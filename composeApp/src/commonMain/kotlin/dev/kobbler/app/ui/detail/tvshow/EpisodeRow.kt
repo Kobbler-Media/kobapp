@@ -46,14 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import coil3.compose.AsyncImage
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.Episode
@@ -69,7 +67,7 @@ import dev.kobbler.app.ui.detail.isWatchedNow
 import dev.kobbler.app.ui.components.FocusEdgeSlack
 import dev.kobbler.app.ui.components.bleedHorizontally
 import dev.kobbler.app.ui.components.rowEdgeBleed
-import dev.kobbler.app.ui.components.StripedBackdrop
+import dev.kobbler.app.ui.components.StripedArt
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.components.tvClickable
@@ -447,20 +445,7 @@ private fun Thumbnail(
             .clip(KobappTheme.shapes.small)
             .border(1.dp, colors.lineSoft, KobappTheme.shapes.small),
     ) {
-        StripedBackdrop(
-            accent = accent,
-            opacity = 0.45f,
-            withRadialOverlay = false,
-            modifier = Modifier.fillMaxSize(),
-        )
-        if (episode.thumbnailUrl != null) {
-            AsyncImage(
-                model = episode.thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        StripedArt(episode.thumbnailUrl, accent, Modifier.fillMaxSize(), opacity = 0.45f)
         val progress = episode.watchProgress
         if (progress != null && progress > 0f && progress < 1f) {
             Box(

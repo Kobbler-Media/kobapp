@@ -85,7 +85,7 @@ fun IptvChannelsDirectoryScreen(
             .sortedBy { it.first }
     }
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         if (showHeader) {
             Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
                 BrowseHeader(

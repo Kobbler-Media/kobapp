@@ -110,7 +110,7 @@ fun IptvChannelDetailScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(colors.bg)) {
+    Box(Modifier.fillMaxSize()) {
         if (isPhone) {
             PhoneLayout(
                 channel = channel, accent = accent, gutter = gutter,
@@ -273,6 +273,7 @@ private fun ChannelHero(
             opacity = 0.40f,
             withRadialOverlay = false,
             modifier = Modifier.matchParentSize(),
+            cached = true,
         )
         Box(
             Modifier.matchParentSize().background(

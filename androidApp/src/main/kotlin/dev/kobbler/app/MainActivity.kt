@@ -142,6 +142,9 @@ class MainActivity : ComponentActivity() {
                 isFullscreen = isFullscreen,
             )
         }
+        // App paints its own background; the window's would be one more full-screen fill
+        // under every frame.
+        window.setBackgroundDrawable(null)
     }
 
     override fun onDestroy() {

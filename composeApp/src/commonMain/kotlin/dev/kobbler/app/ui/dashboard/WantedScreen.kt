@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -80,7 +79,7 @@ private fun WantedList(
     }
     val loaded = (state as? Async.Ready)?.value.orEmpty()
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
             BrowseHeader(
                 title = "Wanted",

@@ -90,7 +90,7 @@ fun LiveChannelDetailScreen(
     val clock = rememberGuideClock(active = true)
     CenterFocusedRow(listState, focus, topRow = 0)
 
-    Column(modifier.fillMaxSize().background(colors.bg).safeTopPadding()) {
+    Column(modifier.fillMaxSize().safeTopPadding()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(dimens.s4),

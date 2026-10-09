@@ -141,13 +141,14 @@ fun TvShowDetailScreen(
     val pageScroll = rememberScrollState()
     val pageTopHold = rememberPageTopHold(pageScroll)
     val pageScope = rememberCoroutineScope()
-    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = 0.35f,
             withRadialOverlay = true,
             modifier = Modifier.fillMaxSize(),
+            cached = true,
         )
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {

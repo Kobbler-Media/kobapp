@@ -119,7 +119,7 @@ fun LiveRecordingsScreen(
             sizeLabel(bytes).takeIf { it.isNotEmpty() }?.let { "$it used" },
         ).joinToString(" · ")
 
-        Column(Modifier.fillMaxSize().background(colors.bg)) {
+        Column(Modifier.fillMaxSize()) {
             if (showHeader) {
                 Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
                     BrowseHeader(

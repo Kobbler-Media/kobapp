@@ -106,7 +106,7 @@ private fun ProfileRow(
         runCatching { firstTileFocus.requestFocus() }
     }
 
-    StripedBackdrop(accent = accent) {
+    StripedBackdrop(accent = accent, cached = true) {
         Box(Modifier.fillMaxSize()) {
             if (auth.pickerDismissible) {
                 IconButton(

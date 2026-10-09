@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -176,7 +175,7 @@ fun MoviesScreen(
         // under half the minimum target and cost 44dp of a 360dp screen.
         val showAlphabet = letters.isNotEmpty() && formFactor != FormFactor.Phone
 
-        Box(Modifier.fillMaxSize().background(colors.bg)) {
+        Box(Modifier.fillMaxSize()) {
             val gridFocus = remember { FocusRequester() }
             LazyVerticalGrid(
                 modifier = Modifier.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),

@@ -71,7 +71,7 @@ fun SeriesDetailScreen(
     val authorRefs = books.flatMap { it.authors }.distinctBy { it.id }
     val heroCovers = sortedBooks.mapNotNull { it.coverUrl.takeIf(String::isNotBlank) }.take(4)
 
-    Box(Modifier.fillMaxSize().background(colors.bg)) {
+    Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 SeriesHero(
@@ -148,6 +148,7 @@ private fun SeriesHero(
             opacity = if (isPhone) 0.32f else 0.42f,
             withRadialOverlay = true,
             modifier = Modifier.matchParentSize(),
+            cached = true,
         )
         Box(
             Modifier.matchParentSize().background(

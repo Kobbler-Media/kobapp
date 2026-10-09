@@ -56,7 +56,7 @@ fun NotificationsScreen(
                 else -> dimens.pageGutter
             }
 
-            Column(Modifier.fillMaxSize().background(colors.bg)) {
+            Column(Modifier.fillMaxSize()) {
                 Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
                     BrowseHeader(
                         title = "Notifications",

@@ -30,12 +30,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.HomeData
 import dev.kobbler.app.data.KobblerApi
@@ -47,7 +45,7 @@ import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.WideCard
 import dev.kobbler.app.ui.components.ReasonChip
 import dev.kobbler.app.ui.components.SectionHeading
-import dev.kobbler.app.ui.components.StripedBackdrop
+import dev.kobbler.app.ui.components.StripedArt
 import dev.kobbler.app.ui.components.bleedHorizontally
 
 @Composable
@@ -69,7 +67,7 @@ fun HomePhone(
         // the full width would be taller than the screen.
         val heroHeight = minOf((maxWidth - gutter * 2) * (10f / 16f), maxHeight * 0.55f)
         LazyColumn(
-            modifier = Modifier.fillMaxSize().background(colors.bg),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 0.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -180,15 +178,7 @@ private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit) {
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onClick),
     ) {
-        StripedBackdrop(accent = accent, opacity = 0.55f, withRadialOverlay = false) {}
-        if (!item.backdropUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = item.backdropUrl,
-                contentDescription = item.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        StripedArt(item.backdropUrl, accent, Modifier.fillMaxSize(), contentDescription = item.title)
         Box(
             modifier = Modifier.fillMaxSize().background(
                 Brush.verticalGradient(

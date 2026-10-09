@@ -4,6 +4,10 @@ package dev.kobbler.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalWindowInfo
 import coil3.ImageLoader
@@ -63,17 +67,20 @@ fun App(
     RefreshWatchStateOnFocus(LocalWindowInfo.current.isWindowFocused)
 
     KobappTheme(formFactor = formFactor) {
-        androidx.compose.runtime.CompositionLocalProvider(
-            dev.kobbler.app.data.LocalAuthState provides auth,
-            LocalFocusScopeStore provides rememberFocusScopeStore(),
-            dev.kobbler.app.ui.navigation.LocalBackInterceptors provides
-                androidx.compose.runtime.remember { dev.kobbler.app.ui.navigation.BackInterceptors() },
-        ) {
-            when (auth.screen) {
-                AuthScreen.Loading -> {} // Brief flash while checking stored token
-                AuthScreen.Login -> FocusScopeHost(id = AuthScreen.Login) { PinLoginScreen(auth) }
-                AuthScreen.Picker -> FocusScopeHost(id = AuthScreen.Picker) { ProfilePickerScreen(auth, formFactor) }
-                AuthScreen.LoggedIn -> AdaptiveScaffold(auth, formFactor, onToggleFullscreen, isFullscreen)
+        // The one full-screen background under every screen; the window draws none.
+        Box(Modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                dev.kobbler.app.data.LocalAuthState provides auth,
+                LocalFocusScopeStore provides rememberFocusScopeStore(),
+                dev.kobbler.app.ui.navigation.LocalBackInterceptors provides
+                    androidx.compose.runtime.remember { dev.kobbler.app.ui.navigation.BackInterceptors() },
+            ) {
+                when (auth.screen) {
+                    AuthScreen.Loading -> {} // Brief flash while checking stored token
+                    AuthScreen.Login -> FocusScopeHost(id = AuthScreen.Login) { PinLoginScreen(auth) }
+                    AuthScreen.Picker -> FocusScopeHost(id = AuthScreen.Picker) { ProfilePickerScreen(auth, formFactor) }
+                    AuthScreen.LoggedIn -> AdaptiveScaffold(auth, formFactor, onToggleFullscreen, isFullscreen)
+                }
             }
         }
     }

@@ -67,13 +67,14 @@ fun AuthorDetailScreen(
         .sortedBy { it.second }
     val standaloneBooks = books.filter { it.seriesId == null }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.28f else 0.36f,
             withRadialOverlay = true,
             modifier = Modifier.fillMaxSize(),
+            cached = true,
         )
 
         val pageScroll = rememberScrollState()

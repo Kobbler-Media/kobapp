@@ -1,11 +1,13 @@
 package dev.kobbler.app.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -23,6 +25,10 @@ fun StripedBackdrop(
     opacity: Float = 0.45f,
     modifier: Modifier = Modifier,
     withRadialOverlay: Boolean = true,
+    // For a large backdrop that stays put: drawn once into a layer and composited as one
+    // texture after that. Not for list items — a layer per row costs a render-target
+    // switch each time one is created, which is every row a scroll brings in.
+    cached: Boolean = false,
     content: @Composable () -> Unit = {},
 ) {
     val colors = KobappTheme.colors
@@ -38,18 +44,26 @@ fun StripedBackdrop(
             tileMode = TileMode.Repeated,
         )
     }
-    Box(modifier = modifier.fillMaxSize().background(colors.bg)) {
-        Box(Modifier.fillMaxSize().background(stripes))
-        if (withRadialOverlay) {
-            val radial = remember(accent, colors.bg) {
-                Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = 0.18f), Color.Transparent, colors.bg.copy(alpha = 0.6f)),
-                    center = Offset.Unspecified,
-                    radius = Float.POSITIVE_INFINITY,
-                )
-            }
-            Box(Modifier.fillMaxSize().background(radial))
-        }
+    val radial = remember(accent, colors.bg, withRadialOverlay) {
+        if (!withRadialOverlay) null
+        else Brush.radialGradient(
+            colors = listOf(accent.copy(alpha = 0.18f), Color.Transparent, colors.bg.copy(alpha = 0.6f)),
+            center = Offset.Unspecified,
+            radius = Float.POSITIVE_INFINITY,
+        )
+    }
+    Box(modifier = modifier.fillMaxSize()) {
+        // The content stays outside the layer so its changes do not re-rasterise it.
+        Box(
+            Modifier
+                .matchParentSize()
+                .then(if (cached) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier)
+                .drawBehind {
+                    drawRect(colors.bg)
+                    drawRect(stripes)
+                    radial?.let { drawRect(it) }
+                },
+        )
         content()
     }
 }

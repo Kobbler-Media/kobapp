@@ -81,13 +81,14 @@ fun PersonDetailScreen(
     val sortedFilmography = remember(filmography, sort) { filmography.sortedFor(sort) }
     val stats = remember(filmography) { computeStats(filmography) }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.20f else 0.28f,
             withRadialOverlay = true,
             modifier = Modifier.fillMaxSize(),
+            cached = true,
         )
 
         val pageScroll = rememberScrollState()

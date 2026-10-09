@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -225,7 +224,7 @@ fun TvShowsScreen(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(spacing.s3),
                 verticalArrangement = Arrangement.spacedBy(spacing.s4),
-                modifier = Modifier.fillMaxSize().background(colors.bg).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
                     Column {

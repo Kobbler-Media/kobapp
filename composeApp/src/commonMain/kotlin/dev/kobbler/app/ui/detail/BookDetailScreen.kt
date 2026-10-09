@@ -94,13 +94,14 @@ fun BookDetailScreen(
     val gutter = gutterFor(formFactor)
     val isPhone = formFactor == FormFactor.Phone
 
-    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.30f else 0.40f,
             withRadialOverlay = true,
             modifier = Modifier.fillMaxSize(),
+            cached = true,
         )
 
         val pageScroll = rememberScrollState()

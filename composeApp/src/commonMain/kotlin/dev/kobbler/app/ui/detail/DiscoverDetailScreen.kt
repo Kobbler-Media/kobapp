@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -150,7 +149,7 @@ fun DiscoverDetailScreen(
     val pageTopHold = rememberPageTopHold(pageScroll)
     val pageScope = rememberCoroutineScope()
     val pageFocusManager = LocalFocusManager.current
-    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(

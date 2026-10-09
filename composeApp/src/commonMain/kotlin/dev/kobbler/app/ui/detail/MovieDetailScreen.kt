@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,13 +84,14 @@ fun MovieDetailScreen(
     val gutter = gutterFor(formFactor)
     val isPhone = formFactor == FormFactor.Phone
 
-    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.30f else 0.40f,
             withRadialOverlay = true,
             modifier = Modifier.fillMaxSize(),
+            cached = true,
         )
 
         val pageScroll = rememberScrollState()

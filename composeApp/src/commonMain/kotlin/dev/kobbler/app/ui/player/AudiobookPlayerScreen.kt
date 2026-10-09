@@ -140,7 +140,7 @@ private fun AudiobookPlayerContent(
 
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 720.dp || maxWidth > maxHeight
-            StripedBackdrop(accent = accent, opacity = 0.32f, withRadialOverlay = true)
+            StripedBackdrop(accent = accent, opacity = 0.32f, withRadialOverlay = true, cached = true)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(

@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.navigation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -507,7 +506,7 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
                 }
             },
         ) {
-            Column(Modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
+            Column(Modifier.fillMaxSize()) {
                 // Consumed once here so every screen below — top bar included — clears a
                 // long-edge cutout in landscape without each of them knowing about it.
                 val density = androidx.compose.ui.platform.LocalDensity.current
@@ -718,7 +717,7 @@ private fun DesktopScaffold(
         // of KobSidebar's width tween, and a composition-level read of it recomposed the
         // whole scaffold ~15 times per open.
         val sidebarPx = remember { mutableIntStateOf(railPx) }
-        Box(modifier = Modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1012,7 +1011,7 @@ private fun ScreenContent(
             }
         }
         if (isOnDetail) {
-            Box(Modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
+            Box(Modifier.fillMaxSize()) {
                 FocusScopeHost(id = nav.current, restoreEnabled = contentActive && !covered) {
                     DetailContent(nav, api, formFactor, player, gps, modifier)
                 }
@@ -1487,7 +1486,7 @@ private fun TabScreenWithTopBar(
     formFactor: FormFactor,
     content: @Composable () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
+    Column(Modifier.fillMaxSize()) {
         if (onMenuClick != null && formFactor == FormFactor.Phone) {
             KobPhoneTopBar(
                 onSearchClick = { onSearchClick?.invoke() },

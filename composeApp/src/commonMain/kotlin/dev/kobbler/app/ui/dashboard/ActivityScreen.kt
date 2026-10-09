@@ -107,7 +107,7 @@ fun ActivityScreen(
         }
     }
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
             BrowseHeader(
                 title = "Activity",

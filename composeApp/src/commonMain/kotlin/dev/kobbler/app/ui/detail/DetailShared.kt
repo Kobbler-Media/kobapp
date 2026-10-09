@@ -65,8 +65,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
@@ -77,12 +75,12 @@ import dev.kobbler.app.ui.components.KobButtonSize
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
+import dev.kobbler.app.ui.components.StripedArt
 import dev.kobbler.app.ui.components.StripedBackdrop
+import dev.kobbler.app.ui.components.softenedArt
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
-
-private const val BackdropFallbackPx = 48
 
 @Composable
 fun DetailHero(
@@ -125,15 +123,8 @@ fun DetailHero(
                     modifier = Modifier.matchParentSize().graphicsLayer { alpha = 0.85f },
                 )
             } else {
-                // No backdrop, so the poster stands in for one — softened by decoding it
-                // at thumbnail size and letting the upscale do the blurring. Modifier.blur
-                // is a RenderEffect re-rendered on every scroll frame across the full
-                // width of the hero, and a silent no-op below API 31 besides.
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(bgUrl)
-                        .size(BackdropFallbackPx)
-                        .build(),
+                    model = softenedArt(bgUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize().graphicsLayer { alpha = 0.55f },
@@ -195,20 +186,7 @@ fun DetailPoster(posterUrl: String?, accent: Color, modifier: Modifier = Modifie
             .clip(KobappTheme.shapes.poster)
             .border(1.dp, colors.lineSoft, KobappTheme.shapes.poster),
     ) {
-        StripedBackdrop(
-            accent = accent,
-            opacity = 0.55f,
-            withRadialOverlay = false,
-            modifier = Modifier.fillMaxSize(),
-        )
-        if (!posterUrl.isNullOrEmpty()) {
-            AsyncImage(
-                model = posterUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        StripedArt(posterUrl, accent, Modifier.fillMaxSize())
     }
 }
 

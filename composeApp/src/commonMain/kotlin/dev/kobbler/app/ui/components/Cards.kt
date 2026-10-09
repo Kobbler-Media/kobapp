@@ -20,7 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -102,27 +102,33 @@ fun PosterCard(
             .tvFocusScale(focusProgress, TvFocusScale.Standard)
             .kobFocusRing(focusProgress, 8.dp.value, acc),
     ) {
+        // Every layer here is paid on every card of every rail and grid, each frame the
+        // row moves: the placeholder goes once the art covers it, and the scrim is drawn
+        // only behind the progress bar it exists for — the title sits below the poster.
+        var artShown by remember(imageUrl) { mutableStateOf(false) }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(shape)
-                .background(placeholder),
+                .drawBehind { if (!artShown) drawRect(placeholder) },
         ) {
             AsyncImage(
                 model = imageUrl,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
+                onSuccess = { artShown = true },
                 modifier = Modifier.fillMaxSize(),
             )
-            // bottom scrim
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.45f)
-                    .align(Alignment.BottomCenter)
-                    .background(BottomScrim),
-            )
+            if (progress != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.45f)
+                        .align(Alignment.BottomCenter)
+                        .background(BottomScrim),
+                )
+            }
             // top-left external badge (e.g. "NEW")
             if (badge != null) {
                 Box(
@@ -249,12 +255,11 @@ fun WideCard(
                 AsyncImage(displayUrl, title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             } else {
                 AsyncImage(
-                    imageUrl, null,
-                    modifier = Modifier.fillMaxSize()
-                        .graphicsLayer { scaleX = 3f; scaleY = 3f }
-                        .blur(80.dp)
-                        .graphicsLayer { alpha = 0.6f },
+                    model = softenedArt(imageUrl),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
+                    alpha = 0.6f,
                 )
                 AsyncImage(
                     imageUrl, title,

@@ -270,7 +270,7 @@ internal fun AuthCenteredColumn(
     maxWidth: Dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    StripedBackdrop(accent = accent) {
+    StripedBackdrop(accent = accent, cached = true) {
         BoxWithConstraints(
             modifier = Modifier.fillMaxSize().safeContentPadding().imePadding(),
             contentAlignment = Alignment.Center,

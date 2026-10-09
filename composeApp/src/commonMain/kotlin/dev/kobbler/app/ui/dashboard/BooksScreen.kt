@@ -76,7 +76,7 @@ fun BooksScreen(
         else -> dimens.pageGutter
     }
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         if (onAuthorClick != null && onSeriesClick != null) {
             Row(
                 modifier = Modifier

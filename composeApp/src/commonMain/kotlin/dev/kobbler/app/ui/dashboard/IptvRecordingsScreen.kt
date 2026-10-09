@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,7 +30,7 @@ fun IptvRecordingsScreen(
         FormFactor.Phone -> dimens.pageGutterPhone
         else -> dimens.pageGutter
     }
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         if (showHeader) {
             Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
                 BrowseHeader(
