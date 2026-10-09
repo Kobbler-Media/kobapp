@@ -99,7 +99,7 @@ dependencies {
 // Kobup publish — optional, and only wired up when a sibling kobup checkout is present.
 // Needs .kobup.json in the repo root (copy .kobup.json.example) and KOBUP_TOKEN in .env.
 // Usage: ./gradlew :androidApp:publishToKobup
-val kobupPublishScript = file("${rootDir}/../kobup/gradle/publish-to-kobup.gradle")
+val kobupPublishScript = file("${rootDir}/../kobup/gradle/publish-to-kobup.gradle.kts")
 if (kobupPublishScript.exists()) apply(from = kobupPublishScript)
 tasks.matching { it.name == "publishToKobup" }.configureEach {
     doFirst {
