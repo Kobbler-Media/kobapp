@@ -10,7 +10,6 @@ import kotlinx.coroutines.withContext
 private const val KOBUP_PACKAGE = "com.kobup.app"
 private const val PROVIDER_AUTHORITY = "com.kobup.app.provider"
 private const val ACTION_OPEN_APP = "com.kobup.action.OPEN_APP"
-private const val PACKAGE_NAME = "dev.kobbler.app"
 
 actual object KobupUpdater {
 
@@ -29,7 +28,7 @@ actual object KobupUpdater {
         if (!isKobupInstalled()) return@withContext null
 
         try {
-            val uri = Uri.parse("content://$PROVIDER_AUTHORITY/update_status/$PACKAGE_NAME")
+            val uri = Uri.parse("content://$PROVIDER_AUTHORITY/update_status/${ctx.packageName}")
             val cursor = ctx.contentResolver.query(uri, null, null, null, null)
             cursor?.use {
                 if (it.moveToFirst()) {
@@ -53,7 +52,7 @@ actual object KobupUpdater {
         try {
             val intent = Intent(ACTION_OPEN_APP).apply {
                 setPackage(KOBUP_PACKAGE)
-                putExtra("package_name", PACKAGE_NAME)
+                putExtra("package_name", ctx.packageName)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             ctx.startActivity(intent)
