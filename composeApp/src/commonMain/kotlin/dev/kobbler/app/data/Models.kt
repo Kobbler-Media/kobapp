@@ -15,6 +15,7 @@ data class ContinueItem(
     val backdropUrl: String? = null,
     val progress: Float,
     val link: String? = null,
+    val started: Boolean = false,
 )
 
 @Immutable

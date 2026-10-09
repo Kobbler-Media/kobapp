@@ -1861,6 +1861,7 @@ private fun InProgressItem.toContinueItem(base: String): ContinueItem = Continue
     backdropUrl = resolveUrlOrNull(base, backdropUrl),
     progress = (progressPercent?.div(100.0))?.toFloat() ?: 0f,
     link = link,
+    started = (positionSeconds ?: 0) > 0 || (progressPercent ?: 0.0) > 0.0,
 )
 
 private fun RecentItem.toRecentlyAddedItem(base: String): RecentlyAddedItem = RecentlyAddedItem(

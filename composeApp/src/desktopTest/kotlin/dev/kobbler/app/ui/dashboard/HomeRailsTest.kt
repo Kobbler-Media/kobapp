@@ -14,6 +14,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.components.DataCache
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import kotlin.test.Test
@@ -44,6 +45,7 @@ class HomeRailsTest {
     }
 
     private fun ComposeUiTest.showHome(stub: StubServer, formFactor: FormFactor) {
+        DataCache.clear()
         val api = KobblerApi(HttpClient(), stub.url, "token")
         setContent {
             KobappTheme(formFactor = formFactor) {
