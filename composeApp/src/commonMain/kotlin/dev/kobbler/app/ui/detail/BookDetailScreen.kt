@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -93,7 +94,8 @@ fun BookDetailScreen(
     val gutter = gutterFor(formFactor)
     val isPhone = formFactor == FormFactor.Phone
 
-    Box(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+        val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.30f else 0.40f,
@@ -110,7 +112,7 @@ fun BookDetailScreen(
                 .scrollWhenFocusIsStuck(pageScroll)
                 .verticalScroll(pageScroll),
         ) {
-            if (isPhone) {
+            if (stacked) {
                 PhoneBookLayout(
                     book = book,
                     api = api,
@@ -138,7 +140,7 @@ fun BookDetailScreen(
                         onListen = onListen,
                         onViewComic = onViewComic,
                         actionsModifier = pageTopHold.anchor,
-                        modifier = Modifier.width(if (formFactor == FormFactor.TV) 220.dp else 320.dp),
+                        modifier = Modifier.width(if (formFactor == FormFactor.Desktop) 320.dp else 220.dp),
                     )
                     MiddleColumn(
                         book = book,
@@ -147,7 +149,9 @@ fun BookDetailScreen(
                         onSeriesClick = onSeriesClick,
                         modifier = Modifier.widthIn(max = 760.dp),
                     )
-                    if (formFactor != FormFactor.TV || book.genres.isNotEmpty()) {
+                    // A phone on its side has no room for a third column; its upright page
+                    // goes without the panel too.
+                    if (formFactor == FormFactor.Desktop || (formFactor == FormFactor.TV && book.genres.isNotEmpty())) {
                         RightPanel(
                             book = book,
                             accent = accent,
@@ -234,7 +238,7 @@ private fun LeftColumn(
     actionsModifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        BookPoster(book.coverUrl, accent, posterWidth = if (formFactor == FormFactor.TV) 220.dp else 320.dp)
+        BookPoster(book.coverUrl, accent, posterWidth = if (formFactor == FormFactor.Desktop) 320.dp else 220.dp)
         ActionColumn(
             book = book,
             api = api,

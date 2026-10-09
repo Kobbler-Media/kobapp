@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -84,7 +85,8 @@ fun MovieDetailScreen(
     val gutter = gutterFor(formFactor)
     val isPhone = formFactor == FormFactor.Phone
 
-    Box(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+        val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.30f else 0.40f,
@@ -96,7 +98,7 @@ fun MovieDetailScreen(
         val pageTopHold = rememberPageTopHold(pageScroll)
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
-            if (isPhone) {
+            if (stacked) {
                 PhoneMovieHero(movie, accent, palette.darkAccent)
                 Spacer(Modifier.height(16.dp))
                 Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
@@ -128,7 +130,13 @@ fun MovieDetailScreen(
                     DetailPoster(
                         movie.posterUrl,
                         accent,
-                        Modifier.width(if (formFactor == FormFactor.TV) 200.dp else 280.dp),
+                        Modifier.width(
+                            when (formFactor) {
+                                FormFactor.TV -> 200.dp
+                                FormFactor.Phone -> 160.dp
+                                FormFactor.Desktop -> 280.dp
+                            },
+                        ),
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         MovieTitleBlock(movie.title, colors.textHi)

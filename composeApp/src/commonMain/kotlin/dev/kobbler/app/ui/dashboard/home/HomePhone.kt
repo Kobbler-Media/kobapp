@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,98 +64,103 @@ fun HomePhone(
     val hero = upNext.firstOrNull()
     val stack = upNext.drop(1)
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(colors.bg),
-        contentPadding = PaddingValues(start = gutter, end = gutter, top = 0.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (hero != null) {
-            item(key = "hero") {
-                PhoneHero(item = hero, onClick = { onContinueClick(0) })
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Turned sideways the page is twice as wide and half as tall: a 16:10 hero across
+        // the full width would be taller than the screen.
+        val heroHeight = minOf((maxWidth - gutter * 2) * (10f / 16f), maxHeight * 0.55f)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().background(colors.bg),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = 0.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (hero != null) {
+                item(key = "hero") {
+                    PhoneHero(item = hero, height = heroHeight, onClick = { onContinueClick(0) })
+                }
             }
-        }
 
-        if (stack.isNotEmpty()) {
-            item(key = "upnext-strip") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Up Next",
-                        color = colors.textHi,
-                        style = KobappTheme.type.h3,
-                    )
-                    // One horizontal axis, bounded height: a vertical list grew with the
-                    // queue, and a second axis inside a vertically scrolling page makes the
-                    // swipe ambiguous. The trailing peek is what advertises the rest.
-                    BoxWithConstraints {
-                        // Continue watching earns the loudest treatment after the hero, so
-                        // these are backdrop cards rather than the compact list rows. Just
-                        // under two fit, which puts the next card's edge permanently on
-                        // screen — that peek is what says "swipe".
-                        val cardWidth = (maxWidth - 12.dp) * 0.62f
-                        LazyRow(
-                            modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = gutter),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            itemsIndexed(stack) { i, item ->
-                                WideCard(
-                                    title = item.title,
-                                    subtitle = item.subtitle,
-                                    imageUrl = item.mediaArtUrl.orEmpty(),
-                                    backdropUrl = item.backdropUrl,
-                                    progress = item.progress ?: 0f,
-                                    accentColor = colors.accentForMediaType(item.mediaType),
-                                    onClick = { onContinueClick(i + 1) },
-                                    modifier = Modifier.width(cardWidth),
-                                )
+            if (stack.isNotEmpty()) {
+                item(key = "upnext-strip") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Up Next",
+                            color = colors.textHi,
+                            style = KobappTheme.type.h3,
+                        )
+                        // One horizontal axis, bounded height: a vertical list grew with the
+                        // queue, and a second axis inside a vertically scrolling page makes the
+                        // swipe ambiguous. The trailing peek is what advertises the rest.
+                        BoxWithConstraints {
+                            // Continue watching earns the loudest treatment after the hero, so
+                            // these are backdrop cards rather than the compact list rows. Just
+                            // under two fit, which puts the next card's edge permanently on
+                            // screen — that peek is what says "swipe".
+                            val cardWidth = minOf((maxWidth - 12.dp) * 0.62f, 260.dp)
+                            LazyRow(
+                                modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = gutter),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                itemsIndexed(stack) { i, item ->
+                                    WideCard(
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        imageUrl = item.mediaArtUrl.orEmpty(),
+                                        backdropUrl = item.backdropUrl,
+                                        progress = item.progress ?: 0f,
+                                        accentColor = colors.accentForMediaType(item.mediaType),
+                                        onClick = { onContinueClick(i + 1) },
+                                        modifier = Modifier.width(cardWidth),
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        if (homeData.recentlyAdded.isNotEmpty()) {
-            item(key = "recent") {
-                PhoneRail(
-                    title = "Recently Added",
-                    accent = colors.accMovies,
-                    items = homeData.recentlyAdded,
-                ) { item, cardWidth ->
-                    PosterCard(
-                        title = item.title,
-                        imageUrl = item.imageUrl,
-                        subtitle = item.subtitle,
-                        accentColor = colors.accentForRecentlyAdded(item.itemType),
-                        onClick = { onRecentClick(item) },
-                        width = cardWidth,
-                    )
+            if (homeData.recentlyAdded.isNotEmpty()) {
+                item(key = "recent") {
+                    PhoneRail(
+                        title = "Recently Added",
+                        accent = colors.accMovies,
+                        items = homeData.recentlyAdded,
+                    ) { item, cardWidth ->
+                        PosterCard(
+                            title = item.title,
+                            imageUrl = item.imageUrl,
+                            subtitle = item.subtitle,
+                            accentColor = colors.accentForRecentlyAdded(item.itemType),
+                            onClick = { onRecentClick(item) },
+                            width = cardWidth,
+                        )
+                    }
                 }
             }
-        }
 
-        homeData.sections.forEachIndexed { i, section ->
-            item(key = "section-$i") {
-                val sectionAccent = colors.accentForSection(section.sectionKey)
-                val wantScope = rememberCoroutineScope()
-                PhoneRail(title = section.title, accent = sectionAccent, items = section.items) { item, cardWidth ->
-                    // buildList hands back a fresh List every call, and List compares by
-                    // reference under strong skipping — inline, no card in any rail can
-                    // ever skip.
-                    val menu = remember(item, api) { discoverContextMenu(item, api, wantScope, onDiscoverItemClick) }
-                    PosterCard(
-                        title = item.title,
-                        imageUrl = item.posterUrl,
-                        subtitle = when (item.mediaType) {
-                            "book" -> item.authors.firstOrNull() ?: ""
-                            else -> item.year?.toString() ?: ""
-                        },
-                        accentColor = sectionAccent,
-                        statusBadge = item.libraryStatus,
-                        contextMenuItems = menu,
-                        onClick = { onDiscoverItemClick(item) },
-                        width = cardWidth,
-                    )
+            homeData.sections.forEachIndexed { i, section ->
+                item(key = "section-$i") {
+                    val sectionAccent = colors.accentForSection(section.sectionKey)
+                    val wantScope = rememberCoroutineScope()
+                    PhoneRail(title = section.title, accent = sectionAccent, items = section.items) { item, cardWidth ->
+                        // buildList hands back a fresh List every call, and List compares by
+                        // reference under strong skipping — inline, no card in any rail can
+                        // ever skip.
+                        val menu = remember(item, api) { discoverContextMenu(item, api, wantScope, onDiscoverItemClick) }
+                        PosterCard(
+                            title = item.title,
+                            imageUrl = item.posterUrl,
+                            subtitle = when (item.mediaType) {
+                                "book" -> item.authors.firstOrNull() ?: ""
+                                else -> item.year?.toString() ?: ""
+                            },
+                            accentColor = sectionAccent,
+                            statusBadge = item.libraryStatus,
+                            contextMenuItems = menu,
+                            onClick = { onDiscoverItemClick(item) },
+                            width = cardWidth,
+                        )
+                    }
                 }
             }
         }
@@ -164,13 +168,13 @@ fun HomePhone(
 }
 
 @Composable
-private fun PhoneHero(item: UpNextItem, onClick: () -> Unit) {
+private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit) {
     val colors = KobappTheme.colors
     val accent = colors.accentForMediaType(item.mediaType)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 10f)
+            .height(height)
             .clip(KobappTheme.shapes.hero)
             .border(1.dp, colors.lineSoft, KobappTheme.shapes.hero)
             .pointerHoverIcon(PointerIcon.Hand)
@@ -248,16 +252,26 @@ private fun <T> PhoneRail(
         SectionHeading(title = title, accent = accent)
         Spacer(Modifier.height(10.dp))
         BoxWithConstraints {
-            // Sized so three cards and the edge of a fourth fit: an exact three-up row
-            // reads as a complete set and nobody thinks to swipe.
-            val cardWidth = (maxWidth - 20.dp - 26.dp) / 3
+            val cardWidth = railPosterWidth(maxWidth)
             LazyRow(
                 modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = gutter),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(RailGap),
             ) {
                 items(items) { card(it, cardWidth) }
             }
         }
     }
+}
+
+private val RailGap = 10.dp
+private val RailPeek = 26.dp
+private val RailPosterTarget = 120.dp
+
+// At least three cards and the edge of a fourth: an exact three-up row reads as a
+// complete set and nobody thinks to swipe. A wider screen adds cards rather than
+// growing them.
+private fun railPosterWidth(available: Dp): Dp {
+    val count = maxOf(3, ((available - RailPeek + RailGap) / (RailPosterTarget + RailGap)).toInt())
+    return (available - RailGap * (count - 1) - RailPeek) / count
 }

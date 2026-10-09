@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.detail
 import dev.kobbler.app.ui.kobTopInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,7 +81,8 @@ fun PersonDetailScreen(
     val sortedFilmography = remember(filmography, sort) { filmography.sortedFor(sort) }
     val stats = remember(filmography) { computeStats(filmography) }
 
-    Box(Modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(colors.bg)) {
+        val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.20f else 0.28f,
@@ -99,7 +101,7 @@ fun PersonDetailScreen(
                     bottom = 64.dp,
                 ),
         ) {
-            if (isPhone) {
+            if (stacked) {
                 PhoneHeader(person = person, stats = stats, accent = accent, gutter = gutter)
                 Spacer(Modifier.height(24.dp))
                 Box(Modifier.padding(horizontal = gutter)) {
@@ -117,8 +119,7 @@ fun PersonDetailScreen(
                     onCreditClick = onCreditClick,
                 )
             } else {
-                val isTv = formFactor == FormFactor.TV
-                val asideWidth = if (isTv) 220.dp else 320.dp
+                val asideWidth = if (formFactor == FormFactor.Desktop) 320.dp else 220.dp
 
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = gutter),

@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,7 +113,6 @@ fun DiscoverDetailScreen(
 
     val palette = rememberPalette(currentDetail.posterUrl)
     val gutter = gutterFor(formFactor)
-    val isPhone = formFactor == FormFactor.Phone
 
     // A show is asked for the same way as one already in the library: how much of it to
     // want is the question, and "monitor" — which collects nothing that has already aired
@@ -150,7 +150,8 @@ fun DiscoverDetailScreen(
     val pageTopHold = rememberPageTopHold(pageScroll)
     val pageScope = rememberCoroutineScope()
     val pageFocusManager = LocalFocusManager.current
-    Box(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+        val stacked = detailStacked(formFactor, maxWidth)
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(
             Modifier
@@ -171,7 +172,7 @@ fun DiscoverDetailScreen(
                 DiscoverTitleBlock(currentDetail.title, colors.textHi)
             }
 
-            if (isPhone) {
+            if (stacked) {
                 PhoneBody(
                     detail = currentDetail,
                     accent = accent,

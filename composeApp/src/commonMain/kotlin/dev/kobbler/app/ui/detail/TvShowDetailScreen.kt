@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.detail
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,7 +117,6 @@ fun TvShowDetailScreen(
     val accent = colors.accTv
     val toast = rememberToastState()
     val gutter = gutterFor(formFactor)
-    val isPhone = formFactor == FormFactor.Phone
 
     // The season you are part-way through beats the newest one you own: the action stack
     // offers Resume from it, and the tab strip has to agree with the button next to it.
@@ -141,7 +141,8 @@ fun TvShowDetailScreen(
     val pageScroll = rememberScrollState()
     val pageTopHold = rememberPageTopHold(pageScroll)
     val pageScope = rememberCoroutineScope()
-    Box(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+        val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = 0.35f,
@@ -153,7 +154,7 @@ fun TvShowDetailScreen(
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
             Spacer(Modifier.height(kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp))
 
-            if (isPhone) {
+            if (stacked) {
                 PhoneLayout(
                     show = show,
                     accent = accent,
@@ -237,7 +238,11 @@ private fun WideLayout(
 ) {
     val colors = KobappTheme.colors
     val seasonEntry = remember { FocusRequester() }
-    val posterWidth = if (formFactor == FormFactor.TV) 200.dp else 280.dp
+    val posterWidth = when (formFactor) {
+        FormFactor.TV -> 200.dp
+        FormFactor.Phone -> 160.dp
+        FormFactor.Desktop -> 280.dp
+    }
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = gutter)) {
         Row(

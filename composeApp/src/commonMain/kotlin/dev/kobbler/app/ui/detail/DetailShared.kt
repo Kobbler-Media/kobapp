@@ -495,6 +495,11 @@ fun formatRating(rating: Float): String {
     return if (rounded == rounded.toInt().toFloat()) "${rounded.toInt()}.0" else rounded.toString()
 }
 
+// Upright, a phone stacks its detail page. Turned sideways it has the width to set the
+// text beside the art, and none of the height a stacked hero spends.
+internal fun detailStacked(formFactor: FormFactor, width: androidx.compose.ui.unit.Dp): Boolean =
+    formFactor == FormFactor.Phone && width < 600.dp
+
 internal fun gutterFor(formFactor: FormFactor): androidx.compose.ui.unit.Dp = when (formFactor) {
     FormFactor.TV -> 48.dp
     FormFactor.Phone -> 18.dp

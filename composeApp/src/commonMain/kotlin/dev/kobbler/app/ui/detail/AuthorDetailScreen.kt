@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,7 +67,8 @@ fun AuthorDetailScreen(
         .sortedBy { it.second }
     val standaloneBooks = books.filter { it.seriesId == null }
 
-    Box(Modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(colors.bg)) {
+        val stacked = detailStacked(formFactor, maxWidth)
         StripedBackdrop(
             accent = accent,
             opacity = if (isPhone) 0.28f else 0.36f,
@@ -78,7 +80,7 @@ fun AuthorDetailScreen(
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
             Spacer(Modifier.height(56.dp))
 
-            if (isPhone) {
+            if (stacked) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
                     PhonePortraitHeader(author, accent)
                     Spacer(Modifier.height(20.dp))
@@ -94,8 +96,8 @@ fun AuthorDetailScreen(
                     Spacer(Modifier.height(64.dp))
                 }
             } else {
-                val portraitWidth = if (formFactor == FormFactor.TV) 220.dp else 320.dp
-                val posterWidth = if (formFactor == FormFactor.TV) 100.dp else 140.dp
+                val portraitWidth = if (formFactor == FormFactor.Desktop) 320.dp else 220.dp
+                val posterWidth = if (formFactor == FormFactor.Desktop) 140.dp else 100.dp
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = gutter),
                     horizontalArrangement = Arrangement.spacedBy(40.dp),
