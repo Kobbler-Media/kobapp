@@ -1,0 +1,7 @@
+{
+  "projectSlug": "kobbler",
+  "projectName": "Kobbler",
+  "packageName": "dev.kobbler.app",
+  "channel": "stable",
+  "server": "https://kobup.example.com"
+}

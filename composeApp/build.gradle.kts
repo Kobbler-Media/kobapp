@@ -1,0 +1,245 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+
+plugins {
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.android.multiplatform.library)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.compose.hot.reload)
+}
+
+fun readVersionProps(): Map<String, String> =
+    file("${rootDir}/version.properties").readLines()
+        .filter { it.contains("=") }
+        .associate { val (k, v) = it.split("=", limit = 2); k.trim() to v.trim() }
+
+// Desktop has no manifest to carry the version the way Android's does, so it ships as a
+// resource the app reads at runtime.
+val desktopVersionResource by tasks.registering {
+    val props = file("${rootDir}/version.properties")
+    val out = layout.buildDirectory.dir("generated/desktopVersion")
+    inputs.file(props)
+    outputs.dir(out)
+    doLast { props.copyTo(out.get().file("kobapp-version.properties").asFile, overwrite = true) }
+}
+
+val pinServiceSource by tasks.registering {
+    val url = providers.gradleProperty("pinServiceUrl").orElse("https://pin.biboop.com")
+    val out = layout.buildDirectory.dir("generated/pinService")
+    inputs.property("pinServiceUrl", url)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("dev/kobbler/app/data/PinServiceUrl.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            "package dev.kobbler.app.data\n\n" +
+                "internal const val PIN_SERVICE = \"${url.get().trimEnd('/')}\"\n",
+        )
+    }
+}
+
+// jpackage requires plain MAJOR.MINOR.PATCH; strip the +<sha> suffix.
+val pkgVersion: String = readVersionProps()["versionName"]!!.substringBefore('+')
+
+// macOS jpackage rejects MAJOR=0; promote 0.x.y → 1.x.y for mac targets only.
+val macPkgVersion: String = pkgVersion.split('.').toMutableList().also {
+    if (it.firstOrNull() == "0") it[0] = "1"
+}.joinToString(".")
+
+// iOS needs an Apple host to build at all (Xcode toolchain, and MobileVLCKit via
+// CocoaPods for kobplayer). Declaring the targets off-Mac makes `gradle build` fail on
+// :compileIosMainKotlinMetadata, so they are simply absent unless the host can build them.
+val hostIsMac = org.jetbrains.kotlin.konan.target.HostManager.hostIsMac
+
+kotlin {
+    // Suppress expect/actual class beta warning
+    targets.all {
+        compilations.all {
+            compileTaskProvider.configure {
+                compilerOptions.freeCompilerArgs.add("-Xexpect-actual-classes")
+            }
+        }
+    }
+
+    android {
+        namespace = "dev.kobbler.app"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+    }
+
+    jvm("desktop")
+
+    wasmJs {
+        browser()
+        binaries.executable()
+    }
+
+    if (hostIsMac) {
+        listOf(iosArm64(), iosSimulatorArm64()).forEach {
+            it.binaries.framework {
+                baseName = "ComposeApp"
+                isStatic = true
+            }
+        }
+    }
+
+    sourceSets {
+        commonMain {
+            kotlin.srcDir(pinServiceSource)
+        }
+        commonMain.dependencies {
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            implementation(compose.materialIconsExtended)
+            implementation(compose.ui)
+            implementation(compose.components.resources)
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.json)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ksoup)
+            implementation(libs.kotlinx.datetime)
+            implementation(project(":kobplayer"))
+            implementation(project(":kobpalette"))
+            implementation(project(":kobfocus"))
+        }
+
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.ktor.client.okhttp)
+            implementation(libs.play.services.cast.framework)
+            implementation(libs.mediarouter)
+        }
+
+        val desktopMain by getting {
+            resources.srcDir(desktopVersionResource)
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation(libs.ktor.client.java)
+                implementation(libs.kotlinx.coroutines.swing)
+                implementation(libs.dbus.java.core)
+                implementation(libs.dbus.java.transport.unixsocket)
+            }
+        }
+
+        wasmJsMain.dependencies {
+            implementation(libs.ktor.client.js)
+        }
+
+        if (hostIsMac) {
+            iosMain.dependencies {
+                implementation(libs.ktor.client.darwin)
+            }
+        }
+
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+        }
+
+        val desktopTest by getting {
+            dependencies {
+                implementation(compose.desktop.currentOs)
+            }
+        }
+    }
+}
+
+// The VA-API decoder VLC 3.0.x distributions ship is dead (see kobplayer/native/kobvaapi);
+// ours is compiled against the host's VLC and ffmpeg and loaded from the app's resources.
+val appResources = layout.buildDirectory.dir("appResources")
+val buildKobvaapi by tasks.registering(Exec::class) {
+    val script = rootProject.file("kobplayer/native/kobvaapi/build.sh")
+    val out = appResources.map { it.dir("linux-x64/vlc-plugins") }
+    onlyIf { org.jetbrains.kotlin.konan.target.HostManager.hostIsLinux }
+    inputs.dir(script.parentFile)
+    outputs.dir(out)
+    commandLine(script, out.get().asFile)
+}
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(buildKobvaapi) }
+tasks.withType<JavaExec>().matching { it.name.startsWith("hotRun") }.configureEach {
+    dependsOn(buildKobvaapi)
+    systemProperty("kobplayer.vlc.plugins", appResources.get().dir("linux-x64/vlc-plugins").asFile.path)
+}
+
+// Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. The first launch writes a
+// class-data archive of everything it loaded and later launches map it instead of parsing
+// and verifying those classes again; the JVM regenerates it itself if the runtime changes.
+// afterEvaluate because the Compose plugin `set`s launcherJvmArgs from its own afterEvaluate.
+afterEvaluate {
+    tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().configureEach {
+        launcherJvmArgs.addAll("-XX:+AutoCreateSharedArchive", "-XX:SharedArchiveFile=\$APPDIR/kobapp.jsa")
+    }
+}
+
+compose.desktop {
+    application {
+        mainClass = "dev.kobbler.app.MainKt"
+        jvmArgs += listOf(
+            // ~10-20% smaller heap for an object-heavy UI; production in JDK 25.
+            "-XX:+UseCompactObjectHeaders",
+            // skiko, JNA (vlcj) and dbus-java load native code; JDK 24+ warns and will block.
+            "--enable-native-access=ALL-UNNAMED",
+        )
+
+        buildTypes.release.proguard {
+            // 7.7.0 (the plugin default) cannot read Kotlin's JVM 25 bytecode.
+            version.set("7.10.0")
+            configurationFiles.from(project.file("proguard-desktop.pro"))
+        }
+
+        nativeDistributions {
+            appResourcesRootDir.set(appResources)
+            packageName = "kobapp"
+            packageVersion = pkgVersion
+            description = "Kobbler — self-hosted media library client"
+            vendor = "Kobbler"
+
+            targetFormats(
+                TargetFormat.AppImage,
+                TargetFormat.Deb,
+                TargetFormat.Rpm,
+                TargetFormat.Msi,
+                TargetFormat.Dmg,
+            )
+
+            modules(
+                "java.instrument",
+                "java.xml",
+                "java.management",
+                "java.naming",
+                "java.net.http",
+                "java.prefs",
+                "jdk.crypto.ec",
+                "jdk.net",
+                "jdk.security.auth",
+                "jdk.unsupported",
+            )
+
+            linux {
+                iconFile.set(project.file("src/desktopMain/resources/icon.png"))
+                debPackageVersion = pkgVersion
+                rpmPackageVersion = pkgVersion
+                appCategory = "AudioVideo"
+                debMaintainer = "kobbler@localhost"
+                menuGroup = "Kobbler"
+            }
+            macOS {
+                bundleID = "dev.kobbler.app"
+                packageVersion = macPkgVersion
+                dmgPackageVersion = macPkgVersion
+                pkgPackageVersion = macPkgVersion
+            }
+            windows {
+                menuGroup = "Kobbler"
+                upgradeUuid = "8a1f8b3e-2c4d-4f9b-9e7a-1b2c3d4e5f60"
+            }
+        }
+    }
+}

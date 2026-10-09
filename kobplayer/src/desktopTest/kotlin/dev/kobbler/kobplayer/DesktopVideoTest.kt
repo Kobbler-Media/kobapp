@@ -1,0 +1,121 @@
+package dev.kobbler.kobplayer
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+class DesktopVideoTest {
+
+    private data class Clip(
+        val resource: String,
+        val format: PixelFormat,
+        val picture: Pair<Int, Int>,
+        val videoSize: Pair<Int, Int>,
+    )
+
+    @Test
+    fun decodesStraightIntoPaintableFrames() {
+        DesktopPlayer.prepareLibraries()
+        listOf(
+            Clip("red_176x100_sar4-3.mkv", PixelFormat.I420, 176 to 100, 234 to 100),
+            Clip("red_160x90_hevc10.mkv", PixelFormat.I0AL, 160 to 90, 160 to 90),
+        ).forEach { clip ->
+            val scope = Dispatchers.Default + SupervisorJob()
+            val player = DesktopPlayer(scope, PlayerConfig(hardwareAcceleration = false))
+            try {
+                player.load(MediaSource.Url(resourceUrl(clip.resource)))
+                val sink = player.video!!
+                val frame = awaitFrame(sink)
+                assertNotNull(frame, "${clip.resource} never produced a frame")
+                assertEquals(clip.format, frame.layout.format, clip.resource)
+                assertEquals(clip.picture, frame.layout.width to frame.layout.height, clip.resource)
+                assertEquals(clip.videoSize, player.videoSize.value, clip.resource)
+                assertPaintsRed(frame, clip.resource)
+            } finally {
+                player.release()
+                scope.cancel()
+            }
+        }
+    }
+
+    private fun awaitFrame(sink: VlcVideoSink): DecodedFrame? {
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (System.nanoTime() < deadline) {
+            sink.latestFrame()?.let { return it }
+            Thread.sleep(20)
+        }
+        return null
+    }
+
+    @Test
+    fun playsFileUrlsInEveryFormJavaWritesThem() {
+        DesktopPlayer.prepareLibraries()
+        val file = File(javaClass.getResource("/red_176x100_sar4-3.mkv")!!.toURI())
+        listOf(file.toURI().toString(), file.toPath().toUri().toString()).forEach { url ->
+            val scope = Dispatchers.Default + SupervisorJob()
+            val player = DesktopPlayer(scope, PlayerConfig())
+            try {
+                player.load(MediaSource.Url(url))
+                assertNotNull(awaitFrame(player.video!!), url)
+            } finally {
+                player.release()
+                scope.cancel()
+            }
+        }
+    }
+
+    @Test
+    fun fallsBackToCpuDecodingWhenVlcMustDrawSubtitles() {
+        // VLC 3 blends subpictures onto the decoder's picture, which is an opaque GPU
+        // surface when decoding in hardware: the subtitles silently vanish.
+        DesktopPlayer.prepareLibraries()
+        val scope = Dispatchers.Default + SupervisorJob()
+        val player = DesktopPlayer(scope, PlayerConfig())
+        try {
+            player.load(MediaSource.Url(resourceUrl("red_176x100_subtitled.mkv"), subtitlesOff = true))
+            assertTrue(player.gpuDecodeRequested)
+            assertNotNull(awaitFrame(player.video!!))
+            val track = awaitSubtitleTrack(player)
+
+            player.selectSubtitleTrack(track)
+
+            assertFalse(player.gpuDecodeRequested)
+            assertEquals(track, player.selectedSubtitleTrack.value)
+            assertNotNull(awaitFrame(player.video!!))
+        } finally {
+            player.release()
+            scope.cancel()
+        }
+    }
+
+    private fun awaitSubtitleTrack(player: DesktopPlayer): TrackInfo {
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (System.nanoTime() < deadline) {
+            player.subtitleTracks.value.firstOrNull()?.let { return it }
+            Thread.sleep(20)
+        }
+        error("no subtitle track")
+    }
+
+    private fun resourceUrl(name: String) = File(javaClass.getResource("/$name")!!.toURI()).toPath().toUri().toString()
+
+    @Test
+    fun asksForTheChosenDecoder() {
+        val source = MediaSource.Url("http://x/y.mkv")
+        fun decoderOptions(source: MediaSource.Url, decoding: VideoDecoding) =
+            vlcMediaOptions(source, PlayerConfig(), decoding).filter { it.startsWith("avcodec-hw") || it.startsWith("kobvaapi") }
+        assertEquals(
+            listOf("avcodec-hw=kobvaapi,any", "kobvaapi-device=/dev/dri/renderD129"),
+            decoderOptions(source, VideoDecoding.Gpu("/dev/dri/renderD129")),
+        )
+        assertEquals(listOf("avcodec-hw=kobvaapi,any"), decoderOptions(source, VideoDecoding.Auto))
+        assertEquals(emptyList(), decoderOptions(source, VideoDecoding.Software))
+        assertEquals(emptyList(), decoderOptions(source.copy(subtitleOrdinal = 0), VideoDecoding.Auto))
+    }
+}

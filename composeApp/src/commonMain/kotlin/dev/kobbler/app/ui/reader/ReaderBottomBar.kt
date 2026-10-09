@@ -1,0 +1,76 @@
+package dev.kobbler.app.ui.reader
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.unit.dp
+import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.components.tvAutoGlow
+import dev.kobbler.kobfocus.focusKey
+import dev.kobbler.kobfocus.focusKeyGroup
+import dev.kobbler.app.ui.safeBottomPadding
+
+@Composable
+internal fun ReaderBottomBar(
+    currentPage: Int,
+    totalPages: Int,
+    currentChapter: Int,
+    totalChapters: Int,
+    onSliderChange: (Float) -> Unit,
+    theme: ReaderTheme,
+    entryFocus: FocusRequester,
+) {
+    var showSlider by remember { mutableStateOf(false) }
+    Column(
+        Modifier
+            .focusKeyGroup("bottombar")
+            .fillMaxWidth()
+            .background(theme.backgroundColor)
+            .padding(horizontal = 16.dp)
+            .safeBottomPadding()
+    ) {
+        if (showSlider && totalChapters > 1) {
+            Slider(
+                value = currentChapter.toFloat() / (totalChapters - 1).coerceAtLeast(1),
+                onValueChange = onSliderChange,
+                modifier = Modifier.height(28.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = theme.linkColor,
+                    activeTrackColor = theme.linkColor,
+                ),
+            )
+        }
+        Box(
+            Modifier
+                .focusKey("progress", focusRequester = entryFocus)
+                .fillMaxWidth()
+                .tvAutoGlow(cornerRadiusDp = 6f, scale = 1.01f)
+                .clickable { showSlider = !showSlider }
+                .padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            val overallPercent = if (totalChapters > 0) {
+                ((currentChapter.toFloat() + currentPage.toFloat() / totalPages.coerceAtLeast(1)) / totalChapters * 100).toInt()
+            } else 0
+            Text(
+                "Ch ${currentChapter + 1}/$totalChapters  •  ${currentPage + 1}/$totalPages  •  $overallPercent%",
+                style = KobappTheme.type.caption.copy(color = theme.textColor.copy(alpha = 0.5f)),
+            )
+        }
+    }
+}

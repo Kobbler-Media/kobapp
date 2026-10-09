@@ -1,0 +1,44 @@
+# Gradle / Kotlin build output
+.gradle/
+build/
+.kotlin/
+kotlin-js-store/
+node_modules/
+
+# Local machine config
+local.properties
+.env
+
+# Signing material — never commit a keystore or its passwords
+*.jks
+*.keystore
+*.p12
+keystore.properties
+google-services.json
+GoogleService-Info.plist
+
+# Kobup OTA release config — copy .kobup.json.example and fill in your own server
+.kobup.json
+
+# IDE
+*.iml
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Agent context
+.claude/
+.agents/
+
+# Local agent context — machine/deploy specific, never public
+CLAUDE.local.md
+AGENTS.local.md
+
+# Local compose overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Test book assets (stage locally, see TestBookActivity)
+androidApp/src/debug/assets/testbook/
