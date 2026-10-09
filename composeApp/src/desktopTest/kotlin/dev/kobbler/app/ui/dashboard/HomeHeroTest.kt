@@ -16,7 +16,9 @@ import androidx.compose.ui.semantics.SemanticsActions
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.dashboard.home.HomeHeroTag
 import dev.kobbler.app.ui.dashboard.home.HomeWide
+import androidx.compose.ui.test.onNodeWithTag
 import dev.kobbler.app.ui.navigation.KobTopBar
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
@@ -25,9 +27,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.onChildren
-import androidx.compose.ui.test.onFirst
 
 /** The desktop hero's Resume/Details row under Home's floating top bar. */
 @OptIn(ExperimentalTestApi::class)
@@ -82,8 +81,7 @@ class HomeHeroTest {
         onNodeWithText("Details").assertIsFocused()
     }
 
-    private fun DesktopComposeUiTest.heroBounds() =
-        onAllNodes(hasScrollAction()).onFirst().onChildren().onFirst().getUnclippedBoundsInRoot()
+    private fun DesktopComposeUiTest.heroBounds() = onNodeWithTag(HomeHeroTag).getUnclippedBoundsInRoot()
 
     /** The hero is decoration; the rows are what the page is for, so the next one shows in full. */
     @Test
@@ -93,12 +91,14 @@ class HomeHeroTest {
         assertTrue(heroBounds().bottom <= 600.dp, "the hero takes over two thirds of the window: ${heroBounds()}")
     }
 
+    /** The backdrop is behind the whole page, so the hero's words and the strip open it. */
     @Test
-    fun `the backdrop runs under the up next row`() {
+    fun `the hero and its strip open the page`() {
         for (formFactor in listOf(FormFactor.Desktop, FormFactor.TV)) {
             heroPage(formFactor) {
                 val strip = onNodeWithText("UP NEXT").getUnclippedBoundsInRoot()
-                assertTrue(strip.bottom <= heroBounds().bottom, "$formFactor: Up Next sits below the backdrop")
+                assertEquals(0.dp, heroBounds().top, "$formFactor: the hero does not start the page")
+                assertTrue(strip.bottom <= heroBounds().bottom, "$formFactor: Up Next sits outside the hero")
             }
         }
     }

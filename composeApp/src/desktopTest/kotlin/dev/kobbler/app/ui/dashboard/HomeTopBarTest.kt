@@ -16,7 +16,9 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.DataCache
+import dev.kobbler.app.ui.dashboard.home.HomeHeroTag
 import dev.kobbler.app.ui.dashboard.home.HomeWide
+import androidx.compose.ui.test.onNodeWithTag
 import dev.kobbler.app.ui.navigation.KobTopBar
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
@@ -64,7 +66,8 @@ class HomeTopBarTest {
                     waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(if (hasHero) "Queued 1" else "Recent 1").fetchSemanticsNodes().isNotEmpty() }
 
                     val bar = onNodeWithText("Search library & Discover").getUnclippedBoundsInRoot()
-                    val firstItem = onAllNodes(hasScrollAction()).onFirst().onChildren().onFirst().getUnclippedBoundsInRoot()
+                    val firstItem = if (hasHero) onNodeWithTag(HomeHeroTag).getUnclippedBoundsInRoot()
+                    else onAllNodes(hasScrollAction()).onFirst().onChildren().onFirst().getUnclippedBoundsInRoot()
                     if (hasHero) assertEquals(0.dp, firstItem.top) else assertTrue(firstItem.top >= bar.bottom)
 
                     onNodeWithContentDescription("Fullscreen").performClick()
