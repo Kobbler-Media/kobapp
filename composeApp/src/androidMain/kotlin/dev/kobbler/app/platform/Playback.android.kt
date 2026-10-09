@@ -5,31 +5,23 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
+import dev.kobbler.kobplayer.FocusAction
+import dev.kobbler.kobplayer.FocusResume
+import dev.kobbler.kobplayer.focusChangeOf
 import dev.kobbler.kobplayer.Player as KobPlayer
 import kotlinx.coroutines.flow.StateFlow
 
 actual object PlaybackLifecycle {
     private var focusRequest: AudioFocusRequest? = null
     private var legacyFocusListener: AudioManager.OnAudioFocusChangeListener? = null
-    private var pausedByFocusLoss = false
+    // For speech, ducking would lose words — pause instead.
+    private val focusResume = FocusResume(canDuck = false)
 
     private fun onFocusChange(change: Int) {
-        when (change) {
-            AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            // For speech, ducking would lose words — pause instead.
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                if (PlaybackBridge.nowPlaying.value.isPlaying) {
-                    pausedByFocusLoss = true
-                    PlaybackBridge.onPlayPause?.invoke()
-                }
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                if (pausedByFocusLoss && !PlaybackBridge.nowPlaying.value.isPlaying) {
-                    pausedByFocusLoss = false
-                    PlaybackBridge.onPlayPause?.invoke()
-                }
-            }
+        val focusChange = focusChangeOf(change) ?: return
+        when (focusResume.onChange(focusChange, PlaybackBridge.nowPlaying.value.isPlaying)) {
+            FocusAction.Pause, FocusAction.Resume -> PlaybackBridge.onPlayPause?.invoke()
+            FocusAction.Duck, FocusAction.Restore, FocusAction.None -> {}
         }
     }
 
@@ -99,7 +91,7 @@ actual object PlaybackLifecycle {
     actual fun requestAudioFocus() {
         val ctx = PlaybackBridge.appContext() ?: return
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-        pausedByFocusLoss = false
+        focusResume.forget()
         if (Build.VERSION.SDK_INT >= 26) {
             if (focusRequest != null) return
             val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -125,7 +117,7 @@ actual object PlaybackLifecycle {
     actual fun abandonAudioFocus() {
         val ctx = PlaybackBridge.appContext() ?: return
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-        pausedByFocusLoss = false
+        focusResume.forget()
         if (Build.VERSION.SDK_INT >= 26) {
             focusRequest?.let { am.abandonAudioFocusRequest(it) }
             focusRequest = null

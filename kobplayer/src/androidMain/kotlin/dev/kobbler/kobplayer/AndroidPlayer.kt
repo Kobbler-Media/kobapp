@@ -142,6 +142,7 @@ internal class AndroidPlayer(
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var hasAudioFocus = false
+    private val focusResume = FocusResume()
 
     private val focusRequest: AudioFocusRequest by lazy {
         AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -152,29 +153,20 @@ internal class AndroidPlayer(
                     .build()
             )
             .setOnAudioFocusChangeListener { focusChange ->
-                when (focusChange) {
-                    AudioManager.AUDIOFOCUS_LOSS -> {
-                        vlcPlayer.pause()
-                        hasAudioFocus = false
+                val change = focusChangeOf(focusChange) ?: return@setOnAudioFocusChangeListener
+                if (change == FocusChange.Loss) hasAudioFocus = false
+                if (change == FocusChange.Gain) hasAudioFocus = true
+                // A silent preload holds no audible claim: a call ending must not start it.
+                if (isPreloading.value) return@setOnAudioFocusChangeListener
+                when (focusResume.onChange(change, _state.value == PlayerState.PLAYING)) {
+                    FocusAction.Pause -> pauseIfPlaying()
+                    FocusAction.Duck -> if (!_isMuted.value) vlcPlayer.volume = ((_volume.value * 100) * 0.3f).toInt()
+                    FocusAction.Resume -> {
+                        restoreVolume()
+                        vlcPlayer.play()
                     }
-                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                        if (_state.value == PlayerState.PLAYING) vlcPlayer.pause()
-                    }
-                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                        if (!_isMuted.value && !isPreloading.value) {
-                            vlcPlayer.volume = ((_volume.value * 100) * 0.3f).toInt()
-                        }
-                    }
-                    AudioManager.AUDIOFOCUS_GAIN -> {
-                        // Only restore volume and resume if not preloading.
-                        // Without this check, a phone call ending or alarm stopping
-                        // would resume preloaded content on detail pages.
-                        if (!isPreloading.value && !_isMuted.value) {
-                            vlcPlayer.volume = (_volume.value * 100).toInt()
-                            if (_state.value == PlayerState.PAUSED) vlcPlayer.play()
-                        }
-                        hasAudioFocus = true
-                    }
+                    FocusAction.Restore -> restoreVolume()
+                    FocusAction.None -> {}
                 }
             }
             .build()
@@ -185,6 +177,10 @@ internal class AndroidPlayer(
             val result = audioManager.requestAudioFocus(focusRequest)
             hasAudioFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         }
+    }
+
+    private fun restoreVolume() {
+        vlcPlayer.volume = if (_isMuted.value) 0 else (_volume.value * 100).toInt()
     }
 
     private fun abandonAudioFocus() {
@@ -477,12 +473,18 @@ internal class AndroidPlayer(
             Build.SOC_MANUFACTURER.equals("Google", ignoreCase = true)
 
     override fun play() {
+        focusResume.forget()
         requestAudioFocus()
         vlcPlayer.play()
     }
 
     override fun pause() {
-        // Only pause if actually playing — libvlc pause() is a toggle
+        focusResume.forget()
+        pauseIfPlaying()
+    }
+
+    // libvlc's pause() is a toggle.
+    private fun pauseIfPlaying() {
         if (vlcPlayer.isPlaying) vlcPlayer.pause()
     }
 
@@ -494,15 +496,17 @@ internal class AndroidPlayer(
         _durationMs.value = 0L
         _isBuffering.value = false
         _bufferPercent.value = 0f
+        focusResume.forget()
         abandonAudioFocus()
     }
 
     override fun togglePlayPause() {
+        focusResume.forget()
         when (playPauseIntent(_state.value)) {
             PlayPauseIntent.Play -> vlcPlayer.play()
             // Not vlcPlayer.pause(): libvlc's is a toggle, so it restarts a stream that
             // is not actually running. pause() carries that guard.
-            PlayPauseIntent.Pause -> pause()
+            PlayPauseIntent.Pause -> pauseIfPlaying()
             PlayPauseIntent.None -> {}
         }
     }
