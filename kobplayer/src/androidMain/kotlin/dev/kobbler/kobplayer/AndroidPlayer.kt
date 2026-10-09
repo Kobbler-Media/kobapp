@@ -26,6 +26,7 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.interfaces.IVLCVout
 import java.io.File
+import java.util.concurrent.Executors
 import kotlin.coroutines.CoroutineContext
 
 private const val FieldDecodePrefs = "kobplayer.decoder"
@@ -66,6 +67,20 @@ internal class AndroidPlayer(
     })
 
     val vlcPlayer = MediaPlayer(libVLC)
+
+    // libvlc 3's stop() and setMedia() join the input thread, which waits as long as a
+    // stalled network read does: on the main thread, a stream that hung while opening
+    // took the app down with an ANR the moment anything stopped or replaced it. One
+    // serial thread keeps those calls, and the play/pause/seek that must follow them in
+    // order, off the UI. View attach and detach stay on main: they touch the SurfaceHolder.
+    @Volatile private var released = false
+
+    private val vlcThread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc") }
+
+    private fun vlc(block: MediaPlayer.() -> Unit) {
+        if (released) return
+        vlcThread.execute { vlcPlayer.block() }
+    }
 
     // --- State flows ---
 
@@ -163,7 +178,7 @@ internal class AndroidPlayer(
                     FocusAction.Duck -> if (!_isMuted.value) vlcPlayer.volume = ((_volume.value * 100) * 0.3f).toInt()
                     FocusAction.Resume -> {
                         restoreVolume()
-                        vlcPlayer.play()
+                        vlc { play() }
                     }
                     FocusAction.Restore -> restoreVolume()
                     FocusAction.None -> {}
@@ -282,7 +297,7 @@ internal class AndroidPlayer(
                     // playback, and a caller-side pause() racing the state transition
                     // becomes a no-op, leaving position to advance silently.
                     if (isPreloading.value) {
-                        vlcPlayer.pause()
+                        pauseIfPlaying()
                         _state.value = PlayerState.PAUSED
                     } else {
                         _state.value = PlayerState.PLAYING
@@ -359,7 +374,7 @@ internal class AndroidPlayer(
 
         val headers = source.headers.mapKeys { it.key.lowercase() }
 
-        currentMedia?.release()
+        val previous = currentMedia
         val uri = Uri.parse(source.url)
         val media = Media(libVLC, uri).apply {
             addOption(":http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
@@ -383,7 +398,6 @@ internal class AndroidPlayer(
             source.startTimeSec?.let { addOption(":start-time=$it") }
         }
         currentMedia = media
-        vlcPlayer.media = media
         // Before play(), never after. play() opens the elementary stream, and that
         // is the one moment a decoder is chosen; a window that arrives later is a
         // window MediaCodec was never offered.
@@ -391,7 +405,11 @@ internal class AndroidPlayer(
         // Only grab audio focus if not preloading (preload should not
         // steal focus from other apps like music players).
         if (!isPreloading.value) requestAudioFocus()
-        vlcPlayer.play()
+        vlc {
+            this.media = media
+            previous?.release()
+            play()
+        }
     }
 
     /**
@@ -475,7 +493,7 @@ internal class AndroidPlayer(
     override fun play() {
         focusResume.forget()
         requestAudioFocus()
-        vlcPlayer.play()
+        vlc { play() }
     }
 
     override fun pause() {
@@ -485,12 +503,12 @@ internal class AndroidPlayer(
 
     // libvlc's pause() is a toggle.
     private fun pauseIfPlaying() {
-        if (vlcPlayer.isPlaying) vlcPlayer.pause()
+        vlc { if (isPlaying) pause() }
     }
 
     override fun stop() {
         fieldDecodeProbe?.cancel()
-        vlcPlayer.stop()
+        vlc { stop() }
         _state.value = PlayerState.IDLE
         _currentMs.value = 0L
         _durationMs.value = 0L
@@ -503,7 +521,7 @@ internal class AndroidPlayer(
     override fun togglePlayPause() {
         focusResume.forget()
         when (playPauseIntent(_state.value)) {
-            PlayPauseIntent.Play -> vlcPlayer.play()
+            PlayPauseIntent.Play -> vlc { play() }
             // Not vlcPlayer.pause(): libvlc's is a toggle, so it restarts a stream that
             // is not actually running. pause() carries that guard.
             PlayPauseIntent.Pause -> pauseIfPlaying()
@@ -514,7 +532,7 @@ internal class AndroidPlayer(
     override fun seekTo(ms: Long) {
         val clamped = clampSeekTarget(ms, _durationMs.value)
         _currentMs.value = clamped
-        vlcPlayer.time = clamped
+        vlc { time = clamped }
     }
 
     override fun skip(deltaMs: Long) {
@@ -637,18 +655,20 @@ internal class AndroidPlayer(
         // Consumers can use the native player for platform-specific approaches
     }
 
-    private var released = false
-
     override fun release() {
         if (released) return
-        released = true
         abandonAudioFocus()
-        vlcPlayer.stop()
         vlcPlayer.detachViews()
-        currentMedia?.release()
+        val media = currentMedia
         currentMedia = null
-        vlcPlayer.release()
-        libVLC.release()
+        vlcThread.execute {
+            vlcPlayer.stop()
+            media?.release()
+            vlcPlayer.release()
+            libVLC.release()
+        }
+        vlcThread.shutdown()
+        released = true
         scope.cancel()
     }
 
