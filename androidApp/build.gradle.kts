@@ -55,6 +55,17 @@ android {
             isShrinkResources = false
             signingConfig = signingConfigs.findByName("release")
         }
+        // Release code, installed over the debug build: same package and key, so it keeps
+        // that install's server link and profile. Debug builds run without AOT and are
+        // several times slower on the UI thread, which makes them useless for frame timing.
+        create("perf") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dbg"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            isProfileable = true
+            manifestPlaceholders["appLabel"] = "Kobbler (Perf)"
+        }
     }
 
     packaging {
