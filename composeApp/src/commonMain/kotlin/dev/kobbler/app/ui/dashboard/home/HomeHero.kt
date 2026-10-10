@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import coil3.request.CachePolicy
 import coil3.SingletonImageLoader
@@ -25,7 +23,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.focus.FocusRequester
@@ -37,11 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -56,7 +49,6 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.ReasonChip
 import dev.kobbler.app.ui.components.SoftenedArtPx
 import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.kobfocus.focusKey
@@ -65,27 +57,23 @@ import dev.kobbler.kobfocus.focusKeyGroup
 /** Whatever the page is pointing at: an Up Next entry, or any card in the rails below. */
 @Immutable
 data class Spotlight(
-    val title: String,
     val backdropUrl: String? = null,
     val posterUrl: String? = null,
     val upNextIndex: Int? = null,
 )
 
 fun UpNextItem.spotlight(index: Int) = Spotlight(
-    title = title,
     backdropUrl = backdropUrl,
     posterUrl = mediaArtUrl,
     upNextIndex = index,
 )
 
 fun RecentlyAddedItem.spotlight() = Spotlight(
-    title = title,
     backdropUrl = backdropUrl,
     posterUrl = imageUrl,
 )
 
 fun DiscoverItem.spotlight() = Spotlight(
-    title = title,
     backdropUrl = backdropUrl,
     posterUrl = posterUrl,
 )
@@ -185,8 +173,9 @@ fun PrefetchBackdrops(items: List<UpNextItem>) {
 }
 
 /**
- * The words over the backdrop. Its height is whatever the rows below leave of the screen,
- * so Up Next and the first rail are on screen without scrolling.
+ * The open stretch of backdrop above Up Next, carrying Resume and Details where there is a
+ * pointer. The title is on the focused card already. Its height is whatever the rows below
+ * leave of the screen, so Up Next and the first rail are on screen without scrolling.
  */
 @Composable
 fun HeroCopy(
@@ -222,18 +211,10 @@ fun HeroCopy(
             modifier = Modifier.fillMaxSize().padding(start = gutter, end = gutter, top = 24.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
-            Text(
-                spotlight.title,
-                color = colors.textHi,
-                style = KobappTheme.type.h1.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = if (tv) 1 else 2,
-                overflow = TextOverflow.Ellipsis,
-            )
             if (onResume != null && onDetails != null) {
                 // Kept in place for a rail card, which has no Resume, so the rows below do
                 // not jump as the pointer moves between them.
                 val active = item != null
-                Spacer(Modifier.height(14.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier

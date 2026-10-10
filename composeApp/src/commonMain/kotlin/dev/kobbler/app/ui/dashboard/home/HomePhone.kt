@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -254,3 +253,8 @@ private fun railPosterWidth(available: Dp): Dp {
     val count = maxOf(3, ((available - RailPeek + RailGap) / (RailPosterTarget + RailGap)).toInt())
     return (available - RailGap * (count - 1) - RailPeek) / count
 }
+
+// Just under two cards fit across, so the next card's edge says "swipe"; past this width
+// the card is only more picture.
+private val UpNextCardMaxWidth = 260.dp
+private val UpNextCardGap = 12.dp

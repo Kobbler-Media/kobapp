@@ -39,11 +39,6 @@ fun KobappColors.accentForSection(sectionKey: String): Color = when {
     else -> accWanted
 }
 
-// Just under two phone cards fit across, so the next card's edge says "swipe"; past this
-// width the card is only more picture, on any screen.
-val UpNextCardMaxWidth = 260.dp
-val UpNextCardGap = 12.dp
-
 @Composable
 fun ProgressLine(progress: Float, accent: Color, height: Dp = 3.dp) {
     val colors = KobappTheme.colors

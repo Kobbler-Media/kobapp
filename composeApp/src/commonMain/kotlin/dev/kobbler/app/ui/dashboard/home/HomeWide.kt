@@ -1,18 +1,15 @@
 package dev.kobbler.app.ui.dashboard.home
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -32,11 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -78,6 +73,8 @@ private const val ScrolledBackdropDim = 0.6f
 const val HomeHeroTag = "home-hero"
 
 const val UpNextCardTag = "upnext-card"
+
+const val RecentCardTag = "recent-card"
 
 @Composable
 fun HomeWide(
@@ -205,6 +202,7 @@ fun HomeWide(
                                         accentColor = colors.accentForRecentlyAdded(item.itemType),
                                         onClick = { onRecentClick(item) },
                                         modifier = Modifier
+                                            .testTag("$RecentCardTag.$c")
                                             .focusKey("item.$c")
                                             .onHoverEnter { pointedAt.value = item.spotlight() }
                                             .onFocusChanged {
@@ -348,7 +346,7 @@ private fun UpNextStrip(
                     state = rail.state,
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = gutter),
-                    horizontalArrangement = Arrangement.spacedBy(UpNextCardGap),
+                    horizontalArrangement = Arrangement.spacedBy(KobappTheme.dimens.railGap),
                 ) {
                     itemsIndexed(items) { i, item ->
                         WideCard(
@@ -358,9 +356,12 @@ private fun UpNextStrip(
                             backdropUrl = item.backdropUrl,
                             progress = item.progress ?: 0f,
                             accentColor = colors.accentForMediaType(item.mediaType),
+                            aspectRatio = 3f / 2f,
                             onClick = { onClick(i) },
                             modifier = Modifier
-                                .width(UpNextCardMaxWidth)
+                                // A poster from the rows below turned on its side, so the
+                                // page reads as one grid rather than two sizes of card.
+                                .width(KobappTheme.dimens.posterWidth * 1.5f)
                                 .testTag("$UpNextCardTag.$i")
                                 .focusKey("item.$i", preferredEntry = i == 0)
                                 .onHoverEnter { onHovered(i) }

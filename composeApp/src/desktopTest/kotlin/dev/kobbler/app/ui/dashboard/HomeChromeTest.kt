@@ -25,7 +25,8 @@ class HomeChromeTest {
         {"item_type":"movie","id":"r2","title":"Recent 2","subtitle":"2024","link":"/movies/r2"}
     ],"sections":[
         {"title":"Popular Movies","section_key":"popular_movies","sort_order":1,"items":[
-            {"provider":"tmdb","provider_id":"1","media_type":"movie","title":"Asked For","year":2024,"want_status":"wanted"}
+            {"provider":"tmdb","provider_id":"1","media_type":"movie","title":"Asked For","year":2024,"want_status":"wanted"},
+            {"provider":"tmdb","provider_id":"2","media_type":"movie","title":"Already Here","year":2024,"is_in_library":true}
         ]}
     ]}"""
 
@@ -44,9 +45,11 @@ class HomeChromeTest {
                     for (text in listOf("UP NEXT ·", "new this week")) {
                         check(onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isEmpty()) { "$formFactor: '$text' is shown" }
                     }
-                    check(onAllNodesWithContentDescription("Wanted").fetchSemanticsNodes().isNotEmpty()) {
-                        "$formFactor: a wanted title carries no wanted mark"
+                    for (mark in listOf("Wanted", "In library")) {
+                        check(onAllNodesWithContentDescription(mark).fetchSemanticsNodes().isNotEmpty()) { "$formFactor: no '$mark' mark" }
                     }
+                    // The focused card's title is on the card; the backdrop is only its picture.
+                    check(onAllNodesWithText("Started").fetchSemanticsNodes().size == 1) { "$formFactor: the focused title is repeated" }
                 }
             }
         }

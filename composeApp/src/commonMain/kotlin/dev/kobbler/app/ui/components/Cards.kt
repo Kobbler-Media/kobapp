@@ -32,7 +32,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import dev.kobbler.app.data.LibraryStatus
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -107,11 +106,10 @@ fun PosterCard(
                 .clip(shape)
                 .drawBehind { if (!artShown) drawRect(placeholder) },
         ) {
-            AsyncImage(
+            FadeInImage(
                 model = imageUrl,
                 contentDescription = title,
-                contentScale = ContentScale.Crop,
-                onSuccess = { artShown = true },
+                onShown = { artShown = true },
                 modifier = Modifier.fillMaxSize(),
             )
             if (progress != null) {
@@ -207,6 +205,7 @@ fun WideCard(
     progress: Float,
     accentColor: Color? = null,
     modifier: Modifier = Modifier,
+    aspectRatio: Float = 16f / 9f,
     onClick: () -> Unit = {},
 ) {
     val dimens = KobappTheme.dimens
@@ -241,21 +240,20 @@ fun WideCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
+                .aspectRatio(aspectRatio)
                 .clip(shape)
                 .background(placeholder),
         ) {
             if (backdropUrl != null) {
-                AsyncImage(displayUrl, title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                FadeInImage(displayUrl, title, modifier = Modifier.fillMaxSize())
             } else {
-                AsyncImage(
+                FadeInImage(
                     model = softenedArt(imageUrl),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
                     alpha = 0.6f,
                 )
-                AsyncImage(
+                FadeInImage(
                     imageUrl, title,
                     modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
                     contentScale = ContentScale.Fit,
@@ -322,7 +320,7 @@ fun BookCover(
                 .background(cover),
         ) {
             if (!imageUrl.isNullOrBlank()) {
-                AsyncImage(imageUrl, title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                FadeInImage(imageUrl, title, modifier = Modifier.fillMaxSize())
             }
             // spine line (left)
             Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(2.dp).background(Color.Black.copy(alpha = 0.35f)))

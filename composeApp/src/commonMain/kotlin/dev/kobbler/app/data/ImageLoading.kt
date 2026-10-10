@@ -9,7 +9,6 @@ import coil3.network.NetworkRequest
 import coil3.network.NetworkResponse
 import coil3.network.NetworkResponseBody
 import coil3.network.ktor3.asNetworkClient
-import coil3.request.crossfade
 import dev.kobbler.app.platform.applyPlatformImageOptions
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.currentCoroutineContext
@@ -22,9 +21,6 @@ fun kobImageLoader(context: PlatformContext, httpClient: HttpClient, cacheDir: P
     ImageLoader.Builder(context)
         .components { add(NetworkFetcher.Factory(networkClient = { CompleteBodyNetworkClient(httpClient.asNetworkClient()) })) }
         .apply { cacheDir?.let { dir -> diskCache { DiskCache.Builder().directory(dir).build() } } }
-        // Each poster fades in as its own bytes arrive instead of a screenful popping in
-        // together; memory-cache hits skip the fade, so scrolling back stays instant.
-        .crossfade(true)
         .applyPlatformImageOptions()
         .build()
 

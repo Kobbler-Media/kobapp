@@ -21,6 +21,7 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.dashboard.home.HomeWide
+import dev.kobbler.app.ui.dashboard.home.RecentCardTag
 import dev.kobbler.app.ui.dashboard.home.UpNextCardTag
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
@@ -80,14 +81,15 @@ class HomeWideLayoutTest {
         assertTrue(top < 540.dp, "Recently Added starts at $top of a 540dp screen")
     }
 
-    /** The same 16:9 backdrop cards as the phone's Up Next row, capped at the phone's width. */
+    /** An Up Next card is a Recently Added poster turned on its side. */
     @Test
-    fun `up next is a row of backdrop cards`() {
+    fun `up next cards are the posters below turned sideways`() {
         for ((formFactor, width, height) in listOf(Triple(FormFactor.Desktop, 1920, 1080), Triple(FormFactor.TV, 960, 540))) {
             home(formFactor, width, height) {
                 val card = onNodeWithTag("$UpNextCardTag.1").getUnclippedBoundsInRoot()
-                assertTrue(card.width <= 260.dp, "$formFactor: up next card is ${card.width} wide")
-                assertEquals(card.width.value * 9f / 16f, card.height.value, 2f, "$formFactor: up next card is not 16:9: $card")
+                val poster = onNodeWithTag("$RecentCardTag.1").getUnclippedBoundsInRoot()
+                assertEquals(poster.width.value, card.height.value, 2f, "$formFactor: card $card against poster $poster")
+                assertEquals(poster.width.value * 1.5f, card.width.value, 2f, "$formFactor: card $card against poster $poster")
             }
         }
     }
@@ -105,11 +107,5 @@ class HomeWideLayoutTest {
         val y = ((heading().top + heading().bottom) / 2).value.toInt().coerceIn(0, pixels.height - 1)
         val behind = (pixels.width * 3 / 4 until pixels.width).map { pixels[it, y] }.toSet()
         assertTrue(behind.size > 1, "the right of the Shelf 6 heading is one flat colour: the backdrop is gone")
-    }
-
-    @Test
-    fun `the hero follows focus into the rails`() = home(FormFactor.TV, width = 960, height = 540) {
-        onAllNodesWithText("Recent 3").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Recent 3").fetchSemanticsNodes().size >= 2 }
     }
 }
