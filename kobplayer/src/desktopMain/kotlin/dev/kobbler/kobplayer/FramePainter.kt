@@ -162,10 +162,13 @@ internal class FramePainter : AutoCloseable {
 }
 
 internal object SkiaTextures {
-    // skiko's ColorType lacks kRGB_F16F16F16x, so every entry after RGBA_F16 reaches the
-    // native type one below its name (R16G16_UNORM is really A16_unorm; RG16 is out of reach
-    // entirely). Probe for the one that behaves as A16 so this survives skiko fixing it.
-    val alpha16: ColorType? by lazy { listOf(ColorType.A16_UNORM, ColorType.R16G16_UNORM).firstOrNull(::isAlpha16) }
+    // skiko's ColorType maps to Skia's native enum by ordinal and trails it: native types it
+    // does not list (kRGB_F16F16F16x, and in newer Skia more) push every later entry onto a
+    // native type below its name, so A16_unorm sits under whichever entry the gap lands it on.
+    // Probe for the one that behaves as A16 so this survives skiko moving either way.
+    val alpha16: ColorType? by lazy {
+        listOf(ColorType.A16_UNORM, ColorType.R16G16_UNORM, ColorType.R16G16B16A16_UNORM).firstOrNull(::isAlpha16)
+    }
 
     private fun isAlpha16(type: ColorType): Boolean = runCatching {
         val half = byteArrayOf(0, 0x80.toByte(), 0, 0, 0, 0, 0, 0)

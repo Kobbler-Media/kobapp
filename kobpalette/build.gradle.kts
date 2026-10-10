@@ -29,6 +29,7 @@ kotlin {
 
     wasmJs {
         browser()
+        binaries.executable()
     }
 
     if (hostIsMac) {

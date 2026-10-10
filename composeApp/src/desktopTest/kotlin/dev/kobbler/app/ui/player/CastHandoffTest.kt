@@ -97,7 +97,7 @@ class CastHandoffTest {
             waitUntil(timeoutMillis = 10_000) { cast.started }
 
             cast.connect("Living Room TV")
-            waitUntil(timeoutMillis = 10_000) { cast.loads.isNotEmpty() }
+            waitUntil(timeoutMillis = 10_000) { gps.castSession != null }
 
             assertEquals(1_380, cast.loads.single().startPositionSec)
             assertTrue("pause" in player.calls, "still playing here as well: ${player.calls}")
