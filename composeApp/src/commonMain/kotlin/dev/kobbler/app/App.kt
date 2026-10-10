@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalWindowInfo
-import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
-import coil3.disk.DiskCache
-import coil3.network.ktor3.KtorNetworkFetcherFactory
 import dev.kobbler.app.data.AuthScreen
 import dev.kobbler.app.data.AuthState
+import dev.kobbler.app.data.kobImageLoader
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.defaultFormFactor
 import dev.kobbler.app.platform.imageCacheDir
@@ -30,7 +28,6 @@ import dev.kobbler.app.ui.navigation.AdaptiveScaffold
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import okio.Path.Companion.toPath
 
 @Composable
 fun App(
@@ -58,10 +55,7 @@ fun App(
     }
 
     setSingletonImageLoaderFactory { context ->
-        ImageLoader.Builder(context)
-            .components { add(KtorNetworkFetcherFactory(httpClient = imageHttpClient)) }
-            .apply { imageCacheDir?.let { dir -> diskCache { DiskCache.Builder().directory(dir.toPath()).build() } } }
-            .build()
+        kobImageLoader(context, imageHttpClient, imageCacheDir(context))
     }
 
     RefreshWatchStateOnFocus(LocalWindowInfo.current.isWindowFocused)

@@ -1,6 +1,9 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import coil3.ImageLoader
+import coil3.PlatformContext
+import okio.Path
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
@@ -95,4 +98,6 @@ actual class CacheSink private constructor() {
     actual fun abort() = Unit
 }
 
-actual val imageCacheDir: String? = null
+actual fun imageCacheDir(context: PlatformContext): Path? = null
+
+actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder = this

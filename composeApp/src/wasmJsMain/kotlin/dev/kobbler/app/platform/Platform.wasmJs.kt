@@ -1,6 +1,9 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import coil3.ImageLoader
+import coil3.PlatformContext
+import okio.Path
 import kotlinx.browser.localStorage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -55,4 +58,6 @@ actual class CacheSink private constructor() {
 // Single-threaded runtime: there is no separate I/O pool to move to.
 actual val ioDispatcher: CoroutineDispatcher = Dispatchers.Default
 
-actual val imageCacheDir: String? = null
+actual fun imageCacheDir(context: PlatformContext): Path? = null
+
+actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder = this

@@ -1,6 +1,12 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.request.allowPartialImage
+import kotlin.concurrent.thread
+import okio.Path
+import okio.Path.Companion.toOkioPath
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -128,4 +134,14 @@ actual class CacheSink internal constructor(
 
 actual val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
-actual val imageCacheDir: String? = null
+actual fun imageCacheDir(context: PlatformContext): Path? {
+    retire(context.cacheDir.resolve("image_cache"))
+    return context.cacheDir.resolve("artwork").toOkioPath()
+}
+
+// A truncated download decodes as the top of the picture over nothing, and is shown as if whole.
+actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder = allowPartialImage(false)
+
+private fun retire(dir: java.io.File) {
+    if (dir.exists()) thread(isDaemon = true, name = "retire-image-cache") { dir.deleteRecursively() }
+}

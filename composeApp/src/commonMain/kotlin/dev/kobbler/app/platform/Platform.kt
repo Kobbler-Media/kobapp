@@ -1,6 +1,9 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import coil3.ImageLoader
+import coil3.PlatformContext
+import okio.Path
 import kotlinx.coroutines.CoroutineDispatcher
 
 enum class FormFactor { Phone, TV, Desktop }
@@ -32,9 +35,12 @@ expect object Settings {
  */
 expect val ioDispatcher: CoroutineDispatcher
 
-// Null keeps Coil's platform default. Only set where that default is wrong: on the JVM it
-// is java.io.tmpdir, which is tmpfs on many Linux installs — RAM-backed and gone on reboot.
-expect val imageCacheDir: String?
+// Null keeps Coil's platform default (none on the web and iOS, tmpfs-backed java.io.tmpdir
+// on many Linux desktops). Versioned: the previous directory held posters cut short by
+// cancelled loads and backdrops from before the server kept them at full size.
+expect fun imageCacheDir(context: PlatformContext): Path?
+
+expect fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder
 
 /**
  * Sequential writer into [FileCache]. Lets a multi-hundred-MB download reach disk without

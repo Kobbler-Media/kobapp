@@ -1,6 +1,11 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import coil3.ImageLoader
+import coil3.PlatformContext
+import kotlin.concurrent.thread
+import okio.Path
+import okio.Path.Companion.toOkioPath
 import java.util.prefs.Preferences
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -82,5 +87,14 @@ actual class CacheSink internal constructor(
 
 actual val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
-actual val imageCacheDir: String? =
-    java.io.File(System.getProperty("user.home"), ".cache/kobbler/images").path
+actual fun imageCacheDir(context: PlatformContext): Path? {
+    val root = java.io.File(System.getProperty("user.home"), ".cache/kobbler")
+    retire(root.resolve("images"))
+    return root.resolve("artwork").toOkioPath()
+}
+
+actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder = this
+
+private fun retire(dir: java.io.File) {
+    if (dir.exists()) thread(isDaemon = true, name = "retire-image-cache") { dir.deleteRecursively() }
+}
