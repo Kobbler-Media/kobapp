@@ -43,7 +43,6 @@ import dev.kobbler.app.data.toUpNextItem
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.WideCard
-import dev.kobbler.app.ui.components.ReasonChip
 import dev.kobbler.app.ui.components.SectionHeading
 import dev.kobbler.app.ui.components.StripedArt
 import dev.kobbler.app.ui.components.bleedHorizontally
@@ -93,11 +92,11 @@ fun HomePhone(
                             // these are backdrop cards rather than the compact list rows. Just
                             // under two fit, which puts the next card's edge permanently on
                             // screen — that peek is what says "swipe".
-                            val cardWidth = minOf((maxWidth - 12.dp) * 0.62f, 260.dp)
+                            val cardWidth = minOf((maxWidth - UpNextCardGap) * 0.62f, UpNextCardMaxWidth)
                             LazyRow(
                                 modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
                                 contentPadding = PaddingValues(horizontal = gutter),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(UpNextCardGap),
                             ) {
                                 itemsIndexed(stack) { i, item ->
                                     WideCard(
@@ -121,7 +120,6 @@ fun HomePhone(
                 item(key = "recent") {
                     PhoneRail(
                         title = "Recently Added",
-                        accent = colors.accMovies,
                         items = homeData.recentlyAdded,
                     ) { item, cardWidth ->
                         PosterCard(
@@ -140,7 +138,7 @@ fun HomePhone(
                 item(key = "section-$i") {
                     val sectionAccent = colors.accentForSection(section.sectionKey)
                     val wantScope = rememberCoroutineScope()
-                    PhoneRail(title = section.title, accent = sectionAccent, items = section.items) { item, cardWidth ->
+                    PhoneRail(title = section.title, items = section.items) { item, cardWidth ->
                         // buildList hands back a fresh List every call, and List compares by
                         // reference under strong skipping — inline, no card in any rail can
                         // ever skip.
@@ -191,14 +189,6 @@ private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit) {
             ),
         )
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(14.dp),
-        ) {
-            ReasonChip(reason = item.reason, label = item.tag)
-        }
-
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -233,13 +223,12 @@ private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit) {
 @Composable
 private fun <T> PhoneRail(
     title: String,
-    accent: Color,
     items: List<T>,
     card: @Composable (T, Dp) -> Unit,
 ) {
     val gutter = KobappTheme.dimens.pageGutterPhone
     Column {
-        SectionHeading(title = title, accent = accent)
+        SectionHeading(title = title, accent = null)
         Spacer(Modifier.height(10.dp))
         BoxWithConstraints {
             val cardWidth = railPosterWidth(maxWidth)

@@ -58,6 +58,7 @@ import dev.kobbler.app.ui.components.FocusEdgeSlack
 import dev.kobbler.app.ui.components.HoldPageTop
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.SectionHeading
+import dev.kobbler.app.ui.components.WideCard
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.delay
@@ -70,7 +71,13 @@ private const val HeroSwapDelayMs = 250L
 
 private val HeroBarFade = 200.dp
 
+// Once the hero's words have scrolled off, rows sit straight on the picture; this much dim
+// keeps their headings legible while the picture still follows focus.
+private const val ScrolledBackdropDim = 0.6f
+
 const val HomeHeroTag = "home-hero"
+
+const val UpNextCardTag = "upnext-card"
 
 @Composable
 fun HomeWide(
@@ -137,8 +144,7 @@ fun HomeWide(
             HomeBackdrop(
                 spotlight = { shown.value },
                 accent = upNext.firstOrNull()?.let { colors.accentForMediaType(it.mediaType) } ?: colors.accMovies,
-                // Past Up Next and the first rail the rows below are what is being read.
-                dim = { if (listState.firstVisibleItemIndex >= 2) 1f else scrolledFraction() * 0.7f },
+                dim = { scrolledFraction() * ScrolledBackdropDim },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -188,10 +194,8 @@ fun HomeWide(
                         Box(Modifier.onSizeChanged { recentPx = it.height }) {
                             HomeRail(
                                 title = "Recently Added",
-                                accent = colors.accMovies,
                                 state = rail.state,
                                 key = "recent",
-                                subtitle = if (homeData.recentlyAdded.size > 1) "${homeData.recentlyAdded.size} new this week" else null,
                             ) {
                                 itemsIndexed(homeData.recentlyAdded) { c, item ->
                                     PosterCard(
@@ -224,7 +228,6 @@ fun HomeWide(
                         val rail = rememberRailFocus()
                         HomeRail(
                             title = section.title,
-                            accent = sectionAccent,
                             state = rail.state,
                             key = "section-$i",
                         ) {
@@ -248,12 +251,12 @@ fun HomeWide(
                                     onClick = { onDiscoverItemClick(item) },
                                     modifier = Modifier
                                         .focusKey("item.$c")
-                                        .onHoverEnter { pointedAt.value = item.spotlight(section.title) }
+                                        .onHoverEnter { pointedAt.value = item.spotlight() }
                                         .onFocusChanged {
                                             if (it.isFocused) {
                                                 rail.focused = c
                                                 focusedRow.intValue = sectionRows[i]
-                                                pointedAt.value = item.spotlight(section.title)
+                                                pointedAt.value = item.spotlight()
                                             }
                                         },
                                 )
@@ -325,21 +328,15 @@ private fun UpNextStrip(
     onHovered: (Int) -> Unit,
 ) {
     val colors = KobappTheme.colors
-    val dimens = KobappTheme.dimens
     val gutter = homeGutter()
-    // The tile is art, a title and a tag: past this width it is only empty card.
-    val tileWidth = minOf(dimens.wideCardWidth, 240.dp)
-    val tileGap = dimens.s3
     val rail = rememberRailFocus()
     // The hero's own bottom padding already separates it; a full gap on top of that read as
     // a hole between the title and the strip.
     Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp).focusKeyGroup("upnext")) {
         Text(
-            "Up Next".uppercase(),
-            color = colors.textLo,
-            style = KobappTheme.type.caption.copy(
-                letterSpacing = androidx.compose.ui.unit.TextUnit(0.12f, androidx.compose.ui.unit.TextUnitType.Em),
-            ),
+            "Up Next",
+            color = colors.textHi,
+            style = KobappTheme.type.h3,
             modifier = Modifier.padding(start = gutter),
         )
         Spacer(Modifier.height(10.dp))
@@ -351,14 +348,20 @@ private fun UpNextStrip(
                     state = rail.state,
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = gutter),
-                    horizontalArrangement = Arrangement.spacedBy(tileGap),
+                    horizontalArrangement = Arrangement.spacedBy(UpNextCardGap),
                 ) {
                     itemsIndexed(items) { i, item ->
-                        UpNextStripTile(
-                            item = item,
+                        WideCard(
+                            title = item.title,
+                            subtitle = item.subtitle,
+                            imageUrl = item.mediaArtUrl.orEmpty(),
+                            backdropUrl = item.backdropUrl,
+                            progress = item.progress ?: 0f,
+                            accentColor = colors.accentForMediaType(item.mediaType),
                             onClick = { onClick(i) },
                             modifier = Modifier
-                                .width(tileWidth)
+                                .width(UpNextCardMaxWidth)
+                                .testTag("$UpNextCardTag.$i")
                                 .focusKey("item.$i", preferredEntry = i == 0)
                                 .onHoverEnter { onHovered(i) }
                                 .onFocusChanged {
@@ -375,25 +378,14 @@ private fun UpNextStrip(
 @Composable
 private fun HomeRail(
     title: String,
-    accent: Color,
     state: LazyListState,
     key: String,
-    subtitle: String? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val colors = KobappTheme.colors
     val gutter = homeGutter()
     val railGap = KobappTheme.dimens.railGap
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).focusKeyGroup(key)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = gutter),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SectionHeading(title = title, accent = accent, modifier = Modifier.weight(1f))
-            if (subtitle != null) {
-                Text(subtitle, color = colors.textLo, style = KobappTheme.type.caption)
-            }
-        }
+        SectionHeading(title = title, accent = null, modifier = Modifier.padding(horizontal = gutter))
         Spacer(Modifier.height(10.dp))
         RailPager(state, gutter, enabled = LocalFormFactor.current != FormFactor.TV) {
             LazyRow(

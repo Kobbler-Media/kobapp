@@ -1,8 +1,7 @@
+@file:OptIn(coil3.annotation.ExperimentalCoilApi::class)
+
 package dev.kobbler.app.ui.dashboard.home
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -48,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.compose.useExistingImageAsPlaceholder
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.RecentlyAddedItem
 import dev.kobbler.app.data.UpNextItem
@@ -59,7 +59,6 @@ import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.ReasonChip
 import dev.kobbler.app.ui.components.SoftenedArtPx
 import dev.kobbler.app.ui.components.StripedBackdrop
-import dev.kobbler.app.ui.components.softenedArt
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 
@@ -67,8 +66,6 @@ import dev.kobbler.kobfocus.focusKeyGroup
 @Immutable
 data class Spotlight(
     val title: String,
-    val caption: String,
-    val subtitle: String? = null,
     val backdropUrl: String? = null,
     val posterUrl: String? = null,
     val upNextIndex: Int? = null,
@@ -76,8 +73,6 @@ data class Spotlight(
 
 fun UpNextItem.spotlight(index: Int) = Spotlight(
     title = title,
-    caption = "Up next",
-    subtitle = subtitle,
     backdropUrl = backdropUrl,
     posterUrl = mediaArtUrl,
     upNextIndex = index,
@@ -85,16 +80,12 @@ fun UpNextItem.spotlight(index: Int) = Spotlight(
 
 fun RecentlyAddedItem.spotlight() = Spotlight(
     title = title,
-    caption = "Recently added",
-    subtitle = subtitle,
     backdropUrl = backdropUrl,
     posterUrl = imageUrl,
 )
 
-fun DiscoverItem.spotlight(section: String) = Spotlight(
+fun DiscoverItem.spotlight() = Spotlight(
     title = title,
-    caption = section,
-    subtitle = year?.toString(),
     backdropUrl = backdropUrl,
     posterUrl = posterUrl,
 )
@@ -127,58 +118,47 @@ fun HomeBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Float, m
     }
     Box(
         modifier
+            // Picture and scrims change only with the spotlight, so they are drawn into a
+            // cached layer and composited as one texture. The scroll dim is that layer's
+            // alpha over the page's own background: a full-screen dim rect on top would be
+            // one more full-screen fill a frame, and scrolling does not re-rasterise it.
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                alpha = 1f - dim()
+            }
             .drawWithContent {
-                // Fully covered, the picture would still be a full-screen texture a frame.
-                if (dim() < 1f) drawContent()
+                drawContent()
+                drawRect(bottomScrim)
+                drawRect(sideScrim)
             },
     ) {
-        Box(
-            Modifier
-                .matchParentSize()
-                // Picture and scrims change only with the spotlight, so they are drawn
-                // into a cached layer and composited as one texture; the scroll dim sits
-                // outside it so scrolling does not re-rasterise the picture.
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(bottomScrim)
-                    drawRect(sideScrim)
-                },
-        ) {
         if (backdrop == null && poster == null) {
             StripedBackdrop(accent = accent, opacity = 0.55f, withRadialOverlay = false, modifier = Modifier.fillMaxSize())
-        }
-        // Each frame of a fade is a full-screen saveLayer for the alpha and a re-render of
-        // the cached layer, and moving along a row starts one on nearly every press: more
-        // than a TV stick's GPU has. A TV swaps the picture outright.
-        val fade = if (LocalFormFactor.current == FormFactor.TV) snap<Float>() else tween<Float>(450)
-        Crossfade(targetState = backdrop to poster, animationSpec = fade, label = "home-backdrop") { (b, p) ->
-            when {
-                b != null -> AsyncImage(
-                    model = b,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                p != null -> AsyncImage(
-                    model = softenedArt(p),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alpha = 0.6f,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                else -> Box(Modifier.fillMaxSize())
+        } else {
+            val context = LocalPlatformContext.current
+            // One image whose request changes, fading from the picture already on screen:
+            // a Crossfade of two composables is a full-screen saveLayer a frame, which a TV
+            // stick cannot afford, and without any fade the new picture jumps in.
+            val request = remember(backdrop, poster) {
+                ImageRequest.Builder(context)
+                    .data(backdrop ?: poster)
+                    .apply { if (backdrop == null) size(SoftenedArtPx) }
+                    .crossfade(BackdropFadeMs)
+                    .useExistingImageAsPlaceholder(true)
+                    .build()
             }
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = if (backdrop != null) 1f else 0.6f,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
-        }
-        Box(
-            Modifier.matchParentSize().drawBehind {
-                val d = dim()
-                if (d > 0f) drawRect(colors.bg, alpha = d)
-            },
-        )
     }
 }
+
+private const val BackdropFadeMs = 400
 
 /**
  * Up Next is where focus lands, so its backdrops are the next ones asked for. Fetched to
@@ -222,7 +202,6 @@ fun HeroCopy(
     val gutter = if (tv) KobappTheme.dimens.pageGutterTv else KobappTheme.dimens.pageGutter
     val index = spotlight.upNextIndex
     val item = index?.let { upNext.getOrNull(it) }
-    val captionStyle = KobappTheme.type.caption.copy(letterSpacing = TextUnit(0.12f, TextUnitType.Em))
 
     Box(
         modifier = Modifier
@@ -243,28 +222,6 @@ fun HeroCopy(
             modifier = Modifier.fillMaxSize().padding(start = gutter, end = gutter, top = 24.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    if (item != null) "Up next · ${index + 1} of ${upNext.size}".uppercase() else spotlight.caption.uppercase(),
-                    color = colors.textMd,
-                    style = captionStyle,
-                )
-                if (item != null) ReasonChip(reason = item.reason, label = item.tag)
-                if (!spotlight.subtitle.isNullOrBlank()) {
-                    Text(
-                        spotlight.subtitle,
-                        color = colors.textMd,
-                        style = KobappTheme.type.caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                }
-                if (!item?.tail.isNullOrBlank()) {
-                    Text("· ${item.tail}", color = colors.textLo, style = KobappTheme.type.caption, maxLines = 1)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
             Text(
                 spotlight.title,
                 color = colors.textHi,

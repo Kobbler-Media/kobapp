@@ -96,7 +96,7 @@ class HomeHeroTest {
     fun `the hero and its strip open the page`() {
         for (formFactor in listOf(FormFactor.Desktop, FormFactor.TV)) {
             heroPage(formFactor) {
-                val strip = onNodeWithText("UP NEXT").getUnclippedBoundsInRoot()
+                val strip = onNodeWithText("Up Next").getUnclippedBoundsInRoot()
                 assertEquals(0.dp, heroBounds().top, "$formFactor: the hero does not start the page")
                 assertTrue(strip.bottom <= heroBounds().bottom, "$formFactor: Up Next sits outside the hero")
             }

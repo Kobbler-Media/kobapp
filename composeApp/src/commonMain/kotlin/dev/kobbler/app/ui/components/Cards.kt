@@ -6,15 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -370,18 +364,3 @@ fun BookCover(
     }
 }
 
-@Composable
-private fun StatusBadgeOverlay(status: LibraryStatus, modifier: Modifier = Modifier) {
-    val colors = KobappTheme.colors
-    val (icon, bgColor) = when (status) {
-        LibraryStatus.InLibrary -> Icons.Outlined.Check to colors.ok
-        LibraryStatus.Wanted -> Icons.Outlined.Bookmark to colors.warn
-        LibraryStatus.NotInLibrary -> Icons.Outlined.Add to Color.White.copy(alpha = 0.3f)
-    }
-    Box(
-        modifier = modifier.size(22.dp).background(bgColor, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, status.name, tint = colors.bg, modifier = Modifier.size(14.dp))
-    }
-}

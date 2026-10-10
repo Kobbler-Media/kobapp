@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,9 +34,10 @@ fun StatusPill(
     // "Not in library" is the default state of everything in Discover — saying so on
     // every tile is noise, so it renders nothing at all.
     if (status == PillStatus.NotInLibrary) return
+    if (status == PillStatus.Wanted) return WantedMark(modifier)
     val (label, accent) = when (status) {
         PillStatus.InLibrary -> null to colors.ok
-        PillStatus.Wanted -> "WANTED" to colors.accWanted
+        PillStatus.Wanted -> return
         PillStatus.Live -> "LIVE" to colors.accLive
         PillStatus.NotInLibrary -> return
     }
@@ -58,5 +62,22 @@ fun StatusPill(
                 color = accent,
             )
         }
+    }
+}
+
+// A word on a poster is unreadable at TV distance and covers the art; the clock says
+// "asked for, still coming" at a glance.
+@Composable
+private fun WantedMark(modifier: Modifier) {
+    val warn = KobappTheme.colors.warn
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .border(1.dp, lerp(Color.Transparent, warn, 0.5f), CircleShape),
+    ) {
+        Icon(Icons.Outlined.Schedule, contentDescription = "Wanted", tint = warn, modifier = Modifier.size(16.dp))
     }
 }

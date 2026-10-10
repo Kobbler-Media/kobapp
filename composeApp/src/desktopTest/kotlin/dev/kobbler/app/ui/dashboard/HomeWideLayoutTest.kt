@@ -6,16 +6,26 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.dashboard.home.HomeWide
+import dev.kobbler.app.ui.dashboard.home.UpNextCardTag
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** Home's first screen is Up Next and the newest arrivals, with the picture behind them rather than above. */
@@ -31,7 +41,14 @@ class HomeWideLayoutTest {
         append((1..8).joinToString(",") {
             """{"item_type":"movie","id":"r$it","title":"Recent $it","subtitle":"2024","link":"/movies/r$it"}"""
         })
-        append("""],"sections":[]}""")
+        append("""],"sections":[""")
+        append((1..6).joinToString(",") { section ->
+            val items = (1..8).joinToString(",") {
+                """{"provider":"tmdb","provider_id":"$section-$it","media_type":"movie","title":"Pick $section.$it","year":2024}"""
+            }
+            """{"title":"Shelf $section","section_key":"movie_shelf_$section","sort_order":$section,"items":[$items]}"""
+        })
+        append("]}")
     }
 
     private fun home(formFactor: FormFactor, width: Int, height: Int, test: DesktopComposeUiTest.() -> Unit) =
@@ -63,17 +80,36 @@ class HomeWideLayoutTest {
         assertTrue(top < 540.dp, "Recently Added starts at $top of a 540dp screen")
     }
 
+    /** The same 16:9 backdrop cards as the phone's Up Next row, capped at the phone's width. */
     @Test
-    fun `desktop up next tiles stay tile sized`() = home(FormFactor.Desktop, width = 1920, height = 1080) {
-        val left = { t: String -> onAllNodesWithText(t).onFirst().getUnclippedBoundsInRoot().left }
-        val pitch = left("Queued 3") - left("Queued 2")
-        assertTrue(pitch <= 260.dp, "up next pitch $pitch")
+    fun `up next is a row of backdrop cards`() {
+        for ((formFactor, width, height) in listOf(Triple(FormFactor.Desktop, 1920, 1080), Triple(FormFactor.TV, 960, 540))) {
+            home(formFactor, width, height) {
+                val card = onNodeWithTag("$UpNextCardTag.1").getUnclippedBoundsInRoot()
+                assertTrue(card.width <= 260.dp, "$formFactor: up next card is ${card.width} wide")
+                assertEquals(card.width.value * 9f / 16f, card.height.value, 2f, "$formFactor: up next card is not 16:9: $card")
+            }
+        }
+    }
+
+    /** The backdrop stays put and keeps following focus however far down the rows go. */
+    @Test
+    fun `the backdrop shows behind the rows far down the page`() = home(FormFactor.TV, width = 960, height = 540) {
+        onAllNodes(hasScrollToIndexAction()).onFirst().performScrollToIndex(7)
+        onAllNodesWithText("Pick 6.1").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
+        val heading = { onAllNodesWithText("Shelf 6").onFirst().getUnclippedBoundsInRoot() }
+        waitUntil(timeoutMillis = 5_000) { heading().bottom in 0.dp..540.dp }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        val pixels = onRoot().captureToImage().toPixelMap()
+        val y = ((heading().top + heading().bottom) / 2).value.toInt().coerceIn(0, pixels.height - 1)
+        val behind = (pixels.width * 3 / 4 until pixels.width).map { pixels[it, y] }.toSet()
+        assertTrue(behind.size > 1, "the right of the Shelf 6 heading is one flat colour: the backdrop is gone")
     }
 
     @Test
     fun `the hero follows focus into the rails`() = home(FormFactor.TV, width = 960, height = 540) {
         onAllNodesWithText("Recent 3").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("RECENTLY ADDED").fetchSemanticsNodes().isNotEmpty() }
-        assertTrue(onAllNodesWithText("Recent 3").fetchSemanticsNodes().size >= 2, "hero title did not follow focus")
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Recent 3").fetchSemanticsNodes().size >= 2 }
     }
 }

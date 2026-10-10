@@ -24,13 +24,13 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.kobfocus.focusKey
 
 /**
- * `● Title` heading: small accent square + glow + title text, optional trailing.
- * Matches primitives.jsx:SectionRow header.
+ * `● Title` heading: title text, optional trailing, and an accent square only where the
+ * section has a colour of its own (a library page) — on a mixed row it means nothing.
  */
 @Composable
 fun SectionHeading(
     title: String,
-    accent: Color,
+    accent: Color?,
     modifier: Modifier = Modifier,
     seeAllLabel: String? = null,
     onSeeAll: (() -> Unit)? = null,
@@ -41,8 +41,10 @@ fun SectionHeading(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(accent))
-        Spacer(Modifier.width(14.dp))
+        if (accent != null) {
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(accent))
+            Spacer(Modifier.width(14.dp))
+        }
         // Weighted, so the count/see-all beside it measure first and keep their own
         // width. Unweighted the title took the whole row and left them nothing.
         Text(
