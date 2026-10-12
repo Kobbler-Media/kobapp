@@ -103,7 +103,6 @@ class DesktopVideoTest {
         error("no subtitle track")
     }
 
-    private fun resourceUrl(name: String) = File(javaClass.getResource("/$name")!!.toURI()).toPath().toUri().toString()
 
     @Test
     fun asksForTheChosenDecoder() {

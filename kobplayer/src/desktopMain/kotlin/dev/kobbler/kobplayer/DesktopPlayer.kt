@@ -43,6 +43,7 @@ import kotlin.math.roundToInt
 internal class DesktopPlayer(
     parentContext: CoroutineContext,
     private val config: PlayerConfig,
+    vlcLogFile: String? = System.getenv("KOBPLAYER_VLC_LOG"),
 ) : Player {
 
     private val scope = CoroutineScope(
@@ -55,6 +56,8 @@ internal class DesktopPlayer(
         pluginSearchPathReady
         MediaPlayerFactory(if (config.verboseLogging) listOf("-vv") else emptyList())
     }
+
+    private val logFile = vlcLogFile?.let { VlcLogFile(factory, it) }
 
     val vlcPlayer: MediaPlayer = if (config.audioOnly) {
         factory.mediaPlayers().newMediaPlayer()
@@ -161,7 +164,11 @@ internal class DesktopPlayer(
     // *before* any sample reaches the speaker — eliminating the cold-start
     // pop/jitter the user hears when audio resumes from the preload window.
     private val isPreloading = MutableStateFlow(false)
-    private var fadeJob: Job? = null
+
+    private val gain = GainEnvelope(scope) { vlcPlayer.audio().setVolume(it) }
+    internal val gainLevel: StateFlow<Int> get() = gain.level
+
+    private fun userGain() = (_volume.value * 100).roundToInt()
 
     init {
         if (video != null) {
@@ -216,8 +223,7 @@ internal class DesktopPlayer(
                 // Absorb VLC's READY state — this is the quirk that breaks mediamp.
                 // We just sync volume/mute and load chapters.
                 vlcPlayer.submit {
-                    val vol = if (isPreloading.value) 0 else (_volume.value * 100).roundToInt()
-                    vlcPlayer.audio().setVolume(vol)
+                    gain.reapply()
                     if (_isMuted.value) vlcPlayer.audio().mute()
                 }
                 loadChapters()
@@ -236,6 +242,7 @@ internal class DesktopPlayer(
                     _state.value = PlayerState.PAUSED
                 } else {
                     _state.value = PlayerState.PLAYING
+                    gain.rampTo(FADE_IN_MS, ::userGain)
                 }
 
                 // Parse media and reload tracks on play
@@ -317,6 +324,7 @@ internal class DesktopPlayer(
                 hasStartedPlaying = false
                 loadedSource = source
                 gpuDecodeRequested = decodesOnGpu(source, decoding)
+                gain.set(0)
 
                 vlcPlayer.media().play(vlcMrl(source.url), *vlcMediaOptions(source, config, decoding).toTypedArray())
                 // Re-apply mute after play — new media may reset audio state.
@@ -329,12 +337,15 @@ internal class DesktopPlayer(
     }
 
     override fun play() {
+        if (_state.value == PlayerState.PLAYING) gain.rampTo(FADE_IN_MS, ::userGain)
         vlcPlayer.submit { vlcPlayer.controls().play() }
     }
 
     override fun pause() {
-        // Use setPause(true) — not pause() which is a toggle and can unpause if called twice
-        vlcPlayer.submit { vlcPlayer.controls().setPause(true) }
+        // setPause(true), not pause(): that one toggles, and a second call unpauses.
+        val pauseNow = { vlcPlayer.submit { vlcPlayer.controls().setPause(true) } }
+        if (_state.value == PlayerState.PLAYING) gain.rampTo(FADE_OUT_MS, { 0 }, pauseNow)
+        else pauseNow()
     }
 
     override fun stop() {
@@ -353,8 +364,8 @@ internal class DesktopPlayer(
     override fun togglePlayPause() {
         // Bypass any state guards — use vlcj controls directly
         when (playPauseIntent(_state.value)) {
-            PlayPauseIntent.Play -> vlcPlayer.submit { vlcPlayer.controls().play() }
-            PlayPauseIntent.Pause -> vlcPlayer.submit { vlcPlayer.controls().setPause(true) }
+            PlayPauseIntent.Play -> play()
+            PlayPauseIntent.Pause -> pause()
             PlayPauseIntent.None -> {}
         }
     }
@@ -389,7 +400,10 @@ internal class DesktopPlayer(
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, maxVolume)
         _volume.value = clamped
-        vlcPlayer.audio().setVolume((clamped * 100).roundToInt())
+        // A ramp reads the volume on every step, and a paused player sits at zero until
+        // the next fade-in, so only a steady playing gain is set directly.
+        val audible = _state.value == PlayerState.PLAYING || _state.value == PlayerState.BUFFERING
+        if (audible && !isPreloading.value && !gain.isRamping) gain.set(userGain())
     }
 
     override fun setMuted(muted: Boolean) {
@@ -401,25 +415,12 @@ internal class DesktopPlayer(
     override fun setPreloading(preloading: Boolean) {
         if (isPreloading.value == preloading) return
         isPreloading.value = preloading
-        fadeJob?.cancel()
         if (preloading) {
             // Re-applied in mediaPlayerReady because the initial setVolume can
             // lose to VLC's own readiness reset.
-            vlcPlayer.audio().setVolume(0)
+            gain.set(0)
         } else {
-            // Ramp 0 → user volume over ~250ms instead of jumping. VLC's first
-            // sample on resume-from-pause carries a click; fading the gain
-            // covers it. Long enough to overlap likely audio-sink wake-up,
-            // short enough to be imperceptible as a fade.
-            val target = (_volume.value * 100).roundToInt()
-            fadeJob = scope.launch {
-                val steps = 12
-                val stepMs = 22L
-                for (i in 1..steps) {
-                    vlcPlayer.audio().setVolume((target.toLong() * i / steps).toInt())
-                    delay(stepMs)
-                }
-            }
+            gain.rampTo(FADE_IN_MS, ::userGain)
         }
     }
 
@@ -498,7 +499,10 @@ internal class DesktopPlayer(
         // Detached on purpose: release() has to outlive `scope`, which is cancelled
         // right after. NonCancellable inside `scope` did this by breaking structured
         // concurrency, which is now deprecated.
-        CoroutineScope(Dispatchers.IO).launch { vlcPlayer.release() }
+        CoroutineScope(Dispatchers.IO).launch {
+            vlcPlayer.release()
+            logFile?.close()
+        }
         scope.cancel()
     }
 
@@ -553,6 +557,12 @@ internal class DesktopPlayer(
 
     companion object {
         private val createPlayerLock = ReentrantLock()
+
+        // VLC's first samples after a start or an unpause land on the sink at full gain
+        // and click; ramping the gain covers them. The fade-in is long enough to overlap
+        // the audio sink waking up, the fade-out short enough not to read as a late pause.
+        private const val FADE_IN_MS = 260L
+        private const val FADE_OUT_MS = 80L
 
         // libvlc reads VLC_PLUGIN_PATH once, when the first instance is created, so this
         // has to run before any MediaPlayerFactory exists.
