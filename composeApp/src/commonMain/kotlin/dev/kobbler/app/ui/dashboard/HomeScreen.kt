@@ -11,6 +11,7 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.ui.components.Async
 import dev.kobbler.app.ui.components.AsyncContent
 import dev.kobbler.app.ui.components.DataCache
+import dev.kobbler.app.ui.components.RefreshOnEvents
 import dev.kobbler.app.ui.components.rememberCached
 import dev.kobbler.app.ui.dashboard.home.HomePhone
 import dev.kobbler.app.ui.dashboard.home.HomeWide
@@ -24,7 +25,6 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     isActive: Boolean = true,
     onContinueClick: (ContinueItem) -> Unit = {},
-    onDetailsClick: (ContinueItem) -> Unit = {},
     onRecentClick: (RecentlyAddedItem) -> Unit = {},
     onDiscoverItemClick: (DiscoverItem) -> Unit = {},
     topBar: (@Composable (transparent: Boolean) -> Unit)? = null,
@@ -37,51 +37,75 @@ fun HomeScreen(
         wasActive = isActive
     }
 
+    if (isActive) {
+        RefreshOnEvents(
+            api = api,
+            key = Unit,
+            matches = { it.kind in HomeEventKinds },
+            onRefresh = homeRetry,
+            coalesceMs = HomeRefreshCoalesceMs,
+        )
+    }
+
     // The loaded page draws the bar itself, over its hero; until then nothing else would.
     Column(modifier.fillMaxSize()) {
         if (topBar != null && homeState !is Async.Ready) topBar(false)
         AsyncContent(homeState, onRetry = homeRetry, modifier = Modifier.weight(1f)) { homeData ->
-            val scope = rememberCoroutineScope()
-            var isRefreshing by remember { mutableStateOf(false) }
-            var data by remember { mutableStateOf(homeData) }
-            LaunchedEffect(homeData) { data = homeData }
-
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = {
-                    isRefreshing = true
-                    scope.launch {
-                        try { data = api.getDiscover(); DataCache.put("home", data) } catch (_: Exception) {}
-                        isRefreshing = false
+            val continueClick: (Int) -> Unit = { idx ->
+                homeData.watchNext.getOrNull(idx)?.let { onContinueClick(it) }
+            }
+            when (formFactor) {
+                FormFactor.TV, FormFactor.Desktop -> HomeWide(
+                    homeData = homeData,
+                    api = api,
+                    onContinueClick = continueClick,
+                    onRecentClick = onRecentClick,
+                    onDiscoverItemClick = onDiscoverItemClick,
+                    topBar = topBar,
+                )
+                // A wheel or trackpad scrolling up at the top of the page pulls the
+                // indicator down with nothing to release it, so only touch gets one.
+                FormFactor.Phone -> {
+                    val scope = rememberCoroutineScope()
+                    var isRefreshing by remember { mutableStateOf(false) }
+                    var data by remember { mutableStateOf(homeData) }
+                    LaunchedEffect(homeData) { data = homeData }
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = {
+                            isRefreshing = true
+                            scope.launch {
+                                try { data = api.getDiscover(); DataCache.put("home", data) } catch (_: Exception) {}
+                                isRefreshing = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        HomePhone(
+                            homeData = data,
+                            api = api,
+                            onContinueClick = continueClick,
+                            onRecentClick = onRecentClick,
+                            onDiscoverItemClick = onDiscoverItemClick,
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                val continueClick: (Int) -> Unit = { idx ->
-                    data.watchNext.getOrNull(idx)?.let { onContinueClick(it) }
-                }
-                val detailsClick: (Int) -> Unit = { idx ->
-                    data.watchNext.getOrNull(idx)?.let { onDetailsClick(it) }
-                }
-                when (formFactor) {
-                    FormFactor.TV, FormFactor.Desktop -> HomeWide(
-                        homeData = data,
-                        api = api,
-                        onContinueClick = continueClick,
-                        onRecentClick = onRecentClick,
-                        onDiscoverItemClick = onDiscoverItemClick,
-                        onDetailsClick = detailsClick.takeIf { formFactor == FormFactor.Desktop },
-                        topBar = topBar,
-                    )
-                    FormFactor.Phone -> HomePhone(
-                        homeData = data,
-                        api = api,
-                        onContinueClick = continueClick,
-                        onRecentClick = onRecentClick,
-                        onDiscoverItemClick = onDiscoverItemClick,
-                    )
                 }
             }
         }
     }
 }
+
+// Everything the page is built from: watch state, library rows, and want status on the
+// discover shelves. A scan fires these per item, hence the wide coalescing window — the
+// first one still lands at once.
+private val HomeEventKinds = setOf(
+    "watch_progress",
+    "movie_updated",
+    "tv_show_updated",
+    "tv_season_updated",
+    "tv_episode_updated",
+    "library_updated",
+    "wanted_status_updated",
+)
+
+private const val HomeRefreshCoalesceMs = 10_000L

@@ -83,9 +83,6 @@ fun HomeWide(
     onContinueClick: (Int) -> Unit,
     onRecentClick: (RecentlyAddedItem) -> Unit,
     onDiscoverItemClick: (DiscoverItem) -> Unit,
-    // Pointer platforms get a clickable hero with Resume/Details; on TV the hero is
-    // display-only and the Up Next strip below it is the navigable row.
-    onDetailsClick: ((Int) -> Unit)? = null,
     topBar: (@Composable (transparent: Boolean) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
@@ -95,7 +92,7 @@ fun HomeWide(
     // Held as state objects and read only inside the composables below that need them:
     // as values here, one D-pad press recomposes the page and every card on it.
     val initial = remember(homeData) {
-        upNext.firstOrNull()?.spotlight(0) ?: homeData.recentlyAdded.firstOrNull()?.spotlight()
+        upNext.firstOrNull()?.spotlight() ?: homeData.recentlyAdded.firstOrNull()?.spotlight()
     }
     val pointedAt = remember(homeData) { mutableStateOf(initial) }
     val shown = remember(homeData) { mutableStateOf(initial) }
@@ -160,25 +157,17 @@ fun HomeWide(
             ) {
                 if (upNext.isNotEmpty()) {
                     item(key = "hero") {
-                        val spot = shown.value ?: return@item
                         Column(Modifier.testTag(HomeHeroTag)) {
-                            HeroCopy(
-                                spotlight = spot,
-                                upNext = upNext,
-                                height = heroCopyHeight(tv, viewportPx, stripPx, recentPx, density),
-                                onResume = onContinueClick.takeIf { onDetailsClick != null },
-                                onDetails = onDetailsClick,
-                                onActionsFocused = { focusedRow.intValue = upNextRow },
-                            )
+                            Spacer(Modifier.height(heroHeight(viewportPx, stripPx, recentPx, density)))
                             Box(Modifier.onSizeChanged { stripPx = it.height }) {
                                 UpNextStrip(
                                     items = upNext,
                                     onClick = { idx -> onContinueClick(idx) },
                                     onFocused = { idx ->
-                                        pointedAt.value = upNext[idx].spotlight(idx)
+                                        pointedAt.value = upNext[idx].spotlight()
                                         focusedRow.intValue = upNextRow
                                     },
-                                    onHovered = { idx -> pointedAt.value = upNext[idx].spotlight(idx) },
+                                    onHovered = { idx -> pointedAt.value = upNext[idx].spotlight() },
                                 )
                             }
                         }
@@ -284,10 +273,10 @@ fun HomeWide(
     }
 }
 
-// What the screen has left once Up Next and the first rail are on it, within bounds that
-// keep the title legible on one side and the page from turning into a poster on the other.
-private fun heroCopyHeight(tv: Boolean, viewportPx: Int, stripPx: Int, recentPx: Int, density: Density): Dp {
-    val (min, max) = if (tv) 120.dp to 300.dp else 200.dp to 440.dp
+// The open stretch of backdrop above Up Next: what the screen has left once Up Next and
+// the first rail are on it, bounded so the page never turns into a poster.
+private fun heroHeight(viewportPx: Int, stripPx: Int, recentPx: Int, density: Density): Dp {
+    val (min, max) = 120.dp to 300.dp
     if (viewportPx == 0 || stripPx == 0) return max
     val left = with(density) { (viewportPx - stripPx - recentPx).toDp() }
     return left.coerceIn(min, max)

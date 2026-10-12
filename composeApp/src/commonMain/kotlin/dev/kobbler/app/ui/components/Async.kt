@@ -369,6 +369,7 @@ fun RefreshOnEvents(
     key: Any?,
     matches: (dev.kobbler.app.data.LibraryEventFrame) -> Boolean,
     onRefresh: () -> Unit,
+    coalesceMs: Long = RefreshCoalesceMs,
 ) {
     val currentMatches by rememberUpdatedState(matches)
     val currentRefresh by rememberUpdatedState(onRefresh)
@@ -380,7 +381,7 @@ fun RefreshOnEvents(
                 currentRefresh()
                 // Anything arriving inside this window collapses into the next single
                 // refresh rather than queueing a refetch each.
-                delay(RefreshCoalesceMs)
+                delay(coalesceMs)
             }
     }
 }

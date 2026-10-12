@@ -916,14 +916,13 @@ private fun navigateContinueItem(
     nav: NavigationState,
     gps: GlobalPlayerState,
     item: dev.kobbler.app.data.ContinueItem,
-    play: Boolean = true,
 ) {
     val link = item.link ?: return
     // Raise the player before the detail page it plays from. The detail screen still
     // resolves the episode and creates the session, but that work now happens behind a
     // player that is already up rather than in front of one that arrives late.
     val isVideo = link.startsWith("/movies/") || link.startsWith("/tv/") || link.startsWith("/sports/")
-    if (play && isVideo) {
+    if (isVideo) {
         gps.beginPreparing(
             id = link,
             newTitle = item.title,
@@ -932,24 +931,20 @@ private fun navigateContinueItem(
         )
     }
     when {
-        link.startsWith("/movies/") -> nav.navigate(Destination.MovieDetail(link.removePrefix("/movies/"), autoPlay = play))
+        link.startsWith("/movies/") -> nav.navigate(Destination.MovieDetail(link.removePrefix("/movies/"), autoPlay = true))
         link.startsWith("/tv/episodes/") -> {
-            nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/episodes/"), autoPlay = play, isEpisodeId = true))
+            nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/episodes/"), autoPlay = true, isEpisodeId = true))
         }
-        link.startsWith("/tv/") -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/"), autoPlay = play))
+        link.startsWith("/tv/") -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/"), autoPlay = true))
         link.startsWith("/sports/events/") -> {
-            nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/events/"), autoPlay = play, isEpisodeId = true))
+            nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/events/"), autoPlay = true, isEpisodeId = true))
         }
-        link.startsWith("/sports/") -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/"), autoPlay = play))
+        link.startsWith("/sports/") -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/"), autoPlay = true))
         link.startsWith("/library/books/") -> {
             val bookId = link.removePrefix("/library/books/")
-            if (play) {
-                when (item.mediaType) {
-                    dev.kobbler.app.data.MediaType.Audiobook -> nav.navigate(Destination.AudiobookPlayer(bookId))
-                    else -> nav.navigate(Destination.BookReader(bookId))
-                }
-            } else {
-                nav.navigate(Destination.BookDetail(bookId))
+            when (item.mediaType) {
+                dev.kobbler.app.data.MediaType.Audiobook -> nav.navigate(Destination.AudiobookPlayer(bookId))
+                else -> nav.navigate(Destination.BookReader(bookId))
             }
         }
     }
@@ -1057,7 +1052,6 @@ private fun SingleTabContent(
                     }
                 },
                 onContinueClick = { item -> navigateContinueItem(nav, gps, item) },
-                onDetailsClick = { item -> navigateContinueItem(nav, gps, item, play = false) },
                 topBar = homeTopBar,
             )
         }

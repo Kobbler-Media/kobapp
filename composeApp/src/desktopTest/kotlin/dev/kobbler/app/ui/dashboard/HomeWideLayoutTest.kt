@@ -65,7 +65,6 @@ class HomeWideLayoutTest {
                             onContinueClick = {},
                             onRecentClick = {},
                             onDiscoverItemClick = {},
-                            onDetailsClick = { _: Int -> }.takeIf { formFactor == FormFactor.Desktop },
                         )
                     }
                 }

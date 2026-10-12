@@ -2,20 +2,8 @@
 
 package dev.kobbler.app.ui.dashboard.home
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import coil3.request.CachePolicy
 import coil3.SingletonImageLoader
@@ -25,17 +13,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -44,28 +25,20 @@ import coil3.compose.useExistingImageAsPlaceholder
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.RecentlyAddedItem
 import dev.kobbler.app.data.UpNextItem
-import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.theme.LocalFormFactor
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.SoftenedArtPx
 import dev.kobbler.app.ui.components.StripedBackdrop
-import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
 
 /** Whatever the page is pointing at: an Up Next entry, or any card in the rails below. */
 @Immutable
 data class Spotlight(
     val backdropUrl: String? = null,
     val posterUrl: String? = null,
-    val upNextIndex: Int? = null,
 )
 
-fun UpNextItem.spotlight(index: Int) = Spotlight(
+fun UpNextItem.spotlight() = Spotlight(
     backdropUrl = backdropUrl,
     posterUrl = mediaArtUrl,
-    upNextIndex = index,
 )
 
 fun RecentlyAddedItem.spotlight() = Spotlight(
@@ -168,81 +141,6 @@ fun PrefetchBackdrops(items: List<UpNextItem>) {
                     .memoryCachePolicy(CachePolicy.DISABLED)
                     .build(),
             )
-        }
-    }
-}
-
-/**
- * The open stretch of backdrop above Up Next, carrying Resume and Details where there is a
- * pointer. The title is on the focused card already. Its height is whatever the rows below
- * leave of the screen, so Up Next and the first rail are on screen without scrolling.
- */
-@Composable
-fun HeroCopy(
-    spotlight: Spotlight,
-    upNext: List<UpNextItem>,
-    height: Dp,
-    onResume: ((Int) -> Unit)?,
-    onDetails: ((Int) -> Unit)?,
-    onActionsFocused: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val tv = LocalFormFactor.current == FormFactor.TV
-    val gutter = if (tv) KobappTheme.dimens.pageGutterTv else KobappTheme.dimens.pageGutter
-    val index = spotlight.upNextIndex
-    val item = index?.let { upNext.getOrNull(it) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(height)
-            .then(
-                if (onResume != null && index != null) {
-                    Modifier
-                        .pointerHoverIcon(PointerIcon.Hand)
-                        // The buttons inside are the real stops; a focusable backdrop
-                        // would add an invisible step to every traversal.
-                        .focusProperties { canFocus = false }
-                        .clickable { onResume(index) }
-                } else Modifier,
-            ),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(start = gutter, end = gutter, top = 24.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.Bottom,
-        ) {
-            if (onResume != null && onDetails != null) {
-                // Kept in place for a rail card, which has no Resume, so the rows below do
-                // not jump as the pointer moves between them.
-                val active = item != null
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .graphicsLayer { alpha = if (active) 1f else 0f }
-                        .focusKeyGroup("hero")
-                        .onFocusChanged { if (it.hasFocus) onActionsFocused() },
-                ) {
-                    val accent = item?.let { colors.accentForMediaType(it.mediaType) } ?: KobappTheme.accent
-                    KobButton(
-                        text = item?.ctaLabel ?: "Resume",
-                        onClick = { if (index != null) onResume(index) },
-                        enabled = active,
-                        style = KobButtonStyle.Accent,
-                        accent = accent,
-                        leading = { Icon(Icons.Outlined.PlayArrow, null, modifier = Modifier.size(18.dp)) },
-                        modifier = Modifier.focusKey("resume"),
-                    )
-                    KobButton(
-                        text = "Details",
-                        onClick = { if (index != null) onDetails(index) },
-                        enabled = active,
-                        // The search pill sits up and to the right; it is reachable with Up.
-                        modifier = Modifier
-                            .focusKey("details")
-                            .focusProperties { right = FocusRequester.Cancel },
-                    )
-                }
-            }
         }
     }
 }
