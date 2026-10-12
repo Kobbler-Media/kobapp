@@ -12,6 +12,7 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobplayer.AspectRatio
 import dev.kobbler.kobplayer.TrackInfo
 import dev.kobbler.kobplayer.ui.OverlayChapter
+import dev.kobbler.kobplayer.ui.PlayerChrome
 import dev.kobbler.kobplayer.ui.PlayerColors
 import dev.kobbler.kobplayer.ui.SeekBarRegion
 import dev.kobbler.kobplayer.ui.SideGestureConfig
@@ -48,6 +49,7 @@ fun PlayerOverlay(
     isLive: Boolean = false,
     loading: Boolean = false,
     thumbnailPreview: (@Composable (seekFraction: Float) -> Unit)? = null,
+    chapterThumbnail: (@Composable (startMs: Long) -> Unit)? = null,
     sideGestures: SideGestureConfig? = null,
     onSeekPastEnd: (() -> Unit)? = null,
     overlaid: Boolean = false,
@@ -57,7 +59,8 @@ fun PlayerOverlay(
     val accent = KobappTheme.accent
     // Focus is a remote/keyboard affordance. A phone has neither, and the seek bar being
     // focusable was enough for the platform to hand it focus on open and ring it.
-    val touchOnly = LocalFormFactor.current == FormFactor.Phone
+    val formFactor = LocalFormFactor.current
+    val touchOnly = formFactor == FormFactor.Phone
     val colors = PlayerColors(
         primary = k.textHi,
         primaryDim = k.textHi.copy(alpha = 0.78f),
@@ -86,8 +89,13 @@ fun PlayerOverlay(
         isLive = isLive,
         loading = loading,
         thumbnailPreview = thumbnailPreview,
+        chapterThumbnail = chapterThumbnail,
         sideGestures = sideGestures,
-        dpadSeek = !touchOnly,
+        chrome = when (formFactor) {
+            FormFactor.Phone -> PlayerChrome.Touch
+            FormFactor.Desktop -> PlayerChrome.Pointer
+            FormFactor.TV -> PlayerChrome.Tv
+        },
         // Touch has the panel's own button and no direction keys to spend.
         onSeekPastEnd = onSeekPastEnd.takeUnless { touchOnly },
         overlaid = overlaid,

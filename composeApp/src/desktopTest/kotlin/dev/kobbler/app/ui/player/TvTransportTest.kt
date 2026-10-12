@@ -144,8 +144,8 @@ class TvTransportTest {
         // The row opens with the current selection focused, not the first entry.
         onNodeWithText("Off").assert(isFocused())
 
-        // Walk to English with the D-pad.
-        move(FocusDirection.Down)
+        // Walk to English with the D-pad: the row runs sideways, like every row in the app.
+        move(FocusDirection.Right)
         onNodeWithText("English").assert(isFocused())
 
         // Take it. A key press made right after a focus move races the focus
@@ -218,28 +218,26 @@ class TvTransportTest {
     }
 
     /**
-     * The subtitle row is capped at 300dp, so with six tracks the last entry sits below the
-     * fold. Walking the D-pad to it must bring it on-screen and push the top entry out,
-     * which is what the focused-index scroll in TvMenuRow guarantees (on top of Compose's
-     * own moveFocus scroll-into-view).
+     * Thirty tracks run off the right edge. Walking the D-pad to the last must bring it
+     * on-screen and push the first out.
      */
     @Test
     fun `a long subtitle row scrolls its last entry into view`() = runComposeUiTest {
         val player = FakePlayer()
         player.play()
-        showPlayingMovie(player, subtitleTracks = List(6) { i -> TrackInfo(i.toString(), "Sub $i") })
+        showPlayingMovie(player, subtitleTracks = List(30) { i -> TrackInfo(i.toString(), "Sub $i") })
 
         toSubtitles()
         onNode(isFocused()).performKeyInput { pressKey(Key.DirectionCenter) }
         waitForIdle()
         flushFocus()
 
-        // Off is focused; walk down to the last entry. The row must scroll it into view.
-        repeat(6) { move(FocusDirection.Down) }
+        // Off is focused; walk right to the last entry. The row must scroll it into view.
+        repeat(30) { move(FocusDirection.Right) }
         waitForIdle()
-        onNodeWithText("Sub 5").assert(isFocused())
-        onNodeWithText("Sub 5").assertIsDisplayed()
-        // The row scrolled to the bottom: the top entry is out of view now.
+        onNodeWithText("Sub 29").assert(isFocused())
+        onNodeWithText("Sub 29").assertIsDisplayed()
+        // The row scrolled to the end: the first entry is out of view now.
         onNodeWithText("Off").assertIsNotDisplayed()
     }
 

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -146,16 +147,35 @@ fun ThumbnailPreview(
     modifier: Modifier = Modifier,
 ) {
     if (cues.isEmpty()) return
-
-    val seekMs = (seekFraction * durationMs).toLong()
-    val cue = cues.firstOrNull { seekMs in it.startMs until it.endMs }
-        ?: cues.lastOrNull { seekMs >= it.startMs }
-        ?: return
-
     val bias = ((seekFraction * 2f) - 1f).coerceIn(-0.85f, 0.85f)
     val shape = RoundedCornerShape(6.dp)
-    val previewWidth = 240.dp
-    val previewWidthPx = with(LocalDensity.current) { previewWidth.roundToPx() }
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        contentAlignment = BiasAlignment(horizontalBias = bias, verticalBias = -1f),
+    ) {
+        ThumbnailFrame(
+            cues = cues,
+            atMs = (seekFraction * durationMs).toLong(),
+            width = 240.dp,
+            modifier = Modifier.clip(shape).border(1.dp, Color.White.copy(alpha = 0.5f), shape),
+        )
+    }
+}
+
+/** The trickplay frame covering [atMs], or the last one before it. */
+@Composable
+fun ThumbnailFrame(
+    cues: List<ThumbnailCue>,
+    atMs: Long,
+    width: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val cue = cues.firstOrNull { atMs in it.startMs until it.endMs }
+        ?: cues.lastOrNull { atMs >= it.startMs }
+        ?: return
+    val widthPx = with(LocalDensity.current) { width.roundToPx() }
     val hasCrop = cue.cropW > 0 && cue.cropH > 0
     val aspectRatio = if (hasCrop) cue.cropW.toFloat() / cue.cropH else 16f / 9f
 
@@ -171,39 +191,30 @@ fun ThumbnailPreview(
         w to h
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
-        contentAlignment = BiasAlignment(horizontalBias = bias, verticalBias = -1f),
-    ) {
-        val tileModifier = Modifier
-            .width(previewWidth)
-            .aspectRatio(aspectRatio)
-            .clip(shape)
-            .background(Color.Black)
-            .border(1.dp, Color.White.copy(alpha = 0.5f), shape)
+    val tileModifier = modifier
+        .width(width)
+        .aspectRatio(aspectRatio)
+        .background(Color.Black)
 
-        if (hasCrop) {
-            SpriteCrop(
-                url = cue.url,
-                cropX = cue.cropX,
-                cropY = cue.cropY,
-                cropW = cue.cropW,
-                cropH = cue.cropH,
-                sheetW = sheetSize.first,
-                sheetH = sheetSize.second,
-                displayWidthPx = previewWidthPx,
-                modifier = tileModifier,
-            )
-        } else {
-            AsyncImage(
-                model = cue.url,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = tileModifier,
-            )
-        }
+    if (hasCrop) {
+        SpriteCrop(
+            url = cue.url,
+            cropX = cue.cropX,
+            cropY = cue.cropY,
+            cropW = cue.cropW,
+            cropH = cue.cropH,
+            sheetW = sheetSize.first,
+            sheetH = sheetSize.second,
+            displayWidthPx = widthPx,
+            modifier = tileModifier,
+        )
+    } else {
+        AsyncImage(
+            model = cue.url,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = tileModifier,
+        )
     }
 }
 

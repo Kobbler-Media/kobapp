@@ -668,6 +668,9 @@ fun FullscreenVideoPlayer(
                         seekFraction = seekFraction,
                     )
                 } else null,
+                chapterThumbnail = if (thumbnailCues.isNotEmpty()) { startMs ->
+                    ThumbnailFrame(cues = thumbnailCues, atMs = startMs, width = 200.dp)
+                } else null,
                 sideGestures = if (formFactor == FormFactor.Phone) {
                     dev.kobbler.kobplayer.ui.SideGestureConfig(
                         brightness = playerBrightness,

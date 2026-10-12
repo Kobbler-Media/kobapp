@@ -193,9 +193,10 @@ fun VideoPlayerOverlay(
      */
     loading: Boolean = false,
     thumbnailPreview: (@Composable (seekFraction: Float) -> Unit)? = null,
+    /** The frame nearest a chapter's start, for the TV chapter row. */
+    chapterThumbnail: (@Composable (startMs: Long) -> Unit)? = null,
     sideGestures: SideGestureConfig? = null,
-    /** LEFT/RIGHT seeking on the bar. Off on touch, where it only makes the bar focusable. */
-    dpadSeek: Boolean = true,
+    chrome: PlayerChrome = PlayerChrome.Pointer,
     /**
      * The host has a layer of its own over the player — a channel list, a search panel —
      * which owns the D-pad for as long as it is up. The transport stays put underneath it
@@ -216,11 +217,15 @@ fun VideoPlayerOverlay(
     var seekFraction by remember { mutableFloatStateOf(0f) }
     var hoverFraction by remember { mutableStateOf<Float?>(null) }
     var menuOpen by remember { mutableIntStateOf(0) } // count of open menus
-    // A TV opens menus as full-width rows under the transport, not anchored popups, so the
-    // open state of the two that can be rows lives here, not inside the selector.
-    var subtitlesOpen by remember { mutableStateOf(false) }
-    var chaptersOpen by remember { mutableStateOf(false) }
-    val anyMenuOpen = menuOpen > 0 || subtitlesOpen || chaptersOpen
+    // A TV opens menus as rows under the transport, not anchored popups, so which one is
+    // open lives here, not inside the selector.
+    var tvPicker by remember { mutableStateOf<TvPicker?>(null) }
+    val anyMenuOpen = menuOpen > 0 || tvPicker != null
+    val tv = chrome == PlayerChrome.Tv
+    val dpadSeek = chrome != PlayerChrome.Touch
+    fun toggleTvPicker(picker: TvPicker, open: Boolean) {
+        tvPicker = if (open) picker else tvPicker.takeUnless { it == picker }
+    }
     var overlayFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
@@ -232,9 +237,6 @@ fun VideoPlayerOverlay(
     val durationMsState by rememberUpdatedState(durationMs)
     val onSeekState by rememberUpdatedState(onSeek)
     val onPlayPauseState by rememberUpdatedState(onPlayPause)
-
-    // dpadSeek is the TV signal: PlayerControls sets it exactly when the form factor is TV.
-    val tv = dpadSeek
 
     val topScrim = remember {
         Brush.verticalGradient(
@@ -338,10 +340,17 @@ fun VideoPlayerOverlay(
             .focusable()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { offset ->
-                        // Single tap: show/hide controls
-                        if (controlsVisible) controlsVisible = false
-                        else onInteraction()
+                    onTap = {
+                        // A click on the picture is play/pause wherever there is a mouse;
+                        // a finger has no hover, so its tap is what brings the controls up.
+                        if (chrome == PlayerChrome.Pointer) {
+                            onPlayPauseState()
+                            onInteraction()
+                        } else if (controlsVisible) {
+                            controlsVisible = false
+                        } else {
+                            onInteraction()
+                        }
                         focusRequester.requestFocus()
                     },
                     onDoubleTap = { offset ->
@@ -386,9 +395,8 @@ fun VideoPlayerOverlay(
                         // the player. Touch dropdowns keep their open state inside the
                         // component, so a close could not reach them from here — those pass
                         // through to the host as before.
-                        if (tv && (subtitlesOpen || chaptersOpen)) {
-                            subtitlesOpen = false
-                            chaptersOpen = false
+                        if (tvPicker != null) {
+                            tvPicker = null
                             true
                         } else {
                             onBack(); true
@@ -548,8 +556,9 @@ fun VideoPlayerOverlay(
                 //
                 // A TV with a seek bar does not get these: the bar is the transport, and
                 // the disc sat over the picture burning a focus ring the remote spent on
-                // nothing new. Live keeps them — with no bar, they are the transport.
-                if (!tv || isLive) {
+                // nothing new. Live keeps them — with no bar, they are the transport. A
+                // mouse has play/pause beside the bar and the picture itself to click.
+                if (chrome == PlayerChrome.Touch || (tv && isLive)) {
                     Box(modifier = Modifier.align(Alignment.Center), contentAlignment = Alignment.Center) {
                         IconButton(
                             onClick = { onPlayPause(); onInteraction() },
@@ -640,6 +649,10 @@ fun VideoPlayerOverlay(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            if (chrome == PlayerChrome.Pointer) {
+                                BarPlayPause(isPlaying, colors, playPauseFocus, focusDecoration) { onPlayPause(); onInteraction() }
+                                Spacer(Modifier.width(8.dp))
+                            }
                             Box(
                                 modifier = Modifier
                                     .background(Color.Red, RoundedCornerShape(4.dp))
@@ -714,6 +727,10 @@ fun VideoPlayerOverlay(
                         // On a TV the time is the one number a viewer reads, so it gets the
                         // state glyph and the larger type; the disc that used to carry it
                         // is gone from the picture.
+                        if (chrome == PlayerChrome.Pointer) {
+                            BarPlayPause(isPlaying, colors, playPauseFocus, focusDecoration) { onPlayPause(); onInteraction() }
+                            Spacer(Modifier.width(8.dp))
+                        }
                         if (tv) TvStatusLabel(isPlaying, displayMs, durationMs, colors) else PositionLabel(displayMs, durationMs, colors)
                         Spacer(Modifier.width(12.dp))
                         extraControls()
@@ -728,13 +745,11 @@ fun VideoPlayerOverlay(
                                     onSeek(chapter.startMs)
                                     onInteraction()
                                 },
-                                onMenuToggle = if (tv) { open ->
-                                    chaptersOpen = open
-                                    if (open) subtitlesOpen = false
-                                } else { open -> menuOpen += if (open) 1 else -1 },
+                                onMenuToggle = if (tv) { open -> toggleTvPicker(TvPicker.Chapters, open) }
+                                else { open -> menuOpen += if (open) 1 else -1 },
                                 focusDecoration = focusDecoration,
                                 tv = tv,
-                                expanded = chaptersOpen,
+                                expanded = tvPicker == TvPicker.Chapters,
                             )
                         }
 
@@ -748,9 +763,11 @@ fun VideoPlayerOverlay(
                                 tracks = audioTracks, selectedTrack = selectedAudioTrack,
                                 allowOff = false, colors = colors,
                                 onSelect = { onSelectAudioTrack(it); onInteraction() },
-                                onMenuToggle = { open -> menuOpen += if (open) 1 else -1 },
+                                onMenuToggle = if (tv) { open -> toggleTvPicker(TvPicker.Audio, open) }
+                                else { open -> menuOpen += if (open) 1 else -1 },
                                 focusDecoration = focusDecoration, focusKeyPrefix = "audio",
                                 tv = tv,
+                                expanded = tvPicker == TvPicker.Audio,
                             )
                         }
 
@@ -760,15 +777,13 @@ fun VideoPlayerOverlay(
                                 tracks = subtitleTracks, selectedTrack = selectedSubtitleTrack,
                                 allowOff = true, colors = colors,
                                 onSelect = { onSelectSubtitleTrack(it); onInteraction() },
-                                onMenuToggle = if (tv) { open ->
-                                    subtitlesOpen = open
-                                    if (open) chaptersOpen = false
-                                } else { open -> menuOpen += if (open) 1 else -1 },
+                                onMenuToggle = if (tv) { open -> toggleTvPicker(TvPicker.Subtitles, open) }
+                                else { open -> menuOpen += if (open) 1 else -1 },
                                 focusDecoration = focusDecoration, focusKeyPrefix = "subtitles",
                                 extraLabel = "Find subtitles…".takeIf { onFindSubtitles != null },
                                 onExtra = { onFindSubtitles?.invoke(); onInteraction() },
                                 tv = tv,
-                                expanded = subtitlesOpen,
+                                expanded = tvPicker == TvPicker.Subtitles,
                             )
                         }
 
@@ -788,77 +803,52 @@ fun VideoPlayerOverlay(
                         }
                     }
 
-                    // The TV's menus are rows, not popups: a remote walks them like a list,
-                    // the selected entry starts focused, and OK spends the press on the item.
-                    if (tv && chaptersOpen) {
-                        val regular = chapters.filterNot { it.detected }
-                        val detected = chapters.filter { it.detected }
-                        val currentIdx = regular.indexOfLast { it.startMs <= displayMs() }.coerceAtLeast(0)
-                        TvMenuRow(
-                            title = "Chapters",
-                            items = buildList {
-                                regular.forEachIndexed { idx, chapter ->
-                                    add(TvMenuItem(
-                                        label = chapter.title,
-                                        detail = formatTime(chapter.startMs),
-                                        selected = idx == currentIdx,
-                                        leadingIcon = if (idx == currentIdx) Icons.Outlined.PlayArrow else null,
-                                    ))
-                                }
-                                detected.forEach { seg ->
-                                    add(TvMenuItem(
-                                        label = seg.title,
-                                        detail = "${formatTime(seg.startMs)}-${formatTime(seg.endMs ?: seg.startMs)} (detected)",
-                                    ))
-                                }
-                            },
+                    when (tvPicker.takeIf { tv }) {
+                        TvPicker.Chapters -> ChapterPicker(
+                            chapters = chapters,
+                            currentMs = displayMs(),
+                            thumbnail = chapterThumbnail,
                             colors = colors,
-                            focusKeyPrefix = "chapter",
                             focusDecoration = focusDecoration,
-                            onSelect = { idx ->
-                                val chapter = if (idx < regular.size) regular[idx] else detected[idx - regular.size]
+                            onSelect = { chapter ->
                                 onSeek(chapter.startMs)
-                                chaptersOpen = false
+                                tvPicker = null
                                 onInteraction()
                             },
                         )
-                    }
-                    if (tv && subtitlesOpen) {
-                        TvMenuRow(
+                        TvPicker.Subtitles -> TrackPicker(
                             title = "Subtitles",
-                            items = buildList {
-                                if (onFindSubtitles != null) {
-                                    add(TvMenuItem(label = "Find subtitles…", leadingIcon = Icons.Outlined.Search))
-                                }
-                                add(TvMenuItem(label = "Off", selected = selectedSubtitleTrack == null))
-                                subtitleTracks.forEach { track ->
-                                    add(TvMenuItem(label = track.label, selected = selectedSubtitleTrack?.id == track.id))
-                                }
-                            },
+                            tracks = subtitleTracks,
+                            selected = selectedSubtitleTrack,
+                            allowOff = true,
                             colors = colors,
                             focusKeyPrefix = "subtitles",
                             focusDecoration = focusDecoration,
-                            onSelect = { idx ->
-                                when {
-                                    onFindSubtitles != null && idx == 0 -> {
-                                        onFindSubtitles()
-                                        subtitlesOpen = false
-                                        onInteraction()
-                                    }
-                                    idx == (if (onFindSubtitles != null) 1 else 0) -> {
-                                        onSelectSubtitleTrack(null)
-                                        subtitlesOpen = false
-                                        onInteraction()
-                                    }
-                                    else -> {
-                                        val track = subtitleTracks[idx - (if (onFindSubtitles != null) 2 else 1)]
-                                        onSelectSubtitleTrack(track)
-                                        subtitlesOpen = false
-                                        onInteraction()
-                                    }
-                                }
+                            onFind = onFindSubtitles,
+                            onSelect = { track ->
+                                onSelectSubtitleTrack(track)
+                                tvPicker = null
+                                onInteraction()
                             },
+                            onFound = { tvPicker = null; onInteraction() },
                         )
+                        TvPicker.Audio -> TrackPicker(
+                            title = "Audio",
+                            tracks = audioTracks,
+                            selected = selectedAudioTrack,
+                            allowOff = false,
+                            colors = colors,
+                            focusKeyPrefix = "audio",
+                            focusDecoration = focusDecoration,
+                            onFind = null,
+                            onSelect = { track ->
+                                onSelectAudioTrack(track)
+                                tvPicker = null
+                                onInteraction()
+                            },
+                            onFound = {},
+                        )
+                        null -> Unit
                     }
                 }
             }
@@ -1018,130 +1008,85 @@ private fun TvStatusLabel(isPlaying: Boolean, currentMs: () -> Long, durationMs:
     }
 }
 
-private data class TvMenuItem(
-    val label: String,
-    val detail: String? = null,
-    val selected: Boolean = false,
-    val leadingIcon: ImageVector? = null,
-)
-
-/**
- * A TV menu: a full-width list the remote walks like anything else in the app. The
- * selected entry starts focused, OK spends the press on the item, and the rows are the
- * height a thumb-size 40dp popup is not at arm's length.
- */
 @Composable
-private fun TvMenuRow(
+private fun BarPlayPause(
+    isPlaying: Boolean,
+    colors: PlayerColors,
+    focus: FocusRequester,
+    focusDecoration: ControlFocus,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp).focusRequester(focus).then(focusDecoration("playpause", 999f, 1.08f)),
+    ) {
+        Icon(
+            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+            "Play/Pause", tint = colors.primary, modifier = Modifier.size(28.dp),
+        )
+    }
+}
+
+@Composable
+private fun ChapterPicker(
+    chapters: List<OverlayChapter>,
+    currentMs: Long,
+    thumbnail: (@Composable (startMs: Long) -> Unit)?,
+    colors: PlayerColors,
+    focusDecoration: ControlFocus,
+    onSelect: (OverlayChapter) -> Unit,
+) {
+    val ordered = remember(chapters) { chapters.filterNot { it.detected } + chapters.filter { it.detected } }
+    val currentIdx = ordered.indexOfLast { !it.detected && it.startMs <= currentMs }
+    TvPickerRow(
+        title = "Chapters",
+        items = ordered.mapIndexed { idx, chapter ->
+            TvPickerItem(
+                label = chapter.title,
+                detail = if (chapter.detected) {
+                    "${formatTime(chapter.startMs)}-${formatTime(chapter.endMs ?: chapter.startMs)} (detected)"
+                } else {
+                    formatTime(chapter.startMs)
+                },
+                selected = idx == currentIdx,
+                frame = thumbnail?.let { { it(chapter.startMs) } },
+            )
+        },
+        colors = colors,
+        focusKeyPrefix = "chapter",
+        focusDecoration = focusDecoration,
+        onSelect = { onSelect(ordered[it]) },
+    )
+}
+
+@Composable
+private fun TrackPicker(
     title: String,
-    items: List<TvMenuItem>,
+    tracks: List<TrackInfo>,
+    selected: TrackInfo?,
+    allowOff: Boolean,
     colors: PlayerColors,
     focusKeyPrefix: String,
     focusDecoration: ControlFocus,
-    onSelect: (Int) -> Unit,
+    onFind: (() -> Unit)?,
+    onSelect: (TrackInfo?) -> Unit,
+    onFound: () -> Unit,
 ) {
-    val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
-    var focusedIdx by remember { mutableIntStateOf(-1) }
-    val scrollState = rememberScrollState()
-    val density = LocalDensity.current
-    // One frame in, so the requesters are attached before the ask: a request to a
-    // detached requester is dropped, and the row is composed fresh when it opens.
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        val target = items.indexOfFirst { it.selected }.coerceAtLeast(0)
-        requesters[target].requestFocus()
-    }
-    // Drive the scroll from the focused index with the row's fixed geometry: the header,
-    // then 64dp rows. This is the deterministic guarantee that the focused entry is on
-    // screen (Compose's moveFocus scroll-into-view already does this, but the offsets
-    // here are exact and do not depend on that behaviour). Only when the item is not
-    // already visible, so a walk that stays above the fold leaves the scroll where it is.
-    LaunchedEffect(focusedIdx) {
-        if (focusedIdx < 0) return@LaunchedEffect
-        val itemH = 64f * density.density
-        val headerH = 24f * density.density
-        val viewport = 300f * density.density
-        val margin = 8f * density.density
-        val itemTop = (headerH + focusedIdx * itemH).toInt()
-        val itemBottom = itemTop + itemH.toInt()
-        val current = scrollState.value
-        if (current >= itemBottom - viewport && current <= itemTop) return@LaunchedEffect
-        val target = if (current > itemTop) {
-            // Scrolled past the item: bring its top back to the viewport top.
-            itemTop
-        } else {
-            // Below the fold: bring its bottom up to a margin above the viewport bottom.
-            (itemBottom - (viewport - margin)).toInt().coerceAtMost(scrollState.maxValue)
-        }
-        scrollState.scrollTo(target.coerceIn(0, scrollState.maxValue))
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 300.dp)
-            .verticalScroll(scrollState)
-            // Activation is answered by the container, not the item: the item is the
-            // remote's stop, but the press must land no matter which child node owns
-            // focus inside the row. A stale index (focus left the row) answers nothing.
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key in ActivateKeys && focusedIdx >= 0) {
-                    onSelect(focusedIdx)
-                    true
-                } else {
-                    false
-                }
-            }
-            .padding(top = 8.dp),
-    ) {
-        Text(
-            title.uppercase(),
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = colors.primaryFaint,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-        )
-        items.forEachIndexed { idx, item ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .focusRequester(requesters[idx])
-                    .focusable()
-                    .onFocusChanged { f ->
-                        if (f.isFocused) focusedIdx = idx
-                        else if (focusedIdx == idx) focusedIdx = -1
-                    }
-                    .clickable { onSelect(idx) }
-                    .then(focusDecoration("$focusKeyPrefix.$idx", 8f, 1f))
-                    .onKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown && event.key in ActivateKeys) {
-                            onSelect(idx)
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                when {
-                    item.selected -> Icon(Icons.Outlined.Check, "Selected", tint = colors.accent, modifier = Modifier.size(20.dp))
-                    item.leadingIcon != null -> Icon(item.leadingIcon!!, null, tint = colors.primaryFaint, modifier = Modifier.size(20.dp))
-                    else -> Spacer(Modifier.width(20.dp))
-                }
-                Column {
-                    Text(
-                        item.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (item.selected) colors.accent else colors.primary,
-                        fontWeight = if (item.selected) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                    if (item.detail != null) {
-                        Text(item.detail, style = MaterialTheme.typography.labelMedium, color = colors.primaryFaint)
-                    }
-                }
-            }
+    val options: List<Pair<TvPickerItem, () -> Unit>> = buildList {
+        if (onFind != null) add(TvPickerItem("Find subtitles…", leadingIcon = Icons.Outlined.Search) to { onFind(); onFound() })
+        if (allowOff) add(TvPickerItem("Off", selected = selected == null) to { onSelect(null) })
+        tracks.forEach { track ->
+            add(TvPickerItem(track.label, selected = selected?.id == track.id) to { onSelect(track) })
         }
     }
+    TvPickerRow(
+        title = title,
+        items = options.map { it.first },
+        colors = colors,
+        focusKeyPrefix = focusKeyPrefix,
+        focusDecoration = focusDecoration,
+        onSelect = { options[it].second() },
+    )
 }
 
 @Composable
