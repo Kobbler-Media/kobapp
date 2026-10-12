@@ -148,6 +148,9 @@ cp .kobup.json.example .kobup.json   # then edit "server" to point at your own k
 plus a `KOBUP_TOKEN` in `.env` (see `.env.template`) or in the environment. `.kobup.json` and
 `.env` are gitignored.
 
+Release builds are split per ABI (plus a universal APK); all of them go up as one release and
+kobup hands each device the split for its CPU.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Engineering conventions live in

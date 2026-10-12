@@ -68,6 +68,18 @@ android {
         }
     }
 
+    // libvlc ships for all four ABIs and is most of the APK. kobup serves each device the
+    // split for its ABI; the universal APK is the fallback for browser downloads and
+    // clients that don't report their ABIs.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = true
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
