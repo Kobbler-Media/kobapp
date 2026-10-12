@@ -270,13 +270,21 @@ fun VideoPlayerOverlay(
         }
     }
 
-    // Double-tap skip feedback
-    var skipIndicator by remember { mutableStateOf<SkipIndicator?>(null) }
-    LaunchedEffect(skipIndicator) {
-        if (skipIndicator != null) {
-            delay(600)
-            skipIndicator = null
+    var skipBurst by remember { mutableStateOf<SkipBurst?>(null) }
+    LaunchedEffect(skipBurst) {
+        if (skipBurst != null) {
+            delay(SkipBurstWindowMs)
+            skipBurst = null
         }
+    }
+    // Stacks from where the burst began: the player reports a seek's new position late,
+    // so reading the playhead on every tap landed a fast burst on the same spot.
+    fun skipTaps(forward: Boolean, taps: Int) {
+        val burst = skipBurst?.takeIf { it.forward == forward }
+            ?: SkipBurst(forward, anchorMs = currentMsFn(), taps = 0)
+        val next = burst.copy(taps = burst.taps + taps)
+        skipBurst = next
+        onSeekState(next.targetMs.coerceIn(0, durationMsState))
     }
 
     // Request focus so keyboard events (space, arrows) work on desktop
@@ -340,7 +348,12 @@ fun VideoPlayerOverlay(
             .focusable()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = {
+                    onTap = { offset ->
+                        if (skipBurst != null) {
+                            skipTaps(forward = offset.x > size.width / 2, taps = 1)
+                            onInteraction()
+                            return@detectTapGestures
+                        }
                         // A click on the picture is play/pause wherever there is a mouse;
                         // a finger has no hover, so its tap is what brings the controls up.
                         if (chrome == PlayerChrome.Pointer) {
@@ -354,15 +367,9 @@ fun VideoPlayerOverlay(
                         focusRequester.requestFocus()
                     },
                     onDoubleTap = { offset ->
-                        // Double-tap left half = -10s, right half = +10s
-                        val isRight = offset.x > size.width / 2
-                        if (isRight) {
-                            onSeekState((currentMsFn() + 10_000).coerceAtMost(durationMsState))
-                            skipIndicator = SkipIndicator.FORWARD
-                        } else {
-                            onSeekState((currentMsFn() - 10_000).coerceAtLeast(0))
-                            skipIndicator = SkipIndicator.REWIND
-                        }
+                        val forward = offset.x > size.width / 2
+                        val bursting = skipBurst?.forward == forward
+                        skipTaps(forward, taps = if (bursting) 2 else 1)
                         onInteraction()
                     },
                 )
@@ -524,22 +531,21 @@ fun VideoPlayerOverlay(
             }
         }
 
-        // Double-tap skip indicator (like YouTube)
-        if (skipIndicator != null) {
+        skipBurst?.let { burst ->
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(0.4f)
-                    .align(if (skipIndicator == SkipIndicator.FORWARD) Alignment.CenterEnd else Alignment.CenterStart)
-                    .background(Color.White.copy(alpha = 0.08f), if (skipIndicator == SkipIndicator.FORWARD) RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50) else RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50)),
+                    .align(if (burst.forward) Alignment.CenterEnd else Alignment.CenterStart)
+                    .background(Color.White.copy(alpha = 0.08f), if (burst.forward) RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50) else RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        if (skipIndicator == SkipIndicator.FORWARD) Icons.Rounded.FastForward else Icons.Rounded.FastRewind,
+                        if (burst.forward) Icons.Rounded.FastForward else Icons.Rounded.FastRewind,
                         contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp),
                     )
-                    Text("10s", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                    Text("${burst.seconds}s", style = MaterialTheme.typography.labelMedium, color = Color.White)
                 }
             }
         }
@@ -1403,7 +1409,13 @@ internal fun ChapterListButton(
     }
 }
 
-private enum class SkipIndicator { REWIND, FORWARD }
+private const val SkipStepMs = 10_000L
+private const val SkipBurstWindowMs = 800L
+
+private data class SkipBurst(val forward: Boolean, val anchorMs: Long, val taps: Int) {
+    val seconds get() = taps * SkipStepMs / 1000
+    val targetMs get() = anchorMs + if (forward) taps * SkipStepMs else -taps * SkipStepMs
+}
 
 @Composable
 private fun SideIndicator(
