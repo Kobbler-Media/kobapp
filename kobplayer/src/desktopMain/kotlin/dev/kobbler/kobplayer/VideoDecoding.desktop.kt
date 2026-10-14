@@ -12,7 +12,12 @@ actual fun videoDecoderChoices(): List<VideoDecoderChoice> =
 private fun renderNodes(): List<Pair<String, String?>> =
     File("/sys/class/drm").listFiles { f -> f.name.startsWith("renderD") }.orEmpty()
         .sortedBy { it.name }
-        .map { node -> "/dev/dri/${node.name}" to runCatching { File(node, "device/vendor").readText().trim() }.getOrNull() }
+        .map { node -> "/dev/dri/${node.name}".let { it to pciVendor(it) } }
+
+internal fun pciVendor(device: String): String? =
+    runCatching { File("/sys/class/drm/${device.substringAfterLast('/')}/device/vendor").readText().trim() }.getOrNull()
+
+internal const val NvidiaPciVendor = "0x10de"
 
 internal fun linuxDecoderChoices(nodes: List<Pair<String, String?>>): List<VideoDecoderChoice> {
     val vendors = nodes.map { (_, id) -> vendorName(id) }
@@ -31,7 +36,7 @@ internal fun linuxDecoderChoices(nodes: List<Pair<String, String?>>): List<Video
 
 private fun vendorName(pciVendor: String?): String? = when (pciVendor?.lowercase()) {
     "0x8086" -> "Intel"
-    "0x10de" -> "NVIDIA"
+    NvidiaPciVendor -> "NVIDIA"
     "0x1002" -> "AMD"
     else -> null
 }

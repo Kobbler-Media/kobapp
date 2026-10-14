@@ -13,16 +13,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
-import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
-import uk.co.caprica.vlcj.media.Media
-import uk.co.caprica.vlcj.media.MediaEventAdapter
-import uk.co.caprica.vlcj.media.MediaParsedStatus
 import uk.co.caprica.vlcj.media.TrackType
-import uk.co.caprica.vlcj.media.VideoTrackInfo
-import uk.co.caprica.vlcj.binding.lib.LibC
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
-import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
+import uk.co.caprica.vlcj.player.base.Track
+import uk.co.caprica.vlcj.player.base.TrackList
+import uk.co.caprica.vlcj.player.base.VideoTrack
 import java.io.File
 import java.net.URI
 import java.nio.file.Paths
@@ -53,8 +49,7 @@ internal class DesktopPlayer(
     }
 
     private val factory = createPlayerLock.withLock {
-        pluginSearchPathReady
-        MediaPlayerFactory(if (config.verboseLogging) listOf("-vv") else emptyList())
+        MediaPlayerFactory(libVlcDiscovery, if (config.verboseLogging) listOf("-vv") else emptyList())
     }
 
     private val logFile = vlcLogFile?.let { VlcLogFile(factory, it) }
@@ -63,20 +58,20 @@ internal class DesktopPlayer(
         factory.mediaPlayers().newMediaPlayer()
     } else {
         factory.mediaPlayers().newEmbeddedMediaPlayer()
+    }.also {
+        // vlcj 5.0.0-M6's release() throws before freeing the player unless its clock
+        // was ever watched.
+        it.time().startWatching()
     }
 
     internal val video: VlcVideoSink? = if (!config.audioOnly) {
         VlcVideoSink(
             vlcPlayer,
-            visibleSize = { currentVideoTrack()?.let { it.width() to it.height() } },
+            visibleSize = { withVideoTrack { it?.let { track -> track.width() to track.height() } } },
             onPicture = { layout ->
-                val track = currentVideoTrack()
-                _videoSize.value = displaySize(
-                    layout.width,
-                    layout.height,
-                    track?.sampleAspectRatio() ?: 0,
-                    track?.sampleAspectRatioBase() ?: 0,
-                )
+                _videoSize.value = withVideoTrack { track ->
+                    displaySize(layout.width, layout.height, track?.sampleAspectRatio() ?: 0, track?.sampleAspectRatioBase() ?: 0)
+                }
             },
         )
     } else null
@@ -159,6 +154,11 @@ internal class DesktopPlayer(
     private val setTimeLock = ReentrantLock()
     private var hasStartedPlaying = false
 
+    // Events from an input we stopped or replaced trail in after it; until the next one
+    // opens they describe nothing on screen.
+    @Volatile
+    private var inputRetired = false
+
     // True while the caller has signalled silent preload. We mute audio output
     // and pause synchronously inside `playing()` so VLC's audio path warms up
     // *before* any sample reaches the speaker — eliminating the cold-start
@@ -196,23 +196,18 @@ internal class DesktopPlayer(
             }
         }
 
-        // VLC media events
-        vlcPlayer.events().addMediaEventListener(object : MediaEventAdapter() {
-            override fun mediaParsedChanged(media: Media, newStatus: MediaParsedStatus) {
-                if (newStatus == MediaParsedStatus.DONE) {
-                    updateMediaProperties()
-                }
-            }
-        })
-
         // VLC player events — the heart of our clean state machine
         vlcPlayer.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
-            override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
-                _durationMs.value = newLength
+            override fun opening(mediaPlayer: MediaPlayer) {
+                inputRetired = false
             }
 
-            override fun elementaryStreamAdded(mediaPlayer: MediaPlayer?, type: TrackType?, id: Int) {
-                when (type) {
+            override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
+                _durationMs.value = newLength.usToMs()
+            }
+
+            override fun trackAdded(mediaPlayer: MediaPlayer, trackType: TrackType, trackId: String) {
+                when (trackType) {
                     TrackType.AUDIO -> reloadAudioTracks()
                     TrackType.TEXT -> reloadSubtitleTracks()
                     else -> {}
@@ -224,12 +219,13 @@ internal class DesktopPlayer(
                 // We just sync volume/mute and load chapters.
                 vlcPlayer.submit {
                     gain.reapply()
-                    if (_isMuted.value) vlcPlayer.audio().mute()
+                    if (_isMuted.value) vlcPlayer.audio().setMute(true)
                 }
                 loadChapters()
             }
 
             override fun playing(mediaPlayer: MediaPlayer) {
+                if (inputRetired) return
                 _isBuffering.value = false
                 _bufferPercent.value = 1f
                 hasStartedPlaying = true
@@ -245,17 +241,17 @@ internal class DesktopPlayer(
                     gain.rampTo(FADE_IN_MS, ::userGain)
                 }
 
-                // Parse media and reload tracks on play
-                vlcPlayer.submit { vlcPlayer.media().parsing().parse() }
                 reloadAudioTracks()
                 reloadSubtitleTracks()
             }
 
             override fun paused(mediaPlayer: MediaPlayer) {
+                if (inputRetired) return
                 _state.value = PlayerState.PAUSED
             }
 
             override fun finished(mediaPlayer: MediaPlayer) {
+                if (inputRetired) return
                 _state.value = PlayerState.FINISHED
             }
 
@@ -269,22 +265,23 @@ internal class DesktopPlayer(
                 _state.value = PlayerState.ERROR
             }
 
-            override fun buffering(mediaPlayer: MediaPlayer?, newCache: Float) {
-                _bufferPercent.value = (newCache / 100f).coerceIn(0f, 1f)
-                if (newCache < 100f && hasStartedPlaying) {
+            override fun bufferingChanged(mediaPlayer: MediaPlayer, newCache: Float) {
+                if (inputRetired) return
+                // A fraction in libVLC 4, where 3 reported a percentage.
+                val filled = newCache.coerceIn(0f, 1f)
+                _bufferPercent.value = filled
+                if (filled < 1f && hasStartedPlaying) {
                     _state.value = PlayerState.BUFFERING
                     _isBuffering.value = true
-                } else if (newCache >= 100f && _state.value == PlayerState.BUFFERING) {
+                } else if (filled >= 1f && _state.value == PlayerState.BUFFERING) {
                     _state.value = PlayerState.PLAYING
                     _isBuffering.value = false
                 }
             }
 
-            // Use timeChanged (direct ms) instead of positionChanged (fraction × duration).
-            // The fraction path inherits libvlc's small position rounding and any
-            // duration estimate error, which subtitles read as desync. Android already
-            // uses TimeChanged for the same reason.
-            override fun timeChanged(mediaPlayer: MediaPlayer?, newTime: Long) {
+            override fun positionChanged(mediaPlayer: MediaPlayer, newTimeUs: Long, newPosition: Double) {
+                if (inputRetired) return
+                val newTime = newTimeUs.usToMs()
                 if (newTime != _currentMs.value) {
                     val resolved = stateAfterClockAdvance(_state.value, isPreloading.value)
                     if (resolved != _state.value) {
@@ -318,20 +315,24 @@ internal class DesktopPlayer(
                 _state.value = PlayerState.LOADING
                 _isBuffering.value = true
                 _bufferPercent.value = 0f
-                _currentMs.value = 0L
+                _currentMs.value = source.startTimeSec?.let { it * 1000L } ?: 0L
                 _durationMs.value = 0L
                 _error.value = null
                 hasStartedPlaying = false
                 loadedSource = source
-                gpuDecodeRequested = decodesOnGpu(source, decoding)
+                val device = decoderDevice(source, decoding)
+                gpuDecodeRequested = device.name != "none"
                 gain.set(0)
 
-                vlcPlayer.media().play(vlcMrl(source.url), *vlcMediaOptions(source, config, decoding).toTypedArray())
+                inputRetired = true
+                vlcPlayer.setDecoderDevice(device)
+                vlcPlayer.media().play(vlcMrl(source.url), *vlcMediaOptions(source, config).toTypedArray())
+                // Not :start-time: libVLC 4 makes that the title's start, and reports times
+                // and length from it. A seek before play() has no input to land on.
+                source.startTimeSec?.let { vlcPlayer.controls().setTime((it * 1000L).msToUs(), true) }
                 // Re-apply mute after play — new media may reset audio state.
                 // This prevents audio leaking during muted preload on detail pages.
-                if (_isMuted.value && !vlcPlayer.audio().isMute) {
-                    vlcPlayer.audio().mute()
-                }
+                if (_isMuted.value) vlcPlayer.audio().setMute(true)
             }
         }
     }
@@ -349,6 +350,7 @@ internal class DesktopPlayer(
     }
 
     override fun stop() {
+        inputRetired = true
         try {
             vlcPlayer.submit { vlcPlayer.controls().stop() }
         } catch (_: RejectedExecutionException) {}
@@ -377,7 +379,7 @@ internal class DesktopPlayer(
         _currentMs.value = clamped
         vlcPlayer.submit {
             setTimeLock.withLock {
-                vlcPlayer.controls().setTime(clamped)
+                vlcPlayer.controls().setTime(clamped.msToUs())
             }
         }
         video?.allowFrames(2)
@@ -391,7 +393,7 @@ internal class DesktopPlayer(
         }
         vlcPlayer.submit {
             setTimeLock.withLock {
-                vlcPlayer.controls().skipTime(deltaMs)
+                vlcPlayer.controls().skipTime(deltaMs.msToUs())
             }
         }
         video?.allowFrames(2)
@@ -407,9 +409,8 @@ internal class DesktopPlayer(
     }
 
     override fun setMuted(muted: Boolean) {
-        if (vlcPlayer.audio().isMute == muted) return
         _isMuted.value = muted
-        vlcPlayer.audio().mute()
+        vlcPlayer.audio().setMute(muted)
     }
 
     override fun setPreloading(preloading: Boolean) {
@@ -434,34 +435,28 @@ internal class DesktopPlayer(
 
     override fun selectAudioTrack(track: TrackInfo?) {
         if (track == null) {
-            vlcPlayer.audio().setTrack(-1)
-        } else {
-            val id = track.id.toIntOrNull() ?: return
-            val validIds = vlcPlayer.audio().trackDescriptions().map { it.id() }
-            if (id in validIds) {
-                vlcPlayer.audio().setTrack(id)
-                _selectedAudioTrack.value = track
-            }
+            vlcPlayer.tracks().deselect(TrackType.AUDIO)
+        } else if (_audioTracks.value.any { it.id == track.id }) {
+            vlcPlayer.tracks().select(TrackType.AUDIO, track.id)
+            _selectedAudioTrack.value = track
         }
     }
 
     override fun selectSubtitleTrack(track: TrackInfo?) {
         if (track == null) {
             spuDisabled = true
-            vlcPlayer.subpictures().setTrack(-1)
+            vlcPlayer.tracks().deselect(TrackType.TEXT)
             _selectedSubtitleTrack.value = null
         } else {
-            val id = track.id.toIntOrNull() ?: return
+            if (_subtitleTracks.value.none { it.id == track.id }) return
             spuDisabled = false
-            val validIds = vlcPlayer.subpictures().trackDescriptions().map { it.id() }
-            if (id !in validIds) return
             val source = loadedSource
             val ordinal = _subtitleTracks.value.indexOf(track)
             if (gpuDecodeRequested && source != null && ordinal >= 0) {
                 // VLC can only draw subtitles into a picture the CPU decoded — reopen there.
                 load(source.copy(subtitleOrdinal = ordinal, subtitlesOff = false, startTimeSec = (_currentMs.value / 1000).toInt()))
             } else {
-                vlcPlayer.subpictures().setTrack(id)
+                vlcPlayer.tracks().select(TrackType.TEXT, track.id)
             }
             _selectedSubtitleTrack.value = track
         }
@@ -508,39 +503,28 @@ internal class DesktopPlayer(
 
     // --- Internal helpers ---
 
-    private fun currentVideoTrack(): VideoTrackInfo? {
-        val tracks = vlcPlayer.media().info()?.videoTracks().orEmpty()
-        val selected = vlcPlayer.video().track()
-        return tracks.firstOrNull { it.id() == selected } ?: tracks.firstOrNull()
-    }
-
-    private fun updateMediaProperties() {
-        val info = vlcPlayer.media().info() ?: return
-        _durationMs.value = info.duration()
+    private fun <R> withVideoTrack(read: (VideoTrack?) -> R): R {
+        val selected = vlcPlayer.tracks().selectedVideoTrack()
+        return if (selected != null) selected.use(read) else vlcPlayer.tracks().videoTracks().use { read(it.tracks().firstOrNull()) }
     }
 
     private fun reloadAudioTracks() {
-        val tracks = vlcPlayer.audio().trackDescriptions()
-            .filter { it.id() != -1 }
-            .map { TrackInfo(it.id().toString(), it.description()) }
+        val tracks = trackInfos(vlcPlayer.tracks().audioTracks())
         _audioTracks.value = tracks
-
-        // Update selected track
-        val currentId = vlcPlayer.audio().track()
-        _selectedAudioTrack.value = tracks.find { it.id == currentId.toString() }
+        val current = vlcPlayer.tracks().selectedAudioTrack()?.use { it.trackId() }
+        _selectedAudioTrack.value = tracks.find { it.id == current }
     }
 
     private fun reloadSubtitleTracks() {
-        val tracks = vlcPlayer.subpictures().trackDescriptions()
-            .filter { it.id() != -1 }
-            .map { TrackInfo(it.id().toString(), it.description()) }
+        val tracks = trackInfos(vlcPlayer.tracks().textTracks())
         _subtitleTracks.value = tracks
 
         // Same race as Android: VLC re-selects a default SPU once the streams are parsed,
         // after the app has asked for none.
-        if (spuDisabled && vlcPlayer.subpictures().track() != -1) vlcPlayer.subpictures().setTrack(-1)
-        val currentId = if (spuDisabled) -1 else vlcPlayer.subpictures().track()
-        _selectedSubtitleTrack.value = tracks.find { it.id == currentId.toString() }
+        val selected = vlcPlayer.tracks().selectedTextTrack()?.use { it.trackId() }
+        if (spuDisabled && selected != null) vlcPlayer.tracks().deselect(TrackType.TEXT)
+        val current = if (spuDisabled) null else selected
+        _selectedSubtitleTrack.value = tracks.find { it.id == current }
     }
 
     private fun loadChapters() {
@@ -548,8 +532,8 @@ internal class DesktopPlayer(
             title.map {
                 Chapter(
                     name = it.name(),
-                    offsetMs = it.offset(),
-                    durationMs = it.duration(),
+                    offsetMs = it.offset().usToMs(),
+                    durationMs = it.duration().usToMs(),
                 )
             }
         }
@@ -564,26 +548,9 @@ internal class DesktopPlayer(
         private const val FADE_IN_MS = 260L
         private const val FADE_OUT_MS = 80L
 
-        // libvlc reads VLC_PLUGIN_PATH once, when the first instance is created, so this
-        // has to run before any MediaPlayerFactory exists.
-        private val pluginSearchPathReady: Unit by lazy {
-            NativeDiscovery().discover()
-            bundledPluginDir()?.let { dir ->
-                val existing = System.getenv("VLC_PLUGIN_PATH")
-                LibC.INSTANCE.setenv("VLC_PLUGIN_PATH", listOfNotNull(existing, dir.path).joinToString(File.pathSeparator), 1)
-            }
-            Unit
-        }
-
-        private fun bundledPluginDir(): File? =
-            listOfNotNull(System.getProperty("kobplayer.vlc.plugins"), System.getProperty("compose.application.resources.dir")?.let { "$it/vlc-plugins" })
-                .map(::File)
-                .firstOrNull { it.isDirectory }
-
         fun prepareLibraries() {
             createPlayerLock.withLock {
-                pluginSearchPathReady
-                CallbackMediaPlayerComponent().release()
+                MediaPlayerFactory(libVlcDiscovery).release()
             }
         }
     }
@@ -594,31 +561,32 @@ internal class DesktopPlayer(
 internal fun vlcMrl(url: String): String =
     if (url.startsWith("file:/") && !url.startsWith("file://")) Paths.get(URI(url)).toUri().toString() else url
 
-// VLC 3 blends subpictures onto the decoder's own picture, and a hardware decoder's picture
-// is an opaque GPU surface: the blend fails and the subtitles silently vanish. So the GPU
-// only decodes when VLC has no subtitles to draw — the app's own overlay is unaffected.
-internal fun decodesOnGpu(source: MediaSource.Url, decoding: VideoDecoding): Boolean =
-    decoding != VideoDecoding.Software && source.subtitleOrdinal == null
-
-internal fun vlcMediaOptions(source: MediaSource.Url, config: PlayerConfig, decoding: VideoDecoding): List<String> {
+internal fun vlcMediaOptions(source: MediaSource.Url, config: PlayerConfig): List<String> {
     val headers = source.headers.mapKeys { it.key.lowercase() }
     return buildList {
         add("http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
         add("network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
+        // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
+        // verifies none over a network: every seek decoded the title from its first frame.
+        add("demux=mkv_trusted,any")
         headers["referer"]?.let { add("http-referrer=$it") }
         source.audioLanguage?.let { add("audio-language=$it") }
         if (source.subtitlesOff) add("sub-language=none")
         else source.subtitleOrdinal?.let { add("sub-track=$it") }
-        source.startTimeSec?.let { add("start-time=$it") }
-        // libvlc forces avcodec-hw=none on any player with video callbacks; a media option
-        // outranks it. kobvaapi is the bundled VA-API decoder (native/kobvaapi) — the one
-        // VLC 3.0.23 ships is dead — and "any" still reaches VDPAU, DXVA and VideoToolbox.
-        if (decodesOnGpu(source, decoding)) {
-            add("avcodec-hw=kobvaapi,any")
-            (decoding as? VideoDecoding.Gpu)?.let { add("kobvaapi-device=${it.device}") }
-        }
     }
 }
+
+private fun <T : Track> trackInfos(list: TrackList<T>): List<TrackInfo> = list.use {
+    it.tracks().mapIndexed { index, track -> TrackInfo(track.trackId(), track.name() ?: "Track ${index + 1}") }
+}
+
+private inline fun <L : TrackList<*>, R> L.use(block: (L) -> R): R = try { block(this) } finally { release() }
+
+private inline fun <T : Track, R> T.use(block: (T) -> R): R = try { block(this) } finally { release() }
+
+// libvlc 4 counts time in microseconds, and vlcj 5 passes it through unconverted.
+private fun Long.usToMs() = this / 1000
+private fun Long.msToUs() = this * 1000
 
 // ReentrantLock.withLock with contract
 private inline fun <T> ReentrantLock.withLock(block: () -> T): T {

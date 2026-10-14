@@ -62,10 +62,12 @@ iOS targets are only declared when the build host is a Mac. Declaring them elsew
 - `pause()` / `resume()`: guards reject the `READY` state. Bypass via vlcj
   `player.controls()` directly.
 - Bitmap: read `player.surface.bitmap` inside the Canvas draw lambda, not the composable body.
+- libVLC: desktop runs VLC 4 through vlcj 5, against the libvlc that
+  [kobvlc](https://github.com/Kobbler-Media/kobvlc) builds for Linux (`libvlc-linux` in the
+  version catalog), unpacked into the app's resources — never the system's VLC 3.
+  `-Pkobvlc.linux=<kobvlc>/work/linux/pkg` runs against a local kobvlc build instead.
 - Video: VLC decodes into our own buffers via raw libvlc callbacks (`VlcVideoSink`); YUV→RGB
-  and scaling run in a Skia shader (`FramePainter`). GPU decode goes through the bundled
-  `kobplayer/native/kobvaapi` plugin (VLC 3.0.23's own VA-API DRM decoder never opens); the
-  "Video decoding" setting (`Player.setVideoDecoding`) picks the GPU. `kobvaapi` is adapted
-  from VLC's own LGPL-2.1+ VA-API helper — see the file headers under
-  `kobplayer/native/kobvaapi/`.
+  and scaling run in a Skia shader (`FramePainter`). GPU decoding goes through VLC's VA-API
+  decoder device, chosen per load with kobvlc's `libvlc_video_set_decoder_device`; the
+  "Video decoding" setting (`Player.setVideoDecoding`) picks the GPU.
 - Audio: use the `AudioLevelController` feature to unmute and set volume.

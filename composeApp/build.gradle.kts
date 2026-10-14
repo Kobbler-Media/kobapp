@@ -152,21 +152,15 @@ kotlin {
     }
 }
 
-// The VA-API decoder VLC 3.0.x distributions ship is dead (see kobplayer/native/kobvaapi);
-// ours is compiled against the host's VLC and ffmpeg and loaded from the app's resources.
 val appResources = layout.buildDirectory.dir("appResources")
-val buildKobvaapi by tasks.registering(Exec::class) {
-    val script = rootProject.file("kobplayer/native/kobvaapi/build.sh")
-    val out = appResources.map { it.dir("linux-x64/vlc-plugins") }
-    onlyIf { org.jetbrains.kotlin.konan.target.HostManager.hostIsLinux }
-    inputs.dir(script.parentFile)
-    outputs.dir(out)
-    commandLine(script, out.get().asFile)
+val bundleLibvlc by tasks.registering(Sync::class) {
+    from(project(":kobplayer").tasks.named("unpackLibvlc"))
+    into(appResources.map { it.dir("linux-x64/libvlc") })
 }
-tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(buildKobvaapi) }
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(bundleLibvlc) }
 tasks.withType<JavaExec>().matching { it.name.startsWith("hotRun") }.configureEach {
-    dependsOn(buildKobvaapi)
-    systemProperty("kobplayer.vlc.plugins", appResources.get().dir("linux-x64/vlc-plugins").asFile.path)
+    dependsOn(bundleLibvlc)
+    systemProperty("kobplayer.libvlc.dir", appResources.get().dir("linux-x64/libvlc/lib").asFile.path)
 }
 
 // Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. The first launch writes a

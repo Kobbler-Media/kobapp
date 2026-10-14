@@ -77,15 +77,18 @@ kotlin {
     }
 }
 
-val kobvaapiDir = layout.buildDirectory.dir("kobvaapi")
-val buildKobvaapi by tasks.registering(Exec::class) {
-    val script = file("native/kobvaapi/build.sh")
+// Desktop plays through the libvlc kobvlc builds for Linux. -Pkobvlc.linux=<kobvlc>/work/linux/pkg
+// tries a local kobvlc build instead of the published one.
+val libvlcLinux by configurations.creating { isCanBeConsumed = false }
+dependencies { libvlcLinux("${libs.libvlc.linux.get()}@tar.gz") }
+val libvlcDir = layout.buildDirectory.dir("libvlc")
+val unpackLibvlc by tasks.registering(Sync::class) {
     onlyIf { org.jetbrains.kotlin.konan.target.HostManager.hostIsLinux }
-    inputs.dir(script.parentFile)
-    outputs.dir(kobvaapiDir)
-    commandLine(script, kobvaapiDir.get().asFile)
+    val local = providers.gradleProperty("kobvlc.linux")
+    from(provider<Any> { local.orNull?.let(::file) ?: tarTree(libvlcLinux.singleFile) })
+    into(libvlcDir)
 }
 tasks.named<Test>("desktopTest") {
-    dependsOn(buildKobvaapi)
-    systemProperty("kobplayer.vlc.plugins", kobvaapiDir.get().asFile.path)
+    dependsOn(unpackLibvlc)
+    systemProperty("kobplayer.libvlc.dir", libvlcDir.get().dir("lib").asFile.path)
 }

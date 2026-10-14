@@ -15,12 +15,15 @@ androidx-core = "1.19.1"
 media3 = "1.11.0"
 mediarouter = "1.8.1"
 play-cast = "22.3.1"
-vlcj = "4.12.1"
+# vlcj 5 (VLC 4) has only milestones; M6 binds libvlc as reworked in June 2026.
+vlcj = "5.0.0-M6"
 dbus-java = "5.2.2"
 # VLC 4 has no stable release yet. 3.x drops and stretches audio for seconds whenever a
 # Bluetooth sink wakes from idle (first play, every unpause); 4 resyncs without a glitch.
 # Built by github.com/Kobbler-Media/kobvlc: libvlcjni eap29 with our patches, trimmed.
 libvlc-android = "4.0.0-eap29-kob1"
+# Desktop builds VLC master, which vlcj 5 needs: kobvlc's linux/build.sh.
+libvlc-linux = "4.0.0-3127258a-kob1"
 # Baseline Profile Gradle Plugin 1.4.x (latest stable) only drives AGP 9 with
 # android.newDsl=false, a project-wide opt-out. 1.5.0-rc01 raised its tested AGP
 # ceiling to 10.0.0-alpha01 and is the first build that works under AGP 9's DSL.
@@ -60,6 +63,7 @@ vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
 dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = "dbus-java" }
 dbus-java-transport-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 libvlc-android = { module = "dev.kobbler.vlc:libvlc-all", version.ref = "libvlc-android" }
+libvlc-linux = { module = "dev.kobbler.vlc:libvlc-linux-x64", version.ref = "libvlc-linux" }
 androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "androidx-profileinstaller" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "androidx-benchmark" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-test-junit" }

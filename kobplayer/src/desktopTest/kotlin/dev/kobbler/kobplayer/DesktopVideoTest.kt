@@ -72,8 +72,6 @@ class DesktopVideoTest {
 
     @Test
     fun fallsBackToCpuDecodingWhenVlcMustDrawSubtitles() {
-        // VLC 3 blends subpictures onto the decoder's picture, which is an opaque GPU
-        // surface when decoding in hardware: the subtitles silently vanish.
         DesktopPlayer.prepareLibraries()
         val scope = Dispatchers.Default + SupervisorJob()
         val player = DesktopPlayer(scope, PlayerConfig())
@@ -103,18 +101,25 @@ class DesktopVideoTest {
         error("no subtitle track")
     }
 
+    @Test
+    fun seeksMatroskaOverTheNetworkToItsCues() {
+        assertTrue("demux=mkv_trusted,any" in vlcMediaOptions(MediaSource.Url("https://x/y.mkv"), PlayerConfig()))
+    }
 
     @Test
     fun asksForTheChosenDecoder() {
         val source = MediaSource.Url("http://x/y.mkv")
-        fun decoderOptions(source: MediaSource.Url, decoding: VideoDecoding) =
-            vlcMediaOptions(source, PlayerConfig(), decoding).filter { it.startsWith("avcodec-hw") || it.startsWith("kobvaapi") }
-        assertEquals(
-            listOf("avcodec-hw=kobvaapi,any", "kobvaapi-device=/dev/dri/renderD129"),
-            decoderOptions(source, VideoDecoding.Gpu("/dev/dri/renderD129")),
-        )
-        assertEquals(listOf("avcodec-hw=kobvaapi,any"), decoderOptions(source, VideoDecoding.Auto))
-        assertEquals(emptyList(), decoderOptions(source, VideoDecoding.Software))
-        assertEquals(emptyList(), decoderOptions(source.copy(subtitleOrdinal = 0), VideoDecoding.Auto))
+        val vendors = mapOf("/dev/dri/renderD128" to "0x8086", "/dev/dri/renderD129" to "0x10de")
+        listOf(
+            source to VideoDecoding.Gpu("/dev/dri/renderD128") to DecoderDevice("vaapi_drm", "/dev/dri/renderD128"),
+            source to VideoDecoding.Gpu("/dev/dri/renderD129") to DecoderDevice("nvdec", null),
+            source to VideoDecoding.Gpu("/dev/dri/renderD130") to DecoderDevice("vaapi_drm", "/dev/dri/renderD130"),
+            source to VideoDecoding.Auto to DecoderDevice("any", null),
+            source to VideoDecoding.Software to DecoderDevice("none", null),
+            source.copy(subtitleOrdinal = 0) to VideoDecoding.Auto to DecoderDevice("none", null),
+        ).forEach { (input, expected) ->
+            val (src, decoding) = input
+            assertEquals(expected, decoderDevice(src, decoding, vendors::get), "$decoding ${src.subtitleOrdinal}")
+        }
     }
 }

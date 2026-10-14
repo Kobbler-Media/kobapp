@@ -5,15 +5,13 @@ import com.sun.jna.CallbackThreadInitializer
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
-import com.sun.jna.ptr.IntByReference
-import com.sun.jna.ptr.PointerByReference
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Rect
 import uk.co.caprica.vlcj.binding.internal.libvlc_display_callback_t
 import uk.co.caprica.vlcj.binding.internal.libvlc_lock_callback_t
 import uk.co.caprica.vlcj.binding.internal.libvlc_unlock_callback_t
-import uk.co.caprica.vlcj.binding.internal.libvlc_video_cleanup_cb
 import uk.co.caprica.vlcj.binding.internal.libvlc_video_format_cb
+import uk.co.caprica.vlcj.binding.internal.libvlc_video_output_cleanup_cb
 import uk.co.caprica.vlcj.binding.lib.LibVlc
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import java.util.concurrent.atomic.AtomicInteger
@@ -46,11 +44,11 @@ internal class VlcVideoSink(
 
     private val format = libvlc_video_format_cb { _, chroma, width, height, pitches, lines ->
         val proposed = chroma.pointer.getString(0, "US-ASCII").take(4)
-        val (w, h) = negotiatedSize(width.value, height.value, visibleSize())
+        val (w, h) = negotiatedSize(width.getInt(0), height.getInt(0), visibleSize())
         val layout = FrameLayout(PixelFormat.forDecoderChroma(proposed, SkiaTextures.alpha16 != null), w, h)
         chroma.pointer.write(0, layout.format.fourcc.toByteArray(Charsets.US_ASCII), 0, 4)
-        width.value = w
-        height.value = h
+        width.setInt(0, w)
+        height.setInt(0, h)
         pitches.pointer.write(0, layout.planes.map { it.pitch }.toIntArray(), 0, layout.planes.size)
         lines.pointer.write(0, layout.planes.map { it.lines }.toIntArray(), 0, layout.planes.size)
         frames = FrameSet(layout)
@@ -58,7 +56,7 @@ internal class VlcVideoSink(
         VlcPicturePool
     }
 
-    private val cleanup = libvlc_video_cleanup_cb { frames?.vlcReleased() }
+    private val cleanup = libvlc_video_output_cleanup_cb { frames?.vlcReleased() }
 
     private val lock = libvlc_lock_callback_t { _, planes ->
         val set = frames!!
