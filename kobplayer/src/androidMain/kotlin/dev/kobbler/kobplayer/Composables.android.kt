@@ -2,7 +2,6 @@ package dev.kobbler.kobplayer
 
 import android.os.Build
 import android.view.SurfaceView
-import android.view.ViewGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -20,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -50,12 +50,19 @@ actual fun VideoSurface(
     val android = player as AndroidPlayer
     val aspectRatio by player.aspectRatio.collectAsState()
     val videoSize by player.videoSize.collectAsState()
+    val decodedPicture by android.decodedPicture.collectAsState()
+    val pictureReturns by android.pictureReturns.collectAsState()
+    var frameView by remember { mutableStateOf<VideoFrameLayout?>(null) }
+
+    LaunchedEffect(pictureReturns) {
+        // The clock moves a beat before the decoder's first frame reaches the screen.
+        delay(150)
+        frameView?.releaseFrame()
+    }
 
     Box(modifier.clipToBounds(), contentAlignment = Alignment.Center) {
-        // The surface is sized to the picture and libVLC told to fill it (onSurfaceSize):
-        // left to place the picture itself it trusts decoder geometry some chipsets pad.
         val (vw, vh) = videoSize
-        val surfaceModifier = Modifier.layout { measurable, constraints ->
+        val frameModifier = Modifier.layout { measurable, constraints ->
             val (w, h) = videoFrameSize(aspectRatio, vw, vh, constraints.maxWidth, constraints.maxHeight)
             val placeable = measurable.measure(
                 constraints.copy(minWidth = w, maxWidth = w, minHeight = h, maxHeight = h)
@@ -67,11 +74,7 @@ actual fun VideoSurface(
 
         AndroidView(
             factory = { ctx ->
-                SurfaceView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
+                val surface = SurfaceView(ctx).apply {
                     // A SurfaceView's surface is destroyed and rebuilt with view
                     // visibility by default, so it arrives later than the stream that
                     // needs it. Tying it to attachment instead is framework code — the
@@ -79,37 +82,32 @@ actual fun VideoSurface(
                     if (Build.VERSION.SDK_INT >= 34) {
                         setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
                     }
-                    holder.addCallback(object : android.view.SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                            // Attached immediately, preload included: a decoder is chosen
-                            // when the stream opens and cannot be handed a window that
-                            // turns up afterwards.
-                            android.pendingSurface = holder
-                            android.attachVoutIfReady()
-                            android.onSurfaceReady(true)
-                        }
+                }
+                VideoFrameLayout(ctx, surface).also { frame ->
+                    frameView = frame
+                    surface.holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                        override fun surfaceCreated(holder: android.view.SurfaceHolder) =
+                            android.onSurfaceCreated(holder)
 
                         override fun surfaceChanged(
                             holder: android.view.SurfaceHolder,
                             format: Int,
                             width: Int,
                             height: Int,
-                        ) {
-                            android.onSurfaceSize(width, height)
-                        }
+                        ) = android.onSurfaceSize(width, height)
 
                         override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-                            android.onSurfaceReady(false)
-                            android.pendingSurface = null
-                            android.detachVout()
+                            frame.holdFrame()
+                            android.onSurfaceDestroyed()
                         }
                     })
                 }
             },
+            update = { it.picture = decodedPicture },
             // Without it Compose discards and recreates the view inside any reusable
             // container, and a recreated SurfaceView is a destroyed surface.
             onReset = {},
-            modifier = surfaceModifier,
+            modifier = frameModifier,
         )
 
         overlay(player)

@@ -51,4 +51,20 @@ class VideoFrameTest {
         assertEquals(1280 to 528, displaySize(1280, 528, sarNum = 1, sarDen = 1))
         assertEquals(1280 to 528, displaySize(1280, 528, sarNum = 0, sarDen = 0))
     }
+
+    @Test
+    fun oversizesSurfaceSoDecoderPaddingFallsOutsideTheFrame() {
+        listOf(
+            null to (1920 to 1080),
+            DecodedPicture(1920, 1080, 1920, 1080) to (1920 to 1080),
+            // Software decode of 1080p: 8 padding rows below the picture.
+            DecodedPicture(1920, 1088, 1920, 1080) to (1920 to 1088),
+            DecodedPicture(1280, 736, 1280, 720) to (1920 to 1104),
+            DecodedPicture(0, 0, 0, 0) to (1920 to 1080),
+            // A closing vout reports its picture gone; a surface shrunk to it never regrows.
+            DecodedPicture(0, 0, 2160, 1080) to (1920 to 1080),
+        ).forEach { (picture, expected) ->
+            assertEquals(expected, decodedSurfaceSize(1920, 1080, picture), picture.toString())
+        }
+    }
 }

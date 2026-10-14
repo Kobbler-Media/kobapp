@@ -279,6 +279,11 @@ fun clampSeekTarget(ms: Long, durationMs: Long): Long =
 /** What a play/pause tap should do to a player in a given state. */
 enum class PlayPauseIntent { Play, Pause, None }
 
+// A surface handed back mid-title gets a decoder that has lost its reference frames;
+// without a seek the screen stays black until the stream's next keyframe.
+fun redrawsOnSurfaceReturn(current: PlayerState): Boolean =
+    current == PlayerState.PLAYING || current == PlayerState.PAUSED || current == PlayerState.BUFFERING
+
 /**
  * A transport tap read against the state the player is in.
  *
@@ -294,6 +299,13 @@ fun playPauseIntent(current: PlayerState): PlayPauseIntent =
         PlayerState.PLAYING, PlayerState.BUFFERING, PlayerState.LOADING -> PlayPauseIntent.Pause
         PlayerState.IDLE, PlayerState.FINISHED, PlayerState.ERROR -> PlayPauseIntent.None
     }
+
+// libVLC 4 reports a stop, not an end: the same event follows our own stop and every
+// media swap, and only one nobody asked for means the title ran out.
+fun stateOnStopping(current: PlayerState, requested: Boolean): PlayerState = when {
+    requested || current == PlayerState.IDLE || current == PlayerState.ERROR -> current
+    else -> PlayerState.FINISHED
+}
 
 fun stateAfterClockAdvance(current: PlayerState, preloading: Boolean = false): PlayerState =
     when {

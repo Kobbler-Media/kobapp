@@ -35,6 +35,9 @@ private const val FieldDecodeKey = "field_picture_verdict"
 // Often enough to settle a good device quickly, rarely enough to cost nothing.
 private const val FieldDecodeProbePollMs = 500L
 
+// A paused title that cannot seek never redraws; the held frame must still go eventually.
+private const val PictureReturnTimeoutMs = 3_000L
+
 /**
  * Android VLC player implementation using libvlc-android.
  *
@@ -58,7 +61,8 @@ internal class AndroidPlayer(
     // Left to itself VLC picks a chroma the decoder can hand over directly.
     val libVLC = LibVLC(context, ArrayList<String>().apply {
         add("--network-caching=${config.networkCacheMs}")
-        if (config.verboseLogging) {
+        // `adb shell setprop log.tag.kobplayer VERBOSE` turns it on for any build.
+        if (config.verboseLogging || android.util.Log.isLoggable("kobplayer", android.util.Log.VERBOSE)) {
             add("-vv")
         }
         if (!config.hardwareAcceleration) {
@@ -68,11 +72,11 @@ internal class AndroidPlayer(
 
     val vlcPlayer = MediaPlayer(libVLC)
 
-    // libvlc 3's stop() and setMedia() join the input thread, which waits as long as a
+    // Releasing a player waits for its inputs to wind down, which takes as long as a
     // stalled network read does: on the main thread, a stream that hung while opening
-    // took the app down with an ANR the moment anything stopped or replaced it. One
-    // serial thread keeps those calls, and the play/pause/seek that must follow them in
-    // order, off the UI. View attach and detach stay on main: they touch the SurfaceHolder.
+    // took the app down with an ANR. One serial thread keeps libVLC calls off the UI and
+    // the play/pause/seek that follow a load in order behind it. View attach and detach
+    // stay on main: they touch the SurfaceHolder.
     @Volatile private var released = false
 
     private val vlcThread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc") }
@@ -212,50 +216,90 @@ internal class AndroidPlayer(
     // libavcodec and software-decoded H.264 for its whole duration, which on a TV box is
     // the difference between smooth and stuttering. Preload is silent, not invisible; the
     // preparing scrim is what the viewer sees over it.
-    internal var pendingSurface: android.view.SurfaceHolder? = null
-    internal var voutAttached = false
+    private var pendingSurface: android.view.SurfaceHolder? = null
+    private var voutAttached = false
 
     private val _videoOutputReady = MutableStateFlow(false)
     override val videoOutputReady: StateFlow<Boolean> = _videoOutputReady.asStateFlow()
 
-    internal fun onSurfaceReady(ready: Boolean) { _videoOutputReady.value = ready }
+    internal fun onSurfaceCreated(holder: android.view.SurfaceHolder) {
+        // Attached immediately, preload included: a decoder is chosen when the stream
+        // opens and cannot be handed a window that turns up afterwards.
+        pendingSurface = holder
+        attachVoutIfReady()
+        _videoOutputReady.value = true
+        pictureTimeout?.cancel()
+        if (redrawsOnSurfaceReturn(_state.value)) {
+            awaitingPicture = true
+            vlc { if (isSeekable) setTime(time) }
+            pictureTimeout = scope.launch {
+                delay(PictureReturnTimeoutMs)
+                markPictureReturned()
+            }
+        } else {
+            markPictureReturned()
+        }
+    }
 
-    // surfaceChanged can land before the vout is attached — during muted preload the
-    // attach is deferred to setMuted(false), by which point the only callback carrying
-    // the real dimensions has already been and gone. Bank them so the attach can apply
-    // them; without it VLC keeps a stale window size and renders the frame scaled into
-    // the corner of the surface.
-    internal var pendingSurfaceWidth = 0
-    internal var pendingSurfaceHeight = 0
+    // Bumped once the surface that came back has been drawn into again (or given up on).
+    private val _pictureReturns = MutableStateFlow(0)
+    internal val pictureReturns: StateFlow<Int> = _pictureReturns.asStateFlow()
+    @Volatile private var awaitingPicture = false
+    private var pictureTimeout: Job? = null
+
+    private fun markPictureReturned() {
+        awaitingPicture = false
+        pictureTimeout?.cancel()
+        _pictureReturns.value++
+    }
+
+    internal fun onSurfaceDestroyed() {
+        _videoOutputReady.value = false
+        pendingSurface = null
+        detachVout()
+    }
+
+    // surfaceChanged can land before the vout is attached, and the only callback carrying
+    // the real dimensions is then already gone. Bank them so the attach can apply them;
+    // VLC sizes subtitles to the window it was last told about.
+    private var pendingSurfaceWidth = 0
+    private var pendingSurfaceHeight = 0
 
     /** True when the player is silently preloading (decode without render). */
     internal val isPreloading = MutableStateFlow(false)
 
-    // libVLC 3 misses the crop of Codec2 decoders that pad their output — MediaTek hands a
-    // 1280x528 film over as 1920x1088 — and places the picture by that padded shape: stretched
-    // in a full-screen surface, pillarboxed in one sized to the film. The surface is already
-    // sized to the true picture, so VLC is told to draw exactly that shape.
+    private val _decodedPicture = MutableStateFlow<DecodedPicture?>(null)
+    internal val decodedPicture: StateFlow<DecodedPicture?> = _decodedPicture.asStateFlow()
+
+    // With a layout listener VLC hands the whole decoded buffer to the surface and leaves
+    // placement to us. Left to place the picture itself it fit it to whatever window size
+    // reached its display last — a stale one during a rotation left the picture small
+    // and boxed on all sides — and it trusted decoder geometry some chipsets pad.
+    private val videoLayoutListener =
+        IVLCVout.OnNewVideoLayoutListener { _, width, height, visibleWidth, visibleHeight, _, _ ->
+            _decodedPicture.value = DecodedPicture(width, height, visibleWidth, visibleHeight)
+        }
+
     internal fun onSurfaceSize(width: Int, height: Int) {
         pendingSurfaceWidth = width
         pendingSurfaceHeight = height
-        vlcPlayer.aspectRatio = "$width:$height"
         if (voutAttached) vlcPlayer.vlcVout.setWindowSize(width, height)
     }
 
-    internal fun attachVoutIfReady() {
+    private fun attachVoutIfReady() {
         val holder = pendingSurface ?: return
         if (voutAttached) return
         val vout = vlcPlayer.vlcVout
         if (vout.areViewsAttached()) vout.detachViews()
         vout.setVideoSurface(holder.surface, holder)
-        vout.attachViews()
+        vout.attachViews(videoLayoutListener)
         voutAttached = true
         if (pendingSurfaceWidth > 0 && pendingSurfaceHeight > 0) {
             vout.setWindowSize(pendingSurfaceWidth, pendingSurfaceHeight)
         }
     }
 
-    internal fun detachVout() {
+    private fun detachVout() {
         val vout = vlcPlayer.vlcVout
         if (vout.areViewsAttached()) vout.detachViews()
         voutAttached = false
@@ -264,6 +308,7 @@ internal class AndroidPlayer(
     // --- Internal ---
 
     private var currentMedia: Media? = null
+    @Volatile private var stopRequested = false
 
     private val presentedVideo = MutableStateFlow(false)
     private var fieldDecodeProbe: Job? = null
@@ -274,6 +319,7 @@ internal class AndroidPlayer(
         vlcPlayer.setEventListener { event ->
             when (event.type) {
                 MediaPlayer.Event.Opening -> {
+                    stopRequested = false
                     _state.value = PlayerState.LOADING
                     _isBuffering.value = true
                 }
@@ -293,9 +339,7 @@ internal class AndroidPlayer(
                     }
                 }
                 MediaPlayer.Event.Playing -> {
-                    // If we're preloading, intercept: VLC's media.play() auto-starts
-                    // playback, and a caller-side pause() racing the state transition
-                    // becomes a no-op, leaving position to advance silently.
+                    // A preload is opened like any other and held as soon as it can be.
                     if (isPreloading.value) {
                         pauseIfPlaying()
                         _state.value = PlayerState.PAUSED
@@ -306,11 +350,15 @@ internal class AndroidPlayer(
                     reloadTracks()
                     updateVideoSize()
                 }
+                MediaPlayer.Event.PausableChanged -> {
+                    pausable = event.pausable
+                    if (pausable && isPreloading.value) pauseIfPlaying()
+                }
                 MediaPlayer.Event.Paused -> {
                     _state.value = PlayerState.PAUSED
                 }
                 MediaPlayer.Event.EndReached -> {
-                    _state.value = PlayerState.FINISHED
+                    _state.value = stateOnStopping(_state.value, stopRequested)
                 }
                 MediaPlayer.Event.EncounteredError -> {
                     _error.value = RuntimeException("VLC playback error")
@@ -318,6 +366,7 @@ internal class AndroidPlayer(
                 }
                 MediaPlayer.Event.TimeChanged -> {
                     val time = event.timeChanged
+                    if (awaitingPicture) markPictureReturned()
                     if (time != _currentMs.value) {
                         val resolved = stateAfterClockAdvance(_state.value, isPreloading.value)
                         if (resolved != _state.value) {
@@ -368,7 +417,7 @@ internal class AndroidPlayer(
         _state.value = PlayerState.LOADING
         _isBuffering.value = true
         _bufferPercent.value = 0f
-        _currentMs.value = 0L
+        _currentMs.value = source.startTimeSec?.let { it * 1000L } ?: 0L
         _durationMs.value = 0L
         _error.value = null
 
@@ -379,6 +428,9 @@ internal class AndroidPlayer(
         val media = Media(libVLC, uri).apply {
             addOption(":http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
             addOption(":network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
+            // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
+            // verifies none over a network: every seek decoded the title from its first frame.
+            addOption(":demux=mkv_trusted,any")
             headers["referer"]?.let { addOption(":http-referrer=$it") }
             if (!config.hardwareAcceleration) {
                 addOption(":avcodec-hw=none")
@@ -395,7 +447,6 @@ internal class AndroidPlayer(
             // silently. This only declines the automatic pick.
             if (source.subtitlesOff) addOption(":sub-language=none")
             else source.subtitleOrdinal?.let { addOption(":sub-track=$it") }
-            source.startTimeSec?.let { addOption(":start-time=$it") }
         }
         currentMedia = media
         // Before play(), never after. play() opens the elementary stream, and that
@@ -406,9 +457,16 @@ internal class AndroidPlayer(
         // steal focus from other apps like music players).
         if (!isPreloading.value) requestAudioFocus()
         vlc {
+            stopRequested = true
+            pausable = false
             this.media = media
             previous?.release()
             play()
+            // Not :start-time: libVLC 4 clips the title there, reporting time and length from
+            // the start point. Before play() there is no input to take the seek; straight
+            // after, it is the first thing the input does once the demuxer is open. Fast, so
+            // a resume lands on the keyframe before the mark instead of decoding up to it.
+            source.startTimeSec?.let { setTime(it * 1000L, true) }
         }
     }
 
@@ -501,14 +559,20 @@ internal class AndroidPlayer(
         pauseIfPlaying()
     }
 
-    // libvlc's pause() is a toggle.
+    // libVLC 4 stops an input it cannot pause yet, and every stream is unpausable while
+    // it opens: a pause there threw the open away, and the play after it opened it again.
+    @Volatile private var pausable = false
+
     private fun pauseIfPlaying() {
-        vlc { if (isPlaying) pause() }
+        vlc { if (isPlaying && pausable) pause() }
     }
 
     override fun stop() {
         fieldDecodeProbe?.cancel()
-        vlc { stop() }
+        vlc {
+            stopRequested = true
+            stop()
+        }
         _state.value = PlayerState.IDLE
         _currentMs.value = 0L
         _durationMs.value = 0L
@@ -532,7 +596,7 @@ internal class AndroidPlayer(
     override fun seekTo(ms: Long) {
         val clamped = clampSeekTarget(ms, _durationMs.value)
         _currentMs.value = clamped
-        vlc { time = clamped }
+        vlc { setTime(clamped) }
     }
 
     override fun skip(deltaMs: Long) {
@@ -582,14 +646,9 @@ internal class AndroidPlayer(
     }
 
     override fun selectAudioTrack(track: TrackInfo?) {
-        if (track == null) {
-            vlcPlayer.audioTrack = -1
-            _selectedAudioTrack.value = null
-        } else {
-            val id = track.id.toIntOrNull() ?: return
-            vlcPlayer.audioTrack = id
-            _selectedAudioTrack.value = track
-        }
+        if (track == null) vlcPlayer.unselectTrackType(IMedia.Track.Type.Audio)
+        else vlcPlayer.selectTrack(track.id)
+        _selectedAudioTrack.value = track
         applyAudioOutput()
     }
 
@@ -605,12 +664,7 @@ internal class AndroidPlayer(
     // codec. Setting a device also stops libVLC's own HDMI listener, which would otherwise
     // pick multichannel PCM for any sink that reports a compressed format.
     private fun applyAudioOutput() {
-        val selected = vlcPlayer.audioTrack
-        val codec = currentMedia?.let { media ->
-            (0 until media.trackCount)
-                .mapNotNull { media.getTrack(it) as? IMedia.AudioTrack }
-                .firstOrNull { it.id == selected }?.codec
-        }
+        val codec = vlcPlayer.getSelectedTrack(IMedia.Track.Type.Audio)?.codec
         val device = audioOutputDevice(audioOutputMode, codec, sinkPassthroughMask())
         if (device == appliedAudioDevice) return
         appliedAudioDevice = device
@@ -624,22 +678,14 @@ internal class AndroidPlayer(
     )
 
     override fun selectSubtitleTrack(track: TrackInfo?) {
-        if (track == null) {
-            spuDisabled = true
-            vlcPlayer.spuTrack = -1
-            _selectedSubtitleTrack.value = null
-        } else {
-            val id = track.id.toIntOrNull() ?: return
-            spuDisabled = false
-            vlcPlayer.spuTrack = id
-            _selectedSubtitleTrack.value = track
-        }
+        spuDisabled = track == null
+        if (track == null) vlcPlayer.unselectTrackType(IMedia.Track.Type.Text)
+        else vlcPlayer.selectTrack(track.id)
+        _selectedSubtitleTrack.value = track
     }
 
     override fun setAspectRatio(ratio: AspectRatio) {
         _aspectRatio.value = ratio
-        // Aspect ratio is handled at the Compose layout level (Composables.android.kt)
-        // rather than via VLC APIs, since libvlc 3.x has limited scaling support.
     }
 
     override fun setChapter(chapter: Chapter) {
@@ -675,35 +721,31 @@ internal class AndroidPlayer(
     // --- Internal ---
 
     private fun updateVideoSize() {
-        val media = currentMedia ?: return
-        val track = (0 until media.trackCount)
-            .firstNotNullOfOrNull { media.getTrack(it) as? IMedia.VideoTrack } ?: return
+        val track = (vlcPlayer.getSelectedTrack(IMedia.Track.Type.Video)
+            ?: vlcPlayer.getTracks(IMedia.Track.Type.Video)?.firstOrNull()) as? IMedia.VideoTrack ?: return
         if (track.width > 0 && track.height > 0) {
             _videoSize.value = displaySize(track.width, track.height, track.sarNum, track.sarDen)
         }
     }
 
     private fun reloadTracks() {
-        // Audio tracks
-        val audioDescs = vlcPlayer.audioTracks ?: emptyArray()
-        _audioTracks.value = audioDescs
-            .filter { it.id != -1 }
-            .map { TrackInfo(it.id.toString(), it.name ?: "Track ${it.id}") }
+        _audioTracks.value = trackInfos(IMedia.Track.Type.Audio)
+        val currentAudio = vlcPlayer.getSelectedTrack(IMedia.Track.Type.Audio)?.id
+        _selectedAudioTrack.value = _audioTracks.value.find { it.id == currentAudio }
 
-        val currentAudio = vlcPlayer.audioTrack
-        _selectedAudioTrack.value = _audioTracks.value.find { it.id == currentAudio.toString() }
-
-        // Subtitle tracks
-        val subDescs = vlcPlayer.spuTracks ?: emptyArray()
-        _subtitleTracks.value = subDescs
-            .filter { it.id != -1 }
-            .map { TrackInfo(it.id.toString(), it.name ?: "Track ${it.id}") }
+        _subtitleTracks.value = trackInfos(IMedia.Track.Type.Text)
 
         // VLC picks a default SPU track whenever the elementary streams are parsed, which
         // lands after the app has already asked for none — leave it and its rendering
         // stacks on top of the server-VTT overlay.
-        if (spuDisabled && vlcPlayer.spuTrack != -1) vlcPlayer.spuTrack = -1
-        val currentSub = if (spuDisabled) -1 else vlcPlayer.spuTrack
-        _selectedSubtitleTrack.value = _subtitleTracks.value.find { it.id == currentSub.toString() }
+        val currentSub = vlcPlayer.getSelectedTrack(IMedia.Track.Type.Text)?.id
+        if (spuDisabled && currentSub != null) vlcPlayer.unselectTrackType(IMedia.Track.Type.Text)
+        _selectedSubtitleTrack.value =
+            if (spuDisabled) null else _subtitleTracks.value.find { it.id == currentSub }
     }
+
+    private fun trackInfos(type: Int): List<TrackInfo> =
+        vlcPlayer.getTracks(type).orEmpty().mapIndexed { index, track ->
+            TrackInfo(track.id, track.name ?: "Track ${index + 1}")
+        }
 }
