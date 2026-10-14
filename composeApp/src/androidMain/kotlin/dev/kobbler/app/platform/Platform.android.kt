@@ -145,3 +145,16 @@ actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder 
 private fun retire(dir: java.io.File) {
     if (dir.exists()) thread(isDaemon = true, name = "retire-image-cache") { dir.deleteRecursively() }
 }
+
+actual suspend fun connectRoundTripMs(host: String, port: Int): Long? =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            // Resolved first: a DNS lookup is not the path the stream's bytes take.
+            val address = java.net.InetSocketAddress(java.net.InetAddress.getByName(host), port)
+            java.net.Socket().use { socket ->
+                val start = System.nanoTime()
+                socket.connect(address, 2_000)
+                (System.nanoTime() - start) / 1_000_000
+            }
+        }.getOrNull()
+    }

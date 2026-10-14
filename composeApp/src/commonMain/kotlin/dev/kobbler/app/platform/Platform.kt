@@ -20,6 +20,13 @@ expect val clientKind: String
 @Composable
 expect fun BackHandler(enabled: Boolean = true, onBack: () -> Unit)
 
+/**
+ * One TCP handshake to [host]:[port], timed: the network's round trip without the device's
+ * cost of making an HTTP request, which on a slow TV box is many times the Wi-Fi's.
+ * Null where sockets are not available to the app.
+ */
+expect suspend fun connectRoundTripMs(host: String, port: Int): Long?
+
 /** Simple key-value persistence for auth tokens etc. */
 expect object Settings {
     fun getString(key: String): String?

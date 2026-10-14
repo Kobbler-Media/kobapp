@@ -101,3 +101,5 @@ actual class CacheSink private constructor() {
 actual fun imageCacheDir(context: PlatformContext): Path? = null
 
 actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder = this
+
+actual suspend fun connectRoundTripMs(host: String, port: Int): Long? = null

@@ -86,6 +86,31 @@ class StartSupervisionTest {
     }
 
     /**
+     * The answer for a session the app has already moved on from says nothing about the
+     * one it is starting now. Read as a death, it tore down a healthy start and reconnected.
+     */
+    @Test
+    fun `a session replaced while it was being asked about is not called lost`() = runTest {
+        val gps = watching()
+        val healthy = """{"session_id":"s2","state":"ready","method":"direct_play",
+            "is_live":false,"source_readable":true}"""
+        val routes = mapOf(
+            "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange ->
+                gps.sessionId = "s2"
+                "{}"
+            },
+            "/api/v1/admin/playback/sessions/s2/status" to { _: HttpExchange -> healthy },
+        )
+        StubServer(routes, codes = mapOf("/api/v1/admin/playback/sessions/s1/status" to 404)).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            val outcome = gps.superviseStart(stalled(), api, probeIntervalMs = 50)
+
+            assertEquals(StartOutcome.Stalled, outcome)
+        }
+    }
+
+    /**
      * A stream the server says it is still building is a wait, and the server enforces
      * its own end to it. Only the ceiling stops this one.
      */

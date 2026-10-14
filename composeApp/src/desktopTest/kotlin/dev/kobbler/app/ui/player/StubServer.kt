@@ -6,14 +6,17 @@ import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 
 /** A JDK HTTP server that answers a fixed map of paths, so real API code can be driven. */
-class StubServer(private val routes: Map<String, (HttpExchange) -> String>) : AutoCloseable {
+class StubServer(
+    private val routes: Map<String, (HttpExchange) -> String>,
+    private val codes: Map<String, Int> = emptyMap(),
+) : AutoCloseable {
     val requestBodies = mutableMapOf<String, String>()
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
             val path = exchange.requestURI.path
             requestBodies[path] = exchange.requestBody.readBytes().decodeToString()
             val handler = routes[path]
-            val (code, body) = if (handler == null) 404 to "{}" else 200 to handler(exchange)
+            val (code, body) = if (handler == null) 404 to "{}" else (codes[path] ?: 200) to handler(exchange)
             val bytes = body.encodeToByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
             exchange.sendResponseHeaders(code, bytes.size.toLong())

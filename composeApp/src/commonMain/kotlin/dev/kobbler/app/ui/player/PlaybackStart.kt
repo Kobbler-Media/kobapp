@@ -3,6 +3,10 @@ package dev.kobbler.app.ui.player
 import dev.kobbler.app.data.KobblerApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val ORIGIN_PROBE_TIMEOUT_MS = 1_000L
 
 /** A minted session and the player-side offset to open it at. */
 data class PlaybackStart(
@@ -29,6 +33,9 @@ suspend fun startPlayback(
     savedFallback: Int? = null,
     fromStart: Boolean = false,
 ): PlaybackStart? = coroutineScope {
+    // The buffer the stream opens with is sized from this, so it is timed alongside the
+    // session rather than left to whatever requests happened to come before.
+    launch { withTimeoutOrNull(ORIGIN_PROBE_TIMEOUT_MS) { api.probeOrigin() } }
     val progress = if (fromStart) null else async {
         when (type) {
             "movie" -> api.getMovieProgress(id)

@@ -16,26 +16,68 @@ package dev.kobbler.app.data
  * fast path for hosts that can only be local; the general answer comes from measuring the
  * connection, which is the thing the buffer is actually sized against.
  */
-internal fun networkCacheMsFor(streamUrl: String, apiUrl: String, originIsNear: Boolean): Int = when {
-    isLanHost(hostOf(streamUrl)) -> LanNetworkCacheMs
-    // Only the API's own origin has been measured. A debrid CDN is a host this client has
-    // never timed, and guessing it is near because the library server is would be wrong in
-    // the direction that stutters.
-    originIsNear && sameOrigin(streamUrl, apiUrl) -> LanNetworkCacheMs
-    else -> RemoteNetworkCacheMs
+internal fun networkCacheMsFor(
+    streamUrl: String,
+    apiUrl: String,
+    roundTripMs: Long?,
+    profile: OriginProfile,
+): Int {
+    val roundTrip = roundTripMs ?: profile.roundTripMs
+    val base = when {
+        isLanHost(hostOf(streamUrl)) -> LanNetworkCacheMs
+        // Only the API's own origin has been measured. A debrid CDN is a host this client has
+        // never timed, and guessing it is near because the library server is would be wrong in
+        // the direction that stutters.
+        roundTrip != null && sameOrigin(streamUrl, apiUrl) -> bufferForRoundTrip(roundTrip)
+        else -> RemoteNetworkCacheMs
+    }
+    return (base + profile.stallAllowanceMs).coerceAtMost(MaxNetworkCacheMs)
 }
+
+// Ten round trips of margin on top of the LAN floor: generous, because a buffer a little
+// too deep costs a fraction of a second once while one too shallow stalls the film.
+private fun bufferForRoundTrip(roundTripMs: Long): Int =
+    (LanNetworkCacheMs + roundTripMs * 10).coerceAtMost(RemoteNetworkCacheMs.toLong()).toInt()
 
 const val LanNetworkCacheMs = 300
 const val RemoteNetworkCacheMs = 1500
+const val MaxNetworkCacheMs = 4000
+
+const val StallStepMs = 500
+const val MaxStallAllowanceMs = 2500
+private const val CleanSessionReliefMs = StallStepMs / 2
 
 /**
- * Round-trip time at or under which the server counts as near.
+ * What streaming from one host has taught the buffer, kept across launches.
  *
- * Comfortably above a LAN's couple of milliseconds and below anything crossing a
- * consumer internet connection, so the two do not meet in the middle. A link that really
- * does answer this fast can carry the shallow buffer whatever it is made of.
+ * [roundTripMs] lets the first start of a session size its buffer before anything has been
+ * timed. [stallAllowanceMs] is added to whatever the round trip asks for: a connection that
+ * looks fast and still runs dry — Wi-Fi at the far end of the house, a busy server — earns
+ * a deeper buffer, and gives it back slowly as it plays cleanly.
  */
-const val NearOriginRoundTripMs = 25L
+@kotlinx.serialization.Serializable
+data class OriginProfile(
+    val roundTripMs: Long? = null,
+    val stallAllowanceMs: Int = 0,
+) {
+    fun afterStall() = copy(stallAllowanceMs = (stallAllowanceMs + StallStepMs).coerceAtMost(MaxStallAllowanceMs))
+    fun afterCleanSession() = copy(stallAllowanceMs = (stallAllowanceMs - CleanSessionReliefMs).coerceAtLeast(0))
+}
+
+/**
+ * Whether a drop into buffering mid-play was the connection running dry.
+ *
+ * A seek buffers too, and is the viewer's doing, so buffering that follows one closely is
+ * the seek's. [msSinceSeek] is null when nothing has been sought this play.
+ */
+fun isStall(msSinceSeek: Long?): Boolean = msSinceSeek == null || msSinceSeek > SeekSettleMs
+
+/** A move of the playhead no clock tick could make: a seek, which the player reports at once. */
+fun isSeekJump(previousMs: Long, currentMs: Long): Boolean =
+    kotlin.math.abs(currentMs - previousMs) > SeekJumpMs
+
+private const val SeekJumpMs = 2_000L
+private const val SeekSettleMs = 5_000L
 
 /**
  * The recent round-trip times to one origin, kept so the buffer can be sized against the
@@ -63,7 +105,6 @@ class OriginLatency(private val samples: Int = 16) {
     /** Null until anything has been timed, so callers can tell "far" from "not yet known". */
     fun roundTripMs(): Long? = ring.min().takeIf { it != Long.MAX_VALUE }
 
-    fun isNear(): Boolean = (roundTripMs() ?: return false) <= NearOriginRoundTripMs
 }
 
 internal fun sameOrigin(url: String, other: String): Boolean {
@@ -84,6 +125,13 @@ internal fun hostOf(url: String): String? {
         hostPort.substringBefore(':')
     }
     return host.lowercase().takeIf { it.isNotEmpty() }
+}
+
+internal fun portOf(url: String): Int {
+    val scheme = url.substringBefore("://", missingDelimiterValue = "")
+    val hostPort = url.substringAfter("://").substringBefore('/').substringBefore('?').substringAfterLast('@')
+    val port = if (hostPort.startsWith("[")) hostPort.substringAfter(']').substringAfter(':', "") else hostPort.substringAfter(':', "")
+    return port.toIntOrNull() ?: if (scheme.equals("https", ignoreCase = true)) 443 else 80
 }
 
 /**

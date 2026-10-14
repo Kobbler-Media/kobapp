@@ -1,5 +1,6 @@
 package dev.kobbler.app.data
 
+import dev.kobbler.app.platform.connectRoundTripMs
 import kotlinx.datetime.LocalDate
 import dev.kobbler.app.platform.AppVersion
 import dev.kobbler.app.platform.clientKind
@@ -1896,6 +1897,7 @@ class KobblerApi(
     private val token: String,
     /** True if the user can perform content management actions (want, monitor). */
     val canWant: Boolean = true,
+    private val originProfiles: OriginProfiles = OriginProfiles.Persistent,
 ) {
     /** True if kobload/debrid streaming is configured on the server. Set during initial load. */
     var canStream: Boolean = false
@@ -2035,7 +2037,36 @@ class KobblerApi(
 
     /** Buffer depth for a player source. See [networkCacheMsFor]. */
     fun networkCacheMsFor(url: String): Int =
-        networkCacheMsFor(url, apiUrl, originLatency.isNear())
+        networkCacheMsFor(url, apiUrl, originLatency.roundTripMs(), originProfiles.get(hostOf(url).orEmpty()))
+
+    /**
+     * Time the network to the server rather than a request to it: on a Chromecast an HTTP
+     * call costs tens of ms of the box's own time over a Wi-Fi round trip of a few, and
+     * sizing the stream's buffer by that read the server as remote. A TCP handshake where
+     * sockets are available, best of two; `/health`, which does no work, elsewhere.
+     */
+    suspend fun probeOrigin() {
+        val host = hostOf(apiUrl) ?: return
+        val roundTrip = listOfNotNull(
+            connectRoundTripMs(host, portOf(apiUrl)),
+            connectRoundTripMs(host, portOf(apiUrl)),
+        ).minOrNull() ?: runCatching {
+            val start = kotlin.time.TimeSource.Monotonic.markNow()
+            if (!httpClient.get("$apiUrl/health").status.isSuccess()) return
+            start.elapsedNow().inWholeMilliseconds
+        }.getOrNull() ?: return
+        originLatency.record(roundTrip)
+        val measured = originLatency.roundTripMs() ?: return
+        originProfiles.update(host) { it.copy(roundTripMs = measured) }
+    }
+
+    /** The stream ran dry mid-play: give its host a deeper buffer from the next start. */
+    fun recordStall(streamUrl: String) =
+        originProfiles.update(hostOf(streamUrl).orEmpty()) { it.afterStall() }
+
+    /** A long stretch played without a stall: ease its host's buffer back a step. */
+    fun recordCleanSession(streamUrl: String) =
+        originProfiles.update(hostOf(streamUrl).orEmpty()) { it.afterCleanSession() }
 
     /** Measured round trip to the server, or null before anything has been timed. */
     fun originRoundTripMs(): Long? = originLatency.roundTripMs()

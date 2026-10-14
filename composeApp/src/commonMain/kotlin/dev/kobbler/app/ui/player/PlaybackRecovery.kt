@@ -100,7 +100,10 @@ internal suspend fun GlobalPlayerState.superviseStart(
 
         val sid = sessionId
         if (sid != null) {
-            when (val status = api.sessionStatus(sid)) {
+            val status = api.sessionStatus(sid)
+            // A session replaced mid-probe answers for the one that went, not this start.
+            if (sid != sessionId) continue
+            when (status) {
                 // A request that never arrived says nothing about the session, and
                 // reading it as a death is how a reconnect loop starts on a flaky link.
                 is SessionStatus.Unknown -> {}
@@ -216,6 +219,7 @@ suspend fun GlobalPlayerState.watchPlayback(player: Player, api: KobblerApi) = c
             if (slowStartWatch?.isActive != true) slowStartWatch = launch { watchSlowStart(player, api) }
         }
     }
+    launch { learnBuffering(player, api) }
     launch {
         player.error.collect { throwable ->
             if (throwable == null || loadingError != null || isRecovering) return@collect

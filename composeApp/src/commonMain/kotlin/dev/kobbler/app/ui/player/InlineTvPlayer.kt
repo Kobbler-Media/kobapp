@@ -109,6 +109,7 @@ fun InlineTvPlayer(
                 return@LaunchedEffect
             }
 
+        if (autoPlay) PlaybackTrace.begin("play episode $episodeId (autoplay)")
         try {
             val start = startPlayback(api, "episode", episodeId, cachedSec)
             val session = start?.session

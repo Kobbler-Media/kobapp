@@ -213,7 +213,7 @@ class GlobalPlayerState {
      * which URL died — the player itself reports only that it could not open one.
      */
     var lastStreamUrl by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var reportStatus by mutableStateOf(ReportStatus.Idle)
         private set
