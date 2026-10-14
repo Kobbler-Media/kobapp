@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.*
@@ -727,7 +729,9 @@ fun VideoPlayerOverlay(
                     }
 
                     if (!isLive) Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        // Down from the bar returns to the control last used, not to
+                        // whichever one happens to sit under the playhead.
+                        modifier = Modifier.fillMaxWidth().focusRestorer().focusGroup(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         // On a TV the time is the one number a viewer reads, so it gets the

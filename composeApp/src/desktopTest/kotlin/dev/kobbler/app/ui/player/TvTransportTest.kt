@@ -159,6 +159,24 @@ class TvTransportTest {
         onNodeWithContentDescription("Subtitles").assert(isFocused())
     }
 
+    /**
+     * The row under the bar remembers where the viewer was. Landing under the playhead
+     * instead put a different button under the same press at every point in the film.
+     */
+    @Test
+    fun `down from the bar returns to the control last used`() = runComposeUiTest {
+        val player = FakePlayer()
+        player.play()
+        showPlayingMovie(player)
+
+        toSubtitles()
+        move(FocusDirection.Up)
+        onNodeWithContentDescription("Seek").assert(isFocused())
+
+        move(FocusDirection.Down)
+        onNodeWithContentDescription("Subtitles").assert(isFocused())
+    }
+
     @Test
     fun `speed is one stop on a tv`() = runComposeUiTest {
         val player = FakePlayer()
