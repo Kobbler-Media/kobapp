@@ -54,9 +54,43 @@ class DesktopPlaybackTest {
     fun `resumes on the title's own clock`() = withPlayer { player ->
         player.load(MediaSource.Url(resourceUrl("red_176x100_subtitled.mkv"), startTimeSec = 5))
         player.state.await("playing") { it == PlayerState.PLAYING }
-        val at = player.currentMs.await("position after the resume point") { it >= 5_000 }
+        val at = player.currentMs.await("position playing on from the resume point") { it > 5_300 }
         assertTrue(at < 9_000, "position $at")
         assertTrue(player.durationMs.value in 9_900..10_100, "duration ${player.durationMs.value}")
+    }
+
+    // How the app starts every title, Up Next included: load at the resume point, pause at
+    // once, play when ready.
+    @Test
+    fun `resumes a title paused while it opens`() = listOf(
+        { resourceUrl("red_176x100_subtitled.mkv") },
+        { served("red_176x100_subtitled.mkv") },
+    ).forEach { url -> listOf(false, true).forEach { replacing ->
+        withPlayer { player ->
+            if (replacing) {
+                player.load(MediaSource.Url(resourceUrl("red_176x100_sar4-3.mkv")))
+                player.currentMs.await("first title under way") { it > 300 }
+            }
+            player.load(MediaSource.Url(url(), startTimeSec = 5))
+            player.pause()
+            delay(1_000)
+            player.play()
+            player.state.await("playing") { it == PlayerState.PLAYING }
+            delay(1_500)
+            val at = player.currentMs.value
+            assertTrue(at in 5_000..9_000, "position $at on ${player.state.value}, replacing $replacing")
+        }
+    } }
+
+    @Test
+    fun `pauses a title that is playing`() = withPlayer { player ->
+        player.load(MediaSource.Url(served("red_176x100_subtitled.mkv")))
+        player.currentMs.await("well under way") { it > 600 }
+        player.pause()
+        player.state.await("paused") { it == PlayerState.PAUSED }
+        val held = player.currentMs.value
+        delay(1_000)
+        assertTrue(player.currentMs.value - held < 300, "advanced from $held to ${player.currentMs.value}")
     }
 
     @Test

@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.media.TrackType
+import uk.co.caprica.vlcj.player.base.Capabilties
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
+import uk.co.caprica.vlcj.player.base.State
 import uk.co.caprica.vlcj.player.base.Track
 import uk.co.caprica.vlcj.player.base.TrackList
 import uk.co.caprica.vlcj.player.base.VideoTrack
@@ -152,7 +154,21 @@ internal class DesktopPlayer(
     // --- Internal state ---
 
     private val setTimeLock = ReentrantLock()
+    @Volatile
     private var hasStartedPlaying = false
+
+    // libVLC 4 stops an input asked to pause before it can, and every stream is unpausable
+    // while it opens: a pause there threw the open away, resume seek and all. One asked for
+    // early is held until the input can take it.
+    @Volatile
+    private var pausable = false
+
+    @Volatile
+    private var pauseWhenPausable = false
+
+    private fun holdIfAsked() {
+        if (pausable && (isPreloading.value || pauseWhenPausable)) vlcPlayer.controls().setPause(true)
+    }
 
     // Events from an input we stopped or replaced trail in after it; until the next one
     // opens they describe nothing on screen.
@@ -230,11 +246,11 @@ internal class DesktopPlayer(
                 _bufferPercent.value = 1f
                 hasStartedPlaying = true
 
-                if (isPreloading.value) {
-                    // Caller-side pause() races VLC's auto-start; intercept here so
-                    // position can't advance silently and audio can't reach the
-                    // speaker before unmute. Mirrors AndroidPlayer's Playing handler.
-                    vlcPlayer.controls().setPause(true)
+                if (isPreloading.value || pauseWhenPausable) {
+                    // A preload is opened like any other and held as soon as it can be, so
+                    // position can't advance silently and audio can't reach the speaker
+                    // before unmute. Mirrors AndroidPlayer's Playing handler.
+                    holdIfAsked()
                     _state.value = PlayerState.PAUSED
                 } else {
                     _state.value = PlayerState.PLAYING
@@ -243,6 +259,12 @@ internal class DesktopPlayer(
 
                 reloadAudioTracks()
                 reloadSubtitleTracks()
+            }
+
+            override fun capabilitiesChanged(mediaPlayer: MediaPlayer, oldCapabilities: Capabilties, newCapabilities: Capabilties) {
+                if (inputRetired) return
+                pausable = newCapabilities.canPause()
+                if (hasStartedPlaying) holdIfAsked()
             }
 
             override fun paused(mediaPlayer: MediaPlayer) {
@@ -312,6 +334,7 @@ internal class DesktopPlayer(
     override fun load(source: MediaSource) {
         when (source) {
             is MediaSource.Url -> {
+                inputRetired = true
                 _state.value = PlayerState.LOADING
                 _isBuffering.value = true
                 _bufferPercent.value = 0f
@@ -319,30 +342,50 @@ internal class DesktopPlayer(
                 _durationMs.value = 0L
                 _error.value = null
                 hasStartedPlaying = false
+                pausable = false
+                pauseWhenPausable = false
                 loadedSource = source
                 val device = decoderDevice(source, decoding)
                 gpuDecodeRequested = device.name != "none"
                 gain.set(0)
 
-                inputRetired = true
-                vlcPlayer.setDecoderDevice(device)
-                vlcPlayer.media().play(vlcMrl(source.url), *vlcMediaOptions(source, config).toTypedArray())
-                // Not :start-time: libVLC 4 makes that the title's start, and reports times
-                // and length from it. A seek before play() has no input to land on.
-                source.startTimeSec?.let { vlcPlayer.controls().setTime((it * 1000L).msToUs(), true) }
-                // Re-apply mute after play — new media may reset audio state.
-                // This prevents audio leaking during muted preload on detail pages.
-                if (_isMuted.value) vlcPlayer.audio().setMute(true)
+                val options = vlcMediaOptions(source, config).toTypedArray()
+                vlcPlayer.submit {
+                    stopCurrentInput()
+                    vlcPlayer.setDecoderDevice(device)
+                    vlcPlayer.media().play(vlcMrl(source.url), *options)
+                    // Not :start-time: libVLC 4 makes that the title's start, and reports times
+                    // and length from it. A seek before play() has no input to land on.
+                    source.startTimeSec?.let { vlcPlayer.controls().setTime((it * 1000L).msToUs(), true) }
+                    // Re-apply mute after play — new media may reset audio state.
+                    // This prevents audio leaking during muted preload on detail pages.
+                    if (_isMuted.value) vlcPlayer.audio().setMute(true)
+                }
             }
         }
     }
 
+    // Media handed to a libVLC 4 player that is still playing is swapped in gaplessly: the
+    // player never leaves its playing state, so the new title reports no opening, playing,
+    // pause or end, and nothing marks where the old input's events stop.
+    private fun stopCurrentInput() {
+        if (vlcPlayer.status().state() in inputGone) return
+        vlcPlayer.controls().stop()
+        val deadline = System.nanoTime() + STOP_WAIT_NS
+        while (vlcPlayer.status().state() !in inputGone && System.nanoTime() < deadline) Thread.sleep(10)
+    }
+
     override fun play() {
+        pauseWhenPausable = false
         if (_state.value == PlayerState.PLAYING) gain.rampTo(FADE_IN_MS, ::userGain)
         vlcPlayer.submit { vlcPlayer.controls().play() }
     }
 
     override fun pause() {
+        if (!pausable) {
+            pauseWhenPausable = true
+            return
+        }
         // setPause(true), not pause(): that one toggles, and a second call unpauses.
         val pauseNow = { vlcPlayer.submit { vlcPlayer.controls().setPause(true) } }
         if (_state.value == PlayerState.PLAYING) gain.rampTo(FADE_OUT_MS, { 0 }, pauseNow)
@@ -360,6 +403,8 @@ internal class DesktopPlayer(
         _isBuffering.value = false
         _bufferPercent.value = 0f
         hasStartedPlaying = false
+        pausable = false
+        pauseWhenPausable = false
         video?.clear()
     }
 
@@ -547,6 +592,8 @@ internal class DesktopPlayer(
         // the audio sink waking up, the fade-out short enough not to read as a late pause.
         private const val FADE_IN_MS = 260L
         private const val FADE_OUT_MS = 80L
+        private const val STOP_WAIT_NS = 5_000_000_000L
+        private val inputGone = setOf(State.NOTHING_SPECIAL, State.STOPPED, State.ERROR)
 
         fun prepareLibraries() {
             createPlayerLock.withLock {
