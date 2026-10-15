@@ -340,7 +340,7 @@ internal class AndroidPlayer(
                 }
                 MediaPlayer.Event.Playing -> {
                     // A preload is opened like any other and held as soon as it can be.
-                    if (isPreloading.value) {
+                    if (isPreloading.value || pauseWhenPausable) {
                         pauseIfPlaying()
                         _state.value = PlayerState.PAUSED
                     } else {
@@ -352,7 +352,7 @@ internal class AndroidPlayer(
                 }
                 MediaPlayer.Event.PausableChanged -> {
                     pausable = event.pausable
-                    if (pausable && isPreloading.value) pauseIfPlaying()
+                    if (pausable && (isPreloading.value || pauseWhenPausable)) pauseIfPlaying()
                 }
                 MediaPlayer.Event.Paused -> {
                     _state.value = PlayerState.PAUSED
@@ -459,6 +459,11 @@ internal class AndroidPlayer(
         vlc {
             stopRequested = true
             pausable = false
+            pauseWhenPausable = false
+            // Media handed to a libVLC 4 player that is still playing is swapped in gaplessly:
+            // the player never leaves its playing state, so the new title reports no opening
+            // and its end reads as the stop asked for here. stop() returns once it has stopped.
+            stop()
             this.media = media
             previous?.release()
             play()
@@ -551,17 +556,24 @@ internal class AndroidPlayer(
     override fun play() {
         focusResume.forget()
         requestAudioFocus()
-        vlc { play() }
+        vlc {
+            pauseWhenPausable = false
+            play()
+        }
     }
 
     override fun pause() {
         focusResume.forget()
-        pauseIfPlaying()
+        vlc {
+            if (pausable) pauseIfPlaying() else pauseWhenPausable = true
+        }
     }
 
     // libVLC 4 stops an input it cannot pause yet, and every stream is unpausable while
     // it opens: a pause there threw the open away, and the play after it opened it again.
+    // One asked for early is held until the input can take it.
     @Volatile private var pausable = false
+    @Volatile private var pauseWhenPausable = false
 
     private fun pauseIfPlaying() {
         vlc { if (isPlaying && pausable) pause() }
@@ -571,6 +583,7 @@ internal class AndroidPlayer(
         fieldDecodeProbe?.cancel()
         vlc {
             stopRequested = true
+            pauseWhenPausable = false
             stop()
         }
         _state.value = PlayerState.IDLE
