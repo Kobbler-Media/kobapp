@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.IntState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -53,16 +54,18 @@ import dev.kobbler.app.ui.components.FocusEdgeSlack
 import dev.kobbler.app.ui.components.HoldPageTop
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.SectionHeading
+import dev.kobbler.app.ui.components.SpotlightBackdrop
+import dev.kobbler.app.ui.components.SpotlightState
 import dev.kobbler.app.ui.components.WideCard
+import dev.kobbler.app.ui.components.pageGutter
+import dev.kobbler.app.ui.components.rememberSpotlightState
+import dev.kobbler.app.ui.components.spotlight
+import dev.kobbler.app.ui.components.spotlightOn
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-
-// Long enough that stepping along a row does not swap the backdrop under every press,
-// short enough to feel like the hero is following focus rather than lagging it.
-private const val HeroSwapDelayMs = 250L
 
 private val HeroBarFade = 200.dp
 
@@ -89,22 +92,13 @@ fun HomeWide(
     val tv = LocalFormFactor.current == FormFactor.TV
     val upNext = remember(homeData) { homeData.watchNext.map { it.toUpNextItem() } }
 
-    // Held as state objects and read only inside the composables below that need them:
-    // as values here, one D-pad press recomposes the page and every card on it.
-    val initial = remember(homeData) {
-        upNext.firstOrNull()?.spotlight() ?: homeData.recentlyAdded.firstOrNull()?.spotlight()
-    }
-    val pointedAt = remember(homeData) { mutableStateOf(initial) }
-    val shown = remember(homeData) { mutableStateOf(initial) }
+    // Read only inside the composables below that need it: as a value here, one D-pad
+    // press recomposes the page and every card on it.
+    val spotlight = rememberSpotlightState(
+        upNext.firstOrNull()?.spotlight() ?: homeData.recentlyAdded.firstOrNull()?.spotlight(),
+    )
+    val hasSpotlight by remember(spotlight) { derivedStateOf { spotlight.shown != null } }
     val focusedRow = remember { mutableIntStateOf(-1) }
-    // The backdrop is full screen, so following focus directly means one image load and
-    // decode per press while RIGHT is held down. Settle first, then swap.
-    LaunchedEffect(pointedAt) {
-        snapshotFlow { pointedAt.value }.collectLatest { spot ->
-            delay(HeroSwapDelayMs)
-            shown.value = spot
-        }
-    }
 
     PrefetchBackdrops(upNext)
 
@@ -134,9 +128,9 @@ fun HomeWide(
             .fillMaxSize()
             .onSizeChanged { viewportPx = it.height },
     ) {
-        if (initial != null) {
-            HomeBackdrop(
-                spotlight = { shown.value },
+        if (hasSpotlight) {
+            SpotlightBackdrop(
+                spotlight = { spotlight.shown },
                 accent = upNext.firstOrNull()?.let { colors.accentForMediaType(it.mediaType) } ?: colors.accMovies,
                 dim = { scrolledFraction() * ScrolledBackdropDim },
                 modifier = Modifier.fillMaxSize(),
@@ -163,11 +157,8 @@ fun HomeWide(
                                 UpNextStrip(
                                     items = upNext,
                                     onClick = { idx -> onContinueClick(idx) },
-                                    onFocused = { idx ->
-                                        pointedAt.value = upNext[idx].spotlight()
-                                        focusedRow.intValue = upNextRow
-                                    },
-                                    onHovered = { idx -> pointedAt.value = upNext[idx].spotlight() },
+                                    spotlight = spotlight,
+                                    onFocused = { focusedRow.intValue = upNextRow },
                                 )
                             }
                         }
@@ -193,12 +184,11 @@ fun HomeWide(
                                         modifier = Modifier
                                             .testTag("$RecentCardTag.$c")
                                             .focusKey("item.$c")
-                                            .onHoverEnter { pointedAt.value = item.spotlight() }
+                                            .spotlightOn(spotlight) { item.spotlight() }
                                             .onFocusChanged {
                                                 if (it.isFocused) {
                                                     rail.focused = c
                                                     focusedRow.intValue = recentRow
-                                                    pointedAt.value = item.spotlight()
                                                 }
                                             },
                                     )
@@ -238,12 +228,11 @@ fun HomeWide(
                                     onClick = { onDiscoverItemClick(item) },
                                     modifier = Modifier
                                         .focusKey("item.$c")
-                                        .onHoverEnter { pointedAt.value = item.spotlight() }
+                                        .spotlightOn(spotlight) { item.spotlight() }
                                         .onFocusChanged {
                                             if (it.isFocused) {
                                                 rail.focused = c
                                                 focusedRow.intValue = sectionRows[i]
-                                                pointedAt.value = item.spotlight()
                                             }
                                         },
                                 )
@@ -310,12 +299,12 @@ private fun CenterFocusedPageRow(state: LazyListState, row: IntState, topRow: In
 @Composable
 private fun UpNextStrip(
     items: List<UpNextItem>,
+    spotlight: SpotlightState,
     onClick: (Int) -> Unit,
-    onFocused: (Int) -> Unit,
-    onHovered: (Int) -> Unit,
+    onFocused: () -> Unit,
 ) {
     val colors = KobappTheme.colors
-    val gutter = homeGutter()
+    val gutter = pageGutter()
     val rail = rememberRailFocus()
     // The hero's own bottom padding already separates it; a full gap on top of that read as
     // a hole between the title and the strip.
@@ -353,9 +342,9 @@ private fun UpNextStrip(
                                 .width(KobappTheme.dimens.posterWidth * 1.5f)
                                 .testTag("$UpNextCardTag.$i")
                                 .focusKey("item.$i", preferredEntry = i == 0)
-                                .onHoverEnter { onHovered(i) }
+                                .spotlightOn(spotlight) { item.spotlight() }
                                 .onFocusChanged {
-                                    if (it.isFocused) { rail.focused = i; onFocused(i) }
+                                    if (it.isFocused) { rail.focused = i; onFocused() }
                                 },
                         )
                     }
@@ -372,7 +361,7 @@ private fun HomeRail(
     key: String,
     content: LazyListScope.() -> Unit,
 ) {
-    val gutter = homeGutter()
+    val gutter = pageGutter()
     val railGap = KobappTheme.dimens.railGap
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).focusKeyGroup(key)) {
         SectionHeading(title = title, accent = null, modifier = Modifier.padding(horizontal = gutter))
@@ -388,10 +377,6 @@ private fun HomeRail(
         }
     }
 }
-
-@Composable
-private fun homeGutter(): Dp =
-    if (LocalFormFactor.current == FormFactor.TV) KobappTheme.dimens.pageGutterTv else KobappTheme.dimens.pageGutter
 
 internal fun discoverContextMenu(
     item: DiscoverItem,

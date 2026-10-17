@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import dev.kobbler.app.theme.KobappColorsDefault
 import dev.kobbler.app.theme.KobappTheme
 
@@ -26,13 +27,18 @@ fun MediaCarousel(
     badge: String? = null,
     modifier: Modifier = Modifier,
     onSeeAll: (() -> Unit)? = null,
+    // The page's own horizontal insets: the row bleeds through them to the screen edge, as
+    // Home's rails run. A wide card's scale-up and ring overflow it by more than a
+    // focus-ring bleed, and the row clips what overflows.
+    bleedStart: Dp = pageGutter(),
+    bleedEnd: Dp = bleedStart,
     content: LazyListScope.() -> Unit,
 ) {
     val spacing = KobappTheme.dimens
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = spacing.s2, bottom = spacing.s4),
+            .padding(top = spacing.s2),
     ) {
         SectionHeading(
             title = title,
@@ -51,13 +57,12 @@ fun MediaCarousel(
             } else null,
         )
         Spacer(Modifier.height(spacing.s2))
-        val bleed = rowEdgeBleed()
         LazyRow(
             state = rememberLazyListState(),
             modifier = Modifier
-                .bleedHorizontally(bleed)
+                .bleedHorizontally(bleedStart, bleedEnd)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = bleed),
+            contentPadding = PaddingValues(start = bleedStart, end = bleedEnd),
             horizontalArrangement = Arrangement.spacedBy(spacing.s3),
             content = content,
         )

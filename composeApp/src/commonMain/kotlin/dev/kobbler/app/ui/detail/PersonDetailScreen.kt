@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.Spotlight
+
 import dev.kobbler.app.ui.kobTopInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,7 +52,6 @@ import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.SectionHeading
-import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
@@ -75,7 +76,6 @@ fun PersonDetailScreen(
     val colors = KobappTheme.colors
     val accent = colors.accMovies
     val gutter = gutterFor(formFactor)
-    val isPhone = formFactor == FormFactor.Phone
 
     var sort by remember { mutableStateOf(FilmographySort.Year) }
     val sortedFilmography = remember(filmography, sort) { filmography.sortedFor(sort) }
@@ -83,15 +83,8 @@ fun PersonDetailScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
-        StripedBackdrop(
-            accent = accent,
-            opacity = if (isPhone) 0.20f else 0.28f,
-            withRadialOverlay = true,
-            modifier = Modifier.fillMaxSize(),
-            cached = true,
-        )
-
         val pageScroll = rememberScrollState()
+        DetailBackdrop(Spotlight(posterUrl = person.imageUrl ?: sortedFilmography.firstNotNullOfOrNull { it.posterUrl }), accent, pageScroll)
         Column(
             modifier = Modifier
                 .fillMaxSize()

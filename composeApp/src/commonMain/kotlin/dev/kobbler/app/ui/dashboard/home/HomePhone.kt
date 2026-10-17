@@ -18,8 +18,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -31,6 +34,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.DiscoverItem
@@ -43,7 +47,12 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.WideCard
 import dev.kobbler.app.ui.components.SectionHeading
+import dev.kobbler.app.ui.components.SpotlightBackdrop
+import dev.kobbler.app.ui.components.SpotlightOnScroll
 import dev.kobbler.app.ui.components.StripedArt
+import dev.kobbler.app.ui.components.bottomItemKey
+import dev.kobbler.app.ui.components.rememberSpotlightState
+import dev.kobbler.app.ui.components.spotlight
 import dev.kobbler.app.ui.components.bleedHorizontally
 
 @Composable
@@ -60,11 +69,45 @@ fun HomePhone(
     val hero = upNext.firstOrNull()
     val stack = upNext.drop(1)
 
+    val listState = rememberLazyListState()
+    val spotlight = rememberSpotlightState(hero?.spotlight() ?: homeData.recentlyAdded.firstOrNull()?.spotlight())
+    SpotlightOnScroll(
+        state = spotlight,
+        position = { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset },
+        bottomRow = {
+            when (val key = listState.bottomItemKey()) {
+                "hero" -> listOfNotNull(hero?.spotlight())
+                "upnext-strip" -> stack.map { it.spotlight() }
+                "recent" -> homeData.recentlyAdded.map { it.spotlight() }
+                is String -> key.removePrefix("section-").toIntOrNull()
+                    ?.let { homeData.sections.getOrNull(it) }?.items?.map { it.spotlight() }.orEmpty()
+                else -> emptyList()
+            }
+        },
+    )
+    val hasSpotlight by remember(spotlight) { derivedStateOf { spotlight.shown != null } }
+    val fadePx = with(LocalDensity.current) { PhoneBackdropFade.toPx() }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (hasSpotlight) {
+            SpotlightBackdrop(
+                spotlight = { spotlight.shown },
+                accent = hero?.let { colors.accentForMediaType(it.mediaType) } ?: colors.accMovies,
+                // A phone's rows are narrow enough that the picture shows mostly between
+                // them, so it keeps more of its strength than on a wide screen.
+                dim = {
+                    val scrolled = if (listState.firstVisibleItemIndex > 0) 1f
+                    else (listState.firstVisibleItemScrollOffset / fadePx).coerceIn(0f, 1f)
+                    PhoneBackdropDimTop + scrolled * (PhoneBackdropDimScrolled - PhoneBackdropDimTop)
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         // Turned sideways the page is twice as wide and half as tall: a 16:10 hero across
         // the full width would be taller than the screen.
         val heroHeight = minOf((maxWidth - gutter * 2) * (10f / 16f), maxHeight * 0.55f)
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 0.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -241,6 +284,10 @@ private fun <T> PhoneRail(
         }
     }
 }
+
+private val PhoneBackdropFade = 240.dp
+private const val PhoneBackdropDimTop = 0.2f
+private const val PhoneBackdropDimScrolled = 0.5f
 
 private val RailGap = 10.dp
 private val RailPeek = 26.dp

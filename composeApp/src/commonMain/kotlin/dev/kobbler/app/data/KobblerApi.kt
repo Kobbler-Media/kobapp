@@ -191,6 +191,8 @@ data class MovieDetailDto(
     val rating: Double? = null,
     @SerialName("rating_count") val ratingCount: Int? = null,
     @SerialName("content_rating") val contentRating: String? = null,
+    @SerialName("kids_override") val kidsOverride: Boolean? = null,
+    @SerialName("kids_allowed") val kidsAllowed: Boolean = false,
     @SerialName("is_in_library") val isInLibrary: Boolean = false,
     @SerialName("want_status") val wantStatus: String = "",
     val watched: Boolean? = null,
@@ -244,6 +246,8 @@ data class ShowDetailDto(
     val rating: Double? = null,
     @SerialName("rating_count") val ratingCount: Int? = null,
     @SerialName("content_rating") val contentRating: String? = null,
+    @SerialName("kids_override") val kidsOverride: Boolean? = null,
+    @SerialName("kids_allowed") val kidsAllowed: Boolean = false,
     val network: String? = null,
     @SerialName("content_category") val contentCategory: String? = null,
     val runtime: Int? = null,
@@ -876,10 +880,17 @@ data class MovieListDto(
     @SerialName("sort_title") val sortTitle: String? = null,
     val year: Int? = null,
     @SerialName("poster_url") val posterUrl: String? = null,
+    @SerialName("backdrop_url") val backdropUrl: String? = null,
     @SerialName("logo_url") val logoUrl: String? = null,
     @SerialName("is_in_library") val isInLibrary: Boolean = false,
     @SerialName("want_status") val wantStatus: String = "",
 )
+
+@Serializable
+data class GenreCount(val name: String, val count: Int)
+
+@Serializable
+data class GenresResponse(val genres: List<GenreCount>)
 
 // -- Shows list DTO --
 
@@ -898,6 +909,7 @@ data class ShowListDto(
     @SerialName("sort_title") val sortTitle: String? = null,
     val year: Int? = null,
     @SerialName("poster_url") val posterUrl: String? = null,
+    @SerialName("backdrop_url") val backdropUrl: String? = null,
     @SerialName("logo_url") val logoUrl: String? = null,
     val status: String? = null,
     val network: String? = null,
@@ -1661,6 +1673,8 @@ internal fun MovieDetailDto.toMovie(base: String): Movie = Movie(
     synopsis = description,
     tagline = tagline?.takeIf { it.isNotBlank() },
     contentRating = contentRating?.takeIf { it.isNotBlank() },
+    kidsOverride = kidsOverride,
+    kidsAllowed = kidsAllowed,
     duration = formatRuntime(runtime),
     runtimeMinutes = runtime,
     cast = cast.map { c -> CastMember(name = c.personName, character = c.characterName, imageUrl = resolveUrlOrNull(base, c.personImageUrl), personId = c.personId) },
@@ -1713,6 +1727,8 @@ internal fun ShowDetailDto.toTvShow(base: String): TvShow {
         logoUrl = resolveUrlOrNull(base, logoUrl),
         network = network,
         contentRating = contentRating?.takeIf { it.isNotBlank() },
+        kidsOverride = kidsOverride,
+        kidsAllowed = kidsAllowed,
         rating = rating?.toFloat(),
         synopsis = description,
         cast = cast.map { c -> CastMember(name = c.personName, character = c.characterName, imageUrl = resolveUrlOrNull(base, c.personImageUrl), personId = c.personId) },
@@ -1897,6 +1913,8 @@ class KobblerApi(
     private val token: String,
     /** True if the user can perform content management actions (want, monitor). */
     val canWant: Boolean = true,
+    /** Admin only: whether a title is shown to Kids profiles regardless of its rating. */
+    val canManageKids: Boolean = false,
     private val originProfiles: OriginProfiles = OriginProfiles.Persistent,
 ) {
     /** True if kobload/debrid streaming is configured on the server. Set during initial load. */
@@ -2175,11 +2193,13 @@ class KobblerApi(
     private fun invalidateMovies() {
         DataCache.invalidate("home", "dashboard", "movies", "wanted")
         DataCache.invalidatePrefix("movie-")
+        DataCache.invalidatePrefix("movies:")
     }
 
     private fun invalidateTvShows() {
         DataCache.invalidate("home", "dashboard", "tvshows", "sports", "wanted")
         DataCache.invalidatePrefix("show-")
+        DataCache.invalidatePrefix("tvshows:")
     }
 
     private fun invalidateBooks() {
@@ -2188,6 +2208,17 @@ class KobblerApi(
 
     private fun invalidateBookProgress() {
         DataCache.invalidate("home", "dashboard")
+    }
+
+    /** [allowed] null hands the decision back to the title's rating. */
+    suspend fun setMovieKidsOverride(movieId: String, allowed: Boolean?) {
+        patch("/api/v1/admin/movies/$movieId", "{\"kids_override\":$allowed}")
+        invalidateMovies()
+    }
+
+    suspend fun setShowKidsOverride(showId: String, allowed: Boolean?) {
+        patch("/api/v1/admin/tv/shows/$showId", "{\"kids_override\":$allowed}")
+        invalidateTvShows()
     }
 
     /** Want a movie (create if needed via discover, or want existing). */
@@ -2341,9 +2372,11 @@ class KobblerApi(
         direction: String? = null,
         around: String? = null,
         aroundBefore: Int? = null,
+        genre: String? = null,
     ): PaginatedMovies {
         val path = buildString {
             append("/api/v1/admin/movies?is_in_library=true")
+            if (genre != null) append("&genre=${genre.encodeURLParameter()}")
             if (cursor != null) append("&cursor=$cursor")
             if (direction != null) append("&direction=$direction")
             if (around != null) append("&around=$around")
@@ -2353,7 +2386,10 @@ class KobblerApi(
     }
 
     fun movieListToModels(items: List<MovieListDto>): List<Movie> = items.map {
-        Movie(id = it.id, title = it.title, year = it.year ?: 0, posterUrl = resolveUrl(apiUrl, it.posterUrl))
+        Movie(
+            id = it.id, title = it.title, year = it.year ?: 0,
+            posterUrl = resolveUrl(apiUrl, it.posterUrl), backdropUrl = resolveUrlOrNull(apiUrl, it.backdropUrl),
+        )
     }
 
     suspend fun getShowsList(
@@ -2362,6 +2398,7 @@ class KobblerApi(
         around: String? = null,
         aroundBefore: Int? = null,
         status: String? = null,
+        genre: String? = null,
     ): PaginatedShows {
         val path = buildString {
             append("/api/v1/admin/tv/shows")
@@ -2369,6 +2406,7 @@ class KobblerApi(
             var first = true
             fun param(key: String, value: String) { append(if (first) { first = false; sep } else "&"); append("$key=$value") }
             if (status != null) param("status", status)
+            if (genre != null) param("genre", genre.encodeURLParameter())
             if (cursor != null) param("cursor", cursor)
             if (direction != null) param("direction", direction)
             if (around != null) param("around", around)
@@ -2397,8 +2435,18 @@ class KobblerApi(
     }
 
     fun showListToModels(items: List<ShowListDto>): List<TvShow> = items.map {
-        TvShow(id = it.id, title = it.title, year = it.year ?: 0, posterUrl = resolveUrl(apiUrl, it.posterUrl), network = it.network)
+        TvShow(
+            id = it.id, title = it.title, year = it.year ?: 0,
+            posterUrl = resolveUrl(apiUrl, it.posterUrl), backdropUrl = resolveUrlOrNull(apiUrl, it.backdropUrl),
+            network = it.network,
+        )
     }
+
+    suspend fun getMovieGenres(): List<GenreCount> =
+        decode<GenresResponse>(get("/api/v1/admin/movies/genres")).genres
+
+    suspend fun getShowGenres(): List<GenreCount> =
+        decode<GenresResponse>(get("/api/v1/admin/tv/shows/genres")).genres
 
     // -- Alphabet navigation --
 

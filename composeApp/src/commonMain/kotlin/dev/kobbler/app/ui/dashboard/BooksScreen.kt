@@ -14,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -40,6 +42,9 @@ import dev.kobbler.app.ui.components.rowKeyFor
 import dev.kobbler.app.ui.components.DataCache
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.SegmentedFilter
+import dev.kobbler.app.ui.components.rememberSpotlightState
+import dev.kobbler.app.ui.components.spotlight
+import dev.kobbler.app.ui.components.spotlightOn
 import dev.kobbler.app.ui.components.rememberCached
 import dev.kobbler.app.ui.components.tvAutoGlow
 import kotlinx.coroutines.Dispatchers
@@ -192,6 +197,12 @@ private fun AllBooksGrid(
     // Both rails sit above the grid on the dashboard's own request; inserting them
     // afterwards shunts the whole page down under the viewer's focus.
     val railsSettled = dashState !is Async.Loading
+    val touch = formFactor == FormFactor.Phone
+    val spotlight = rememberSpotlightState(
+        readNext.firstOrNull()?.spotlight() ?: recentBooks.firstOrNull()?.spotlight() ?: books.firstOrNull()?.spotlight(),
+    )
+    val pointer = spotlight.takeUnless { touch }
+
     AsyncContent(if (railsSettled) state else Async.Loading, onRetry = retry) { _ ->
         val gridState = rememberLazyGridState()
         val readNextIndex = if (readNext.isNotEmpty()) 0 else -1
@@ -265,39 +276,52 @@ private fun AllBooksGrid(
         // 22dp letters stacked 26 deep are a pointer/D-pad affordance; on touch they are
         // under half the minimum target and cost 44dp of a 360dp screen.
         val showAlphabet = letters.isNotEmpty() && formFactor != FormFactor.Phone
+        val railEnd = if (showAlphabet) gutter + AlphabetBarWidth else gutter
+        val density = LocalDensity.current
+        var gridWidthPx by remember { mutableIntStateOf(0) }
+        val railBleedEnd = railEnd + with(density) {
+            fixedGridSlackPx(gridWidthPx, gutter.roundToPx(), railEnd.roundToPx(), dimens.posterWidth.roundToPx(), dimens.s3.roundToPx()).toDp()
+        }
 
         Box(Modifier.fillMaxSize()) {
+            BrowseBackdrop(spotlight, accentColor, gridState, touch) { key ->
+                when (key) {
+                    "read-next" -> readNext.map { it.spotlight() }
+                    "recent" -> recentBooks.map { it.spotlight() }
+                    else -> books.filter { it.id == key }.map { it.spotlight() }
+                }
+            }
             val gridFocus = remember { FocusRequester() }
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.FixedSize(dimens.posterWidth),
                 contentPadding = PaddingValues(
                     start = gutter, top = dimens.s4, bottom = dimens.s4,
-                    end = if (showAlphabet) (gutter + AlphabetBarWidth) else gutter,
+                    end = railEnd,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                 verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                modifier = Modifier.fillMaxSize().focusInert(progressBook != null).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusInert(progressBook != null).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 if (readNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "read-next") {
-                        dev.kobbler.app.ui.components.MediaCarousel(
+                        dev.kobbler.app.ui.components.MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
                             title = if (audiobooksOnly) "Continue Listening" else "Continue Reading",
                             accentColor = accentColor,
                             badge = "Reading",
                             modifier = Modifier.focusKeyGroup("readnext"),
                         ) {
                             itemsIndexed(readNext, key = { _, item -> item.id }) { idx, item ->
-                                dev.kobbler.app.ui.components.WideCard(title = item.title, subtitle = item.subtitle, imageUrl = item.imageUrl, progress = item.progress, onClick = { onContinueClick(item) }, modifier = Modifier.focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = readNextIndex; focus.rowKey = "readnext" } })
+                                dev.kobbler.app.ui.components.WideCard(title = item.title, subtitle = item.subtitle, imageUrl = item.imageUrl, progress = item.progress, onClick = { onContinueClick(item) }, modifier = Modifier.spotlightOn(pointer) { item.spotlight() }.focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = readNextIndex; focus.rowKey = "readnext" } })
                             }
                         }
                     }
                 }
                 if (recentBooks.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "recent") {
-                        dev.kobbler.app.ui.components.MediaCarousel(title = "Recently Added", accentColor = accentColor, modifier = Modifier.focusKeyGroup("recent")) {
+                        dev.kobbler.app.ui.components.MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, title = "Recently Added", accentColor = accentColor, modifier = Modifier.focusKeyGroup("recent")) {
                             itemsIndexed(recentBooks, key = { _, b -> b.id }) { idx, b ->
-                                dev.kobbler.app.ui.components.PosterCard(title = b.title, imageUrl = b.coverUrl, subtitle = b.author, accentColor = accentColor, onClick = { onBookClick(b) }, modifier = Modifier.focusKey("book.${b.id}", preferredEntry = recentIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } })
+                                dev.kobbler.app.ui.components.PosterCard(title = b.title, imageUrl = b.coverUrl, subtitle = b.author, accentColor = accentColor, onClick = { onBookClick(b) }, modifier = Modifier.spotlightOn(pointer) { b.spotlight() }.focusKey("book.${b.id}", preferredEntry = recentIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } })
                             }
                         }
                     }
@@ -312,6 +336,7 @@ private fun AllBooksGrid(
                         onClick = { onBookClick(book) },
                         onLongClick = { progressBook = book },
                         modifier = Modifier
+                            .spotlightOn(pointer) { book.spotlight() }
                             .focusKey("book.${book.id}", preferredEntry = gridIsEntry && bookIdx == 0)
                             .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(book.title); focus.lazyIndex = bookIdx + headerCount; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == bookIdx + headerCount }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
                     )

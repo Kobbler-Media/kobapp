@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.Spotlight
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,7 +42,6 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.SectionHeading
-import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 
@@ -56,7 +57,6 @@ fun AuthorDetailScreen(
     val colors = KobappTheme.colors
     val accent = colors.accBooks
     val gutter = gutterFor(formFactor)
-    val isPhone = formFactor == FormFactor.Phone
 
     val seriesGroups: List<Triple<String, String, List<Book>>> = books
         .filter { it.seriesId != null }
@@ -69,15 +69,8 @@ fun AuthorDetailScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
-        StripedBackdrop(
-            accent = accent,
-            opacity = if (isPhone) 0.28f else 0.36f,
-            withRadialOverlay = true,
-            modifier = Modifier.fillMaxSize(),
-            cached = true,
-        )
-
         val pageScroll = rememberScrollState()
+        DetailBackdrop(Spotlight(posterUrl = author.imageUrl ?: books.firstOrNull()?.coverUrl), accent, pageScroll)
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
             Spacer(Modifier.height(56.dp))
 

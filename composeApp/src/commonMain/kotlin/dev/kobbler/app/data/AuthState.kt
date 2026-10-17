@@ -101,6 +101,7 @@ data class MeResponse(
     val display_name: String? = null,
     val avatar_url: String? = null,
     val has_pin: Boolean = false,
+    val is_kids: Boolean = false,
 )
 
 enum class AuthScreen { Loading, Login, Picker, LoggedIn }
@@ -128,6 +129,7 @@ class AuthState(
     val apiUrl: String? get() = currentProfile?.apiUrl
     val token: String? get() = currentProfile?.token
     val role: String get() = currentProfile?.role ?: "viewer"
+    val isKids: Boolean get() = currentProfile?.isKids == true
 
     /** True if the user can perform content management actions (want, monitor). */
     val canWant: Boolean get() = role != "viewer"
@@ -342,6 +344,7 @@ class AuthState(
                     name = me.display_name,
                     avatarUrl = me.avatar_url,
                     hasPin = me.has_pin,
+                    isKids = me.is_kids,
                     needsRelink = false,
                 )
             }
@@ -567,6 +570,7 @@ class AuthState(
                     name = me.display_name,
                     avatarUrl = me.avatar_url,
                     hasPin = me.has_pin,
+                    isKids = me.is_kids,
                     needsRelink = false,
                 )
             }

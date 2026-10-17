@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.spotlight
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,7 +84,6 @@ import dev.kobbler.app.ui.components.CastRow
 import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.components.WatchProgressBar
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.detail.tvshow.EpisodeList
@@ -143,13 +144,7 @@ fun TvShowDetailScreen(
     val pageScope = rememberCoroutineScope()
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
-        StripedBackdrop(
-            accent = accent,
-            opacity = 0.35f,
-            withRadialOverlay = true,
-            modifier = Modifier.fillMaxSize(),
-            cached = true,
-        )
+        DetailBackdrop(show.spotlight(), accent, pageScroll)
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
@@ -283,6 +278,7 @@ private fun WideLayout(
                     exitDown = seasonEntry.takeIf { show.seasons.isNotEmpty() },
                     modifier = actionsAnchor,
                 )
+                if (api != null) ShowKidsAccess(show, api, accent, toast, Modifier.padding(top = 16.dp))
             }
         }
 
@@ -358,6 +354,7 @@ private fun PhoneLayout(
             horizontal = false,
             modifier = actionsAnchor,
         )
+        if (api != null) ShowKidsAccess(show, api, accent, toast, Modifier.padding(top = 14.dp))
         if (show.synopsis != null) {
             Spacer(Modifier.height(18.dp))
             ExpandableText(show.synopsis)

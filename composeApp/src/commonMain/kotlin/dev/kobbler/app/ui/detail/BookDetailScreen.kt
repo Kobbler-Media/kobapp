@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.spotlight
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,7 +70,6 @@ import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
-import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
@@ -92,19 +93,11 @@ fun BookDetailScreen(
     val colors = KobappTheme.colors
     val accent = colors.accBooks
     val gutter = gutterFor(formFactor)
-    val isPhone = formFactor == FormFactor.Phone
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
-        StripedBackdrop(
-            accent = accent,
-            opacity = if (isPhone) 0.30f else 0.40f,
-            withRadialOverlay = true,
-            modifier = Modifier.fillMaxSize(),
-            cached = true,
-        )
-
         val pageScroll = rememberScrollState()
+        DetailBackdrop(book.spotlight(), accent, pageScroll)
         val pageTopHold = rememberPageTopHold(pageScroll)
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(

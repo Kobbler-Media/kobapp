@@ -11,17 +11,17 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
 
 /**
- * Lets a horizontally scrolling row inside a gutter-padded page extend [bleed] past both of
- * its own edges while still reporting the un-bled width to its parent, so the surrounding
- * vertical layout is unaffected.
+ * Lets a horizontally scrolling row inside a gutter-padded page extend [start] and [end]
+ * past its own edges while still reporting the un-bled width to its parent, so the
+ * surrounding vertical layout is unaffected.
  *
- * Pair it with content padding of the same [bleed]: the row then still *starts* on the
+ * Pair it with content padding of the same amounts: the row then still *starts* on the
  * gutter, scrolls its items out to the physical screen edge instead of stopping dead at the
  * gutter, and keeps a trailing gutter once the list bottoms out.
  */
-fun Modifier.bleedHorizontally(bleed: Dp): Modifier =
-    if (bleed <= 0.dp) this else layout { measurable, constraints ->
-        val extra = bleed.roundToPx() * 2
+fun Modifier.bleedHorizontally(start: Dp, end: Dp = start): Modifier =
+    if (start <= 0.dp && end <= 0.dp) this else layout { measurable, constraints ->
+        val extra = start.roundToPx() + end.roundToPx()
         val placeable = measurable.measure(
             constraints.copy(
                 minWidth = constraints.minWidth + extra,
@@ -33,7 +33,7 @@ fun Modifier.bleedHorizontally(bleed: Dp): Modifier =
             ),
         )
         layout((placeable.width - extra).coerceAtLeast(0), placeable.height) {
-            placeable.place(-bleed.roundToPx(), 0)
+            placeable.place(-start.roundToPx(), 0)
         }
     }
 
@@ -45,4 +45,13 @@ fun Modifier.bleedHorizontally(bleed: Dp): Modifier =
 @Composable
 fun rowEdgeBleed(): Dp = with(KobappTheme.dimens) {
     if (LocalFormFactor.current == FormFactor.Phone) pageGutterPhone else focusBleed
+}
+
+@Composable
+fun pageGutter(): Dp = with(KobappTheme.dimens) {
+    when (LocalFormFactor.current) {
+        FormFactor.TV -> pageGutterTv
+        FormFactor.Phone -> pageGutterPhone
+        FormFactor.Desktop -> pageGutter
+    }
 }

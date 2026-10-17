@@ -11,8 +11,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -46,6 +49,8 @@ fun TvShowsScreen(
     var prevCursor by remember { mutableStateOf<String?>(null) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var filterIndex by remember { mutableIntStateOf(0) }
+    var genre by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickingCategory by remember { mutableStateOf(false) }
     var isReloading by remember { mutableStateOf(true) }
     // The list is a cursor window, so `shows.size` is the page, not the library. The
     // server only counts on the first page (tv.rs is_first_page), so hold on to it.
@@ -63,10 +68,11 @@ fun TvShowsScreen(
             api.getShowsList(
                 cursor = cursor, direction = direction, around = around, aroundBefore = aroundBefore,
                 status = if (continuingOnly) "continuing" else null,
+                genre = genre,
             )
         }
 
-    val cacheKey = if (sportsOnly) "sports" else "tvshows"
+    val cacheKey = if (sportsOnly) "sports" else browseCacheKey("tvshows", genre)
     val (state, retry) = rememberCached(cacheKey, filterIndex) {
         isReloading = true
         try {
@@ -96,11 +102,15 @@ fun TvShowsScreen(
     // grid before they land means inserting a rail above it afterwards, which shunts the
     // whole page down under the viewer's focus. Wait for them to settle first.
     val watchNextType = if (sportsOnly) MediaType.SportsEvent else MediaType.TvShow
-    val watchNext = (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == watchNextType } ?: emptyList()
+    // A category is a narrower question than the rails above the grid answer.
+    val watchNext = if (genre != null) emptyList()
+    else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == watchNextType } ?: emptyList()
 
     // Recently added from cached dashboard data
     val (dashState, _) = rememberCached("dashboard") { api.getDashboard() }
-    val recentShows = if (sportsOnly) {
+    val recentShows = if (genre != null) {
+        emptyList()
+    } else if (sportsOnly) {
         (dashState as? Async.Ready)?.value?.sports ?: emptyList()
     } else {
         (dashState as? Async.Ready)?.value?.shows ?: emptyList()
@@ -128,6 +138,12 @@ fun TvShowsScreen(
         gridIsEntry -> "grid.${shows.first().id}"
         else -> null
     }
+
+    val touch = formFactor == FormFactor.Phone
+    val spotlight = rememberSpotlightState(
+        watchNext.firstOrNull()?.spotlight() ?: recentShows.firstOrNull()?.spotlight() ?: shows.firstOrNull()?.spotlight(),
+    )
+    val pointer = spotlight.takeUnless { touch }
 
     val gatedState = if (railsSettled) state else Async.Loading
     AsyncContent(gatedState, onRetry = retry, modifier = modifier) { _ ->
@@ -211,20 +227,33 @@ fun TvShowsScreen(
         // jump targets do not exist in the continuing-only list.
         // 22dp letters stacked 26 deep are a pointer/D-pad affordance; on touch they are
         // under half the minimum target and cost 44dp of a 360dp screen.
-        val showAlphabet = letters.isNotEmpty() && !continuingOnly && formFactor != FormFactor.Phone
+        val showAlphabet = letters.isNotEmpty() && !continuingOnly && genre == null && formFactor != FormFactor.Phone
+        val railEnd = if (showAlphabet) gutter + AlphabetBarWidth else gutter
+        val density = LocalDensity.current
+        var gridWidthPx by remember { mutableIntStateOf(0) }
+        val railBleedEnd = railEnd + with(density) {
+            fixedGridSlackPx(gridWidthPx, gutter.roundToPx(), railEnd.roundToPx(), spacing.posterWidth.roundToPx(), spacing.s3.roundToPx()).toDp()
+        }
 
         Box(Modifier.fillMaxSize()) {
+            BrowseBackdrop(spotlight, accentColor, gridState, touch) { key ->
+                when (key) {
+                    "watch-next" -> watchNext.map { it.spotlight() }
+                    "recent" -> recentShows.map { it.spotlight() }
+                    else -> gridShows.filter { it.id == key }.map { it.spotlight() }
+                }
+            }
             val gridFocus = remember { FocusRequester() }
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.FixedSize(spacing.posterWidth),
                 contentPadding = PaddingValues(
-                    start = gutter, end = if (showAlphabet) (gutter + AlphabetBarWidth) else gutter,
+                    start = gutter, end = railEnd,
                     top = spacing.s4, bottom = spacing.s6,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(spacing.s3),
                 verticalArrangement = Arrangement.spacedBy(spacing.s4),
-                modifier = Modifier.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
                     Column {
@@ -235,19 +264,25 @@ fun TvShowsScreen(
                             compact = compact,
                             trailing = if (sportsOnly) null else {
                                 {
-                                    SegmentedFilter(
-                                        options = listOf("All library", "Continuing"),
-                                        selectedIndex = filterIndex,
-                                        accent = accentColor,
-                                        onSelected = {
-                                            if (it != filterIndex) {
-                                                filterIndex = it
-                                                shows.clear()
-                                                nextCursor = null
-                                                prevCursor = null
-                                            }
-                                        },
-                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(spacing.s3),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        CategoriesButton(genre, accentColor, onClick = { pickingCategory = true })
+                                        SegmentedFilter(
+                                            options = listOf("All library", "Continuing"),
+                                            selectedIndex = filterIndex,
+                                            accent = accentColor,
+                                            onSelected = {
+                                                if (it != filterIndex) {
+                                                    filterIndex = it
+                                                    shows.clear()
+                                                    nextCursor = null
+                                                    prevCursor = null
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             },
                         )
@@ -256,7 +291,7 @@ fun TvShowsScreen(
                 }
                 if (watchNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "watch-next") {
-                        MediaCarousel(
+                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
                             title = "Continue Watching",
                             accentColor = accentColor,
                             badge = "Watching",
@@ -270,6 +305,7 @@ fun TvShowsScreen(
                                     accentColor = accentColor,
                                     onClick = { onContinueClick(item) },
                                     modifier = Modifier
+                                        .spotlightOn(pointer) { item.spotlight() }
                                         .focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = watchNextIndex; focus.rowKey = "watchnext" } },
                                 )
@@ -279,7 +315,7 @@ fun TvShowsScreen(
                 }
                 if (recentShows.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "recent") {
-                        MediaCarousel(
+                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
                             title = "Recently Added",
                             accentColor = accentColor,
                             modifier = Modifier.focusKeyGroup("recent"),
@@ -292,6 +328,7 @@ fun TvShowsScreen(
                                     accentColor = accentColor,
                                     onClick = { onShowClick(show) },
                                     modifier = Modifier
+                                        .spotlightOn(pointer) { show.spotlight() }
                                         .focusKey("show.${show.id}", preferredEntry = recentIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } },
                                 )
@@ -328,10 +365,30 @@ fun TvShowsScreen(
                         accentColor = accentColor,
                         onClick = { onShowClick(show) },
                         modifier = Modifier
+                            .spotlightOn(pointer) { show.spotlight() }
                             .focusKey("grid.${show.id}", preferredEntry = gridIsEntry && index == 0)
                             .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(show.title); focus.lazyIndex = lazyIndex; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lazyIndex }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
                     )
                 }
+            }
+
+            if (pickingCategory) {
+                BrowseCategoryDialog(
+                    cacheKey = "show-genres",
+                    loadGenres = api::getShowGenres,
+                    selected = genre,
+                    accent = accentColor,
+                    onDismiss = { pickingCategory = false },
+                    onPick = { picked ->
+                        pickingCategory = false
+                        if (picked != genre) {
+                            genre = picked
+                            shows.clear()
+                            nextCursor = null
+                            prevCursor = null
+                        }
+                    },
+                )
             }
 
             if (showAlphabet) {

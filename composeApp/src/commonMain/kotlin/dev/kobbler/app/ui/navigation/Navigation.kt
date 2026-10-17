@@ -157,6 +157,19 @@ val defaultNavConfig = NavConfig(
     ),
 )
 
+// The server refuses live, IPTV, sports and activity routes for a Kids profile, so their tabs would only
+// ever show an error.
+private val kidsHiddenTabs =
+    setOf(Destination.Tab.LiveTv, Destination.Tab.Iptv, Destination.Tab.Sports, Destination.Tab.Activity)
+
+fun navConfigFor(isKids: Boolean): NavConfig =
+    if (!isKids) defaultNavConfig
+    else defaultNavConfig.copy(
+        bottomBarTabs = defaultNavConfig.bottomBarTabs - kidsHiddenTabs,
+        drawerTabs = defaultNavConfig.drawerTabs - kidsHiddenTabs,
+        sidebarTabs = defaultNavConfig.sidebarTabs - kidsHiddenTabs,
+    )
+
 // -- Navigation state --
 
 class NavigationState {
@@ -208,12 +221,13 @@ class NavigationState {
 @Composable
 fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen: (() -> Unit)? = null, isFullscreen: Boolean = false) {
     val nav = remember { NavigationState() }
-    val navConfig = remember { defaultNavConfig }
+    val navConfig = remember(auth.isKids) { navConfigFor(auth.isKids) }
     val canWant = auth.canWant
-    val api = remember(auth.apiUrl, auth.token, canWant) {
+    val isAdmin = auth.role == "admin"
+    val api = remember(auth.apiUrl, auth.token, canWant, isAdmin) {
         val url = auth.apiUrl ?: return@remember null
         val tok = auth.token ?: return@remember null
-        KobblerApi(auth.httpClient, url, tok, canWant = canWant)
+        KobblerApi(auth.httpClient, url, tok, canWant = canWant, canManageKids = isAdmin)
     }
 
     // Global player — one instance for the entire app
@@ -548,7 +562,7 @@ private const val SIDEBAR_SEARCH_IDX = -1
 private const val SidebarNavDebounceMs = 300L
 
 @Composable
-private fun DesktopScaffold(
+internal fun DesktopScaffold(
     nav: NavigationState,
     navConfig: NavConfig,
     api: KobblerApi,
@@ -681,7 +695,7 @@ private fun DesktopScaffold(
         commitSidebarIdx()
     }
 
-    val homeTopBar: (@Composable (Boolean) -> Unit)? = if (tvMode) null else { transparent ->
+    val tabTopBar: (@Composable (Boolean) -> Unit)? = if (tvMode) null else { transparent ->
         KobTopBar(
             notificationCount = 0,
             dense = true,
@@ -856,13 +870,8 @@ private fun DesktopScaffold(
                             .onSizeChanged { size -> contentWidthDp = with(density) { size.width.toDp() } },
                     ) {
                         // Home draws the bar itself, over its hero.
-                        if (!isDetailScreen && !tvMode && current != Destination.Tab.Home) {
-                            KobTopBar(
-                                notificationCount = 0,
-                                dense = true,
-                                showCast = true,
-                                onSearchClick = openSearch,
-                            )
+                        if (!isDetailScreen && tabTopBar != null && current != Destination.Tab.Home) {
+                            tabTopBar(false)
                         }
                         Box(Modifier.fillMaxSize().weight(1f)) {
                             // Content keeps its focus while the rail is open — screens
@@ -876,7 +885,7 @@ private fun DesktopScaffold(
                                         nav, api, formFactor, player, gps,
                                         contentActive = zone == Zone.Content,
                                         onSearchClick = openSearch,
-                                        homeTopBar = homeTopBar,
+                                        homeTopBar = tabTopBar,
                                         serverUrl = serverUrl,
                                         onLogout = onLogout,
                                     )

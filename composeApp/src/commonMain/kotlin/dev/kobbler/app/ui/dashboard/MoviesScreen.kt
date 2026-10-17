@@ -10,8 +10,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -40,11 +43,13 @@ fun MoviesScreen(
     var isLoadingMore by remember { mutableStateOf(false) }
     var isReloading by remember { mutableStateOf(true) }
     var totalCount by remember { mutableStateOf<Long?>(null) }
+    var genre by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickingCategory by remember { mutableStateOf(false) }
 
     suspend fun fetch(cursor: String? = null, direction: String? = null, around: String? = null, aroundBefore: Int? = null) =
-        api.getMoviesList(cursor = cursor, direction = direction, around = around, aroundBefore = aroundBefore)
+        api.getMoviesList(cursor = cursor, direction = direction, around = around, aroundBefore = aroundBefore, genre = genre)
 
-    val (state, retry) = rememberCached("movies") {
+    val (state, retry) = rememberCached(browseCacheKey("movies", genre)) {
         isReloading = true
         try {
             val result = fetch()
@@ -68,11 +73,13 @@ fun MoviesScreen(
     }
 
     val (homeState, _) = rememberCached("home") { api.getDiscover() }
-    val watchNext = (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == MediaType.Movie } ?: emptyList()
+    // A category is a narrower question than the rails above the grid answer.
+    val watchNext = if (genre != null) emptyList()
+    else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == MediaType.Movie } ?: emptyList()
 
     // Recently added from cached dashboard data
     val (dashState, _) = rememberCached("dashboard") { api.getDashboard() }
-    val recentMovies = (dashState as? Async.Ready)?.value?.movies ?: emptyList()
+    val recentMovies = if (genre != null) emptyList() else (dashState as? Async.Ready)?.value?.movies ?: emptyList()
 
     // Both rails sit above the grid, and each arrives on its own request. Rendering the
     // grid before they land means inserting a rail above it afterwards, which shunts the
@@ -93,6 +100,12 @@ fun MoviesScreen(
         gridIsEntry -> "grid.${movies.first().id}"
         else -> null
     }
+
+    val touch = formFactor == FormFactor.Phone
+    val spotlight = rememberSpotlightState(
+        watchNext.firstOrNull()?.spotlight() ?: recentMovies.firstOrNull()?.spotlight() ?: movies.firstOrNull()?.spotlight(),
+    )
+    val pointer = spotlight.takeUnless { touch }
 
     AsyncContent(if (railsSettled) state else Async.Loading, onRetry = retry, modifier = modifier) { _ ->
         val gridState = rememberLazyGridState()
@@ -173,16 +186,29 @@ fun MoviesScreen(
         val accent = colors.accMovies
         // 22dp letters stacked 26 deep are a pointer/D-pad affordance; on touch they are
         // under half the minimum target and cost 44dp of a 360dp screen.
-        val showAlphabet = letters.isNotEmpty() && formFactor != FormFactor.Phone
+        val showAlphabet = letters.isNotEmpty() && formFactor != FormFactor.Phone && genre == null
+        val railEnd = if (showAlphabet) gutter + AlphabetBarWidth else gutter
+        val density = LocalDensity.current
+        var gridWidthPx by remember { mutableIntStateOf(0) }
+        val railBleedEnd = railEnd + with(density) {
+            fixedGridSlackPx(gridWidthPx, gutter.roundToPx(), railEnd.roundToPx(), dimens.posterWidth.roundToPx(), dimens.s3.roundToPx()).toDp()
+        }
 
         Box(Modifier.fillMaxSize()) {
+            BrowseBackdrop(spotlight, accent, gridState, touch) { key ->
+                when (key) {
+                    "watch-next" -> watchNext.map { it.spotlight() }
+                    "recent" -> recentMovies.map { it.spotlight() }
+                    else -> gridMovies.filter { it.id == key }.map { it.spotlight() }
+                }
+            }
             val gridFocus = remember { FocusRequester() }
             LazyVerticalGrid(
-                modifier = Modifier.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
                 state = gridState,
                 columns = GridCells.FixedSize(dimens.posterWidth),
                 contentPadding = PaddingValues(
-                    start = gutter, end = if (showAlphabet) (gutter + AlphabetBarWidth) else gutter,
+                    start = gutter, end = railEnd,
                     top = dimens.s4, bottom = dimens.s6,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
@@ -195,6 +221,7 @@ fun MoviesScreen(
                             accent = accent,
                             countLine = countLine(totalCount, movies.size, "in library"),
                             compact = compact,
+                            trailing = { CategoriesButton(genre, accent, onClick = { pickingCategory = true }) },
                         )
                         Spacer(Modifier.height(dimens.s4))
                     }
@@ -202,7 +229,7 @@ fun MoviesScreen(
 
                 if (watchNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "watch-next") {
-                        MediaCarousel(
+                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
                             title = "Continue Watching",
                             accentColor = accent,
                             badge = "Watching",
@@ -216,6 +243,7 @@ fun MoviesScreen(
                                     accentColor = accent,
                                     onClick = { onContinueClick(item) },
                                     modifier = Modifier
+                                        .spotlightOn(pointer) { item.spotlight() }
                                         .focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = 1; focus.rowKey = "watchnext" } },
                                 )
@@ -226,7 +254,7 @@ fun MoviesScreen(
 
                 if (recentMovies.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "recent") {
-                        MediaCarousel(
+                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
                             title = "Recently Added",
                             accentColor = accent,
                             modifier = Modifier.focusKeyGroup("recent"),
@@ -239,6 +267,7 @@ fun MoviesScreen(
                                     accentColor = accent,
                                     onClick = { onMovieClick(movie) },
                                     modifier = Modifier
+                                        .spotlightOn(pointer) { movie.spotlight() }
                                         .focusKey("recent.movie.${movie.id}", preferredEntry = recentIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } },
                                 )
@@ -267,6 +296,7 @@ fun MoviesScreen(
                         accentColor = accent,
                         onClick = { onMovieClick(movie) },
                         modifier = Modifier
+                            .spotlightOn(pointer) { movie.spotlight() }
                             .focusKey("grid.${movie.id}", preferredEntry = gridIsEntry && index == 0)
                             .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(movie.title); focus.lazyIndex = lazyIndex; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lazyIndex }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
                     )
@@ -294,6 +324,25 @@ fun MoviesScreen(
                                 val target = items.indexOfFirst { it.id == firstByLetter.id }.coerceAtLeast(0)
                                 gridState.scrollToItem(headerCount + 1 + target)
                             } catch (_: Exception) {}
+                        }
+                    },
+                )
+            }
+
+            if (pickingCategory) {
+                BrowseCategoryDialog(
+                    cacheKey = "movie-genres",
+                    loadGenres = api::getMovieGenres,
+                    selected = genre,
+                    accent = accent,
+                    onDismiss = { pickingCategory = false },
+                    onPick = { picked ->
+                        pickingCategory = false
+                        if (picked != genre) {
+                            genre = picked
+                            movies.clear()
+                            nextCursor = null
+                            prevCursor = null
                         }
                     },
                 )

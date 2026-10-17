@@ -1,67 +1,36 @@
 @file:OptIn(coil3.annotation.ExperimentalCoilApi::class)
 
-package dev.kobbler.app.ui.dashboard.home
+package dev.kobbler.app.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import coil3.request.CachePolicy
-import coil3.SingletonImageLoader
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
+import coil3.compose.useExistingImageAsPlaceholder
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import coil3.compose.useExistingImageAsPlaceholder
-import dev.kobbler.app.data.DiscoverItem
-import dev.kobbler.app.data.RecentlyAddedItem
-import dev.kobbler.app.data.UpNextItem
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.components.SoftenedArtPx
-import dev.kobbler.app.ui.components.StripedBackdrop
-
-/** Whatever the page is pointing at: an Up Next entry, or any card in the rails below. */
-@Immutable
-data class Spotlight(
-    val backdropUrl: String? = null,
-    val posterUrl: String? = null,
-)
-
-fun UpNextItem.spotlight() = Spotlight(
-    backdropUrl = backdropUrl,
-    posterUrl = mediaArtUrl,
-)
-
-fun RecentlyAddedItem.spotlight() = Spotlight(
-    backdropUrl = backdropUrl,
-    posterUrl = imageUrl,
-)
-
-fun DiscoverItem.spotlight() = Spotlight(
-    backdropUrl = backdropUrl,
-    posterUrl = posterUrl,
-)
 
 /**
- * The page's background, fixed behind every row rather than scrolling with the hero, so
- * the picture is cropped to the screen's shape — not to a short band showing only the
- * top of the art. Without a backdrop the poster stands in, softened.
+ * A page's background, fixed behind every row rather than scrolling with them, so the
+ * picture is cropped to the screen's shape — not to a short band showing only the top of
+ * the art. Without a backdrop the poster stands in, softened.
  *
  * [spotlight] is read here and nowhere above, so a change of focus recomposes this layer
- * and not every rail on the page. The scrims are one draw pass: each full-screen layer
+ * and not every row on the page. The scrims are one draw pass: each full-screen layer
  * is a full-screen fill, and fill rate is what a TV stick's GPU runs out of first.
  */
 @Composable
-fun HomeBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Float, modifier: Modifier = Modifier) {
+fun SpotlightBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Float, modifier: Modifier = Modifier) {
     val colors = KobappTheme.colors
     val spot = spotlight()
     val backdrop = spot?.backdropUrl?.takeIf { it.isNotBlank() }
@@ -120,27 +89,3 @@ fun HomeBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Float, m
 }
 
 private const val BackdropFadeMs = 400
-
-/**
- * Up Next is where focus lands, so its backdrops are the next ones asked for. Fetched to
- * disk only: holding a dozen decoded full-screen bitmaps would crowd the posters out of a
- * low-memory device's cache.
- */
-@Composable
-fun PrefetchBackdrops(items: List<UpNextItem>) {
-    val context = LocalPlatformContext.current
-    LaunchedEffect(items) {
-        val loader = SingletonImageLoader.get(context)
-        items.drop(1).mapNotNull { it.backdropUrl?.takeIf(String::isNotBlank) }.forEach { url ->
-            loader.enqueue(
-                ImageRequest.Builder(context)
-                    .data(url)
-                    // The bytes land in the disk cache whatever the decode size; a
-                    // thumbnail keeps the decode itself from costing a core.
-                    .size(SoftenedArtPx)
-                    .memoryCachePolicy(CachePolicy.DISABLED)
-                    .build(),
-            )
-        }
-    }
-}

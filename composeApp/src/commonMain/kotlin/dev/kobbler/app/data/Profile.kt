@@ -12,6 +12,7 @@ data class Profile(
     val role: String = "viewer",
     val avatarUrl: String? = null,
     val hasPin: Boolean = false,
+    val isKids: Boolean = false,
     /** The name set on the server. Null means nobody has chosen one. */
     val name: String? = null,
     /**

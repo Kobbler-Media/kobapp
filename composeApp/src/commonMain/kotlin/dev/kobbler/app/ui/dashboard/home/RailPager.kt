@@ -29,10 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
@@ -91,14 +89,6 @@ private fun BoxScope.PagerArrow(
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = label, tint = colors.textHi, modifier = Modifier.size(22.dp))
-        }
-    }
-}
-
-fun Modifier.onHoverEnter(action: () -> Unit): Modifier = pointerInput(action) {
-    awaitPointerEventScope {
-        while (true) {
-            if (awaitPointerEvent().type == PointerEventType.Enter) action()
         }
     }
 }

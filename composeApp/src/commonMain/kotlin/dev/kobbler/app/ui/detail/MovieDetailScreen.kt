@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.spotlight
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +55,6 @@ import dev.kobbler.app.ui.components.CastRow
 import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.components.WatchProgressBar
 import dev.kobbler.app.ui.components.rememberPalette
 import dev.kobbler.app.ui.player.resumeSeconds
@@ -86,15 +87,8 @@ fun MovieDetailScreen(
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
-        StripedBackdrop(
-            accent = accent,
-            opacity = if (isPhone) 0.30f else 0.40f,
-            withRadialOverlay = true,
-            modifier = Modifier.fillMaxSize(),
-            cached = true,
-        )
-
         val pageScroll = rememberScrollState()
+        DetailBackdrop(movie.spotlight(), accent, pageScroll)
         val pageTopHold = rememberPageTopHold(pageScroll)
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
@@ -106,6 +100,7 @@ fun MovieDetailScreen(
                         GenreChips(movie.genres, accent = accent)
                         Spacer(Modifier.height(14.dp))
                     }
+                    MovieKidsAccess(movie, api, accent, toast, Modifier.padding(bottom = 14.dp))
                     ActionRow(
                         movie = movie, api = api, accent = accent,
                         onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
@@ -171,6 +166,7 @@ fun MovieDetailScreen(
                             Spacer(Modifier.height(20.dp))
                             GenreChips(movie.genres, accent = accent)
                         }
+                        MovieKidsAccess(movie, api, accent, toast, Modifier.padding(top = 16.dp))
                         Spacer(Modifier.height(24.dp))
                         CreditLines(movie, formFactor)
                     }
