@@ -65,6 +65,9 @@ data class CastSessionDto(
 /** Delivery state of the automatic failure report shown on the error dialog. */
 enum class ReportStatus { Idle, Sending, Sent, Failed }
 
+// Channels rather than titles: they have no end, so a stop nobody asked for is a dropout.
+private val LiveMediaTypes = setOf("livetv", "iptv")
+
 class GlobalPlayerState {
     /**
      * Shared by every detail screen that closes a session on dispose: the close has to
@@ -442,6 +445,7 @@ class GlobalPlayerState {
                 subtitleOrdinal = intent.subtitleOrdinal,
                 subtitlesOff = intent.subtitlesOff,
                 startTimeSec = seekToSec.takeIf { it > RESUME_MIN_SECONDS },
+                live = type in LiveMediaTypes,
             ),
         )
         // Pause immediately — prefetch only, don't start playback.

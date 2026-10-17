@@ -79,6 +79,8 @@ sealed class MediaSource {
          * then again from the seek target, having thrown the first fill away.
          */
         val startTimeSec: Int? = null,
+        /** A channel rather than a title: it has no end, so a stop it was not asked for is a dropout. */
+        val live: Boolean = false,
     ) : MediaSource()
 }
 
@@ -300,12 +302,40 @@ fun playPauseIntent(current: PlayerState): PlayPauseIntent =
         PlayerState.IDLE, PlayerState.FINISHED, PlayerState.ERROR -> PlayPauseIntent.None
     }
 
-// libVLC 4 reports a stop, not an end: the same event follows our own stop and every
-// media swap, and only one nobody asked for means the title ran out.
-fun stateOnStopping(current: PlayerState, requested: Boolean): PlayerState = when {
+// More than credits rounding or a last partial segment, less than anything a viewer would
+// call the end; a short title gets a tenth of its length instead. Never under the floor:
+// the last position report trails the real end by a few hundred milliseconds.
+private const val END_SLACK_MS = 10_000L
+private const val END_SLACK_FRACTION = 10
+private const val END_SLACK_FLOOR_MS = 1_500L
+
+private fun endSlackMs(durationMs: Long): Long =
+    minOf(END_SLACK_MS, durationMs / END_SLACK_FRACTION).coerceAtLeast(END_SLACK_FLOOR_MS)
+
+/**
+ * libVLC 4 reports a stop, not an end: the same event follows our own stop, every media
+ * swap, and a stream that dropped out — a server restarting, a connection lost. Only one
+ * nobody asked for, at the end of what the title said its length was, means it ran out;
+ * short of that it is an error, so the app reconnects rather than moving on.
+ */
+fun stateOnStopping(
+    current: PlayerState,
+    requested: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    live: Boolean = false,
+): PlayerState = when {
     requested || current == PlayerState.IDLE || current == PlayerState.ERROR -> current
+    live -> PlayerState.ERROR
+    durationMs > 0 && durationMs - positionMs > endSlackMs(durationMs) -> PlayerState.ERROR
     else -> PlayerState.FINISHED
 }
+
+class StreamStoppedShort(positionMs: Long, durationMs: Long, live: Boolean) :
+    Exception(
+        if (live) "Live stream stopped after ${positionMs / 1000}s"
+        else "Stream stopped at ${positionMs / 1000}s of ${durationMs / 1000}s",
+    )
 
 /**
  * Buffering interrupts playback; it never starts it. A paused player re-filling after a

@@ -309,6 +309,7 @@ internal class AndroidPlayer(
 
     private var currentMedia: Media? = null
     @Volatile private var stopRequested = false
+    @Volatile private var sourceLive = false
 
     private val presentedVideo = MutableStateFlow(false)
     private var fieldDecodeProbe: Job? = null
@@ -349,7 +350,9 @@ internal class AndroidPlayer(
                     _state.value = PlayerState.PAUSED
                 }
                 MediaPlayer.Event.EndReached -> {
-                    _state.value = stateOnStopping(_state.value, stopRequested)
+                    val next = stateOnStopping(_state.value, stopRequested, _currentMs.value, _durationMs.value, sourceLive)
+                    if (next == PlayerState.ERROR) _error.value = StreamStoppedShort(_currentMs.value, _durationMs.value, sourceLive)
+                    _state.value = next
                 }
                 MediaPlayer.Event.EncounteredError -> {
                     _error.value = RuntimeException("VLC playback error")
@@ -396,6 +399,7 @@ internal class AndroidPlayer(
     override fun load(source: MediaSource) {
         when (source) {
             is MediaSource.Url -> {
+                sourceLive = source.live
                 forceSoftwareDecode = false
                 open(source)
                 armFieldDecodeProbe(source)

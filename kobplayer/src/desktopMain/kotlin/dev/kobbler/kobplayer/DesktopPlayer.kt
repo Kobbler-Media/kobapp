@@ -174,6 +174,7 @@ internal class DesktopPlayer(
     // opens they describe nothing on screen.
     @Volatile
     private var inputRetired = false
+    private var sourceLive = false
 
     // True while the caller has signalled silent preload. We mute audio output
     // and pause synchronously inside `playing()` so VLC's audio path warms up
@@ -274,7 +275,9 @@ internal class DesktopPlayer(
 
             override fun finished(mediaPlayer: MediaPlayer) {
                 if (inputRetired) return
-                _state.value = PlayerState.FINISHED
+                val next = stateOnStopping(_state.value, requested = false, _currentMs.value, _durationMs.value, sourceLive)
+                if (next == PlayerState.ERROR) _error.value = StreamStoppedShort(_currentMs.value, _durationMs.value, sourceLive)
+                _state.value = next
             }
 
             // vlcj fires `stopped` for explicit stop() *and* for media-swap during
@@ -331,6 +334,7 @@ internal class DesktopPlayer(
         when (source) {
             is MediaSource.Url -> {
                 inputRetired = true
+                sourceLive = source.live
                 _state.value = PlayerState.LOADING
                 _isBuffering.value = true
                 _bufferPercent.value = 0f

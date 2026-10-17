@@ -206,6 +206,32 @@ class PlaybackRecoveryTest {
         }
     }
 
+    /**
+     * A channel has no end, so the player has to know it is playing one: a stop it was not
+     * asked for is then a dropout to reconnect, never the end of a title.
+     */
+    @Test
+    fun `channels are opened as live and titles are not`() = runTest {
+        val routes = mintingRoutes(CopyOnWriteArrayList()) + mapOf(
+            "/api/v1/admin/livetv/sessions" to { _: HttpExchange ->
+                """{"session_id":"live-2","channel_id":"chan-1","method":"direct","direct_url":"http://127.0.0.1:1/live-2.ts"}"""
+            },
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            for ((type, id, live) in listOf(Triple("livetv", "chan-1", true), Triple("movie", "mov-1", false))) {
+                val gps = GlobalPlayerState().apply {
+                    mediaType = type
+                    mediaId = id
+                    title = "Watching"
+                }
+                val player = stalledPlayer(atMs = 60_000)
+                assertTrue(gps.recoverPlayback(player, api), type)
+                assertEquals(live, player.loadedSource?.live, "$type opened live=${player.loadedSource?.live}")
+            }
+        }
+    }
+
     @Test
     fun `a lease the server let go is retuned by the live heartbeat`() {
         val routes = mapOf(

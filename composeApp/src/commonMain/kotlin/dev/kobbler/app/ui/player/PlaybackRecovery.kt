@@ -158,9 +158,10 @@ internal const val RECONNECT_NOTICE_DELAY_MS = 1_800L
 
 /**
  * How long to wait before each attempt. A session lost to a restarted API cannot be minted
- * again until the server is back up, so the budget is a schedule rather than a count.
+ * again until the server is back up, so the budget is a schedule rather than a count. It
+ * spans about forty seconds: a deploy's restart is back serving in around twenty.
  */
-internal val RECOVERY_BACKOFFS_MS = listOf(0L, 3_000L, 6_000L, 12_000L)
+internal val RECOVERY_BACKOFFS_MS = listOf(0L, 3_000L, 6_000L, 12_000L, 20_000L)
 
 /**
  * Minting a session succeeds even when what it points at is unplayable, and a fresh

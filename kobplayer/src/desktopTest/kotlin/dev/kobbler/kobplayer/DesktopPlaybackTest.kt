@@ -170,6 +170,44 @@ class DesktopPlaybackTest {
         assertEquals(PlayerState.PLAYING, player.state.value)
     }
 
+    /** Hands out the first [fraction] of the file and then goes away, as a server restarting does. */
+    private fun dying(resource: String, fraction: Double): String {
+        val bytes = File(javaClass.getResource("/$resource")!!.toURI()).readBytes()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "video/x-matroska")
+            // Chunked, so the cut reads as a clean end of stream rather than a short body.
+            exchange.sendResponseHeaders(200, 0)
+            runCatching { exchange.responseBody.write(bytes, 0, (bytes.size * fraction).toInt()) }
+            exchange.close()
+            Thread { server.stop(0) }.start()
+        }
+        server.start()
+        servers += server
+        return "http://127.0.0.1:${server.address.port}/$resource"
+    }
+
+    /**
+     * libVLC 4 reports a stream that dropped out the same way as a title that ran out. Short
+     * of the end it is the former, and an error is what lets the app reconnect instead of
+     * moving on to the next episode.
+     */
+    @Test
+    fun `a stream that dies short of the end is an error, not the end`() = withPlayer { player ->
+        player.load(MediaSource.Url(dying("red_176x100_subtitled.mkv", fraction = 0.4)))
+        val settled = player.state.await("playback to stop") { it == PlayerState.ERROR || it == PlayerState.FINISHED }
+        assertEquals(PlayerState.ERROR, settled, "stopped at ${player.currentMs.value} of ${player.durationMs.value}")
+        assertTrue(player.error.value != null)
+    }
+
+    /** A channel has no end: a live stream that stops has dropped out, however far it got. */
+    @Test
+    fun `a live stream that stops is an error even at the end of its bytes`() = withPlayer { player ->
+        player.load(MediaSource.Url(dying("red_176x100_sar4-3.mkv", fraction = 1.0), live = true))
+        val settled = player.state.await("playback to stop") { it == PlayerState.ERROR || it == PlayerState.FINISHED }
+        assertEquals(PlayerState.ERROR, settled, "stopped at ${player.currentMs.value} of ${player.durationMs.value}")
+    }
+
     private val servers = mutableListOf<HttpServer>()
 
     @kotlin.test.AfterTest
