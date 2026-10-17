@@ -62,9 +62,9 @@ class DetailKidsAccessTest {
     @Test
     fun `admin allows a title for kids profiles`() {
         for (kind in listOf("movie", "show")) page(kind, admin = true) { patches ->
-            assertTrue(onAllNodesWithText("Hidden from Kids profiles").fetchSemanticsNodes().isNotEmpty(), kind)
-            onAllNodesWithText("Allow").onFirst().performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Shown on Kids profiles").fetchSemanticsNodes().isNotEmpty() }
+            onAllNodesWithText("Kids: hidden").onFirst().performClick()
+            onAllNodesWithText("Always show").onFirst().performClick()
+            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Kids: shown").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(patches.any { it.contains("\"kids_override\":true") }, "$kind: $patches")
         }
     }
@@ -72,7 +72,7 @@ class DetailKidsAccessTest {
     @Test
     fun `only admins see the control`() {
         for (kind in listOf("movie", "show")) page(kind, admin = false) {
-            assertTrue(onAllNodesWithText("Hidden from Kids profiles").fetchSemanticsNodes().isEmpty(), kind)
+            assertTrue(onAllNodesWithText("Kids: hidden").fetchSemanticsNodes().isEmpty(), kind)
         }
     }
 }

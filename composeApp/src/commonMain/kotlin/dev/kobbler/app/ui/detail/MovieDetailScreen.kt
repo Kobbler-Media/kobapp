@@ -100,7 +100,6 @@ fun MovieDetailScreen(
                         GenreChips(movie.genres, accent = accent)
                         Spacer(Modifier.height(14.dp))
                     }
-                    MovieKidsAccess(movie, api, accent, toast, Modifier.padding(bottom = 14.dp))
                     ActionRow(
                         movie = movie, api = api, accent = accent,
                         onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
@@ -166,7 +165,6 @@ fun MovieDetailScreen(
                             Spacer(Modifier.height(20.dp))
                             GenreChips(movie.genres, accent = accent)
                         }
-                        MovieKidsAccess(movie, api, accent, toast, Modifier.padding(top = 16.dp))
                         Spacer(Modifier.height(24.dp))
                         CreditLines(movie, formFactor)
                     }
@@ -182,6 +180,7 @@ fun MovieDetailScreen(
                 )
             }
 
+            MovieKidsAccess(movie, api, accent, toast, Modifier.padding(start = gutter, end = gutter, top = 28.dp))
             Spacer(Modifier.height(64.dp))
         }
         }

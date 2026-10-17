@@ -2,6 +2,8 @@ package dev.kobbler.app.ui.auth
 
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.AuthScreen
@@ -34,14 +36,23 @@ class PickerBackdropTest {
         {"item_type":"movie","id":"r2","title":"Recent Two","subtitle":"2023","link":"/movies/r2","backdrop_url":"/img/r2-backdrop"}
     ],"sections":[]}"""
 
-    private fun picker(profiles: (String) -> List<Profile>, test: DesktopComposeUiTest.(tokens: List<String>) -> Unit) =
+    private fun picker(
+        profiles: (String) -> List<Profile>,
+        discoverDelayMs: Long = 0,
+        test: DesktopComposeUiTest.(tokens: List<String>, auth: AuthState) -> Unit,
+    ) =
         runDesktopComposeUiTest(width = 1280, height = 800) {
             val tokens = CopyOnWriteArrayList<String>()
             StubServer(
                 mapOf(
                     "/api/v1/admin/discover" to { exchange ->
                         tokens += exchange.requestHeaders.getFirst("Authorization").orEmpty()
+                        Thread.sleep(discoverDelayMs)
                         discover
+                    },
+                    "/api/v1/admin/me" to { exchange ->
+                        val token = exchange.requestHeaders.getFirst("Authorization").orEmpty().removePrefix("Bearer ")
+                        """{"user_id":"$token","email":"","role":"viewer","display_name":"$token"}"""
                     },
                 ),
             ).use { stub ->
@@ -60,7 +71,7 @@ class PickerBackdropTest {
                             ProfilePickerScreen(auth = auth, formFactor = FormFactor.Desktop)
                         }
                     }
-                    test(tokens)
+                    test(tokens, auth)
                 } finally {
                     scope.cancel()
                 }
@@ -73,7 +84,7 @@ class PickerBackdropTest {
     @Test
     fun `the newest arrivals cycle behind the profiles`() = picker({ url ->
         listOf(Profile(id = "adult", token = "adult-token", apiUrl = url))
-    }) {
+    }) { _, _ ->
         waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
         assertTrue(shows("RECENTLY ADDED"))
         repeat(60) {
@@ -90,9 +101,37 @@ class PickerBackdropTest {
             Profile(id = "adult", token = "adult-token", apiUrl = url),
             Profile(id = "kid", token = "kid-token", apiUrl = url, isKids = true),
         )
-    }) { tokens ->
+    }) { tokens, _ ->
         waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
         assertTrue(tokens.isNotEmpty())
         assertEquals(setOf("Bearer kid-token"), tokens.toSet())
+    }
+
+    @Test
+    fun `the first profile keeps focus once the arrivals arrive`() = picker({ url ->
+        listOf(Profile(id = "adult", token = "Alice", apiUrl = url))
+    }, discoverDelayMs = 1_000) { _, _ ->
+        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        mainClock.advanceTimeBy(500)
+        waitForIdle()
+        onNodeWithText("Alice").assertIsFocused()
+    }
+
+    @Test
+    fun `whoever was here last comes first`() = picker({ url ->
+        listOf(
+            Profile(id = "a", token = "Alice", apiUrl = url),
+            Profile(id = "b", token = "Bob", apiUrl = url),
+        )
+    }) { _, auth ->
+        waitUntil(timeoutMillis = 10_000) { shows("Alice") }
+        auth.confirmProfile("b")
+        auth.showPicker()
+        waitForIdle()
+        mainClock.advanceTimeBy(500)
+        waitForIdle()
+        val left = { name: String -> onNodeWithText(name).fetchSemanticsNode().boundsInRoot.left }
+        assertTrue(left("Bob") < left("Alice"), "Bob ${left("Bob")} Alice ${left("Alice")}")
+        onNodeWithText("Bob").assertIsFocused()
     }
 }

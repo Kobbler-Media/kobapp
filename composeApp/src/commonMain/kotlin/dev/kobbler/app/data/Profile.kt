@@ -20,6 +20,7 @@ data class Profile(
      * its id - per-profile prefs are namespaced by it and would be lost by a fresh add.
      */
     val needsRelink: Boolean = false,
+    val lastUsedAtMs: Long = 0,
 ) {
     /** The chosen name, or the best guess the email allows until someone sets one. */
     val displayName: String

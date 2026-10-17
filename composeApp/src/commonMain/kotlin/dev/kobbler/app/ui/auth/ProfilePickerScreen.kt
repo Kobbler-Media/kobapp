@@ -148,7 +148,7 @@ private fun ProfileRow(
                         // grows it further; a lazy layout clips to its own.
                         contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
                     ) {
-                        itemsIndexed(auth.profiles, key = { _, profile -> profile.id }) { index, profile ->
+                        itemsIndexed(auth.profilesByRecentUse, key = { _, profile -> profile.id }) { index, profile ->
                             ProfileTile(
                                 profile = profile,
                                 size = avatarSize,

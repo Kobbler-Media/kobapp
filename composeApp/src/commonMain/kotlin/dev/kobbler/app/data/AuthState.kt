@@ -126,6 +126,8 @@ class AuthState(
 
     val currentProfile: Profile? get() = profiles.firstOrNull { it.id == currentProfileId }
 
+    val profilesByRecentUse: List<Profile> get() = profiles.sortedByDescending { it.lastUsedAtMs }
+
     val apiUrl: String? get() = currentProfile?.apiUrl
     val token: String? get() = currentProfile?.token
     val role: String get() = currentProfile?.role ?: "viewer"
@@ -280,11 +282,10 @@ class AuthState(
     /** Select a profile. Call after any PIN gate has been cleared. */
     fun confirmProfile(profileId: String) {
         if (profiles.none { it.id == profileId }) return
-        if (currentProfileId != profileId) {
-            currentProfileId = profileId
-            persistProfiles()
-            DataCache.clear()
-        }
+        val switched = currentProfileId != profileId
+        currentProfileId = profileId
+        updateProfile(profileId) { it.copy(lastUsedAtMs = nowMs()) }
+        if (switched) DataCache.clear()
         screen = AuthScreen.LoggedIn
         scope.launch { refreshCurrentProfileFromServer() }
     }
@@ -356,6 +357,8 @@ class AuthState(
         }
     }
 
+    private fun nowMs() = Clock.System.now().toEpochMilliseconds()
+
     private fun updateProfile(id: String, transform: (Profile) -> Profile) {
         val idx = profiles.indexOfFirst { it.id == id }
         if (idx < 0) return
@@ -374,7 +377,7 @@ class AuthState(
         val profile = profiles.firstOrNull { it.id == profileId } ?: return
         val key = KEY_SESSION_TOUCHED_PREFIX + profileId
         val last = store.getString(key)?.toLongOrNull() ?: 0L
-        val nowMs = Clock.System.now().toEpochMilliseconds()
+        val nowMs = nowMs()
         if (nowMs - last < TOUCH_INTERVAL_MS) return
         try {
             val resp = httpClient.post("${profile.apiUrl}/api/v1/admin/sessions/refresh") {
@@ -524,7 +527,7 @@ class AuthState(
             relinkTargetId = null
             // Reuse the existing profile id: per-profile prefs are namespaced by it.
             updateProfile(relinkId) {
-                it.copy(token = token, apiUrl = apiUrl, needsRelink = false)
+                it.copy(token = token, apiUrl = apiUrl, needsRelink = false, lastUsedAtMs = nowMs())
             }
             store.remove(KEY_SESSION_TOUCHED_PREFIX + relinkId)
             currentProfileId = relinkId
@@ -536,7 +539,12 @@ class AuthState(
         }
 
         val id = newProfileId()
-        val profile = Profile(id = id, token = token, apiUrl = apiUrl)
+        val profile = Profile(
+            id = id,
+            token = token,
+            apiUrl = apiUrl,
+            lastUsedAtMs = if (pinLoginMode == PinLoginMode.Replace) nowMs() else 0,
+        )
         profiles.add(profile)
         persistProfiles()
 

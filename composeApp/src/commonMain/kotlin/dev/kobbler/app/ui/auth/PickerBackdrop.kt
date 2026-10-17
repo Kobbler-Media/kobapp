@@ -69,19 +69,21 @@ internal fun PickerBackdrop(auth: AuthState, accent: Color, content: @Composable
     }
 
     val current = arrivals.getOrNull(index)
-    if (current == null) {
-        StripedBackdrop(accent = accent, cached = true) { content() }
-        return
-    }
+    // One tree whatever is behind it: swapping the content's parent when the arrivals land
+    // would rebuild the profile tiles and drop the focus the first one was just given.
     Box(Modifier.fillMaxSize()) {
-        SpotlightBackdrop(
-            spotlight = { current.spotlight() },
-            accent = accent,
-            dim = { 0f },
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (current == null) {
+            StripedBackdrop(accent = accent, cached = true, modifier = Modifier.fillMaxSize())
+        } else {
+            SpotlightBackdrop(
+                spotlight = { current.spotlight() },
+                accent = accent,
+                dim = { 0f },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         content()
-        ArrivalCaption(current, Modifier.align(Alignment.BottomEnd).padding(28.dp))
+        current?.let { ArrivalCaption(it, Modifier.align(Alignment.BottomEnd).padding(28.dp)) }
     }
 }
 

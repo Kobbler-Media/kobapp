@@ -281,7 +281,7 @@ fun SettingsScreen(
                     )
                 }
             }
-            auth.profiles.filter { it.id != auth.currentProfileId }.forEach { other ->
+            auth.profilesByRecentUse.filter { it.id != auth.currentProfileId }.forEach { other ->
                 SettingsDivider()
                 SettingsRow(
                     icon = Icons.Outlined.PersonRemove,

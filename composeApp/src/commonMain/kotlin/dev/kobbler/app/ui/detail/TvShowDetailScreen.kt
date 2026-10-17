@@ -278,7 +278,6 @@ private fun WideLayout(
                     exitDown = seasonEntry.takeIf { show.seasons.isNotEmpty() },
                     modifier = actionsAnchor,
                 )
-                if (api != null) ShowKidsAccess(show, api, accent, toast, Modifier.padding(top = 16.dp))
             }
         }
 
@@ -308,6 +307,7 @@ private fun WideLayout(
             Spacer(Modifier.height(36.dp))
             CastRow(show.cast, onPersonClick = onPersonClick)
         }
+        if (api != null) ShowKidsAccess(show, api, accent, toast, Modifier.padding(top = 28.dp))
     }
 }
 
@@ -354,7 +354,6 @@ private fun PhoneLayout(
             horizontal = false,
             modifier = actionsAnchor,
         )
-        if (api != null) ShowKidsAccess(show, api, accent, toast, Modifier.padding(top = 14.dp))
         if (show.synopsis != null) {
             Spacer(Modifier.height(18.dp))
             ExpandableText(show.synopsis)
@@ -380,6 +379,7 @@ private fun PhoneLayout(
             Spacer(Modifier.height(22.dp))
             CastRow(show.cast, onPersonClick = onPersonClick)
         }
+        if (api != null) ShowKidsAccess(show, api, accent, toast, Modifier.padding(top = 28.dp))
     }
 }
 
