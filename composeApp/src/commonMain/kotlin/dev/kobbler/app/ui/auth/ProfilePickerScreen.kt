@@ -35,7 +35,6 @@ import dev.kobbler.app.platform.BackHandler
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.FocusEdgeSlack
-import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
@@ -106,7 +105,7 @@ private fun ProfileRow(
         runCatching { firstTileFocus.requestFocus() }
     }
 
-    StripedBackdrop(accent = accent, cached = true) {
+    PickerBackdrop(auth = auth, accent = accent) {
         Box(Modifier.fillMaxSize()) {
             if (auth.pickerDismissible) {
                 IconButton(
@@ -116,9 +115,15 @@ private fun ProfileRow(
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.textMd)
                 }
             }
+            // A band rather than a card: the picture keeps the whole width around it, and
+            // the title and tiles stay legible over whatever arrival is showing.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(vertical = 40.dp),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .background(colors.bg.copy(alpha = 0.6f))
+                    .padding(vertical = 40.dp),
             ) {
                 Text(
                     "Choose your profile",

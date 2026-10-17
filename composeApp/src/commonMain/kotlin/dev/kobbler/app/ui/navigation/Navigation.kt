@@ -46,6 +46,7 @@ import dev.kobbler.app.theme.LocalKobappDimens
 import dev.kobbler.app.theme.LocalSection
 import dev.kobbler.app.ui.kobChromeInsets
 import dev.kobbler.app.theme.Section
+import dev.kobbler.app.ui.components.PageBackdropHost
 import dev.kobbler.app.ui.components.LocalTvFocusDecor
 import dev.kobbler.app.ui.components.AsyncContent
 import dev.kobbler.app.ui.components.RefreshOnEvents
@@ -1483,22 +1484,26 @@ private fun DetailContent(
 /** Wraps a tab screen with the phone top bar on phones. Desktop/TV use the
  *  scaffold-level KobTopBar instead. */
 @Composable
-private fun TabScreenWithTopBar(
+internal fun TabScreenWithTopBar(
     onMenuClick: (() -> Unit)?,
     onSearchClick: (() -> Unit)?,
     formFactor: FormFactor,
     content: @Composable () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize()) {
-        if (onMenuClick != null && formFactor == FormFactor.Phone) {
+    if (onMenuClick == null || formFactor != FormFactor.Phone) {
+        Box(Modifier.fillMaxSize()) { content() }
+        return
+    }
+    PageBackdropHost {
+        Column(Modifier.fillMaxSize()) {
             KobPhoneTopBar(
                 onSearchClick = { onSearchClick?.invoke() },
                 onCastClick = {},
                 onMenuClick = onMenuClick,
             )
-        }
-        Box(Modifier.weight(1f)) {
-            content()
+            Box(Modifier.weight(1f)) {
+                content()
+            }
         }
     }
 }

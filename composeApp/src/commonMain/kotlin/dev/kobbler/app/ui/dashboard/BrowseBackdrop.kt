@@ -15,6 +15,7 @@ import dev.kobbler.app.ui.components.SpotlightBackdrop
 import dev.kobbler.app.ui.components.SpotlightOnScroll
 import dev.kobbler.app.ui.components.SpotlightState
 import dev.kobbler.app.ui.components.bottomRowKeys
+import dev.kobbler.app.ui.components.hostedBackdrop
 
 // Posters packed edge to edge are busier than Home's rails, so the picture fades sooner.
 private const val ScrolledBrowseDim = 0.65f
@@ -37,19 +38,23 @@ internal fun BrowseBackdrop(
         SpotlightOnScroll(
             state = spotlight,
             position = { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset },
+            atTop = { gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0 },
             bottomRow = { gridState.bottomRowKeys().flatMap(spotlightsFor) },
         )
     }
-    if (!hasSpotlight) return
     val fadePx = with(LocalDensity.current) { BrowseDimFade.toPx() }
-    SpotlightBackdrop(
-        spotlight = { spotlight.shown },
-        accent = accent,
-        dim = {
+    val dim = remember(gridState, fadePx) {
+        {
             val scrolled = if (gridState.firstVisibleItemIndex > 0) 1f
             else (gridState.firstVisibleItemScrollOffset / fadePx).coerceIn(0f, 1f)
             scrolled * ScrolledBrowseDim
-        },
+        }
+    }
+    if (hostedBackdrop(spotlight, accent, dim) || !hasSpotlight) return
+    SpotlightBackdrop(
+        spotlight = { spotlight.shown },
+        accent = accent,
+        dim = dim,
         modifier = Modifier.fillMaxSize(),
     )
 }

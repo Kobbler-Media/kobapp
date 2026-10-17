@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
@@ -32,6 +33,7 @@ fun MediaCarousel(
     // focus-ring bleed, and the row clips what overflows.
     bleedStart: Dp = pageGutter(),
     bleedEnd: Dp = bleedStart,
+    rowState: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
     val spacing = KobappTheme.dimens
@@ -58,7 +60,7 @@ fun MediaCarousel(
         )
         Spacer(Modifier.height(spacing.s2))
         LazyRow(
-            state = rememberLazyListState(),
+            state = rowState,
             modifier = Modifier
                 .bleedHorizontally(bleedStart, bleedEnd)
                 .fillMaxWidth(),

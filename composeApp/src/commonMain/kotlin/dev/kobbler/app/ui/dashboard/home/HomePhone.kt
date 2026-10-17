@@ -48,7 +48,12 @@ import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.WideCard
 import dev.kobbler.app.ui.components.SectionHeading
 import dev.kobbler.app.ui.components.SpotlightBackdrop
+import dev.kobbler.app.ui.components.Spotlight
+import dev.kobbler.app.ui.components.SpotlightOnRowScroll
 import dev.kobbler.app.ui.components.SpotlightOnScroll
+import dev.kobbler.app.ui.components.SpotlightState
+import dev.kobbler.app.ui.components.hostedBackdrop
+import dev.kobbler.app.ui.components.showingBadge
 import dev.kobbler.app.ui.components.StripedArt
 import dev.kobbler.app.ui.components.bottomItemKey
 import dev.kobbler.app.ui.components.rememberSpotlightState
@@ -74,6 +79,7 @@ fun HomePhone(
     SpotlightOnScroll(
         state = spotlight,
         position = { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset },
+        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
         bottomRow = {
             when (val key = listState.bottomItemKey()) {
                 "hero" -> listOfNotNull(hero?.spotlight())
@@ -87,19 +93,24 @@ fun HomePhone(
     )
     val hasSpotlight by remember(spotlight) { derivedStateOf { spotlight.shown != null } }
     val fadePx = with(LocalDensity.current) { PhoneBackdropFade.toPx() }
+    val backdropAccent = hero?.let { colors.accentForMediaType(it.mediaType) } ?: colors.accMovies
+    // A phone's rows are narrow enough that the picture shows mostly between them, so it
+    // keeps more of its strength than on a wide screen.
+    val backdropDim = remember(listState, fadePx) {
+        {
+            val scrolled = if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset / fadePx).coerceIn(0f, 1f)
+            PhoneBackdropDimTop + scrolled * (PhoneBackdropDimScrolled - PhoneBackdropDimTop)
+        }
+    }
+    val hosted = hostedBackdrop(spotlight, backdropAccent, backdropDim)
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (hasSpotlight) {
+        if (hasSpotlight && !hosted) {
             SpotlightBackdrop(
                 spotlight = { spotlight.shown },
-                accent = hero?.let { colors.accentForMediaType(it.mediaType) } ?: colors.accMovies,
-                // A phone's rows are narrow enough that the picture shows mostly between
-                // them, so it keeps more of its strength than on a wide screen.
-                dim = {
-                    val scrolled = if (listState.firstVisibleItemIndex > 0) 1f
-                    else (listState.firstVisibleItemScrollOffset / fadePx).coerceIn(0f, 1f)
-                    PhoneBackdropDimTop + scrolled * (PhoneBackdropDimScrolled - PhoneBackdropDimTop)
-                },
+                accent = backdropAccent,
+                dim = backdropDim,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -114,7 +125,12 @@ fun HomePhone(
         ) {
             if (hero != null) {
                 item(key = "hero") {
-                    PhoneHero(item = hero, height = heroHeight, onClick = { onContinueClick(0) })
+                    PhoneHero(
+                        item = hero,
+                        height = heroHeight,
+                        onClick = { onContinueClick(0) },
+                        modifier = Modifier.showingBadge(spotlight, hero.spotlight()),
+                    )
                 }
             }
 
@@ -135,7 +151,10 @@ fun HomePhone(
                             // under two fit, which puts the next card's edge permanently on
                             // screen — that peek is what says "swipe".
                             val cardWidth = minOf((maxWidth - UpNextCardGap) * 0.62f, UpNextCardMaxWidth)
+                            val stackState = rememberLazyListState()
+                            SpotlightOnRowScroll(spotlight, stackState) { stack.getOrNull(it)?.spotlight() }
                             LazyRow(
+                                state = stackState,
                                 modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
                                 contentPadding = PaddingValues(horizontal = gutter),
                                 horizontalArrangement = Arrangement.spacedBy(UpNextCardGap),
@@ -149,7 +168,7 @@ fun HomePhone(
                                         progress = item.progress ?: 0f,
                                         accentColor = colors.accentForMediaType(item.mediaType),
                                         onClick = { onContinueClick(i + 1) },
-                                        modifier = Modifier.width(cardWidth),
+                                        modifier = Modifier.width(cardWidth).showingBadge(spotlight, item.spotlight()),
                                     )
                                 }
                             }
@@ -163,6 +182,8 @@ fun HomePhone(
                     PhoneRail(
                         title = "Recently Added",
                         items = homeData.recentlyAdded,
+                        spotlight = spotlight,
+                        spotlightOf = { it.spotlight() },
                     ) { item, cardWidth ->
                         PosterCard(
                             title = item.title,
@@ -171,6 +192,7 @@ fun HomePhone(
                             accentColor = colors.accentForRecentlyAdded(item.itemType),
                             onClick = { onRecentClick(item) },
                             width = cardWidth,
+                            modifier = Modifier.showingBadge(spotlight, item.spotlight()),
                         )
                     }
                 }
@@ -180,7 +202,12 @@ fun HomePhone(
                 item(key = "section-$i") {
                     val sectionAccent = colors.accentForSection(section.sectionKey)
                     val wantScope = rememberCoroutineScope()
-                    PhoneRail(title = section.title, items = section.items) { item, cardWidth ->
+                    PhoneRail(
+                        title = section.title,
+                        items = section.items,
+                        spotlight = spotlight,
+                        spotlightOf = { it.spotlight() },
+                    ) { item, cardWidth ->
                         // buildList hands back a fresh List every call, and List compares by
                         // reference under strong skipping — inline, no card in any rail can
                         // ever skip.
@@ -197,6 +224,7 @@ fun HomePhone(
                             contextMenuItems = menu,
                             onClick = { onDiscoverItemClick(item) },
                             width = cardWidth,
+                            modifier = Modifier.showingBadge(spotlight, item.spotlight()),
                         )
                     }
                 }
@@ -206,11 +234,11 @@ fun HomePhone(
 }
 
 @Composable
-private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit) {
+private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = KobappTheme.colors
     val accent = colors.accentForMediaType(item.mediaType)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(height)
             .clip(KobappTheme.shapes.hero)
@@ -266,6 +294,8 @@ private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit) {
 private fun <T> PhoneRail(
     title: String,
     items: List<T>,
+    spotlight: SpotlightState,
+    spotlightOf: (T) -> Spotlight,
     card: @Composable (T, Dp) -> Unit,
 ) {
     val gutter = KobappTheme.dimens.pageGutterPhone
@@ -274,7 +304,10 @@ private fun <T> PhoneRail(
         Spacer(Modifier.height(10.dp))
         BoxWithConstraints {
             val cardWidth = railPosterWidth(maxWidth)
+            val rowState = rememberLazyListState()
+            SpotlightOnRowScroll(spotlight, rowState) { items.getOrNull(it)?.let(spotlightOf) }
             LazyRow(
+                state = rowState,
                 modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = gutter),
                 horizontalArrangement = Arrangement.spacedBy(RailGap),

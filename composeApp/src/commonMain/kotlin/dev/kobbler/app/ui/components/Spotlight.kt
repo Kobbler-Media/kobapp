@@ -24,8 +24,21 @@ import kotlinx.coroutines.flow.drop
 data class Spotlight(
     val backdropUrl: String? = null,
     val posterUrl: String? = null,
+    val title: String? = null,
 ) {
     val hasArt: Boolean get() = !backdropUrl.isNullOrBlank() || !posterUrl.isNullOrBlank()
+    val hasBackdrop: Boolean get() = !backdropUrl.isNullOrBlank()
+}
+
+/**
+ * The card a touch page settles on, from [candidates] in reading order: a real backdrop
+ * over a softened poster, and anything over what is already showing, so a scroll always
+ * changes the picture when it can.
+ */
+fun pickSpotlight(candidates: List<Spotlight>, current: Spotlight?): Spotlight? {
+    val withArt = candidates.filter { it.hasArt }
+    val best = withArt.filter { it.hasBackdrop }.ifEmpty { withArt }
+    return best.firstOrNull { it != current } ?: best.firstOrNull()
 }
 
 // Long enough that stepping along a row does not swap the backdrop under every press,
@@ -43,8 +56,15 @@ class SpotlightState(initial: Spotlight?) {
     var shown by mutableStateOf(initial)
         internal set
 
+    /** What the page opens on, and goes back to at the top. */
+    internal var home: Spotlight? = initial
+
     fun point(spot: Spotlight) {
         if (spot.hasArt) pointedAt = spot
+    }
+
+    fun goHome() {
+        home?.let(::point)
     }
 }
 
@@ -52,6 +72,7 @@ class SpotlightState(initial: Spotlight?) {
 fun rememberSpotlightState(initial: Spotlight?): SpotlightState {
     val state = remember { SpotlightState(initial) }
     LaunchedEffect(initial) {
+        state.home = initial
         if (state.shown == null && initial != null) {
             state.pointedAt = initial
             state.shown = initial
@@ -82,21 +103,51 @@ fun Modifier.spotlightOn(state: SpotlightState?, spot: () -> Spotlight): Modifie
 private const val ScrollSettleMs = 300L
 
 /**
- * Touch has nothing to point with, so each time a scroll comes to rest the backdrop picks
- * one of the cards along the bottom of the screen — the ones the eye has just scrolled to.
- * The first composition is skipped: until the viewer scrolls, the page's opening item holds.
+ * Touch has nothing to point with, so each time a scroll comes to rest the backdrop moves
+ * to a card along the bottom of the screen — the ones the eye has just scrolled to — and
+ * back to the page's opening picture once the page is at its top again. The first
+ * composition is skipped: until the viewer scrolls, the opening picture holds.
  *
  * Settling is read off [position] rather than `isScrollInProgress`: a short fling can start
  * and stop between two snapshot reads, and the conflated flow then never sees it end.
  */
 @Composable
-fun SpotlightOnScroll(state: SpotlightState, position: () -> Any, bottomRow: () -> List<Spotlight>) {
+fun SpotlightOnScroll(
+    state: SpotlightState,
+    position: () -> Any,
+    atTop: () -> Boolean,
+    bottomRow: () -> List<Spotlight>,
+) {
     val currentBottomRow by rememberUpdatedState(bottomRow)
+    val currentAtTop by rememberUpdatedState(atTop)
     LaunchedEffect(state) {
         snapshotFlow(position).drop(1).collectLatest {
             delay(ScrollSettleMs)
-            currentBottomRow().filter { it.hasArt }.randomOrNull()?.let(state::point)
+            if (currentAtTop()) state.goHome()
+            else pickSpotlight(currentBottomRow(), state.shown)?.let(state::point)
         }
+    }
+}
+
+/**
+ * A swipe along one rail is a look at that rail, so when it settles the backdrop follows
+ * the first card it left fully on screen.
+ */
+@Composable
+fun SpotlightOnRowScroll(state: SpotlightState?, rowState: LazyListState, spotlightAt: (index: Int) -> Spotlight?) {
+    if (state == null) return
+    val currentSpotlightAt by rememberUpdatedState(spotlightAt)
+    LaunchedEffect(state, rowState) {
+        snapshotFlow { rowState.firstVisibleItemIndex to rowState.firstVisibleItemScrollOffset }
+            .drop(1)
+            .collectLatest {
+                delay(ScrollSettleMs)
+                val info = rowState.layoutInfo
+                val whole = info.visibleItemsInfo
+                    .filter { it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset }
+                    .ifEmpty { info.visibleItemsInfo }
+                pickSpotlight(whole.mapNotNull { currentSpotlightAt(it.index) }, state.shown)?.let(state::point)
+            }
     }
 }
 

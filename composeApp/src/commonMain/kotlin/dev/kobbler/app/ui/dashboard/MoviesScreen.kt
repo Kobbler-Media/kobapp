@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -106,6 +107,7 @@ fun MoviesScreen(
         watchNext.firstOrNull()?.spotlight() ?: recentMovies.firstOrNull()?.spotlight() ?: movies.firstOrNull()?.spotlight(),
     )
     val pointer = spotlight.takeUnless { touch }
+    val swiper = spotlight.takeIf { touch }
 
     AsyncContent(if (railsSettled) state else Async.Loading, onRetry = retry, modifier = modifier) { _ ->
         val gridState = rememberLazyGridState()
@@ -229,7 +231,12 @@ fun MoviesScreen(
 
                 if (watchNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "watch-next") {
-                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
+                        val watchNextRow = rememberLazyListState()
+                        SpotlightOnRowScroll(swiper, watchNextRow) { watchNext.getOrNull(it)?.spotlight() }
+                        MediaCarousel(
+                            bleedStart = gutter,
+                            bleedEnd = railBleedEnd,
+                            rowState = watchNextRow,
                             title = "Continue Watching",
                             accentColor = accent,
                             badge = "Watching",
@@ -243,7 +250,7 @@ fun MoviesScreen(
                                     accentColor = accent,
                                     onClick = { onContinueClick(item) },
                                     modifier = Modifier
-                                        .spotlightOn(pointer) { item.spotlight() }
+                                        .spotlightOn(pointer) { item.spotlight() }.showingBadge(swiper, item.spotlight())
                                         .focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = 1; focus.rowKey = "watchnext" } },
                                 )
@@ -254,7 +261,12 @@ fun MoviesScreen(
 
                 if (recentMovies.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "recent") {
-                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
+                        val recentMoviesRow = rememberLazyListState()
+                        SpotlightOnRowScroll(swiper, recentMoviesRow) { recentMovies.getOrNull(it)?.spotlight() }
+                        MediaCarousel(
+                            bleedStart = gutter,
+                            bleedEnd = railBleedEnd,
+                            rowState = recentMoviesRow,
                             title = "Recently Added",
                             accentColor = accent,
                             modifier = Modifier.focusKeyGroup("recent"),
@@ -267,7 +279,7 @@ fun MoviesScreen(
                                     accentColor = accent,
                                     onClick = { onMovieClick(movie) },
                                     modifier = Modifier
-                                        .spotlightOn(pointer) { movie.spotlight() }
+                                        .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
                                         .focusKey("recent.movie.${movie.id}", preferredEntry = recentIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } },
                                 )
@@ -296,7 +308,7 @@ fun MoviesScreen(
                         accentColor = accent,
                         onClick = { onMovieClick(movie) },
                         modifier = Modifier
-                            .spotlightOn(pointer) { movie.spotlight() }
+                            .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
                             .focusKey("grid.${movie.id}", preferredEntry = gridIsEntry && index == 0)
                             .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(movie.title); focus.lazyIndex = lazyIndex; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lazyIndex }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
                     )

@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -144,6 +145,7 @@ fun TvShowsScreen(
         watchNext.firstOrNull()?.spotlight() ?: recentShows.firstOrNull()?.spotlight() ?: shows.firstOrNull()?.spotlight(),
     )
     val pointer = spotlight.takeUnless { touch }
+    val swiper = spotlight.takeIf { touch }
 
     val gatedState = if (railsSettled) state else Async.Loading
     AsyncContent(gatedState, onRetry = retry, modifier = modifier) { _ ->
@@ -291,7 +293,12 @@ fun TvShowsScreen(
                 }
                 if (watchNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "watch-next") {
-                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
+                        val watchNextRow = rememberLazyListState()
+                        SpotlightOnRowScroll(swiper, watchNextRow) { watchNext.getOrNull(it)?.spotlight() }
+                        MediaCarousel(
+                            bleedStart = gutter,
+                            bleedEnd = railBleedEnd,
+                            rowState = watchNextRow,
                             title = "Continue Watching",
                             accentColor = accentColor,
                             badge = "Watching",
@@ -305,7 +312,7 @@ fun TvShowsScreen(
                                     accentColor = accentColor,
                                     onClick = { onContinueClick(item) },
                                     modifier = Modifier
-                                        .spotlightOn(pointer) { item.spotlight() }
+                                        .spotlightOn(pointer) { item.spotlight() }.showingBadge(swiper, item.spotlight())
                                         .focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = watchNextIndex; focus.rowKey = "watchnext" } },
                                 )
@@ -315,7 +322,12 @@ fun TvShowsScreen(
                 }
                 if (recentShows.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "recent") {
-                        MediaCarousel(bleedStart = gutter, bleedEnd = railBleedEnd, 
+                        val recentShowsRow = rememberLazyListState()
+                        SpotlightOnRowScroll(swiper, recentShowsRow) { recentShows.getOrNull(it)?.spotlight() }
+                        MediaCarousel(
+                            bleedStart = gutter,
+                            bleedEnd = railBleedEnd,
+                            rowState = recentShowsRow,
                             title = "Recently Added",
                             accentColor = accentColor,
                             modifier = Modifier.focusKeyGroup("recent"),
@@ -328,7 +340,7 @@ fun TvShowsScreen(
                                     accentColor = accentColor,
                                     onClick = { onShowClick(show) },
                                     modifier = Modifier
-                                        .spotlightOn(pointer) { show.spotlight() }
+                                        .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
                                         .focusKey("show.${show.id}", preferredEntry = recentIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } },
                                 )
@@ -365,7 +377,7 @@ fun TvShowsScreen(
                         accentColor = accentColor,
                         onClick = { onShowClick(show) },
                         modifier = Modifier
-                            .spotlightOn(pointer) { show.spotlight() }
+                            .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
                             .focusKey("grid.${show.id}", preferredEntry = gridIsEntry && index == 0)
                             .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(show.title); focus.lazyIndex = lazyIndex; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lazyIndex }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
                     )
