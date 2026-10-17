@@ -292,13 +292,9 @@ internal class DesktopPlayer(
                 // A fraction in libVLC 4, where 3 reported a percentage.
                 val filled = newCache.coerceIn(0f, 1f)
                 _bufferPercent.value = filled
-                if (filled < 1f && hasStartedPlaying) {
-                    _state.value = PlayerState.BUFFERING
-                    _isBuffering.value = true
-                } else if (filled >= 1f && _state.value == PlayerState.BUFFERING) {
-                    _state.value = PlayerState.PLAYING
-                    _isBuffering.value = false
-                }
+                if (!hasStartedPlaying) return
+                _isBuffering.value = filled < 1f
+                _state.value = stateOnBuffering(_state.value, full = filled >= 1f)
             }
 
             override fun positionChanged(mediaPlayer: MediaPlayer, newTimeUs: Long, newPosition: Double) {

@@ -307,6 +307,16 @@ fun stateOnStopping(current: PlayerState, requested: Boolean): PlayerState = whe
     else -> PlayerState.FINISHED
 }
 
+/**
+ * Buffering interrupts playback; it never starts it. A paused player re-filling after a
+ * seek stays paused, or the next play press reads it as playing and pauses instead.
+ */
+fun stateOnBuffering(current: PlayerState, full: Boolean): PlayerState = when {
+    !full && current == PlayerState.PLAYING -> PlayerState.BUFFERING
+    full && current == PlayerState.BUFFERING -> PlayerState.PLAYING
+    else -> current
+}
+
 fun stateAfterClockAdvance(current: PlayerState, preloading: Boolean = false): PlayerState =
     when {
         preloading -> current

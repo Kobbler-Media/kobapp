@@ -50,6 +50,29 @@ class DesktopPlaybackTest {
         assertEquals(false, player.isBuffering.value)
     }
 
+    /**
+     * A seek while paused re-buffers and moves the clock, and neither means playback
+     * resumed. Reporting it as playing turned the next play press into a pause.
+     */
+    @Test
+    fun `a seek while paused stays paused and play resumes from there`() = withPlayer { player ->
+        player.load(MediaSource.Url(resourceUrl("red_176x100_subtitled.mkv")))
+        player.state.await("playing") { it == PlayerState.PLAYING }
+        player.currentMs.await("under way") { it > 500 }
+        player.pause()
+        player.state.await("paused") { it == PlayerState.PAUSED }
+
+        player.seekTo(6_000)
+        delay(1_500)
+        assertEquals(PlayerState.PAUSED, player.state.value, "after seeking while paused")
+        val parkedAt = player.currentMs.value
+
+        player.togglePlayPause()
+        player.state.await("playing again") { it == PlayerState.PLAYING }
+        val resumedTo = player.currentMs.await("clock moving on from the seek") { it > parkedAt + 500 }
+        assertTrue(resumedTo in 6_000..9_500, "resumed to $resumedTo")
+    }
+
     @Test
     fun `resumes on the title's own clock`() = withPlayer { player ->
         player.load(MediaSource.Url(resourceUrl("red_176x100_subtitled.mkv"), startTimeSec = 5))

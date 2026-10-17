@@ -326,17 +326,8 @@ internal class AndroidPlayer(
                 MediaPlayer.Event.Buffering -> {
                     val pct = event.buffering
                     _bufferPercent.value = (pct / 100f).coerceIn(0f, 1f)
-                    if (pct < 100f) {
-                        _isBuffering.value = true
-                        if (_state.value == PlayerState.PLAYING) {
-                            _state.value = PlayerState.BUFFERING
-                        }
-                    } else {
-                        _isBuffering.value = false
-                        if (_state.value == PlayerState.BUFFERING) {
-                            _state.value = PlayerState.PLAYING
-                        }
-                    }
+                    _isBuffering.value = pct < 100f
+                    _state.value = stateOnBuffering(_state.value, full = pct >= 100f)
                 }
                 MediaPlayer.Event.Playing -> {
                     // A preload is opened like any other and held as soon as it can be.
