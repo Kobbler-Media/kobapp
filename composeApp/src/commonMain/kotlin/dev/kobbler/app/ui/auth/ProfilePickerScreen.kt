@@ -24,6 +24,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -39,7 +40,9 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 
-private val TilePadding = 22.dp
+private val TilePadding = PaddingValues(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 8.dp)
+
+const val ProfileStripTag = "profile-strip"
 
 @Composable
 fun ProfilePickerScreen(
@@ -95,9 +98,7 @@ private fun ProfileRow(
     onAddProfile: () -> Unit,
 ) {
     val colors = KobappTheme.colors
-    val type = KobappTheme.type
     val accent = colors.accHome
-    val avatarSize: Dp = if (formFactor == FormFactor.Phone) 96.dp else 124.dp
     val firstTileFocus = remember { FocusRequester() }
 
     LaunchedEffect(auth.profiles.size) {
@@ -106,7 +107,14 @@ private fun ProfileRow(
     }
 
     PickerBackdrop(auth = auth, accent = accent) {
-        Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val avatarSize: Dp = when {
+                maxHeight < 480.dp -> 56.dp
+                formFactor == FormFactor.Phone -> 96.dp
+                else -> 124.dp
+            }
+            val profiles = auth.profilesByRecentUse
+            val withCaptions = profiles.any { it.caption != null }
             if (auth.pickerDismissible) {
                 IconButton(
                     onClick = onDismiss,
@@ -115,44 +123,30 @@ private fun ProfileRow(
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.textMd)
                 }
             }
-            // A band rather than a card: the picture keeps the whole width around it, and
-            // the title and tiles stay legible over whatever arrival is showing.
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            // A thin band rather than a card: the picture keeps the screen around it, and
+            // the tiles stay legible over whatever arrival is showing.
+            Box(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .fillMaxWidth()
+                    .testTag(ProfileStripTag)
                     .background(colors.bg.copy(alpha = 0.6f))
-                    .padding(vertical = 40.dp),
+                    .padding(vertical = 4.dp),
             ) {
-                Text(
-                    "Choose your profile",
-                    color = colors.textLo,
-                    style = type.bodySm,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Who’s watching tonight?",
-                    color = colors.textHi,
-                    style = type.display.copy(fontSize = type.h1.fontSize),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 40.dp),
-                )
-                Spacer(Modifier.height(48.dp))
-
                 FocusEdgeSlack {
                     LazyRow(
                         modifier = Modifier.focusKeyGroup("profiles").fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
                         // The focus ring draws outside a tile's bounds and the focus scale
                         // grows it further; a lazy layout clips to its own.
-                        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
+                        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
                     ) {
-                        itemsIndexed(auth.profilesByRecentUse, key = { _, profile -> profile.id }) { index, profile ->
+                        itemsIndexed(profiles, key = { _, profile -> profile.id }) { index, profile ->
                             ProfileTile(
                                 profile = profile,
                                 size = avatarSize,
                                 accent = accent,
+                                withCaption = withCaptions,
                                 modifier = Modifier
                                     .focusKey(profile.id)
                                     .then(if (index == 0) Modifier.focusRequester(firstTileFocus) else Modifier),
@@ -162,6 +156,7 @@ private fun ProfileRow(
                         item(key = "__add__") {
                             AddProfileTile(
                                 size = avatarSize,
+                                withCaption = withCaptions,
                                 modifier = Modifier
                                     .focusKey("add")
                                     .then(if (auth.profiles.isEmpty()) Modifier.focusRequester(firstTileFocus) else Modifier),
@@ -176,7 +171,14 @@ private fun ProfileRow(
 }
 
 @Composable
-private fun ProfileTile(profile: Profile, size: Dp, accent: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun ProfileTile(
+    profile: Profile,
+    size: Dp,
+    accent: Color,
+    withCaption: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val colors = KobappTheme.colors
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -209,11 +211,7 @@ private fun ProfileTile(profile: Profile, size: Dp, accent: Color, modifier: Mod
         }
         TileLabels(
             title = profile.displayName,
-            caption = when {
-                profile.needsRelink -> "Needs relink"
-                profile.hasPin -> "PIN locked"
-                else -> null
-            },
+            caption = if (withCaption) profile.caption.orEmpty() else null,
             captionColor = if (profile.needsRelink) colors.err else colors.textLo,
             width = size,
         )
@@ -221,7 +219,7 @@ private fun ProfileTile(profile: Profile, size: Dp, accent: Color, modifier: Mod
 }
 
 @Composable
-private fun AddProfileTile(size: Dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun AddProfileTile(size: Dp, withCaption: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = KobappTheme.colors
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -239,7 +237,7 @@ private fun AddProfileTile(size: Dp, modifier: Modifier = Modifier, onClick: () 
         ) {
             Icon(Icons.Outlined.Add, contentDescription = "Add profile", tint = colors.textLo, modifier = Modifier.size(size / 2))
         }
-        TileLabels(title = "Add profile", caption = null, captionColor = colors.textLo, width = size)
+        TileLabels(title = "Add profile", caption = if (withCaption) "" else null, captionColor = colors.textLo, width = size)
     }
 }
 
@@ -247,7 +245,7 @@ private fun AddProfileTile(size: Dp, modifier: Modifier = Modifier, onClick: () 
 private fun TileLabels(title: String, caption: String?, captionColor: Color, width: Dp) {
     val colors = KobappTheme.colors
     val type = KobappTheme.type
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(8.dp))
     Text(
         title,
         color = colors.textHi,
@@ -257,7 +255,13 @@ private fun TileLabels(title: String, caption: String?, captionColor: Color, wid
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.width(width),
     )
-    Spacer(Modifier.height(4.dp))
-    // An empty caption still takes its line, so tiles with and without one stay the same height.
-    Text(caption.orEmpty(), color = captionColor, style = type.caption)
+    // Once any tile in the row has a caption, an empty one still takes its line so the tiles stay level.
+    if (caption != null) Text(caption, color = captionColor, style = type.caption)
 }
+
+private val Profile.caption: String?
+    get() = when {
+        needsRelink -> "Needs relink"
+        hasPin -> "PIN locked"
+        else -> null
+    }

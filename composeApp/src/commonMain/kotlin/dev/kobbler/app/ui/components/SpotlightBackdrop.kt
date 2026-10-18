@@ -1,5 +1,3 @@
-@file:OptIn(coil3.annotation.ExperimentalCoilApi::class)
-
 package dev.kobbler.app.ui.components
 
 import androidx.compose.foundation.layout.Box
@@ -12,12 +10,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.compose.useExistingImageAsPlaceholder
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import dev.kobbler.app.theme.KobappTheme
 
 /**
@@ -62,30 +54,11 @@ fun SpotlightBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Flo
                 drawRect(sideScrim)
             },
     ) {
-        if (backdrop == null && poster == null) {
+        val art = backdrop?.let { Art(it, softened = false) } ?: poster?.let { Art(it, softened = true) }
+        if (art == null) {
             StripedBackdrop(accent = accent, opacity = 0.55f, withRadialOverlay = false, modifier = Modifier.fillMaxSize())
         } else {
-            val context = LocalPlatformContext.current
-            // One image whose request changes, fading from the picture already on screen:
-            // a Crossfade of two composables is a full-screen saveLayer a frame, which a TV
-            // stick cannot afford, and without any fade the new picture jumps in.
-            val request = remember(backdrop, poster) {
-                ImageRequest.Builder(context)
-                    .data(backdrop ?: poster)
-                    .apply { if (backdrop == null) size(SoftenedArtPx) }
-                    .crossfade(BackdropFadeMs)
-                    .useExistingImageAsPlaceholder(true)
-                    .build()
-            }
-            AsyncImage(
-                model = request,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alpha = if (backdrop != null) 1f else 0.6f,
-                modifier = Modifier.fillMaxSize(),
-            )
+            ArtCrossfade(art, Modifier.fillMaxSize())
         }
     }
 }
-
-private const val BackdropFadeMs = 400
