@@ -268,7 +268,7 @@ private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit, modifie
             Text(
                 item.title,
                 color = Color.White,
-                style = KobappTheme.type.h2.copy(fontWeight = FontWeight.SemiBold),
+                style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -33,9 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.LibraryStatus
-import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.theme.LocalFormFactor
 
 // Shared instances, not per-composition copies: background() caches its shader against
 // the Brush identity, so a fresh equal instance still rebuilds the shader.
@@ -264,12 +262,9 @@ fun WideCard(
                     .background(BottomScrim),
             )
             Column(Modifier.align(Alignment.BottomStart).padding(dimens.s3)) {
-                // TV's h3 is 24sp against the 16sp bodySm on the poster cards directly
-                // below, and the two sit in one column: a 50% jump reads as a mistake.
-                val titleStyle = if (LocalFormFactor.current == FormFactor.TV) KobappTheme.type.body else KobappTheme.type.h3
-                Text(title, style = titleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.tvMarquee(isFocused))
+                Text(title, style = KobappTheme.type.bodySm, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.tvMarquee(isFocused))
                 if (subtitle != null) {
-                    Text(subtitle, style = KobappTheme.type.bodySm, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.tvMarquee(isFocused))
+                    Text(subtitle, style = KobappTheme.type.caption, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.tvMarquee(isFocused))
                 }
             }
             LinearProgressIndicator(

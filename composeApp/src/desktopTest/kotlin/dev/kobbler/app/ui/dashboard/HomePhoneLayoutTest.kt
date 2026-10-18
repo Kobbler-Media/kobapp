@@ -11,10 +11,12 @@ import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.components.fontSize
 import dev.kobbler.app.ui.dashboard.home.HomePhone
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** A phone turned sideways is twice as wide, not a reason for cards twice the size. */
@@ -69,5 +71,13 @@ class HomePhoneLayoutTest {
     fun `landscape hero leaves room for the page below it`() = phoneHome(width = 900, height = 400) {
         val titleBottom = onNodeWithText("Queued 1").getUnclippedBoundsInRoot().bottom
         assertTrue(titleBottom <= 240.dp, "hero title ends at $titleBottom of a 400dp screen")
+    }
+
+    @Test
+    fun `hero and up next titles sit on the rails' type scale`() = phoneHome(width = 412, height = 900) {
+        val rail = fontSize("Recent 1")
+        assertEquals(rail, fontSize("Queued 2"), "up next card title")
+        val hero = fontSize("Queued 1")
+        assertTrue(hero.value <= rail.value + 2, "hero title $hero against rail $rail")
     }
 }
