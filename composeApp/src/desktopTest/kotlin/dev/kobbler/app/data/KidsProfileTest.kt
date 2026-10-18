@@ -25,7 +25,7 @@ class KidsProfileTest {
         StubServer(
             mapOf("/api/v1/admin/me" to { _ -> """{"user_id":"u1","email":"kid@home","role":"viewer","is_kids":$isKids}""" }),
         ).use { stub ->
-            val profile = Profile(id = "kid", token = "t", apiUrl = stub.url)
+            val profile = Profile(id = "kid", token = "t", apiUrl = stub.url, isKids = !isKids)
             val store = InMemoryKeyValueStore().apply {
                 putString("kobbler_profiles_v1", Json.encodeToString(listOf(profile)))
                 putString("kobbler_current_profile_id", profile.id)
@@ -33,9 +33,7 @@ class KidsProfileTest {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             try {
                 val auth = AuthState(scope, FormFactor.Desktop, store)
-                withTimeout(5.seconds) { while (auth.screen == AuthScreen.Loading) delay(5) }
-                withTimeout(5.seconds) { while ("/api/v1/admin/me" !in stub.requestBodies) delay(5) }
-                delay(200)
+                withTimeout(5.seconds) { while (auth.currentProfile?.email != "kid@home") delay(5) }
                 auth.isKids
             } finally {
                 scope.cancel()
