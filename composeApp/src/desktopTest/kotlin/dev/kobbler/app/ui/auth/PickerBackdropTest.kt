@@ -1,9 +1,12 @@
 package dev.kobbler.app.ui.auth
 
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import dev.kobbler.app.data.Profile
 import dev.kobbler.app.ui.components.BackdropArtTag
 import kotlin.test.Test
@@ -89,5 +92,19 @@ class PickerBackdropTest {
         val left = { name: String -> onNodeWithText(name).fetchSemanticsNode().boundsInRoot.left }
         assertTrue(left("Bob") < left("Alice"), "Bob ${left("Bob")} Alice ${left("Alice")}")
         onNodeWithText("Bob").assertIsFocused()
+    }
+
+    @Test
+    fun `the picture is as bright at the bottom as at the top`() = picker({ url ->
+        listOf(Profile(id = "adult", token = "adult-token", apiUrl = url))
+    }) { _, _ ->
+        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        mainClock.advanceTimeBy(2_000)
+        waitForIdle()
+        val pixels = onRoot().captureToImage().toPixelMap()
+        val x = pixels.width / 2
+        val top = pixels[x, pixels.height / 10]
+        val bottom = pixels[x, pixels.height * 9 / 10]
+        assertEquals(top, bottom, "a scrim darkens the bottom of the picture")
     }
 }

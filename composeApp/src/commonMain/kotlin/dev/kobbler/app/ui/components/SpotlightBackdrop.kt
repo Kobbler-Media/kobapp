@@ -22,7 +22,13 @@ import dev.kobbler.app.theme.KobappTheme
  * is a full-screen fill, and fill rate is what a TV stick's GPU runs out of first.
  */
 @Composable
-fun SpotlightBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Float, modifier: Modifier = Modifier) {
+fun SpotlightBackdrop(
+    spotlight: () -> Spotlight?,
+    accent: Color,
+    dim: () -> Float,
+    modifier: Modifier = Modifier,
+    scrims: Boolean = true,
+) {
     val colors = KobappTheme.colors
     val spot = spotlight()
     val backdrop = spot?.backdropUrl?.takeIf { it.isNotBlank() }
@@ -50,8 +56,10 @@ fun SpotlightBackdrop(spotlight: () -> Spotlight?, accent: Color, dim: () -> Flo
             }
             .drawWithContent {
                 drawContent()
-                drawRect(bottomScrim)
-                drawRect(sideScrim)
+                if (scrims) {
+                    drawRect(bottomScrim)
+                    drawRect(sideScrim)
+                }
             },
     ) {
         val art = backdrop?.let { Art(it, softened = false) } ?: poster?.let { Art(it, softened = true) }

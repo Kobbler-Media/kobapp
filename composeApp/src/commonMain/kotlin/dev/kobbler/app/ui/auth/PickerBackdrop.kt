@@ -1,10 +1,12 @@
 package dev.kobbler.app.ui.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,6 +83,9 @@ internal fun PickerBackdrop(auth: AuthState, accent: Color, content: @Composable
                 accent = accent,
                 dim = { 0f },
                 modifier = Modifier.fillMaxSize(),
+                // Nothing sits over the picture but the profile strip and the caption, and
+                // each carries its own backing; the page scrims would only shade the art.
+                scrims = false,
             )
         }
         content()
@@ -90,7 +96,14 @@ internal fun PickerBackdrop(auth: AuthState, accent: Color, content: @Composable
 @Composable
 private fun ArrivalCaption(item: RecentlyAddedItem, modifier: Modifier) {
     val colors = KobappTheme.colors
-    Column(horizontalAlignment = Alignment.End, modifier = modifier.widthIn(max = 360.dp)) {
+    Column(
+        horizontalAlignment = Alignment.End,
+        modifier = modifier
+            .widthIn(max = 360.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.bg.copy(alpha = 0.6f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
         Text("RECENTLY ADDED", color = colors.textLo, style = KobappTheme.type.label)
         Text(
             item.title,
