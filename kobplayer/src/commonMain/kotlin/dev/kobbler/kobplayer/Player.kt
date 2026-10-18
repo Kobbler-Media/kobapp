@@ -355,3 +355,10 @@ fun stateAfterClockAdvance(current: PlayerState, preloading: Boolean = false): P
     }
 
 private val AlwaysReady: StateFlow<Boolean> = MutableStateFlow(true)
+
+// Android's libVLC reports the clock with every picture; each report recomposes whatever
+// shows the position. A step this size still moves a seconds readout on time.
+private const val PositionPublishStepMs = 200L
+
+fun publishedPosition(published: Long, reported: Long): Long =
+    if (reported < published || reported - published >= PositionPublishStepMs) reported else published

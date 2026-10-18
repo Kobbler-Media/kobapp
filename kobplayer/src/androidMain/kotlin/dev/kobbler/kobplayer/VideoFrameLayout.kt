@@ -3,9 +3,11 @@ package dev.kobbler.kobplayer
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
+import android.view.Surface
 import android.view.SurfaceView
 import android.view.View
 import android.widget.FrameLayout
@@ -24,6 +26,27 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
             field = value
             requestLayout()
         }
+
+    // Left to guess, SurfaceFlinger reads 24fps through VLC's uneven queueing as 60Hz content
+    // in busy scenes and the panel drops to 60, where frames alternate two and three vsyncs.
+    // VLC's own SurfaceControl beneath this surface inherits the vote.
+    var frameRate: Float = 0f
+        set(value) {
+            if (field == value) return
+            field = value
+            applyFrameRate()
+        }
+
+    fun applyFrameRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val target = surface.holder.surface
+        if (!target.isValid) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            target.setFrameRate(frameRate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS)
+        } else {
+            target.setFrameRate(frameRate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
+        }
+    }
 
     // libVLC drops the video decoder with the surface, and the one rebuilt when the surface
     // returns has nothing until the stream is re-read: the last frame stands in until then.

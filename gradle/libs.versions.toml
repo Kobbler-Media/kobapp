@@ -21,7 +21,7 @@ dbus-java = "5.2.2"
 # VLC 4 has no stable release yet. 3.x drops and stretches audio for seconds whenever a
 # Bluetooth sink wakes from idle (first play, every unpause); 4 resyncs without a glitch.
 # Built by github.com/Kobbler-Media/kobvlc: libvlcjni eap29 with our patches, trimmed.
-libvlc-android = "4.0.0-eap29-kob1"
+libvlc-android = "4.0.0-eap29-kob2"
 # Desktop builds VLC master, which vlcj 5 needs: kobvlc's linux/build.sh.
 libvlc-linux = "4.0.0-3127258a-kob1"
 # Baseline Profile Gradle Plugin 1.4.x (latest stable) only drives AGP 9 with

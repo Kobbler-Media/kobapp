@@ -24,6 +24,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val POSITION = "/api/v1/admin/movies/mov-1/watch-state/position"
@@ -167,6 +168,26 @@ class WatchHistorySyncTest {
 
             runBlocking { state.reportProgress(api, "movie", "mov-1", 660_000) }
             assertEquals(660, stub.savedSeconds(), "a playhead that did move was not saved")
+        }
+    }
+
+    /**
+     * The local mirror is state the screens beneath the player read, so writing it redraws
+     * them; every redraw on Android 15+ pulls the panel to 60Hz and 24fps video judders.
+     * Mid-play saves go to the server only; the pause or exit after them updates the mirror,
+     * even when the server already has that second.
+     */
+    @Test
+    fun aSaveWhilePlayingLeavesTheShownPositionToThePauseOrExit() {
+        StubServer(mapOf(POSITION to { _ -> "{}" })).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val state = GlobalPlayerState()
+            runBlocking { state.reportProgress(api, "movie", "mov-1", 600_000, mirror = false) }
+            assertEquals(600, stub.savedSeconds())
+            assertNull(state.reportedPositions["mov-1"], "a mid-play save touched the shown position")
+
+            runBlocking { state.reportProgress(api, "movie", "mov-1", 600_400) }
+            assertEquals(WatchedPoint(600), state.reportedPositions["mov-1"])
         }
     }
 

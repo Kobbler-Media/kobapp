@@ -104,14 +104,15 @@ fun PersistentVideoSurface(
     val activeMediaType = state.mediaType
     LaunchedEffect(activeMediaId, activeMediaType) {
         if (activeMediaId == null || activeMediaType == null) return@LaunchedEffect
-        val save: suspend () -> Unit = {
+        suspend fun save(mirror: Boolean) {
             val pos = state.timeline.toAbsoluteMs(player.currentMs.value)
             // A finished title has already saved itself as finished; a part-way save
             // over the top would put it back in progress at its credits.
             if (pos > 0 && player.state.value != dev.kobbler.kobplayer.PlayerState.FINISHED) {
-                state.reportProgress(api, activeMediaType, activeMediaId, pos)
+                state.reportProgress(api, activeMediaType, activeMediaId, pos, mirror = mirror)
             }
         }
+        val save: suspend () -> Unit = { save(mirror = true) }
         PlaybackExit.register(save)
         try {
             coroutineScope {
@@ -121,7 +122,7 @@ fun PersistentVideoSurface(
                 launch {
                     while (true) {
                         kotlinx.coroutines.delay(10_000)
-                        save()
+                        save(mirror = false)
                     }
                 }
                 // A pause is where a viewer most often walks away to another device.

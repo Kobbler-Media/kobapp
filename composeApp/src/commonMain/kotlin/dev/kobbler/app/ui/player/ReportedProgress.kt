@@ -40,15 +40,20 @@ suspend fun GlobalPlayerState.reportProgress(
     mediaId: String,
     posMs: Long,
     finished: Boolean = false,
+    mirror: Boolean = true,
 ) {
     if (mediaType in NonResumableMediaTypes) return
     // Another device got further and the viewer has not said which one wins yet.
     if (handoff != null) return
     val seconds = (posMs / 1000).toInt()
+    // The screens beneath the player read the mirror, so a write redraws them, and on
+    // Android 15+ a redraw pulls the panel to 60Hz where 24fps judders. Mid-play saves
+    // leave it to the pause or exit after them, which write it even when the server
+    // already has that second.
+    if (mirror) reportedPositions[mediaId] = WatchedPoint(seconds, finished)
     val known = lastSaved?.takeIf { it.first == mediaId }?.second
     if (!finished && known != null && abs(known - seconds) <= 1) return
     lastSaved = mediaId to seconds
-    reportedPositions[mediaId] = WatchedPoint(seconds, finished)
     try {
         when (mediaType) {
             "movie" -> api.reportMovieProgress(mediaId, seconds)

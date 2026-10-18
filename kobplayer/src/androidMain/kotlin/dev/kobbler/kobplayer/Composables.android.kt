@@ -51,6 +51,7 @@ actual fun VideoSurface(
     val aspectRatio by player.aspectRatio.collectAsState()
     val videoSize by player.videoSize.collectAsState()
     val decodedPicture by android.decodedPicture.collectAsState()
+    val contentFrameRate by android.contentFrameRate.collectAsState()
     val pictureReturns by android.pictureReturns.collectAsState()
     var frameView by remember { mutableStateOf<VideoFrameLayout?>(null) }
 
@@ -86,8 +87,10 @@ actual fun VideoSurface(
                 VideoFrameLayout(ctx, surface).also { frame ->
                     frameView = frame
                     surface.holder.addCallback(object : android.view.SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: android.view.SurfaceHolder) =
+                        override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                            frame.applyFrameRate()
                             android.onSurfaceCreated(holder)
+                        }
 
                         override fun surfaceChanged(
                             holder: android.view.SurfaceHolder,
@@ -103,7 +106,10 @@ actual fun VideoSurface(
                     })
                 }
             },
-            update = { it.picture = decodedPicture },
+            update = {
+                it.picture = decodedPicture
+                it.frameRate = contentFrameRate
+            },
             // Without it Compose discards and recreates the view inside any reusable
             // container, and a recreated SurfaceView is a destroyed surface.
             onReset = {},

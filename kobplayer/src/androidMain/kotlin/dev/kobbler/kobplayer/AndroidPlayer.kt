@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +38,9 @@ private const val FieldDecodeProbePollMs = 500L
 
 // A paused title that cannot seek never redraws; the held frame must still go eventually.
 private const val PictureReturnTimeoutMs = 3_000L
+
+private const val FrameRateProbeSettleMs = 1_000L
+private const val FrameRateProbeWindowMs = 4_000L
 
 /**
  * Android VLC player implementation using libvlc-android.
@@ -268,6 +272,32 @@ internal class AndroidPlayer(
     /** True when the player is silently preloading (decode without render). */
     internal val isPreloading = MutableStateFlow(false)
 
+    private val _contentFrameRate = MutableStateFlow(0f)
+    internal val contentFrameRate: StateFlow<Float> = _contentFrameRate.asStateFlow()
+
+    private var frameRateProbe: Job? = null
+
+    // Matroska without a default duration declares no rate, so it is counted instead: the
+    // pictures shown over a stretch of uninterrupted 1x playback. Retried until one is clean.
+    private fun armFrameRateProbe() {
+        frameRateProbe?.cancel()
+        frameRateProbe = scope.launch {
+            while (isActive && _contentFrameRate.value == 0f) {
+                delay(FrameRateProbeSettleMs)
+                val start = cleanPlaybackSample() ?: continue
+                delay(FrameRateProbeWindowMs)
+                val end = cleanPlaybackSample() ?: continue
+                _contentFrameRate.value = measuredFrameRate(end.first - start.first, end.second - start.second)
+            }
+        }
+    }
+
+    private fun cleanPlaybackSample(): Pair<Long, Long>? {
+        if (_state.value != PlayerState.PLAYING || _isBuffering.value || _playbackSpeed.value != 1f) return null
+        val shown = currentMedia?.stats?.displayedPictures ?: return null
+        return shown to SystemClock.elapsedRealtime()
+    }
+
     private val _decodedPicture = MutableStateFlow<DecodedPicture?>(null)
     internal val decodedPicture: StateFlow<DecodedPicture?> = _decodedPicture.asStateFlow()
 
@@ -368,7 +398,7 @@ internal class AndroidPlayer(
                             _isBuffering.value = false
                         }
                     }
-                    _currentMs.value = time
+                    _currentMs.value = publishedPosition(_currentMs.value, time)
                 }
                 MediaPlayer.Event.LengthChanged -> {
                     _durationMs.value = event.lengthChanged
@@ -409,6 +439,8 @@ internal class AndroidPlayer(
 
     private fun open(source: MediaSource.Url) {
         presentedVideo.value = false
+        _contentFrameRate.value = 0f
+        armFrameRateProbe()
         _state.value = PlayerState.LOADING
         _isBuffering.value = true
         _bufferPercent.value = 0f
@@ -576,6 +608,7 @@ internal class AndroidPlayer(
 
     override fun stop() {
         fieldDecodeProbe?.cancel()
+        frameRateProbe?.cancel()
         vlc {
             stopRequested = true
             pauseWhenPausable = false
@@ -733,6 +766,11 @@ internal class AndroidPlayer(
             ?: vlcPlayer.getTracks(IMedia.Track.Type.Video)?.firstOrNull()) as? IMedia.VideoTrack ?: return
         if (track.width > 0 && track.height > 0) {
             _videoSize.value = displaySize(track.width, track.height, track.sarNum, track.sarDen)
+        }
+        val declared = contentFrameRate(track.frameRateNum, track.frameRateDen)
+        if (declared > 0f) {
+            frameRateProbe?.cancel()
+            _contentFrameRate.value = declared
         }
     }
 
