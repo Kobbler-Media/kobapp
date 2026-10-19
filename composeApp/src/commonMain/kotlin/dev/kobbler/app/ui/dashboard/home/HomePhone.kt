@@ -85,6 +85,7 @@ fun HomePhone(
                 "hero" -> listOfNotNull(hero?.spotlight())
                 "upnext-strip" -> stack.map { it.spotlight() }
                 "recent" -> homeData.recentlyAdded.map { it.spotlight() }
+                "stremio" -> homeData.stremioContinue.map { it.item.spotlight() }
                 is String -> key.removePrefix("section-").toIntOrNull()
                     ?.let { homeData.sections.getOrNull(it) }?.items?.map { it.spotlight() }.orEmpty()
                 else -> emptyList()
@@ -193,6 +194,24 @@ fun HomePhone(
                             onClick = { onRecentClick(item) },
                             width = cardWidth,
                             modifier = Modifier.showingBadge(spotlight, item.spotlight()),
+                        )
+                    }
+                }
+            }
+
+            if (homeData.stremioContinue.isNotEmpty()) {
+                item(key = "stremio") {
+                    PhoneRail(
+                        title = StremioContinueTitle,
+                        items = homeData.stremioContinue,
+                        spotlight = spotlight,
+                        spotlightOf = { it.item.spotlight() },
+                    ) { entry, cardWidth ->
+                        StremioContinueCard(
+                            entry = entry,
+                            onClick = { onDiscoverItemClick(entry.item) },
+                            width = cardWidth,
+                            modifier = Modifier.showingBadge(spotlight, entry.item.spotlight()),
                         )
                     }
                 }

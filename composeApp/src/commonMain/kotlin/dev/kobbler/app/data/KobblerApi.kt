@@ -1554,7 +1554,17 @@ data class DiscoverItemDto(
 data class DiscoverResponseDto(
     @SerialName("watch_next") val watchNext: List<InProgressItem> = emptyList(),
     @SerialName("recently_added") val recentlyAdded: List<RecentItem> = emptyList(),
+    // Each entry is a discover item with the Stremio fields alongside it, so it is decoded
+    // twice rather than repeating DiscoverItemDto's fields.
+    @SerialName("stremio_continue") val stremioContinue: List<kotlinx.serialization.json.JsonObject> = emptyList(),
     val sections: List<DiscoverSectionDto> = emptyList(),
+)
+
+@Serializable
+data class StremioContinueExtrasDto(
+    val subtitle: String? = null,
+    val season: Int? = null,
+    @SerialName("progress_percent") val progressPercent: Double? = null,
 )
 
 @Serializable
@@ -1862,6 +1872,16 @@ private fun DiscoverItemDto.toDiscoverItem(base: String): DiscoverItem = Discove
     wantStatus = wantStatus,
     isInLibrary = isInLibrary ?: false,
 )
+
+private fun kotlinx.serialization.json.JsonObject.toStremioContinueItem(base: String): StremioContinueItem {
+    val extras = json.decodeFromJsonElement(StremioContinueExtrasDto.serializer(), this)
+    return StremioContinueItem(
+        item = json.decodeFromJsonElement(DiscoverItemDto.serializer(), this).toDiscoverItem(base),
+        subtitle = extras.subtitle,
+        season = extras.season,
+        progress = extras.progressPercent?.div(100.0)?.toFloat(),
+    )
+}
 
 private fun InProgressItem.toContinueItem(base: String): ContinueItem = ContinueItem(
     id = mediaId,
@@ -3575,6 +3595,7 @@ class KobblerApi(
             HomeData(
                 watchNext = resp.watchNext.map { it.toContinueItem(apiUrl) },
                 recentlyAdded = resp.recentlyAdded.map { it.toRecentlyAddedItem(apiUrl) },
+                stremioContinue = resp.stremioContinue.map { it.toStremioContinueItem(apiUrl) },
                 sections = resp.sections
                     .sortedBy { it.sortOrder }
                     .map { s -> DiscoverSection(

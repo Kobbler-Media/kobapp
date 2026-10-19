@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.MediaType
+import dev.kobbler.app.data.StremioContinueItem
+import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.theme.KobappColors
 import dev.kobbler.app.theme.KobappTheme
 
@@ -56,4 +58,27 @@ fun ProgressLine(progress: Float, accent: Color, height: Dp = 3.dp) {
                 .background(accent),
         )
     }
+}
+
+const val StremioContinueTitle = "Continue Watching on Stremio"
+
+@Composable
+fun StremioContinueCard(
+    entry: StremioContinueItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    width: Dp? = null,
+) {
+    val item = entry.item
+    PosterCard(
+        title = item.title,
+        imageUrl = item.posterUrl,
+        subtitle = entry.subtitle ?: item.year?.toString().orEmpty(),
+        accentColor = KobappTheme.colors.accentForRecentlyAdded(item.mediaType),
+        statusBadge = item.libraryStatus,
+        progress = entry.progress,
+        onClick = onClick,
+        width = width,
+        modifier = modifier,
+    )
 }

@@ -110,6 +110,7 @@ fun HomeWide(
     // row is describing — hold the page at the top until focus moves past it.
     CenterFocusedPageRow(listState, focusedRow, topRow = upNextRow)
     val recentRow = if (homeData.recentlyAdded.isNotEmpty()) lazyIndex++ else -1
+    val stremioRow = if (homeData.stremioContinue.isNotEmpty()) lazyIndex++ else -1
     val sectionRows = homeData.sections.map { lazyIndex++ }
 
     val density = LocalDensity.current
@@ -193,6 +194,29 @@ fun HomeWide(
                                             },
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                if (homeData.stremioContinue.isNotEmpty()) {
+                    item(key = "stremio") {
+                        val rail = rememberRailFocus()
+                        HomeRail(title = StremioContinueTitle, state = rail.state, key = "stremio") {
+                            itemsIndexed(homeData.stremioContinue) { c, entry ->
+                                StremioContinueCard(
+                                    entry = entry,
+                                    onClick = { onDiscoverItemClick(entry.item) },
+                                    modifier = Modifier
+                                        .focusKey("item.$c")
+                                        .spotlightOn(spotlight) { entry.item.spotlight() }
+                                        .onFocusChanged {
+                                            if (it.isFocused) {
+                                                rail.focused = c
+                                                focusedRow.intValue = stremioRow
+                                            }
+                                        },
+                                )
                             }
                         }
                     }

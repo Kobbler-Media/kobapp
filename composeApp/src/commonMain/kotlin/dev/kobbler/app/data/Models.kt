@@ -581,7 +581,16 @@ data class DiscoverSearchResults(
 data class HomeData(
     val watchNext: List<ContinueItem> = emptyList(),
     val recentlyAdded: List<RecentlyAddedItem> = emptyList(),
+    val stremioContinue: List<StremioContinueItem> = emptyList(),
     val sections: List<DiscoverSection> = emptyList(),
+)
+
+@Immutable
+data class StremioContinueItem(
+    val item: DiscoverItem,
+    val subtitle: String?,
+    val season: Int?,
+    val progress: Float?,
 )
 
 @Immutable
