@@ -1,6 +1,11 @@
 package dev.kobbler.app.data
 
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.platform.FormFactor
+import dev.kobbler.app.ui.auth.ProfilePickerScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,11 +45,8 @@ class PickerDismissTest {
     }
 
     @Test
-    fun launchPickerBackStaysOnPicker() {
+    fun launchShowsThePicker() {
         for ((name, setup) in launchPickers) launched(setup.first, setup.second) { auth ->
-            assertEquals(AuthScreen.Picker, auth.screen, name)
-            assertEquals(false, auth.pickerDismissible, name)
-            auth.dismissPicker()
             assertEquals(AuthScreen.Picker, auth.screen, name)
         }
     }
@@ -57,17 +59,21 @@ class PickerDismissTest {
         }
     }
 
+    /** Switching profile is a profile logout: the picker it opens is the launch picker, with no way back. */
+    @OptIn(ExperimentalTestApi::class)
     @Test
-    fun switchPickerReturnsToSession() = launched(alice, showPickerOnLaunch = false) { auth ->
+    fun switchPickerHasNoWayBackToTheSession() = launched(alice, showPickerOnLaunch = false) { auth ->
         assertEquals(AuthScreen.LoggedIn, auth.screen)
 
         auth.showPicker()
-        assertEquals(true, auth.pickerDismissible)
-        auth.dismissPicker()
-        assertEquals(AuthScreen.LoggedIn, auth.screen)
+        assertEquals(AuthScreen.Picker, auth.screen)
+        runComposeUiTest {
+            setContent { ProfilePickerScreen(auth, FormFactor.TV) }
+            waitForIdle()
+            onAllNodesWithContentDescription("Back").assertCountEquals(0)
+        }
 
-        auth.showPicker()
         auth.cancelPinLogin()
-        assertEquals(AuthScreen.LoggedIn, auth.screen)
+        assertEquals(AuthScreen.Picker, auth.screen)
     }
 }

@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import dev.kobbler.app.ui.components.spotlight
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,17 +25,14 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,12 +51,12 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.CastRow
 import dev.kobbler.app.ui.components.ExpandableText
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.WatchProgressBar
 import dev.kobbler.app.ui.components.rememberPalette
 import dev.kobbler.app.ui.player.resumeSeconds
 import dev.kobbler.kobfocus.focusKey
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.focusProperties
 import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.kobTopInset
@@ -104,10 +102,8 @@ fun MovieDetailScreen(
                         movie = movie, api = api, accent = accent,
                         onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
                         onWatchedChanged = onWatchedChanged,
-                        onCastClick = onPersonClick,
                         toast = toast,
                     )
-                    MovieWatchProgress(movie, accent, topSpacing = 14.dp)
                     if (movie.synopsis != null) {
                         Spacer(Modifier.height(18.dp))
                         ExpandableText(movie.synopsis)
@@ -156,11 +152,9 @@ fun MovieDetailScreen(
                             movie = movie, api = api, accent = accent,
                             onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
                             onWatchedChanged = onWatchedChanged,
-                            onCastClick = onPersonClick,
-                            toast = toast,
+                                toast = toast,
                             modifier = pageTopHold.anchor,
                         )
-                        MovieWatchProgress(movie, accent, topSpacing = 16.dp)
                         if (movie.genres.isNotEmpty()) {
                             Spacer(Modifier.height(20.dp))
                             GenreChips(movie.genres, accent = accent)
@@ -180,7 +174,6 @@ fun MovieDetailScreen(
                 )
             }
 
-            MovieKidsAccess(movie, api, accent, toast, Modifier.padding(start = gutter, end = gutter, top = 28.dp))
             Spacer(Modifier.height(64.dp))
         }
         }
@@ -311,57 +304,55 @@ private fun ActionRow(
     onStream: ((fromStart: Boolean) -> Unit)?,
     onStreamPick: (() -> Unit)?,
     onWatchedChanged: (Boolean) -> Unit,
-    onCastClick: ((String) -> Unit)?,
     toast: ToastState,
     modifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
+    val kids = rememberMovieKidsAccess(movie, api, toast)
+    val canPlay = supportsVideoPlayback && (movie.filePath != null || onStream != null)
+    val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
+    val resumeAt = movie.resumeSeconds
+    val total = movie.runtimeMinutes?.times(60)
+    // Nothing of the row's own lies to its left, and geometry found the cast instead.
+    // Cancelling hands the press to the scaffold, which opens the rail.
+    val exits = Modifier.focusProperties {
+        onExit = { if (requestedFocusDirection == FocusDirection.Left) cancelFocusChange() }
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = modifier.focusKeyGroup("actions"),
+        modifier = modifier.focusKeyGroup("actions").then(exits).focusGroup(),
     ) {
-        val canPlay = supportsVideoPlayback && (movie.filePath != null || onStream != null)
-        val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
-        val resumeAt = movie.resumeSeconds
         if (canPlay) {
-            KobButton(
-                onClick = { play(resumeAt == null) },
-                style = KobButtonStyle.Accent,
+            PlayActionButton(
+                icon = Icons.Outlined.PlayArrow,
+                label = if (resumeAt != null) "Resume" else "Play",
+                progress = if (resumeAt != null && total != null && total > 0) resumeAt.toFloat() / total else null,
+                remaining = if (resumeAt != null && total != null) remainingLabel(total - resumeAt) else null,
                 accent = accent,
+                onClick = { play(resumeAt == null) },
                 modifier = Modifier.focusKey("play", preferredEntry = true),
-            ) {
-                Icon(Icons.Outlined.PlayArrow, contentDescription = null, tint = colors.bg, modifier = Modifier.size(20.dp))
-                Text(
-                    if (resumeAt != null) "Resume" else "Play",
-                    style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
-                    color = colors.bg,
-                )
-            }
+            )
         }
 
         if (canPlay && resumeAt != null) {
-            KobButton(
-                onClick = { play(true) },
-                style = KobButtonStyle.Default,
+            IconAction(
+                icon = Icons.Outlined.Replay,
+                label = "From start",
                 accent = accent,
+                onClick = { play(true) },
                 modifier = Modifier.focusKey("fromStart"),
-            ) {
-                Icon(Icons.Outlined.Replay, contentDescription = null, tint = colors.textHi, modifier = Modifier.size(18.dp))
-                Text("From start", style = KobappTheme.type.body, color = colors.textHi)
-            }
+            )
         }
 
         if (onStreamPick != null) {
-            KobButton(
-                onClick = onStreamPick,
-                style = KobButtonStyle.Default,
+            IconAction(
+                icon = Icons.Outlined.Tune,
+                label = "Streams",
                 accent = accent,
+                onClick = onStreamPick,
                 modifier = Modifier.focusKey("streams"),
-            ) {
-                Icon(Icons.Outlined.Tune, contentDescription = null, tint = colors.textHi, modifier = Modifier.size(18.dp))
-                Text("Streams", style = KobappTheme.type.body, color = colors.textHi)
-            }
+            )
         }
 
         if (api.canWant) {
@@ -380,75 +371,47 @@ private fun ActionRow(
         if (movie.canBeWanted(api.canWant)) {
             var wanted by remember { mutableStateOf(false) }
             val wantScope = rememberCoroutineScope()
-            val wantAction: () -> Unit = {
-                wantScope.launch {
-                    try { api.wantMovieById(movie.id); wanted = true } catch (_: Exception) {}
-                }
-            }
-            KobButton(
-                onClick = if (wanted) ({}) else wantAction,
-                style = KobButtonStyle.Default,
-                enabled = !wanted,
+            IconAction(
+                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+                label = if (wanted) "Wanted" else "Want",
+                tint = if (wanted) colors.warn else colors.textHi,
                 accent = accent,
+                onClick = {
+                    if (!wanted) {
+                        wantScope.launch {
+                            try { api.wantMovieById(movie.id); wanted = true } catch (_: Exception) {}
+                        }
+                    }
+                },
                 modifier = Modifier.focusKey("want"),
-            ) {
-                Icon(
-                    if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
-                    contentDescription = null,
-                    tint = if (wanted) colors.warn else colors.textHi,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    if (wanted) "Wanted" else "Want",
-                    style = KobappTheme.type.body,
-                    color = if (wanted) colors.warn else colors.textHi,
-                )
-            }
+            )
         }
 
         if (canPlay) {
             val watched = movie.isWatched
             val watchScope = rememberCoroutineScope()
-            val watchAction: () -> Unit = {
-                val newState = !watched
-                onWatchedChanged(newState)
-                watchScope.launch {
-                    try { api.setMovieWatched(movie.id, newState) }
-                    catch (_: Exception) { onWatchedChanged(!newState) }
-                }
-            }
-            KobButton(
-                onClick = watchAction,
-                style = KobButtonStyle.Ghost,
+            IconAction(
+                icon = if (watched) Icons.Outlined.Check else Icons.Outlined.Visibility,
+                label = if (watched) "Watched" else "Mark watched",
+                tint = if (watched) colors.ok else colors.textHi,
                 accent = accent,
+                onClick = {
+                    val newState = !watched
+                    onWatchedChanged(newState)
+                    watchScope.launch {
+                        try { api.setMovieWatched(movie.id, newState) }
+                        catch (_: Exception) { onWatchedChanged(!newState) }
+                    }
+                },
                 modifier = Modifier.focusKey("watched"),
-            ) {
-                Icon(
-                    if (watched) Icons.Outlined.Check else Icons.Outlined.Visibility,
-                    contentDescription = null,
-                    tint = if (watched) colors.ok else colors.textMd,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    if (watched) "Watched" else "Mark watched",
-                    style = KobappTheme.type.body,
-                    color = if (watched) colors.ok else colors.textMd,
-                )
-            }
+            )
+        }
+
+        if (kids != null) {
+            OverflowActions(accent = accent) { close -> KidsAccessItem(kids, accent, close) }
+            KidsAccessDialog(kids, accent)
         }
     }
-}
-
-@Composable
-private fun MovieWatchProgress(movie: Movie, accent: Color, topSpacing: Dp) {
-    val position = movie.watchPositionSeconds
-    if (movie.isWatched || position == null || position <= 0) return
-    Spacer(Modifier.height(topSpacing))
-    WatchProgressBar(
-        positionSeconds = position,
-        totalSeconds = movie.runtimeMinutes?.times(60),
-        accent = accent,
-    )
 }
 
 @Composable

@@ -342,7 +342,7 @@ fun MoviesScreen(
             }
 
             if (pickingCategory) {
-                BrowseCategoryDialog(
+                BrowseCategoryPage(
                     cacheKey = "movie-genres",
                     loadGenres = api::getMovieGenres,
                     selected = genre,

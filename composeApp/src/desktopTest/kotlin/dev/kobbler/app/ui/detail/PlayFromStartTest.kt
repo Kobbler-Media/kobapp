@@ -3,7 +3,9 @@ package dev.kobbler.app.ui.detail
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -97,7 +99,7 @@ class PlayFromStartTest {
     fun movieFromStartIgnoresTheSavedPosition() = runComposeUiTest {
         movieRig(nearEnd, """{"watched":false,"position_seconds":5900}""") { rig ->
             onNodeWithText("Resume").assertExists()
-            onNodeWithText("From start").performClick()
+            onNodeWithContentDescription("From start").performClick()
             awaitLoaded(rig.gps, "m1")
             assertEquals(0L, rig.gps.pendingSeekMs ?: 0L)
             assertEquals(null, rig.stub.lastSessionStart(), "the session was rebased to the old position")
@@ -126,7 +128,7 @@ class PlayFromStartTest {
                 )
             }
             waitForIdle()
-            onNodeWithText("From start").performClick()
+            onNodeWithContentDescription("From start").performClick()
             awaitLoaded(gps, "m1")
             assertEquals(0L, gps.pendingSeekMs ?: 0L)
             val resolve = stub.requestBodies.getValue("/api/v1/admin/stream/resolve")
@@ -148,7 +150,7 @@ class PlayFromStartTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
             onAllNodesWithText("Resume").assertCountEquals(0)
-            onAllNodesWithText("From start").assertCountEquals(0)
+            onAllNodesWithContentDescription("From start").assertCountEquals(0)
             onNodeWithText("Play").performClick()
             awaitLoaded(rig.gps, "m1")
             assertEquals(0L, rig.gps.pendingSeekMs ?: 0L)
@@ -160,12 +162,12 @@ class PlayFromStartTest {
     fun markingAMovieUnwatchedForgetsWhereItWasLeft() = runComposeUiTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
-            onNodeWithText("Watched").performClick()
+            onNodeWithContentDescription("Watched").performClick()
             waitUntil(timeoutMillis = 5_000) { rig.stub.requestBodies[MOVIE_STATE].orEmpty().contains("watched") }
             val sent = rig.stub.requestBodies.getValue(MOVIE_STATE)
             assertTrue(sent.contains("\"watched\":false"), sent)
             assertTrue(sent.contains("\"position_seconds\":0"), "unwatching kept the old position: $sent")
-            onNodeWithText("Mark watched").assertExists()
+            onNodeWithContentDescription("Mark watched").assertExists()
             onNodeWithText("Play").assertExists()
             onAllNodesWithText("Resume").assertCountEquals(0)
         }
@@ -174,7 +176,7 @@ class PlayFromStartTest {
     @Test
     fun episodeFromStartIgnoresTheSavedPosition() = runComposeUiTest {
         showRig(showNearEnd, """{"watched":false,"position_seconds":2500}""") { rig ->
-            onNodeWithText("From start").performClick()
+            onNodeWithContentDescription("From start").performClick()
             awaitLoaded(rig.gps, "ep-1")
             assertEquals(0L, rig.gps.pendingSeekMs ?: 0L)
             assertEquals(null, rig.stub.lastSessionStart())

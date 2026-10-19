@@ -385,7 +385,7 @@ fun TvShowsScreen(
             }
 
             if (pickingCategory) {
-                BrowseCategoryDialog(
+                BrowseCategoryPage(
                     cacheKey = "show-genres",
                     loadGenres = api::getShowGenres,
                     selected = genre,

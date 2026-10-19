@@ -887,7 +887,11 @@ data class MovieListDto(
 )
 
 @Serializable
-data class GenreCount(val name: String, val count: Int)
+data class GenreCount(
+    val name: String,
+    val count: Int,
+    @SerialName("backdrop_url") val backdropUrl: String? = null,
+)
 
 @Serializable
 data class GenresResponse(val genres: List<GenreCount>)
@@ -2343,6 +2347,12 @@ class KobblerApi(
         DataCache.invalidate("tvshows", "sports")
     }
 
+    suspend fun setShowWatched(showId: String, watched: Boolean) {
+        put("/api/v1/admin/tv/shows/$showId/watch-state", """{"watched":$watched}""")
+        DataCache.invalidateWatchProgress()
+        invalidateTvShows()
+    }
+
     // Either way the saved position goes: the server keeps it unless told otherwise, so
     // an unwatched title would still offer to resume from wherever it was last left.
     private fun watchStateBody(watched: Boolean) = """{"watched":$watched,"position_seconds":0}"""
@@ -2462,11 +2472,12 @@ class KobblerApi(
         )
     }
 
-    suspend fun getMovieGenres(): List<GenreCount> =
-        decode<GenresResponse>(get("/api/v1/admin/movies/genres")).genres
+    suspend fun getMovieGenres(): List<GenreCount> = genres("/api/v1/admin/movies/genres")
 
-    suspend fun getShowGenres(): List<GenreCount> =
-        decode<GenresResponse>(get("/api/v1/admin/tv/shows/genres")).genres
+    suspend fun getShowGenres(): List<GenreCount> = genres("/api/v1/admin/tv/shows/genres")
+
+    private suspend fun genres(path: String): List<GenreCount> =
+        decode<GenresResponse>(get(path)).genres.map { it.copy(backdropUrl = resolveUrlOrNull(apiUrl, it.backdropUrl)) }
 
     // -- Alphabet navigation --
 

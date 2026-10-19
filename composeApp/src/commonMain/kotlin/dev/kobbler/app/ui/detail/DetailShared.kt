@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -11,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,15 +32,12 @@ import androidx.compose.material3.Text
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -507,9 +505,15 @@ fun WatchlistToggle(
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    KobButton(
+    // NOT the eye: `Visibility` is already the watched toggle on these screens, and one
+    // glyph meaning two things is worse than a duller one.
+    IconAction(
+        icon = if (on) Icons.Outlined.PlaylistAddCheck else Icons.Outlined.PlaylistAdd,
+        label = if (on) "On your list" else "Add to your list",
+        tint = if (on) accent else colors.textHi,
+        accent = accent,
         onClick = {
-            if (busy) return@KobButton
+            if (busy) return@IconAction
             val next = !on
             on = next
             busy = true
@@ -525,19 +529,8 @@ fun WatchlistToggle(
                 busy = false
             }
         },
-        style = KobButtonStyle.Default,
-        accent = accent,
         modifier = modifier.focusKey(focusKeyName),
-    ) {
-        Icon(
-            // NOT the eye: `Visibility` is already the watched toggle on these
-            // screens, and one glyph meaning two things is worse than a duller one.
-            if (on) Icons.Outlined.PlaylistAddCheck else Icons.Outlined.PlaylistAdd,
-            if (on) "On your list" else "Add to your list",
-            tint = if (on) accent else colors.textMd,
-            modifier = Modifier.size(20.dp),
-        )
-    }
+    )
 }
 
 @Stable

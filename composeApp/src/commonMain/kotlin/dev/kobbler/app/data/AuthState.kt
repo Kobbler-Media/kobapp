@@ -256,26 +256,18 @@ class AuthState(
         store.putString(KEY_SHOW_PICKER_ON_LAUNCH, enabled.toString())
     }
 
-    /** Only a picker opened from a live session may back out to it; the launch picker is the PIN gate. */
-    var pickerDismissible by mutableStateOf(false)
-        private set
+    private val onPicker: Boolean get() = screen == AuthScreen.Picker
 
-    private val onLaunchPicker: Boolean get() = screen == AuthScreen.Picker && !pickerDismissible
-
-    fun dismissPicker() {
-        if (pickerDismissible) currentProfileId?.let { confirmProfile(it) }
-    }
-
-    private fun openPicker(dismissible: Boolean = false) {
-        pickerDismissible = dismissible
+    private fun openPicker() {
         screen = AuthScreen.Picker
     }
 
+    /** Switching profile leaves the session: the picker has no way back to it, only forward into a profile. */
     fun showPicker() {
         if (profiles.isEmpty()) {
             screen = AuthScreen.Login
         } else {
-            openPicker(dismissible = screen == AuthScreen.LoggedIn)
+            openPicker()
         }
     }
 
@@ -556,7 +548,7 @@ class AuthState(
                 screen = AuthScreen.LoggedIn
             }
             PinLoginMode.Add, PinLoginMode.Relink -> {
-                if (currentProfileId == null || onLaunchPicker) openPicker() else screen = AuthScreen.LoggedIn
+                if (currentProfileId == null || onPicker) openPicker() else screen = AuthScreen.LoggedIn
             }
         }
         refreshProfileFromServer(id)
@@ -597,7 +589,7 @@ class AuthState(
         relinkTargetId = null
         when {
             profiles.isEmpty() -> screen = AuthScreen.Login
-            onLaunchPicker -> Unit
+            onPicker -> Unit
             currentProfileId != null -> screen = AuthScreen.LoggedIn
             else -> openPicker()
         }

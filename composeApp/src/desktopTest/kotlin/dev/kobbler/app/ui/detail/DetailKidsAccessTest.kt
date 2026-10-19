@@ -1,7 +1,9 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -16,7 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-/** An admin decides, on the title's own page, whether a Kids profile sees it. */
+/** An admin decides, from the title page's overflow menu, whether a Kids profile sees it. */
 @OptIn(ExperimentalTestApi::class)
 class DetailKidsAccessTest {
 
@@ -59,11 +61,19 @@ class DetailKidsAccessTest {
             }
         }
 
+    private fun androidx.compose.ui.test.DesktopComposeUiTest.openMore() {
+        onNodeWithContentDescription("More").performClick()
+        waitForIdle()
+    }
+
     @Test
     fun `admin allows a title for kids profiles`() {
         for (kind in listOf("movie", "show")) page(kind, admin = true) { patches ->
+            openMore()
             onAllNodesWithText("Kids: hidden").onFirst().performClick()
             onAllNodesWithText("Always show").onFirst().performClick()
+            waitUntil(timeoutMillis = 5_000) { patches.isNotEmpty() }
+            openMore()
             waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Kids: shown").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(patches.any { it.contains("\"kids_override\":true") }, "$kind: $patches")
         }
@@ -72,6 +82,7 @@ class DetailKidsAccessTest {
     @Test
     fun `only admins see the control`() {
         for (kind in listOf("movie", "show")) page(kind, admin = false) {
+            if (onAllNodesWithContentDescription("More").fetchSemanticsNodes().isNotEmpty()) openMore()
             assertTrue(onAllNodesWithText("Kids: hidden").fetchSemanticsNodes().isEmpty(), kind)
         }
     }

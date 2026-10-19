@@ -9,12 +9,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,12 +52,11 @@ fun ProfilePickerScreen(
     // link lands back on the profiles without a second copy of that state here.
     val linking = auth.pinPolling || auth.pin != null || auth.pinError != null
 
-    val dismiss: () -> Unit = when {
-        linking -> auth::cancelPinLogin
-        pinTarget != null -> { { pinTarget = null } }
-        else -> auth::dismissPicker
+    // Nothing to go back to from the profiles themselves: whether at launch or from
+    // Switch profile, the session is already gone.
+    BackHandler(enabled = linking || pinTarget != null) {
+        if (linking) auth.cancelPinLogin() else pinTarget = null
     }
-    BackHandler(enabled = linking || pinTarget != null || auth.pickerDismissible, onBack = dismiss)
 
     val target = pinTarget
     when {
@@ -76,7 +73,6 @@ fun ProfilePickerScreen(
         else -> ProfileRow(
             auth = auth,
             formFactor = formFactor,
-            onDismiss = dismiss,
             onProfileSelected = { profile ->
                 when {
                     profile.needsRelink -> auth.startPinLogin(PinLoginMode.Relink, relinkProfileId = profile.id)
@@ -93,7 +89,6 @@ fun ProfilePickerScreen(
 private fun ProfileRow(
     auth: AuthState,
     formFactor: FormFactor,
-    onDismiss: () -> Unit,
     onProfileSelected: (Profile) -> Unit,
     onAddProfile: () -> Unit,
 ) {
@@ -115,14 +110,6 @@ private fun ProfileRow(
             }
             val profiles = auth.profilesByRecentUse
             val withCaptions = profiles.any { it.caption != null }
-            if (auth.pickerDismissible) {
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.focusKey("back").align(Alignment.TopStart).padding(16.dp),
-                ) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = colors.textMd)
-                }
-            }
             // A thin band rather than a card: the picture keeps the screen around it, and
             // the tiles stay legible over whatever arrival is showing.
             Box(
