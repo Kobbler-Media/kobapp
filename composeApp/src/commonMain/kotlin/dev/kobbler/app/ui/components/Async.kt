@@ -66,13 +66,13 @@ fun <T> rememberAsync(
 }
 
 /**
- * Full-screen loading — shows skeleton placeholders instead of a spinner
- * for a more polished loading experience.
+ * Full-screen loading. [skeleton] is required, not defaulted: a skeleton is a promise of
+ * the layout about to arrive, and one borrowed from another screen breaks it.
  */
 @Composable
-fun LoadingScreen(modifier: Modifier = Modifier) {
+fun LoadingScreen(skeleton: @Composable () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
-        DashboardSkeleton()
+        skeleton()
     }
 }
 
@@ -124,18 +124,19 @@ fun ErrorScreen(
 }
 
 /**
- * Render an [Async] value: loading spinner, error screen, or content.
+ * Render an [Async] value: the screen's own [skeleton], an error screen, or content.
  */
 @Composable
 fun <T> AsyncContent(
     state: Async<T>,
+    skeleton: @Composable () -> Unit,
     onRetry: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable (T) -> Unit,
 ) {
     when (state) {
-        is Async.Loading -> LoadingScreen(modifier)
+        is Async.Loading -> LoadingScreen(skeleton, modifier)
         is Async.Error -> ErrorScreen(state.message, onRetry, onBack, modifier)
         is Async.Ready -> content(state.value)
     }

@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.Column
+import dev.kobbler.app.ui.dashboard.home.HomeSkeleton
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -50,7 +51,7 @@ fun HomeScreen(
     // The loaded page draws the bar itself, over its hero; until then nothing else would.
     Column(modifier.fillMaxSize()) {
         if (topBar != null && homeState !is Async.Ready) topBar(false)
-        AsyncContent(homeState, onRetry = homeRetry, modifier = Modifier.weight(1f)) { homeData ->
+        AsyncContent(homeState, skeleton = { HomeSkeleton() }, onRetry = homeRetry, modifier = Modifier.weight(1f)) { homeData ->
             val continueClick: (Int) -> Unit = { idx ->
                 homeData.watchNext.getOrNull(idx)?.let { onContinueClick(it) }
             }

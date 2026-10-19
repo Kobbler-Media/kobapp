@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,7 +76,7 @@ fun LiveOnNowScreen(
     val scope = rememberCoroutineScope()
     val (state, retry) = rememberCached("livetv-on-now") { api.getLiveOnNow() }
 
-    AsyncContent(state, onRetry = retry, onBack = onBack, modifier = modifier) { data ->
+    AsyncContent(state, skeleton = { ListSkeleton() }, onRetry = retry, onBack = onBack, modifier = modifier) { data ->
         val colors = KobappTheme.colors
         val dimens = KobappTheme.dimens
         val accent = colors.accLive

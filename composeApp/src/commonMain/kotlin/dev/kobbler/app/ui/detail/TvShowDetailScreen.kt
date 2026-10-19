@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.ui.components.spotlight
@@ -171,6 +172,7 @@ fun TvShowDetailScreen(
         }
 
         TopBar(
+            scroll = pageScroll,
             show = shown,
             watchedOverrides = watchedOverrides,
             formFactor = formFactor,
@@ -445,6 +447,7 @@ private fun MetaItem(content: @Composable () -> Unit) {
 private fun TopBar(
     show: TvShow,
     watchedOverrides: Map<String, Boolean>,
+    scroll: ScrollState,
     formFactor: FormFactor,
     gutter: Dp,
     accent: Color,
@@ -456,7 +459,7 @@ private fun TopBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .detailTopScrim()
+            .detailTopScrim(scroll)
             .safeTopPadding()
             .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -380,14 +381,17 @@ fun Modifier.pageTopOverlay(hold: PageTopHold): Modifier =
 
 /**
  * Fade behind a detail screen's fixed top bar. The bar is painted over scrolling
- * content, so without this the synopsis runs straight through the breadcrumb.
+ * content, so without this the synopsis runs straight through the breadcrumb. It comes in
+ * only as content slides under the bar: at rest it greyed out the top of the backdrop.
  */
 @Composable
-fun Modifier.detailTopScrim(): Modifier {
+fun Modifier.detailTopScrim(scroll: ScrollState): Modifier {
     val bg = KobappTheme.colors.bg
-    return this.background(
-        Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to Color.Transparent),
-    )
+    val fadeIn = with(LocalDensity.current) { 96.dp.toPx() }
+    val brush = remember(bg) { Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to Color.Transparent) }
+    return drawBehind {
+        drawRect(brush, alpha = (scroll.value / fadeIn).coerceIn(0f, 1f))
+    }
 }
 
 @Composable

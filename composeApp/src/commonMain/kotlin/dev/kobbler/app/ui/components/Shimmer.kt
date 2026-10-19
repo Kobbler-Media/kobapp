@@ -7,9 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
@@ -50,7 +48,7 @@ private fun rememberShimmerOffset(): State<Float> =
  * for the whole cold start of a screen. Nests harmlessly — the outermost host wins.
  */
 @Composable
-private fun ShimmerHost(content: @Composable () -> Unit) {
+internal fun ShimmerHost(content: @Composable () -> Unit) {
     if (LocalShimmerOffset.current != null) {
         content()
         return
@@ -85,66 +83,4 @@ fun ShimmerBox(
             }
         },
     )
-}
-
-/** Skeleton placeholder for a poster card grid */
-@Composable
-fun PosterCardSkeleton(modifier: Modifier = Modifier) {
-    ShimmerHost {
-        Column(modifier.width(140.dp)) {
-            ShimmerBox(Modifier.width(KobappTheme.dimens.posterWidth).aspectRatio(2f / 3f))
-            Spacer(Modifier.height(8.dp))
-            ShimmerBox(Modifier.width(KobappTheme.dimens.posterWidth).height(12.dp))
-            Spacer(Modifier.height(4.dp))
-            ShimmerBox(Modifier.width(KobappTheme.dimens.posterWidth * 0.6f).height(10.dp))
-        }
-    }
-}
-
-/** Skeleton placeholder for the detail hero area */
-@Composable
-fun DetailHeroSkeleton(modifier: Modifier = Modifier) {
-    ShimmerHost {
-        Row(
-            modifier = modifier.fillMaxWidth().padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            ShimmerBox(Modifier.width(120.dp).aspectRatio(2f / 3f), cornerRadius = 6.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ShimmerBox(Modifier.fillMaxWidth().height(24.dp))
-                ShimmerBox(Modifier.fillMaxWidth(0.7f).height(16.dp))
-                ShimmerBox(Modifier.fillMaxWidth(0.5f).height(16.dp))
-            }
-        }
-    }
-}
-
-/** Skeleton for a carousel row */
-@Composable
-fun CarouselSkeleton(modifier: Modifier = Modifier) {
-    ShimmerHost {
-        Column(modifier.fillMaxWidth().padding(start = 16.dp)) {
-            ShimmerBox(Modifier.width(120.dp).height(18.dp))
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                repeat(4) { PosterCardSkeleton() }
-            }
-        }
-    }
-}
-
-/** Full dashboard skeleton with hero + carousel rows */
-@Composable
-fun DashboardSkeleton(modifier: Modifier = Modifier) {
-    ShimmerHost {
-        Column(
-            modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            // Wide card skeleton (continue watching)
-            ShimmerBox(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(160.dp), cornerRadius = 6.dp)
-            CarouselSkeleton()
-            CarouselSkeleton()
-        }
-    }
 }

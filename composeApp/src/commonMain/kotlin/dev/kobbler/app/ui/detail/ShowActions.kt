@@ -2,12 +2,6 @@ package dev.kobbler.app.ui.detail
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
@@ -25,13 +19,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateMap
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.ContinueEpisode
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Season
@@ -42,7 +32,6 @@ import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.player.resumeRequestSeconds
 import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.launch
 
 @Composable
@@ -86,13 +75,11 @@ internal fun ShowActions(
         null
     }
 
-    // Beside the poster it measures to its label; on a phone it takes the row the icons leave.
-    val playFill = if (wide) Modifier else Modifier.fillMaxWidth()
-    val playButton: @Composable () -> Unit = {
+    val playButton: @Composable (Modifier) -> Unit = { playFill ->
         if (resume != null && supportsVideoPlayback) {
             val total = resumeEpisode?.runtimeMinutes?.times(60)
             val inProgress = canRestart && resumeEpisode?.isWatchedNow(watchedOverrides) != true
-            PlayActionButton(
+            PrimaryAction(
                 icon = if (resumeIsStream) Icons.Outlined.CloudDownload else Icons.Outlined.PlayArrow,
                 label = when {
                     resumeIsStream -> "Stream"
@@ -103,15 +90,13 @@ internal fun ShowActions(
                 progress = if (inProgress && total != null && total > 0) resumePosition.toFloat() / total else null,
                 remaining = if (inProgress && total != null) remainingLabel(total - resumePosition) else null,
                 emphasised = !resumeIsStream,
-                accent = accent,
                 onClick = { onPlayEpisode(resume.seasonIdx, resume.episodeIdx, false) },
                 modifier = Modifier.focusKey("action.resume", preferredEntry = true).then(playFill),
             )
         } else if (firstUnwatchedIdx != null && supportsVideoPlayback) {
-            PlayActionButton(
+            PrimaryAction(
                 icon = Icons.Outlined.PlayArrow,
                 label = "Play",
-                accent = accent,
                 onClick = { onPlayEpisode(selectedSeasonIdx, firstUnwatchedIdx, false) },
                 modifier = Modifier.focusKey("action.play", preferredEntry = true).then(playFill),
             )
@@ -316,44 +301,16 @@ internal fun ShowActions(
 
     // The season strip is directly below, so a geometric search down out of the row
     // lands on whichever tab is nearest -- season one, which on a remote selects it too.
-    // Left has nothing of the row's own to reach: geometry found the Kids control at the
-    // foot of the page, or the cast. Cancelling hands the press to the scaffold, which
-    // opens the rail. Redirected on exit rather than per button, so a wrapped second line
-    // of actions still steps through.
-    val exits = Modifier.focusProperties {
-        onExit = {
-            when (requestedFocusDirection) {
-                FocusDirection.Down -> exitDown?.requestFocus()
-                FocusDirection.Left -> cancelFocusChange()
-                else -> Unit
-            }
-        }
-    }
-    val buttons: @Composable () -> Unit = {
+    DetailActionRow(
+        wide = wide,
+        modifier = modifier,
+        exitDown = exitDown,
+        primary = { fill -> playButton(fill) },
+    ) {
         fromStartButton()
         nextButton()
         wantButton()
         overflowButton()
-    }
-    if (wide) {
-        FlowRow(
-            modifier = modifier.fillMaxWidth().focusKeyGroup("actions").then(exits).focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            itemVerticalAlignment = Alignment.CenterVertically,
-        ) {
-            playButton()
-            buttons()
-        }
-    } else {
-        Row(
-            modifier = modifier.fillMaxWidth().focusKeyGroup("actions"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.weight(1f)) { playButton() }
-            buttons()
-        }
     }
 }
 

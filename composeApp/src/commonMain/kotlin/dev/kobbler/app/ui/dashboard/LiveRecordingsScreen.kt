@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -96,7 +97,7 @@ fun LiveRecordingsScreen(
         }
     }
 
-    AsyncContent(state, onRetry = retry, modifier = modifier) { data ->
+    AsyncContent(state, skeleton = { ListSkeleton(title = showHeader) }, onRetry = retry, modifier = modifier) { data ->
         val colors = KobappTheme.colors
         val dimens = KobappTheme.dimens
         val accent = colors.accLive

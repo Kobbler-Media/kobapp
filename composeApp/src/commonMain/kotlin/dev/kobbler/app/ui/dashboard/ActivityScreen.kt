@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.onFocusChanged
@@ -123,7 +124,7 @@ fun ActivityScreen(
         }
 
         when {
-            loading -> LoadingScreen()
+            loading -> LoadingScreen({ ListSkeleton(title = false) })
             errorMessage != null && events.isEmpty() -> ErrorScreen(
                 message = errorMessage!!,
                 onRetry = { retryToken++ },

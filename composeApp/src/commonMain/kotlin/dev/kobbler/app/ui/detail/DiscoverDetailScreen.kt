@@ -12,17 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.key
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,8 +22,6 @@ import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
@@ -53,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverEpisodeRef
 import dev.kobbler.app.data.KobblerApi
@@ -64,8 +53,6 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.CastRow
 import dev.kobbler.app.ui.components.ExpandableText
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.PillStatus
 import dev.kobbler.app.ui.components.StatusPill
 import dev.kobbler.app.ui.components.rememberPalette
@@ -297,6 +284,7 @@ private fun PhoneBody(
             onWant = onWant,
             onPlay = onPlay,
             onShowStreams = onShowStreams,
+            wide = false,
         )
         ReleaseAvailabilityStrip(
             detail = detail,
@@ -369,6 +357,7 @@ private fun WideBody(
                 onWant = onWant,
                 onPlay = onPlay,
                 onShowStreams = onShowStreams,
+                wide = true,
                 modifier = actionsAnchor,
             )
             if (detail.genres.isNotEmpty()) {
@@ -491,77 +480,65 @@ private fun ActionRow(
     onWant: () -> Unit,
     onPlay: () -> Unit,
     onShowStreams: () -> Unit,
+    wide: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
-    Row(
-        modifier = modifier.focusKeyGroup("action"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (canStreamMedia && detail.mediaType == "movie") {
-            KobButton(
-                onClick = onPlay,
-                style = KobButtonStyle.Default,
-                accent = accent,
-                modifier = Modifier.focusKey("play", preferredEntry = true),
-            ) {
-                Icon(Icons.Outlined.PlayArrow, contentDescription = null, tint = colors.textHi, modifier = Modifier.size(18.dp))
-                Text("Play", style = KobappTheme.type.body, color = colors.textHi)
+    val playable = canStreamMedia && detail.mediaType == "movie"
+    val wantable = showWant && detail.libraryStatus == LibraryStatus.NotInLibrary
+    val wantLabel = if (wantLoading) "Adding…" else "Want"
+    DetailActionRow(
+        wide = wide,
+        modifier = modifier,
+        primary = when {
+            playable -> { fill ->
+                PrimaryAction(
+                    icon = Icons.Outlined.PlayArrow,
+                    label = "Play",
+                    onClick = onPlay,
+                    modifier = Modifier.focusKey("play", preferredEntry = true).then(fill),
+                )
             }
-            KobButton(
-                onClick = onShowStreams,
-                style = KobButtonStyle.Default,
+            wantable -> { fill ->
+                PrimaryAction(
+                    icon = Icons.Outlined.BookmarkAdd,
+                    label = wantLabel,
+                    onClick = onWant,
+                    enabled = !wantLoading,
+                    modifier = Modifier.focusKey("want", preferredEntry = true).then(fill),
+                )
+            }
+            else -> null
+        },
+    ) {
+        if (playable) {
+            IconAction(
+                icon = Icons.Outlined.Tune,
+                label = "Stream options",
                 accent = accent,
+                onClick = onShowStreams,
                 modifier = Modifier.focusKey("streams"),
-            ) {
-                Icon(Icons.Outlined.Tune, contentDescription = "Stream options", tint = colors.textMd, modifier = Modifier.size(18.dp))
+            )
+            if (wantable) {
+                IconAction(
+                    icon = Icons.Outlined.BookmarkAdd,
+                    label = wantLabel,
+                    accent = accent,
+                    onClick = onWant,
+                    enabled = !wantLoading,
+                    modifier = Modifier.focusKey("want"),
+                )
             }
         }
-
-        if (showWant) {
-            when (detail.libraryStatus) {
-                LibraryStatus.InLibrary -> Unit
-                LibraryStatus.Wanted -> {
-                    KobButton(
-                        onClick = {},
-                        style = KobButtonStyle.Default,
-                        enabled = false,
-                        accent = accent,
-                    ) {
-                        Icon(Icons.Outlined.Check, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
-                        Text(
-                            "Wanted",
-                            style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
-                            color = accent,
-                        )
-                    }
-                }
-                LibraryStatus.NotInLibrary -> {
-                    KobButton(
-                        onClick = onWant,
-                        style = KobButtonStyle.Accent,
-                        enabled = !wantLoading,
-                        accent = accent,
-                        modifier = Modifier.focusKey("want", preferredEntry = true),
-                    ) {
-                        if (wantLoading) {
-                            CircularProgressIndicator(
-                                color = colors.bg,
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        } else {
-                            Icon(Icons.Outlined.BookmarkAdd, contentDescription = null, tint = colors.bg, modifier = Modifier.size(18.dp))
-                        }
-                        Text(
-                            if (wantLoading) "Adding…" else "Want",
-                            style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
-                            color = colors.bg,
-                        )
-                    }
-                }
-            }
+        if (showWant && detail.libraryStatus == LibraryStatus.Wanted) {
+            IconAction(
+                icon = Icons.Outlined.Check,
+                label = "Wanted",
+                tint = colors.warn,
+                accent = accent,
+                onClick = {},
+                modifier = Modifier.focusKey("wanted"),
+            )
         }
     }
 }

@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -192,7 +193,7 @@ fun IptvScreen(
             }
     }
 
-    AsyncContent(headerState, onRetry = headerRetry, modifier = modifier) { data ->
+    AsyncContent(headerState, skeleton = { ListSkeleton() }, onRetry = headerRetry, modifier = modifier) { data ->
         val colors = KobappTheme.colors
         val dimens = KobappTheme.dimens
         val accent = colors.accIptv

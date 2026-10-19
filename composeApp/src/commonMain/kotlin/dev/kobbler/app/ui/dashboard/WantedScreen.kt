@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.*
+import dev.kobbler.app.ui.components.GridSkeleton
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -98,7 +99,7 @@ private fun WantedList(
             )
         }
 
-        AsyncContent(state, onRetry = retry) { items ->
+        AsyncContent(state, skeleton = { GridSkeleton() }, onRetry = retry) { items ->
             if (items.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.Bookmark,

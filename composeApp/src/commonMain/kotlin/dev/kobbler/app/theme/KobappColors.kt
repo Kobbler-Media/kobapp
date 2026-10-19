@@ -32,6 +32,8 @@ data class KobappColors(
     val accCal: Color,
     val accSet: Color,
 
+    val action: Color,
+
     val ok: Color,
     val warn: Color,
     val err: Color,
@@ -67,6 +69,10 @@ val KobappColorsDefault = KobappColors(
     accNotif = Color(0xFFDCD070),
     accCal = Color(0xFF82A4E8),
     accSet = Color(0xFFB1ACA5),
+
+    // One colour for the button a page exists for, whatever the section: the section hues
+    // are tuned as hints, and filled across a pill the cool ones clashed with the warm surfaces.
+    action = Color(0xFFEDBA58),
 
     ok = Color(0xFF5FCC8A),
     warn = Color(0xFFE3C36C),

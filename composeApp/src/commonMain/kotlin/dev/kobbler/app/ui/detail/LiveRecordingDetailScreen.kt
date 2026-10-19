@@ -27,7 +27,6 @@ import dev.kobbler.app.data.LiveRecording
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonSize
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.dashboard.livetv.LiveBadge
 import dev.kobbler.app.ui.dashboard.livetv.LiveThumb
@@ -118,20 +117,19 @@ fun LiveRecordingDetailScreen(
                     Text(it, style = KobappTheme.type.caption, color = colors.textLo)
                 }
             }
-            KobButton(
-                text = if (current.isInProgress) "Watch from start" else "Play",
+            PrimaryAction(
+                icon = Icons.Outlined.PlayArrow,
+                label = if (current.isInProgress) "Watch from start" else "Play",
                 onClick = { onPlay(current) },
-                style = KobButtonStyle.Accent,
-                size = KobButtonSize.Prominent,
-                accent = accent,
                 enabled = current.playableFromStart || current.status == "completed",
-                cornerRadiusDp = 999f,
-                leading = { Icon(Icons.Outlined.PlayArrow, null, modifier = Modifier.size(18.dp)) },
                 modifier = Modifier.focusKey("play", preferredEntry = true),
             )
             if (current.isInProgress) {
-                KobButton(
-                    text = "Stop",
+                IconAction(
+                    icon = Icons.Outlined.Stop,
+                    label = "Stop recording",
+                    accent = accent,
+                    enabled = !busy,
                     onClick = {
                         scope.launch {
                             busy = true
@@ -139,14 +137,15 @@ fun LiveRecordingDetailScreen(
                             busy = false
                         }
                     },
-                    style = KobButtonStyle.Default,
-                    enabled = !busy,
-                    leading = { Icon(Icons.Outlined.Stop, null, modifier = Modifier.size(16.dp)) },
                     modifier = Modifier.focusKey("stop", entryEligible = false),
                 )
             }
-            KobButton(
-                text = "Delete",
+            IconAction(
+                icon = Icons.Outlined.Delete,
+                label = "Delete recording",
+                accent = accent,
+                tint = colors.err,
+                enabled = !busy,
                 onClick = {
                     scope.launch {
                         busy = true
@@ -155,9 +154,6 @@ fun LiveRecordingDetailScreen(
                         onBack()
                     }
                 },
-                style = KobButtonStyle.Ghost,
-                enabled = !busy,
-                leading = { Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(16.dp)) },
                 modifier = Modifier.focusKey("delete", entryEligible = false),
             )
         }

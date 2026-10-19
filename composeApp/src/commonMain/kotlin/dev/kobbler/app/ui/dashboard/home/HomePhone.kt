@@ -329,7 +329,7 @@ private fun <T> PhoneRail(
                 state = rowState,
                 modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = gutter),
-                horizontalArrangement = Arrangement.spacedBy(RailGap),
+                horizontalArrangement = Arrangement.spacedBy(PhoneRailGap),
             ) {
                 items(items) { card(it, cardWidth) }
             }
@@ -341,19 +341,19 @@ private val PhoneBackdropFade = 240.dp
 private const val PhoneBackdropDimTop = 0.2f
 private const val PhoneBackdropDimScrolled = 0.5f
 
-private val RailGap = 10.dp
+internal val PhoneRailGap = 10.dp
 private val RailPeek = 26.dp
 private val RailPosterTarget = 120.dp
 
 // At least three cards and the edge of a fourth: an exact three-up row reads as a
 // complete set and nobody thinks to swipe. A wider screen adds cards rather than
 // growing them.
-private fun railPosterWidth(available: Dp): Dp {
-    val count = maxOf(3, ((available - RailPeek + RailGap) / (RailPosterTarget + RailGap)).toInt())
-    return (available - RailGap * (count - 1) - RailPeek) / count
+internal fun railPosterWidth(available: Dp): Dp {
+    val count = maxOf(3, ((available - RailPeek + PhoneRailGap) / (RailPosterTarget + PhoneRailGap)).toInt())
+    return (available - PhoneRailGap * (count - 1) - RailPeek) / count
 }
 
 // Just under two cards fit across, so the next card's edge says "swipe"; past this width
 // the card is only more picture.
-private val UpNextCardMaxWidth = 260.dp
-private val UpNextCardGap = 12.dp
+internal val UpNextCardMaxWidth = 260.dp
+internal val UpNextCardGap = 12.dp

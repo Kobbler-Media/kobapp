@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.*
+import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -148,7 +149,7 @@ fun TvShowsScreen(
     val swiper = spotlight.takeIf { touch }
 
     val gatedState = if (railsSettled) state else Async.Loading
-    AsyncContent(gatedState, onRetry = retry, modifier = modifier) { _ ->
+    AsyncContent(gatedState, skeleton = { BrowseSkeleton() }, onRetry = retry, modifier = modifier) { _ ->
         val gridState = rememberLazyGridState()
         val scope = rememberCoroutineScope()
 

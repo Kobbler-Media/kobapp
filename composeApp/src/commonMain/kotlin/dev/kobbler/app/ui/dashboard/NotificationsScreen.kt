@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,7 +41,7 @@ fun NotificationsScreen(
     val compact = formFactor == FormFactor.Phone
     val accent = colors.accNotif
 
-    AsyncContent(state, onRetry = retry, modifier = modifier) { data ->
+    AsyncContent(state, skeleton = { ListSkeleton() }, onRetry = retry, modifier = modifier) { data ->
         if (data.notifications.isEmpty()) {
             EmptyState(
                 icon = Icons.Outlined.NotificationsNone,

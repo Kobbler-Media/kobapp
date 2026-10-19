@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
@@ -152,7 +153,7 @@ fun LiveTvScreen(
         wasActive = isActive
     }
 
-    AsyncContent(headerState, onRetry = headerRetry, modifier = modifier) { header ->
+    AsyncContent(headerState, skeleton = { ListSkeleton() }, onRetry = headerRetry, modifier = modifier) { header ->
       BoxWithConstraints(Modifier.fillMaxSize()) {
         val dense = maxHeight < DenseLiveTvMaxHeight
         val colors = KobappTheme.colors

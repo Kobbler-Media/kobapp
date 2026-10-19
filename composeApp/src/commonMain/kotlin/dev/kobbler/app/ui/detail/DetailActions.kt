@@ -1,6 +1,12 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import dev.kobbler.kobfocus.focusKeyGroup
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.Layout
@@ -51,12 +57,12 @@ private const val PillRadius = 24f
  * Resume needs no second line and no free-floating bar beneath the row.
  */
 @Composable
-internal fun PlayActionButton(
+internal fun PrimaryAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    accent: Color,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     detail: String? = null,
     progress: Float? = null,
     remaining: String? = null,
@@ -67,7 +73,8 @@ internal fun PlayActionButton(
     KobButton(
         onClick = onClick,
         style = if (emphasised) KobButtonStyle.Accent else KobButtonStyle.Default,
-        accent = accent,
+        accent = colors.action,
+        enabled = enabled,
         cornerRadiusDp = PillRadius,
         modifier = modifier,
     ) {
@@ -87,10 +94,10 @@ internal fun PlayActionButton(
                         Box(
                             Modifier
                                 .weight(1f)
-                                .widthIn(min = 40.dp)
+                                .widthIn(min = 56.dp)
                                 .height(3.dp)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(fg.copy(alpha = 0.25f)),
+                                .background(fg.copy(alpha = 0.3f)),
                         ) {
                             Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(fg))
                         }
@@ -121,6 +128,7 @@ internal fun IconAction(
     tint: Color = KobappTheme.colors.textHi,
     style: KobButtonStyle = KobButtonStyle.Default,
     captioned: Boolean = true,
+    enabled: Boolean = true,
 ) {
     var focused by remember { mutableStateOf(false) }
     val hover = remember { MutableInteractionSource() }
@@ -133,6 +141,7 @@ internal fun IconAction(
                 onClick = onClick,
                 style = style,
                 accent = accent,
+                enabled = enabled,
                 cornerRadiusDp = PillRadius,
                 modifier = modifier
                     .onFocusChanged { focused = it.isFocused }
@@ -163,3 +172,51 @@ internal fun IconAction(
 }
 
 private val CaptionGap = 8.dp
+
+/**
+ * A detail page's actions: [primary] first, then the icon actions. Beside a poster the
+ * row flows onto a second line when it must; on a phone [primary] takes whatever width
+ * the icons leave, and is handed a fill modifier to do it with.
+ */
+@Composable
+internal fun DetailActionRow(
+    wide: Boolean,
+    modifier: Modifier = Modifier,
+    exitDown: FocusRequester? = null,
+    primary: (@Composable (fill: Modifier) -> Unit)? = null,
+    secondary: @Composable () -> Unit,
+) {
+    // Left has nothing of the row's own to reach, and geometry found the cast or the foot of
+    // the page instead. Cancelling hands the press to the scaffold, which opens the rail.
+    // Redirected on exit rather than per button, so a wrapped second line still steps through.
+    val exits = Modifier.focusProperties {
+        onExit = {
+            when (requestedFocusDirection) {
+                FocusDirection.Down -> exitDown?.requestFocus()
+                FocusDirection.Left -> cancelFocusChange()
+                else -> Unit
+            }
+        }
+    }
+    val group = modifier.fillMaxWidth().focusKeyGroup("actions").then(exits).focusGroup()
+    if (wide) {
+        FlowRow(
+            modifier = group,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            primary?.invoke(Modifier)
+            secondary()
+        }
+    } else {
+        Row(
+            modifier = group,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (primary != null) Box(Modifier.weight(1f)) { primary(Modifier.fillMaxWidth()) }
+            secondary()
+        }
+    }
+}

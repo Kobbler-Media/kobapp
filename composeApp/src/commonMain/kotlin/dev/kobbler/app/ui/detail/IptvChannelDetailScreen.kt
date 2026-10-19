@@ -24,11 +24,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,8 +54,6 @@ import dev.kobbler.app.data.IptvEpgEntry
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.kobfocus.focusKey
@@ -313,7 +309,7 @@ private fun ChannelHero(
                 HeroActions(
                     accent = accent, isFavourite = isFavourite, isLoading = isLoading,
                     onWatchLive = onWatchLive, onToggleFavourite = onToggleFavourite,
-                    showRecord = false,
+                    wide = false,
                 )
             } else {
                 Row(
@@ -337,7 +333,7 @@ private fun ChannelHero(
                         HeroActions(
                             accent = accent, isFavourite = isFavourite, isLoading = isLoading,
                             onWatchLive = onWatchLive, onToggleFavourite = onToggleFavourite,
-                            showRecord = !isPhone,
+                            wide = true,
                         )
                     }
                 }
@@ -400,72 +396,28 @@ private fun HeroActions(
     isLoading: Boolean,
     onWatchLive: () -> Unit,
     onToggleFavourite: () -> Unit,
-    showRecord: Boolean,
+    wide: Boolean,
 ) {
-    val colors = KobappTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    DetailActionRow(
+        wide = wide,
+        primary = { fill ->
+            PrimaryAction(
+                icon = Icons.Outlined.PlayArrow,
+                label = if (isLoading) "Loading…" else "Watch live",
+                onClick = onWatchLive,
+                enabled = !isLoading,
+                modifier = Modifier.focusKey("action.watchLive", preferredEntry = true).then(fill),
+            )
+        },
     ) {
-        KobButton(
-            onClick = onWatchLive,
-            style = KobButtonStyle.Accent,
+        IconAction(
+            icon = if (isFavourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+            label = if (isFavourite) "Favourited" else "Favourite",
+            tint = if (isFavourite) accent else KobappTheme.colors.textHi,
             accent = accent,
-            enabled = !isLoading,
-            modifier = Modifier.focusKey("action.watchLive"),
-        ) {
-            Icon(
-                Icons.Outlined.PlayArrow,
-                contentDescription = null,
-                tint = colors.bg,
-                modifier = Modifier.size(20.dp),
-            )
-            Text(
-                if (isLoading) "Loading…" else "Watch live",
-                style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.bg,
-            )
-        }
-
-        KobButton(
             onClick = onToggleFavourite,
-            style = KobButtonStyle.Default,
-            accent = accent,
             modifier = Modifier.focusKey("action.favourite"),
-        ) {
-            Icon(
-                if (isFavourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = null,
-                tint = if (isFavourite) accent else colors.textHi,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                if (isFavourite) "Favourited" else "Favourite",
-                style = KobappTheme.type.body,
-                color = if (isFavourite) accent else colors.textHi,
-            )
-        }
-
-        if (showRecord) {
-            KobButton(
-                onClick = {},
-                style = KobButtonStyle.Ghost,
-                accent = accent,
-                enabled = false,
-            ) {
-                Icon(
-                    Icons.Outlined.CalendarMonth,
-                    contentDescription = null,
-                    tint = colors.textLo,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(
-                    "Record",
-                    style = KobappTheme.type.body,
-                    color = colors.textLo,
-                )
-            }
-        }
+        )
     }
 }
 

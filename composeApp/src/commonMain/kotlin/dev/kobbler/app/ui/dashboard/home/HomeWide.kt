@@ -288,11 +288,13 @@ fun HomeWide(
 
 // The open stretch of backdrop above Up Next: what the screen has left once Up Next and
 // the first rail are on it, bounded so the page never turns into a poster.
+internal val HeroMinHeight = 120.dp
+internal val HeroMaxHeight = 300.dp
+
 private fun heroHeight(viewportPx: Int, stripPx: Int, recentPx: Int, density: Density): Dp {
-    val (min, max) = 120.dp to 300.dp
-    if (viewportPx == 0 || stripPx == 0) return max
+    if (viewportPx == 0 || stripPx == 0) return HeroMaxHeight
     val left = with(density) { (viewportPx - stripPx - recentPx).toDp() }
-    return left.coerceIn(min, max)
+    return left.coerceIn(HeroMinHeight, HeroMaxHeight)
 }
 
 @Stable

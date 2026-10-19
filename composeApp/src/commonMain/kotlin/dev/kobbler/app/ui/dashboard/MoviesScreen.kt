@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.*
+import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -109,7 +110,7 @@ fun MoviesScreen(
     val pointer = spotlight.takeUnless { touch }
     val swiper = spotlight.takeIf { touch }
 
-    AsyncContent(if (railsSettled) state else Async.Loading, onRetry = retry, modifier = modifier) { _ ->
+    AsyncContent(if (railsSettled) state else Async.Loading, skeleton = { BrowseSkeleton() }, onRetry = retry, modifier = modifier) { _ ->
         val gridState = rememberLazyGridState()
         val colors = KobappTheme.colors
         val dimens = KobappTheme.dimens

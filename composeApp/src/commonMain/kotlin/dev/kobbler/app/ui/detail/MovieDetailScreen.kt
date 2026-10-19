@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.ui.components.spotlight
@@ -54,10 +55,6 @@ import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.components.rememberPalette
 import dev.kobbler.app.ui.player.resumeSeconds
 import dev.kobbler.kobfocus.focusKey
-import androidx.compose.foundation.focusGroup
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.focusProperties
-import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.safeTopPadding
@@ -103,6 +100,7 @@ fun MovieDetailScreen(
                         onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
                         onWatchedChanged = onWatchedChanged,
                         toast = toast,
+                        wide = false,
                     )
                     if (movie.synopsis != null) {
                         Spacer(Modifier.height(18.dp))
@@ -152,7 +150,8 @@ fun MovieDetailScreen(
                             movie = movie, api = api, accent = accent,
                             onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
                             onWatchedChanged = onWatchedChanged,
-                                toast = toast,
+                            toast = toast,
+                            wide = true,
                             modifier = pageTopHold.anchor,
                         )
                         if (movie.genres.isNotEmpty()) {
@@ -179,6 +178,7 @@ fun MovieDetailScreen(
         }
 
         TopBar(
+            scroll = pageScroll,
             movie = movie,
             formFactor = formFactor,
             gutter = gutter,
@@ -305,6 +305,7 @@ private fun ActionRow(
     onStreamPick: (() -> Unit)?,
     onWatchedChanged: (Boolean) -> Unit,
     toast: ToastState,
+    wide: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
@@ -313,28 +314,20 @@ private fun ActionRow(
     val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
     val resumeAt = movie.resumeSeconds
     val total = movie.runtimeMinutes?.times(60)
-    // Nothing of the row's own lies to its left, and geometry found the cast instead.
-    // Cancelling hands the press to the scaffold, which opens the rail.
-    val exits = Modifier.focusProperties {
-        onExit = { if (requestedFocusDirection == FocusDirection.Left) cancelFocusChange() }
-    }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = modifier.focusKeyGroup("actions").then(exits).focusGroup(),
-    ) {
-        if (canPlay) {
-            PlayActionButton(
+    DetailActionRow(
+        wide = wide,
+        modifier = modifier,
+        primary = if (!canPlay) null else { fill ->
+            PrimaryAction(
                 icon = Icons.Outlined.PlayArrow,
                 label = if (resumeAt != null) "Resume" else "Play",
                 progress = if (resumeAt != null && total != null && total > 0) resumeAt.toFloat() / total else null,
                 remaining = if (resumeAt != null && total != null) remainingLabel(total - resumeAt) else null,
-                accent = accent,
                 onClick = { play(resumeAt == null) },
-                modifier = Modifier.focusKey("play", preferredEntry = true),
+                modifier = Modifier.focusKey("play", preferredEntry = true).then(fill),
             )
-        }
-
+        },
+    ) {
         if (canPlay && resumeAt != null) {
             IconAction(
                 icon = Icons.Outlined.Replay,
@@ -453,6 +446,7 @@ private fun CastSection(
 @Composable
 private fun TopBar(
     movie: Movie,
+    scroll: ScrollState,
     formFactor: FormFactor,
     gutter: Dp,
     accent: Color,
@@ -462,7 +456,7 @@ private fun TopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .detailTopScrim()
+            .detailTopScrim(scroll)
             .safeTopPadding()
             .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

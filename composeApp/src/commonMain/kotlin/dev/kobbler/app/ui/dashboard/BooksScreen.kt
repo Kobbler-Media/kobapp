@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.GridSkeleton
+import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -207,7 +209,7 @@ private fun AllBooksGrid(
     val pointer = spotlight.takeUnless { touch }
     val swiper = spotlight.takeIf { touch }
 
-    AsyncContent(if (railsSettled) state else Async.Loading, onRetry = retry) { _ ->
+    AsyncContent(if (railsSettled) state else Async.Loading, skeleton = { BrowseSkeleton() }, onRetry = retry) { _ ->
         val gridState = rememberLazyGridState()
         val readNextIndex = if (readNext.isNotEmpty()) 0 else -1
         val recentIndex = if (recentBooks.isNotEmpty()) (if (readNextIndex >= 0) 1 else 0) else -1
@@ -429,7 +431,7 @@ private fun AuthorsGrid(api: KobblerApi, gutter: Dp, onAuthorClick: (String) -> 
         nextCursor = page.next
     }
 
-    AsyncContent(state, onRetry = retry) { _ ->
+    AsyncContent(state, skeleton = { GridSkeleton() }, onRetry = retry) { _ ->
         val gridState = rememberLazyGridState()
 
         val shouldLoadMore by remember {
@@ -485,7 +487,7 @@ private fun SeriesGrid(api: KobblerApi, gutter: Dp, onSeriesClick: (String) -> U
         nextCursor = page.next
     }
 
-    AsyncContent(state, onRetry = retry) { _ ->
+    AsyncContent(state, skeleton = { GridSkeleton() }, onRetry = retry) { _ ->
         val gridState = rememberLazyGridState()
 
         val shouldLoadMore by remember {

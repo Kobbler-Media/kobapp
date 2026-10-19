@@ -34,7 +34,6 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.EmptyState
 import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonSize
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
@@ -130,47 +129,24 @@ fun LiveChannelDetailScreen(
                     color = colors.textMd,
                 )
             }
-            // Icon-only on a phone: the word cost about a third of the header row and the
-            // play glyph on an accent pill is not ambiguous.
-            if (formFactor == FormFactor.Phone) {
-                KobButton(
-                    onClick = { onWatch(channel) },
-                    style = KobButtonStyle.Accent,
-                    accent = accent,
-                    cornerRadiusDp = 999f,
-                    modifier = Modifier.focusKey("watch", preferredEntry = true),
-                ) {
-                    Icon(Icons.Outlined.PlayArrow, "Watch", modifier = Modifier.size(20.dp))
-                }
-            } else {
-                KobButton(
-                    text = "Watch",
-                    onClick = { onWatch(channel) },
-                    style = KobButtonStyle.Accent,
-                    size = KobButtonSize.Prominent,
-                    accent = accent,
-                    cornerRadiusDp = 999f,
-                    leading = { Icon(Icons.Outlined.PlayArrow, null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.focusKey("watch", preferredEntry = true),
-                )
-            }
-            KobButton(
+            PrimaryAction(
+                icon = Icons.Outlined.PlayArrow,
+                label = "Watch",
+                onClick = { onWatch(channel) },
+                modifier = Modifier.focusKey("watch", preferredEntry = true),
+            )
+            IconAction(
+                icon = if (favourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                label = if (favourite) "Remove favourite" else "Add favourite",
+                tint = if (favourite) accent else colors.textHi,
+                accent = accent,
                 onClick = {
                     val next = !favourite
                     favourite = next
                     scope.launch { runCatching { api.setLiveChannelFavourite(channel.id, next) } }
                 },
-                style = KobButtonStyle.Default,
-                cornerRadiusDp = 999f,
                 modifier = Modifier.focusKey("favourite", entryEligible = false),
-            ) {
-                Icon(
-                    if (favourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = if (favourite) "Remove favourite" else "Add favourite",
-                    tint = if (favourite) accent else colors.textMd,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+            )
         }
 
         if (entries.isEmpty()) {

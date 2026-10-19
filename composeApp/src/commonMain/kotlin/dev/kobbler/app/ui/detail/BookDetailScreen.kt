@@ -1,14 +1,13 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.foundation.ScrollState
 import dev.kobbler.app.ui.components.spotlight
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,10 +28,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -44,15 +43,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -65,15 +60,14 @@ import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.Section
+import dev.kobbler.app.theme.LocalSection
 import dev.kobbler.app.ui.components.ExpandableText
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -161,6 +155,7 @@ fun BookDetailScreen(
         }
 
         TopBar(
+            scroll = pageScroll,
             book = book,
             formFactor = formFactor,
             gutter = gutter,
@@ -203,7 +198,6 @@ private fun PhoneBookLayout(
             book = book,
             api = api,
             accent = accent,
-            fillWidth = true,
             onRead = onRead,
             onListen = onListen,
             onViewComic = onViewComic,
@@ -233,7 +227,7 @@ private fun LeftColumn(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
         BookPoster(book.coverUrl, accent, posterWidth = if (formFactor == FormFactor.Desktop) 320.dp else 220.dp)
-        ActionColumn(
+        ActionRow(
             book = book,
             api = api,
             accent = accent,
@@ -466,7 +460,7 @@ private fun FormatChips(book: Book, accent: Color, centered: Boolean) {
 }
 
 @Composable
-private fun ActionColumn(
+private fun ActionRow(
     book: Book,
     api: KobblerApi,
     accent: Color,
@@ -475,80 +469,55 @@ private fun ActionColumn(
     onViewComic: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val actions = bookActions(book, api, accent, onRead, onListen, onViewComic)
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier.fillMaxWidth().focusKeyGroup("actions"),
+    val actions = bookActions(book, api, onRead, onListen, onViewComic)
+    val first = actions.firstOrNull()
+    DetailActionRow(
+        wide = false,
+        modifier = modifier,
+        primary = first?.let { action ->
+            { fill ->
+                PrimaryAction(
+                    icon = action.icon,
+                    label = action.label,
+                    onClick = action.onClick,
+                    enabled = action.enabled,
+                    modifier = Modifier.focusKey(action.key, preferredEntry = true).then(fill),
+                )
+            }
+        },
     ) {
-        actions.forEachIndexed { index, action ->
-            action.render(fillWidth = true, preferredEntry = index == 0)
-        }
-    }
-}
-
-@Composable
-private fun ActionRow(
-    book: Book,
-    api: KobblerApi,
-    accent: Color,
-    fillWidth: Boolean,
-    onRead: () -> Unit,
-    onListen: () -> Unit,
-    onViewComic: () -> Unit,
-) {
-    val actions = bookActions(book, api, accent, onRead, onListen, onViewComic)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = (if (fillWidth) Modifier.fillMaxWidth() else Modifier).focusKeyGroup("actions"),
-    ) {
-        actions.forEachIndexed { index, action ->
-            action.render(fillWidth = fillWidth, preferredEntry = index == 0)
+        actions.drop(1).forEach { action ->
+            IconAction(
+                icon = action.icon,
+                label = action.label,
+                accent = accent,
+                tint = action.tint ?: KobappTheme.colors.textHi,
+                onClick = action.onClick,
+                enabled = action.enabled,
+                modifier = Modifier.focusKey(action.key),
+            )
         }
     }
 }
 
 private class BookAction(
+    val key: String,
     val label: String,
-    val style: KobButtonStyle,
-    val accent: Color,
-    val icon: @Composable () -> Unit,
+    val icon: ImageVector,
     val onClick: () -> Unit,
     val enabled: Boolean = true,
-    val textColorOverride: Color? = null,
-) {
-    @Composable
-    fun render(fillWidth: Boolean, preferredEntry: Boolean) {
-        val colors = KobappTheme.colors
-        val fg = textColorOverride ?: when (style) {
-            KobButtonStyle.Accent -> colors.bg
-            else -> colors.textHi
-        }
-        KobButton(
-            onClick = onClick,
-            style = style,
-            accent = accent,
-            enabled = enabled,
-            modifier = (if (fillWidth) Modifier.fillMaxWidth() else Modifier)
-                .focusKey(label.lowercase(), preferredEntry = preferredEntry),
-        ) {
-            icon()
-            Text(label, style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold), color = fg)
-        }
-    }
-}
+    val tint: Color? = null,
+)
 
 @Composable
 private fun bookActions(
     book: Book,
     api: KobblerApi,
-    accent: Color,
     onRead: () -> Unit,
     onListen: () -> Unit,
     onViewComic: () -> Unit,
 ): List<BookAction> {
     val colors = KobappTheme.colors
-    val audioAccent = colors.accAudio
     val list = mutableListOf<BookAction>()
 
     val readableFormats = setOf("EPUB", "KEPUB", "MOBI", "AZW3", "FB2", "PDF")
@@ -557,56 +526,32 @@ private fun bookActions(
     val hasComic = book.formats.any { it.uppercase() in comicFormats }
 
     if (hasReadable) {
-        list += BookAction(
-            label = "Read",
-            style = KobButtonStyle.Accent,
-            accent = accent,
-            icon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, tint = colors.bg, modifier = Modifier.size(20.dp)) },
-            onClick = onRead,
-        )
+        list += BookAction("read", "Read", Icons.AutoMirrored.Outlined.MenuBook, onRead)
     }
     if (hasComic) {
-        list += BookAction(
-            label = if (hasReadable) "View comic" else "Read",
-            style = if (hasReadable) KobButtonStyle.Default else KobButtonStyle.Accent,
-            accent = accent,
-            icon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, tint = if (hasReadable) colors.textHi else colors.bg, modifier = Modifier.size(18.dp)) },
-            onClick = onViewComic,
-            textColorOverride = if (hasReadable) colors.textHi else colors.bg,
-        )
+        list += if (hasReadable) {
+            BookAction("comic", "View comic", Icons.Outlined.AutoStories, onViewComic)
+        } else {
+            BookAction("read", "Read", Icons.AutoMirrored.Outlined.MenuBook, onViewComic)
+        }
     }
     if (book.hasAudiobook) {
-        val accentForListen = audioAccent
-        list += BookAction(
-            label = "Listen",
-            style = KobButtonStyle.Default,
-            accent = accentForListen,
-            icon = { Icon(Icons.Outlined.Headphones, null, tint = accentForListen, modifier = Modifier.size(18.dp)) },
-            onClick = onListen,
-            textColorOverride = colors.textHi,
-        )
+        // Opened from Audiobooks, the book is being listened to; anywhere else, read.
+        val listenFirst = LocalSection.current == Section.Audio
+        val listen = BookAction("listen", "Listen", Icons.Outlined.Headphones, onListen, tint = colors.accAudio.takeIf { list.isNotEmpty() && !listenFirst })
+        if (listenFirst) list.add(0, listen) else list += listen
     }
     if (!book.isInLibrary && api.canWant && book.wantStatus != "wanted") {
         var wanted by remember { mutableStateOf(false) }
         val wantScope = rememberCoroutineScope()
-        val wantAction: () -> Unit = {
-            wantScope.launch { try { api.wantBookById(book.id); wanted = true } catch (_: Exception) {} }
-        }
         list += BookAction(
+            key = "want",
             label = if (wanted) "Wanted" else "Want",
-            style = KobButtonStyle.Ghost,
-            accent = colors.accWanted,
-            icon = {
-                Icon(
-                    if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
-                    null,
-                    tint = if (wanted) colors.accWanted else colors.textMd,
-                    modifier = Modifier.size(18.dp),
-                )
+            icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+            onClick = {
+                if (!wanted) wantScope.launch { try { api.wantBookById(book.id); wanted = true } catch (_: Exception) {} }
             },
-            onClick = if (wanted) ({}) else wantAction,
-            enabled = !wanted,
-            textColorOverride = if (wanted) colors.accWanted else colors.textMd,
+            tint = if (wanted) colors.accWanted else null,
         )
     }
     return list
@@ -615,6 +560,7 @@ private fun bookActions(
 @Composable
 private fun TopBar(
     book: Book,
+    scroll: ScrollState,
     formFactor: FormFactor,
     gutter: Dp,
     accent: Color,
@@ -624,7 +570,7 @@ private fun TopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .detailTopScrim()
+            .detailTopScrim(scroll)
             .safeTopPadding()
             .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

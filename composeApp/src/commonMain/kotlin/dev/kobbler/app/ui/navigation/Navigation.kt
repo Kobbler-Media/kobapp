@@ -1,6 +1,11 @@
 package dev.kobbler.app.ui.navigation
 
 import androidx.compose.foundation.clickable
+import dev.kobbler.app.ui.components.ComicSkeleton
+import dev.kobbler.app.ui.components.ReaderSkeleton
+import dev.kobbler.app.ui.components.PlayerSkeleton
+import dev.kobbler.app.ui.components.ChannelSkeleton
+import dev.kobbler.app.ui.detail.DetailSkeleton
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -1233,7 +1238,7 @@ private fun DetailContent(
                 matches = { it.kind == "movie_updated" && it.idField("movie_id") == dest.movieId },
                 onRefresh = retry,
             )
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { m ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { m ->
                 InlineMoviePlayer(
                     movie = m,
                     api = api,
@@ -1268,7 +1273,7 @@ private fun DetailContent(
                 },
                 onRefresh = retry,
             )
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { s ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { s ->
                 InlineTvPlayer(
                     show = s,
                     api = api,
@@ -1289,7 +1294,7 @@ private fun DetailContent(
                 matches = { it.kind == "library_updated" && it.idField("book_id") == dest.bookId },
                 onRefresh = retry,
             )
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { book ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { book ->
                 BookDetailScreen(
                     book = book,
                     api = api,
@@ -1311,7 +1316,7 @@ private fun DetailContent(
                     author.await() to books.await()
                 }
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (author, books) ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (author, books) ->
                 AuthorDetailScreen(
                     author = author,
                     books = books,
@@ -1330,7 +1335,7 @@ private fun DetailContent(
                     series.await() to books.await()
                 }
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (series, books) ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (series, books) ->
                 SeriesDetailScreen(
                     series = series,
                     books = books,
@@ -1348,7 +1353,7 @@ private fun DetailContent(
             ) {
                 api.getDiscoverDetail(dest.mediaType, dest.provider, dest.providerId)
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { detail ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { detail ->
                 DiscoverDetailScreen(
                     detail = detail,
                     api = api,
@@ -1375,7 +1380,7 @@ private fun DetailContent(
                     channel.await().copy(isFavourite = favourite != null, favouriteId = favourite?.id) to epg.await()
                 }
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (channel, epg) ->
+            AsyncContent(state, skeleton = { ChannelSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (channel, epg) ->
                 dev.kobbler.app.ui.detail.IptvChannelDetailScreen(
                     channel = channel,
                     epg = epg,
@@ -1400,7 +1405,7 @@ private fun DetailContent(
                     requireNotNull(resolved) { "Channel not found" } to (row?.entries ?: emptyList())
                 }
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (channel, entries) ->
+            AsyncContent(state, skeleton = { ChannelSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (channel, entries) ->
                 dev.kobbler.app.ui.detail.LiveChannelDetailScreen(
                     channel = channel,
                     entries = entries,
@@ -1415,7 +1420,7 @@ private fun DetailContent(
             val (state, retry) = rememberCached("live-recording-${dest.recordingId}", dest.recordingId) {
                 api.getLiveRecording(dest.recordingId)
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { recording ->
+            AsyncContent(state, skeleton = { ChannelSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { recording ->
                 dev.kobbler.app.ui.detail.LiveRecordingDetailScreen(
                     recording = recording,
                     api = api,
@@ -1460,7 +1465,7 @@ private fun DetailContent(
                     person.await() to filmography.await()
                 }
             }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (person, filmography) ->
+            AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { (person, filmography) ->
                 dev.kobbler.app.ui.detail.PersonDetailScreen(
                     person = person,
                     filmography = filmography,
@@ -1519,7 +1524,7 @@ private fun PlayerContent(
     when (val dest = nav.current) {
         is Destination.AudiobookPlayer -> {
             val (state, retry) = rememberCached("book-${dest.bookId}", dest.bookId) { api.getBook(dest.bookId) }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }) { book ->
+            AsyncContent(state, skeleton = { PlayerSkeleton() }, onRetry = retry, onBack = { nav.goBack() }) { book ->
                 AudiobookPlayerScreen(
                     book = book,
                     api = api,
@@ -1530,7 +1535,7 @@ private fun PlayerContent(
         }
         is Destination.BookReader -> {
             val (state, retry) = rememberCached("book-${dest.bookId}", dest.bookId) { api.getBook(dest.bookId) }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }) { book ->
+            AsyncContent(state, skeleton = { ReaderSkeleton() }, onRetry = retry, onBack = { nav.goBack() }) { book ->
                 ReaderScreen(
                     book = book,
                     api = api,
@@ -1541,7 +1546,7 @@ private fun PlayerContent(
         }
         is Destination.ComicViewer -> {
             val (state, retry) = rememberCached("book-${dest.bookId}", dest.bookId) { api.getBook(dest.bookId) }
-            AsyncContent(state, onRetry = retry, onBack = { nav.goBack() }) { book ->
+            AsyncContent(state, skeleton = { ComicSkeleton() }, onRetry = retry, onBack = { nav.goBack() }) { book ->
                 ComicReader(
                     book = book,
                     api = api,
