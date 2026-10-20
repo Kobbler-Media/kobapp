@@ -73,7 +73,7 @@ internal fun seasonMenu(
                     val missing = season.episodes.filter { it.id != null && it.canBeWanted(api.canWant) }
                     missing.forEach { wantOverrides[it.id!!] = true }
                     scope.launch {
-                        runCatching { api.wantSeason(show.id, season.id) }
+                        runCatching { api.wantSeason(season.id) }
                             .onSuccess { toast.show("Season ${season.number} added to wanted") }
                             .onFailure {
                                 missing.forEach { wantOverrides.remove(it.id!!) }

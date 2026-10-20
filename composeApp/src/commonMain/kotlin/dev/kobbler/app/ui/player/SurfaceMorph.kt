@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal const val MORPH_POSITION_MS = 260
@@ -99,4 +100,19 @@ internal fun SurfaceMorphEffect(
             }
         }
     }
+}
+
+// Covering waits out the morph, because the screen behind shows around a surface still
+// growing over it; uncovering is immediate, because it shows the moment the surface shrinks.
+@Composable
+internal fun rememberPlayerCoversScreen(fills: Boolean): Boolean {
+    var arrived by remember { mutableStateOf(false) }
+    LaunchedEffect(fills) {
+        arrived = false
+        if (fills) {
+            delay(MORPH_SIZE_MS.toLong())
+            arrived = true
+        }
+    }
+    return fills && arrived
 }

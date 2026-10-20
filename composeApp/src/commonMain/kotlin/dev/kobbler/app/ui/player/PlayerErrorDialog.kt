@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +29,11 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +41,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -50,6 +57,8 @@ import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
 import dev.kobbler.kobfocus.focusKey
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.ui.kobChromeInsets
 
@@ -59,6 +68,8 @@ fun PlayerErrorDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     title: String = "Stream failed",
+    summary: String? = null,
+    want: WantAction? = null,
     alternatives: List<StreamOption> = emptyList(),
     onPickAlternative: (StreamOption) -> Unit = {},
     onRetry: (() -> Unit)? = null,
@@ -96,32 +107,13 @@ fun PlayerErrorDialog(
             Spacer(Modifier.height(14.dp))
             Text(title, style = KobappTheme.type.h3, color = colors.textHi)
             Spacer(Modifier.height(8.dp))
-            val isMultiline = message.length > 200 || message.contains('\n')
-            if (isMultiline) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 280.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.elev2)
-                        .border(1.dp, colors.lineSoft, RoundedCornerShape(10.dp))
-                        .verticalScroll(rememberScrollState())
-                        .padding(12.dp),
-                ) {
-                    SelectionContainer {
-                        Text(
-                            message,
-                            style = KobappTheme.type.bodySm,
-                            color = colors.textMd,
-                        )
-                    }
-                }
-            } else {
-                Text(
-                    message,
-                    style = KobappTheme.type.body,
-                    color = colors.textMd,
-                )
+            var showDetails by remember(message) { mutableStateOf(summary == null) }
+            if (summary != null) {
+                Text(summary, style = KobappTheme.type.body, color = colors.textMd, textAlign = TextAlign.Center)
+            }
+            if (showDetails) {
+                if (summary != null) Spacer(Modifier.height(12.dp))
+                DiagnosticText(message)
             }
 
             val reportLine = when (reportStatus) {
@@ -135,7 +127,8 @@ fun PlayerErrorDialog(
                 Text(reportLine, style = KobappTheme.type.bodySm, color = colors.textLo)
             }
 
-            if (alternatives.isNotEmpty()) {
+            var showAlternatives by remember(alternatives) { mutableStateOf(false) }
+            if (showAlternatives) {
                 Spacer(Modifier.height(20.dp))
                 AlternativesSection(
                     alternatives = alternatives,
@@ -145,11 +138,32 @@ fun PlayerErrorDialog(
             }
 
             Spacer(Modifier.height(22.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            // Wraps rather than squeezes: a phone is narrower than the five buttons a
+            // debrid failure can offer.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Spacer(Modifier.weight(1f))
+                if (summary != null) {
+                    KobButton(
+                        onClick = { showDetails = !showDetails },
+                        style = KobButtonStyle.Ghost,
+                        modifier = Modifier.focusKey("details"),
+                    ) {
+                        Text(if (showDetails) "Hide details" else "Details", style = KobappTheme.type.body, color = colors.textLo)
+                    }
+                }
+                if (alternatives.isNotEmpty() && !showAlternatives) {
+                    KobButton(
+                        onClick = { showAlternatives = true },
+                        style = KobButtonStyle.Ghost,
+                        modifier = Modifier.focusKey("choose"),
+                    ) {
+                        Text("Choose a release", style = KobappTheme.type.body, color = colors.textHi)
+                    }
+                }
+                if (want != null) WantButton(want)
                 // The report goes on its own; this only says so, and only offers a
                 // button when it could not be delivered.
                 if (reportStatus == ReportStatus.Failed && onRetryReport != null) {
@@ -181,6 +195,68 @@ fun PlayerErrorDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DiagnosticText(message: String) {
+    val colors = KobappTheme.colors
+    if (message.length > 200 || message.contains('\n')) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.elev2)
+                .border(1.dp, colors.lineSoft, RoundedCornerShape(10.dp))
+                .verticalScroll(rememberScrollState())
+                .padding(12.dp),
+        ) {
+            SelectionContainer {
+                Text(message, style = KobappTheme.type.bodySm, color = colors.textMd)
+            }
+        }
+    } else {
+        Text(message, style = KobappTheme.type.body, color = colors.textMd)
+    }
+}
+
+private enum class WantState { Idle, Sending, Done, Failed }
+
+@Composable
+private fun WantButton(want: WantAction) {
+    val colors = KobappTheme.colors
+    val scope = rememberCoroutineScope()
+    var state by remember(want) { mutableStateOf(WantState.Idle) }
+    KobButton(
+        onClick = {
+            if (state == WantState.Idle || state == WantState.Failed) {
+                state = WantState.Sending
+                scope.launch {
+                    state = try {
+                        want.run()
+                        WantState.Done
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        WantState.Failed
+                    }
+                }
+            }
+        },
+        style = KobButtonStyle.Ghost,
+        modifier = Modifier.focusKey("want"),
+    ) {
+        Text(
+            when (state) {
+                WantState.Idle -> "Want"
+                WantState.Sending -> "Adding…"
+                WantState.Done -> "Wanted"
+                WantState.Failed -> "Want failed — retry"
+            },
+            style = KobappTheme.type.body,
+            color = if (state == WantState.Done) colors.warn else colors.textHi,
+        )
     }
 }
 

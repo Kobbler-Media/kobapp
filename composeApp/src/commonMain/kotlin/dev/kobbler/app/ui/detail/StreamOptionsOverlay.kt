@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.em
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.RecentStreamDto
 import dev.kobbler.app.data.StreamOption
+import dev.kobbler.app.ui.player.PLAYBACK_FAILED
+import dev.kobbler.app.ui.player.PLAYBACK_WORKED
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
@@ -397,14 +399,23 @@ private fun StreamRow(
         // and only the first is worth a badge. "WILL CACHE" was drawn on every option
         // that was not confirmed instant, which is the opposite of the truth for any
         // option kobload simply had not probed.
-        if (option.cached) InstantPill()
+        val history = when (option.playback) {
+            PLAYBACK_WORKED -> "PLAYED BEFORE" to accent
+            PLAYBACK_FAILED -> "FAILED BEFORE" to colors.err
+            else -> null
+        }
+        if (option.cached || history != null) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (option.cached) StreamPill("INSTANT", colors.ok)
+                history?.let { (label, tint) -> StreamPill(label, tint) }
+            }
+        }
     }
 }
 
 @Composable
-private fun InstantPill() {
+private fun StreamPill(label: String, acc: Color) {
     val colors = KobappTheme.colors
-    val acc = colors.ok
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -416,7 +427,7 @@ private fun InstantPill() {
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(acc))
         Text(
-            "INSTANT",
+            label,
             style = KobappTheme.type.labelSm.copy(letterSpacing = 0.1.em),
             color = acc,
         )

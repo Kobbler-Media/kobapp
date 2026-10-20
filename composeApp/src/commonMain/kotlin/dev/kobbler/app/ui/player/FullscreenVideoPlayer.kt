@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,11 +69,15 @@ import dev.kobbler.kobplayer.TrackInfo
 import dev.kobbler.kobplayer.VideoSurface
 import dev.kobbler.kobplayer.ui.OverlayChapter
 import dev.kobbler.kobplayer.ui.SeekBarRegion
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val BRIGHTNESS_KEY = "player.brightness"
+private const val BRIGHTNESS_PERSIST_SETTLE_MS = 500L
 private const val GESTURE_HINT_KEY = "player.gesture_hint_count"
 private const val ASPECT_BUCKET_KEY_PREFIX = "aspect_ratio:"
 
@@ -163,6 +168,8 @@ fun FullscreenVideoPlayer(
     }
     LaunchedEffect(playerBrightness) {
         PlaybackLifecycle.setBrightnessLock(playerBrightness)
+        delay(BRIGHTNESS_PERSIST_SETTLE_MS)
+        Settings.putString(BRIGHTNESS_KEY, playerBrightness.toString())
     }
 
     val gestureHints = remember { Settings.getString(GESTURE_HINT_KEY)?.toIntOrNull() ?: 0 }
@@ -254,7 +261,7 @@ fun FullscreenVideoPlayer(
     val isInPip by PlaybackLifecycle.isInPipModeFlow.collectAsState()
 
     var thumbnailCues by remember { mutableStateOf<List<ThumbnailCue>>(emptyList()) }
-    LaunchedEffect(state.thumbnailsUrl) {
+    LaunchedEffect(state.thumbnailsUrl, state.isLive) {
         val url = state.thumbnailsUrl
         if (url == null) {
             thumbnailCues = emptyList()
@@ -262,42 +269,20 @@ fun FullscreenVideoPlayer(
         }
         val authToken = api.authHeaders["Authorization"]?.removePrefix("Bearer ") ?: ""
         val baseUrl = thumbnailVttBaseUrl(url)
+        val poll = ThumbnailPoll(live = state.isLive)
         var lastVtt: String? = null
-        var stableTicks = 0
         while (true) {
             val text = fetchThumbnailVttText(url, api.httpClient, authToken)
-            if (text != null) {
-                if (text != lastVtt) {
-                    thumbnailCues = parseThumbnailVttText(text, baseUrl)
+            val fetch = when (text) {
+                null -> ThumbnailFetch.Failed
+                lastVtt -> ThumbnailFetch.Unchanged
+                else -> {
+                    thumbnailCues = withContext(Dispatchers.Default) { parseThumbnailVttText(text, baseUrl) }
                     lastVtt = text
-                    stableTicks = 0
-                } else {
-                    stableTicks++
+                    ThumbnailFetch.Changed
                 }
-                if (stableTicks >= 2 && !state.isLive) return@LaunchedEffect
             }
-            delay(15_000)
-        }
-    }
-
-    // Skip detection finishes minutes after a file is ingested and people press play
-    // the moment the episode appears, so a session routinely fetches its segments before
-    // they exist and then holds that empty list for the whole watch. The server pushes
-    // them when they land; adopt the ones addressed to this file.
-    LaunchedEffect(state.fileId) {
-        val fileId = state.fileId ?: return@LaunchedEffect
-        api.libraryEvents().collect { frame ->
-            if (frame.kind != "skip_segments_ready") return@collect
-            // Whole handler guarded: the effect's key never changes, so one frame in an
-            // unexpected shape would otherwise take the collector down for the session.
-            runCatching {
-                if (frame.data["file_id"]?.jsonPrimitive?.contentOrNull != fileId) return@collect
-                val segments = frame.data["segments"] ?: return@collect
-                // Detection is season-scoped, so this fires for every sibling episode
-                // too — the file id filter above keeps someone else's segments out.
-                val parsed = api.decodeSkipSegments(segments)
-                if (parsed.isNotEmpty()) state.skipSegments = parsed
-            }
+            delay(poll.after(fetch) ?: return@LaunchedEffect)
         }
     }
 
@@ -326,24 +311,44 @@ fun FullscreenVideoPlayer(
         }
     }
 
+    // One library stream serves two listeners, so a title holds one connection, not two.
+    //
+    // Skip detection finishes minutes after a file is ingested and people press play
+    // the moment the episode appears, so a session routinely fetches its segments before
+    // they exist and then holds that empty list for the whole watch. The server pushes
+    // them when they land; adopt the ones addressed to this file.
+    //
     // Cross-device handoff: learn where this title stands on open and on every episode
     // change, then listen. Each reconnect re-asks, because the save that matters most is
     // the one made while this device was asleep. See PlaybackHandoff.kt.
-    LaunchedEffect(mediaId) {
-        if (mediaType != "movie" && mediaType != "episode") return@LaunchedEffect
+    LaunchedEffect(mediaId, mediaType) {
+        val handsOff = mediaType == "movie" || mediaType == "episode"
+        if (!handsOff) snapshotFlow { state.fileId }.first { it != null }
         val isPlayingNow = { player.isPlaying.value }
         val secondsNow = { (state.timeline.toAbsoluteMs(player.currentMs.value) / 1000).toInt() }
         var connectedOnce = false
         api.libraryEvents().collect { frame ->
-            // Guarded whole, like the skip-segment collector above.
+            // Guarded whole: the key does not change for the life of the title, so one frame
+            // in an unexpected shape would otherwise take the collector down for good.
             runCatching {
                 when (frame.kind) {
-                    dev.kobbler.app.data.STREAM_CONNECTED -> {
+                    "skip_segments_ready" -> {
+                        val fileId = state.fileId ?: return@runCatching
+                        if (frame.data["file_id"]?.jsonPrimitive?.contentOrNull != fileId) return@runCatching
+                        val segments = frame.data["segments"] ?: return@runCatching
+                        // Detection is season-scoped, so this fires for every sibling episode
+                        // too — the file id filter above keeps someone else's segments out.
+                        val parsed = api.decodeSkipSegments(segments)
+                        if (parsed.isNotEmpty()) state.skipSegments = parsed
+                    }
+                    dev.kobbler.app.data.STREAM_CONNECTED -> if (handsOff) {
                         state.syncHandoff(api, baseline = !connectedOnce, isPlayingNow, secondsNow)
                         connectedOnce = true
                     }
-                    "watch_progress" -> api.decodeWatchProgress(frame.data)?.let {
-                        state.considerHandoff(it, isPlayingNow(), secondsNow())
+                    "watch_progress" -> if (handsOff) {
+                        api.decodeWatchProgress(frame.data)?.let {
+                            state.considerHandoff(it, isPlayingNow(), secondsNow())
+                        }
                     }
                 }
             }
@@ -684,7 +689,6 @@ fun FullscreenVideoPlayer(
                         brightness = playerBrightness,
                         onBrightnessChange = { v ->
                             playerBrightness = v
-                            Settings.putString(BRIGHTNESS_KEY, v.toString())
                         },
                         volume = playerVolume,
                         maxVolume = player.maxVolume,

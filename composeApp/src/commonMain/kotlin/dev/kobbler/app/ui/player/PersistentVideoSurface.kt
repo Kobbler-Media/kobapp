@@ -21,7 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -240,21 +242,22 @@ fun PersistentVideoSurface(
     ) {
         if (containerSize == IntSize.Zero) return@Box
 
-        val renderedOffset = if (isMini && isDragging) {
-            IntOffset(
-                (miniSnapX + dragOffsetX.toInt()).coerceIn(0, (containerSize.width - miniWidthPx).coerceAtLeast(0)),
-                (miniSnapY + dragOffsetY.toInt()).coerceIn(0, (containerSize.height - miniHeightPx).coerceAtLeast(0)),
-            )
-        } else animOffset.value
-
-        val renderedSize = animSize.value
-
+        // Read in placement and measurement, not here: a morph or drag moves these every
+        // frame, and read in composition each frame recomposed the whole player.
         val surfaceModifier = Modifier
-            .offset { renderedOffset }
-            .size(
-                with(density) { renderedSize.width.toDp() },
-                with(density) { renderedSize.height.toDp() },
-            )
+            .offset {
+                if (isMini && isDragging) {
+                    IntOffset(
+                        (miniSnapX + dragOffsetX.toInt()).coerceIn(0, (containerSize.width - miniWidthPx).coerceAtLeast(0)),
+                        (miniSnapY + dragOffsetY.toInt()).coerceIn(0, (containerSize.height - miniHeightPx).coerceAtLeast(0)),
+                    )
+                } else animOffset.value
+            }
+            .layout { measurable, _ ->
+                val size = animSize.value
+                val placeable = measurable.measure(Constraints.fixed(size.width, size.height))
+                layout(size.width, size.height) { placeable.place(0, 0) }
+            }
             .then(if (shadowDp > 0.dp) Modifier.shadow(shadowDp, RoundedCornerShape(cornerDp)) else Modifier)
             .then(if (cornerDp > 0.dp) Modifier.clip(RoundedCornerShape(cornerDp)) else Modifier)
             .background(Color.Black)

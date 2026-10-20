@@ -1,11 +1,14 @@
 package dev.kobbler.kobplayer
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.Display
 import android.view.PixelCopy
 import android.view.Surface
 import android.view.SurfaceView
@@ -37,12 +40,56 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
             applyFrameRate()
         }
 
+    // ALWAYS still defers to the viewer's "Match content frame rate" setting: with it off, or on
+    // seamless-only (every phone's default), the panel never blanks. ONLY_IF_SEAMLESS overrode an
+    // explicit "Always" and left a TV that cannot switch seamlessly judder 24p at 60Hz.
+    var modeSwitchAllowed: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            applyFrameRate()
+        }
+
+    var matchDisplayRefresh: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            applyDisplayMode()
+        }
+
+    // A frame-rate vote never takes the panel off the rate the system picked, which on a
+    // Pixel playing video is 60Hz: 24p stays 3:2 pulldown. Asking for the display mode does.
+    private var requestedModeId = 0
+
+    private fun applyDisplayMode() {
+        val window = context.findActivity()?.window ?: return
+        val wanted = if (matchDisplayRefresh && isAttachedToWindow) {
+            requestableMode() ?: requestedModeId
+        } else {
+            0
+        }
+        if (wanted == requestedModeId && window.attributes.preferredDisplayModeId == wanted) return
+        requestedModeId = wanted
+        window.attributes = window.attributes.apply { preferredDisplayModeId = wanted }
+    }
+
+    // Held between episodes, while the next one's duration and rate are still unknown, so a TV
+    // does not blank twice to come back to the mode it was already in.
+    private fun requestableMode(): Int? {
+        if (!modeSwitchAllowed) return null
+        val display = display ?: return null
+        fun Display.Mode.described() = DisplayMode(modeId, physicalWidth, physicalHeight, refreshRate)
+        return displayModeFor(display.supportedModes.map { it.described() }, display.mode.described(), frameRate)
+    }
+
     fun applyFrameRate() {
+        applyDisplayMode()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val target = surface.holder.surface
         if (!target.isValid) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            target.setFrameRate(frameRate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS)
+            val strategy = if (modeSwitchAllowed) Surface.CHANGE_FRAME_RATE_ALWAYS else Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS
+            target.setFrameRate(frameRate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE, strategy)
         } else {
             target.setFrameRate(frameRate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
         }
@@ -55,6 +102,8 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
         visibility = View.GONE
     }
     private var captured: Bitmap? = null
+    private var frameBuffer: Bitmap? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     // The surface still holds a picture at pause, and is gone by the time it is reported lost.
     private val lifecycleObserver = LifecycleEventObserver { _, event ->
@@ -81,25 +130,27 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
 
     private fun captureFrame() {
         if (!surface.holder.surface.isValid || surface.width <= 0 || surface.height <= 0) return
-        val bitmap = Bitmap.createBitmap(
-            (surface.width / 2).coerceAtLeast(1),
-            (surface.height / 2).coerceAtLeast(1),
-            Bitmap.Config.ARGB_8888,
-        )
+        val width = (surface.width / 2).coerceAtLeast(1)
+        val height = (surface.height / 2).coerceAtLeast(1)
+        val bitmap = frameBuffer
+            ?.takeIf { it.width == width && it.height == height && heldFrame.visibility != View.VISIBLE }
+            ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { frameBuffer = it }
         PixelCopy.request(surface, bitmap, { result ->
-            if (result == PixelCopy.SUCCESS) captured = bitmap
-        }, Handler(Looper.getMainLooper()))
+            captured = bitmap.takeIf { result == PixelCopy.SUCCESS }
+        }, mainHandler)
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         observedLifecycle = findViewTreeLifecycleOwner()?.lifecycle?.also { it.addObserver(lifecycleObserver) }
+        applyDisplayMode()
     }
 
     override fun onDetachedFromWindow() {
         observedLifecycle?.removeObserver(lifecycleObserver)
         observedLifecycle = null
         super.onDetachedFromWindow()
+        applyDisplayMode()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -114,4 +165,10 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
         // A SurfaceView ignores its parent's bounds; its own clip holds from API 33.
         surface.clipBounds = Rect(0, 0, width, height)
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

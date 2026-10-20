@@ -53,6 +53,9 @@ import dev.kobbler.app.ui.kobChromeInsets
 import dev.kobbler.app.theme.Section
 import dev.kobbler.app.ui.components.PageBackdropHost
 import dev.kobbler.app.ui.components.LocalTvFocusDecor
+import dev.kobbler.app.ui.components.LocalCoveredByPlayer
+import dev.kobbler.app.ui.components.hiddenWhenCovered
+import dev.kobbler.app.ui.player.rememberPlayerCoversScreen
 import dev.kobbler.app.ui.components.AsyncContent
 import dev.kobbler.app.ui.components.RefreshOnEvents
 import dev.kobbler.app.ui.components.rememberCached
@@ -308,10 +311,17 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
                 PlayerContent(nav, api, formFactor, onToggleFullscreen, isFullscreen)
             }
         } else {
-            Box(Modifier.focusInert(scaffoldCovered)) {
-                when (formFactor) {
-                    FormFactor.Phone -> MobileScaffold(nav, navConfig, api, formFactor, player, gps, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
-                    FormFactor.TV, FormFactor.Desktop -> DesktopScaffold(nav, navConfig, api, formFactor, player, gps, onToggleFullscreen, isFullscreen, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
+            // Composed but unpainted under the player: anything it repaints holds an
+            // adaptive-refresh panel at 60Hz, and 24fps film judders there.
+            val coveredByPlayer = rememberPlayerCoversScreen(
+                gps.isFullscreen && player != null && gps.isActive && gps.castSession == null,
+            )
+            Box(Modifier.focusInert(scaffoldCovered).hiddenWhenCovered(coveredByPlayer)) {
+                CompositionLocalProvider(LocalCoveredByPlayer provides coveredByPlayer) {
+                    when (formFactor) {
+                        FormFactor.Phone -> MobileScaffold(nav, navConfig, api, formFactor, player, gps, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
+                        FormFactor.TV, FormFactor.Desktop -> DesktopScaffold(nav, navConfig, api, formFactor, player, gps, onToggleFullscreen, isFullscreen, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
+                    }
                 }
             }
         }
@@ -356,8 +366,14 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         val playbackError = gps.loadingError
         if (playbackError != null) {
             FocusScopeHost(id = "playback-error") {
+                val help = gps.failureHelp
                 dev.kobbler.app.ui.player.PlayerErrorDialog(
                     message = playbackError,
+                    title = if (help != null) "Couldn't play this" else "Stream failed",
+                    summary = help?.summary,
+                    want = help?.want,
+                    alternatives = help?.alternatives.orEmpty(),
+                    onPickAlternative = { option -> help?.onPickAlternative?.invoke(option) },
                     onDismiss = {
                         gps.loadingError = null
                         if (player != null && gps.isActive) gps.stop(player, api, scope)

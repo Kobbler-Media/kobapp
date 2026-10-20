@@ -836,7 +836,7 @@ fun VideoPlayerOverlay(
                     when (tvPicker.takeIf { tv }) {
                         TvPicker.Chapters -> ChapterPicker(
                             chapters = chapters,
-                            currentMs = displayMs(),
+                            currentMs = displayMs,
                             thumbnail = chapterThumbnail,
                             colors = colors,
                             focusDecoration = focusDecoration,
@@ -1069,14 +1069,17 @@ private fun BarPlayPause(
 @Composable
 private fun ChapterPicker(
     chapters: List<OverlayChapter>,
-    currentMs: Long,
+    currentMs: () -> Long,
     thumbnail: (@Composable (startMs: Long) -> Unit)?,
     colors: PlayerColors,
     focusDecoration: ControlFocus,
     onSelect: (OverlayChapter) -> Unit,
 ) {
     val ordered = remember(chapters) { chapters.filterNot { it.detected } + chapters.filter { it.detected } }
-    val currentIdx = ordered.indexOfLast { !it.detected && it.startMs <= currentMs }
+    val position by rememberUpdatedState(currentMs)
+    val currentIdx by remember(ordered) {
+        derivedStateOf { ordered.indexOfLast { !it.detected && it.startMs <= position() } }
+    }
     TvPickerRow(
         title = "Chapters",
         items = ordered.mapIndexed { idx, chapter ->

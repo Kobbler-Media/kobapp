@@ -202,7 +202,10 @@ suspend fun GlobalPlayerState.watchPlayback(player: Player, api: KobblerApi) = c
         // picked up on the next turn instead.
         startRequests.collect {
             when (val outcome = superviseStart(player, api)) {
-                StartOutcome.Playing -> PlaybackTrace.end()
+                StartOutcome.Playing -> {
+                    PlaybackTrace.end()
+                    debridPlayback?.onPlaying(sessionId)
+                }
                 is StartOutcome.Broken -> handleLostStart(player, api, outcome.cause)
                 StartOutcome.Stalled -> handleLostStart(
                     player, api,
@@ -224,6 +227,7 @@ suspend fun GlobalPlayerState.watchPlayback(player: Player, api: KobblerApi) = c
     launch {
         player.error.collect { throwable ->
             if (throwable == null || loadingError != null || isRecovering) return@collect
+            if (debridPlayback?.takeOver(player, throwable) == true) return@collect
             if (!recoverPlayback(player, api, cause = throwable)) reportPlayerFailure(throwable)
         }
     }
@@ -235,6 +239,7 @@ private suspend fun GlobalPlayerState.handleLostStart(
     cause: Throwable,
 ) {
     PlaybackTrace.end()
+    if (debridPlayback?.takeOver(player, cause) == true) return
     if (!recoverPlayback(player, api, cause = cause)) failWith(cause, diagnosticContext())
 }
 

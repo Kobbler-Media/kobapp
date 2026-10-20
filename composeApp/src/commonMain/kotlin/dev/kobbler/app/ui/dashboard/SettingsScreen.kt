@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Speaker
+import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.outlined.SwitchAccount
@@ -84,6 +85,8 @@ import dev.kobbler.app.platform.clientKind
 import dev.kobbler.app.ui.player.KEY_AUDIO_OUTPUT
 import dev.kobbler.app.ui.player.KEY_VIDEO_DECODING
 import dev.kobbler.app.ui.player.videoDecodingSetting
+import dev.kobbler.app.ui.player.KEY_MATCH_DISPLAY_REFRESH
+import dev.kobbler.app.ui.player.matchDisplayRefreshSetting
 import dev.kobbler.kobplayer.videoDecoderChoices
 import dev.kobbler.app.ui.player.audioOutputModeSetting
 import dev.kobbler.kobplayer.AudioOutputMode
@@ -189,6 +192,7 @@ fun SettingsScreen(
     var audioOutput by remember { mutableStateOf(audioOutputModeSetting().name) }
     val decoderChoices = remember { videoDecoderChoices() }
     var videoDecoding by remember { mutableStateOf(videoDecodingSetting().key) }
+    var matchDisplayRefresh by remember { mutableStateOf(matchDisplayRefreshSetting()) }
     var playbackSpeed by remember { mutableStateOf(UserSettings.getString(KEY_DEFAULT_PLAYBACK_SPEED) ?: "1.0") }
     var streamingQuality by remember { mutableStateOf(UserSettings.getString(KEY_STREAMING_QUALITY) ?: "auto") }
     var ttsVoice by remember { mutableStateOf(UserSettings.getString(KEY_TTS_VOICE) ?: "") }
@@ -344,6 +348,17 @@ fun SettingsScreen(
                     valueLabel = AUDIO_OUTPUT_OPTIONS.first { it.first == audioOutput }.second.substringBefore(" ("),
                     options = AUDIO_OUTPUT_OPTIONS,
                     onSelect = { audioOutput = it; Settings.putString(KEY_AUDIO_OUTPUT, it) },
+                )
+                SettingsDivider()
+                SettingsToggleRow(
+                    icon = Icons.Outlined.Tv,
+                    title = "Match display refresh rate",
+                    key = "match-display-refresh",
+                    checked = matchDisplayRefresh,
+                    onToggle = {
+                        matchDisplayRefresh = it
+                        Settings.putString(KEY_MATCH_DISPLAY_REFRESH, it.toString())
+                    },
                 )
             }
             if (decoderChoices.isNotEmpty()) {

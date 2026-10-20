@@ -1,6 +1,7 @@
 package dev.kobbler.kobplayer
 
 import kotlin.math.abs
+import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sign
 
@@ -70,4 +71,31 @@ fun measuredFrameRate(pictures: Long, elapsedMs: Long): Float {
     val fps = pictures * 1000f / elapsedMs
     val nearest = BroadcastFrameRates.minBy { abs(it - fps) }
     return if (abs(nearest - fps) / nearest <= FrameRateSnapTolerance) nearest else 0f
+}
+
+// Android's guidance: a non-seamless refresh switch blanks the panel for a second or two, which
+// only a movie-length watch repays. A trailer or hero preview stays on seamless switches.
+private const val ModeSwitchMinDurationMs = 10 * 60_000L
+
+fun worthAModeSwitch(durationMs: Long, live: Boolean): Boolean = live || durationMs >= ModeSwitchMinDurationMs
+
+data class DisplayMode(val id: Int, val width: Int, val height: Int, val refreshHz: Float)
+
+// 23.976 at 120Hz drifts a frame every eight seconds, which beats 3:2 pulldown; an exact
+// multiple still wins where the display has one, as 59.94 does over 60.
+private const val ExactCadence = 0.0002f
+private const val CloseCadence = 0.002f
+
+fun displayModeFor(modes: List<DisplayMode>, current: DisplayMode, frameRate: Float): Int? {
+    if (frameRate <= 0f) return null
+    fun drift(mode: DisplayMode): Float {
+        val repeats = mode.refreshHz / frameRate
+        return abs(repeats - round(repeats)) / repeats
+    }
+    val best = modes
+        .filter { it.width == current.width && it.height == current.height && it.refreshHz >= frameRate * (1 - CloseCadence) }
+        .filter { drift(it) <= CloseCadence }
+        .minWithOrNull(compareBy<DisplayMode> { drift(it) > ExactCadence }.thenBy { it.refreshHz })
+        ?: return null
+    return best.id.takeIf { it != current.id }
 }

@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.player
 
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.platform.Settings
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -23,6 +24,21 @@ class GlobalPlayerLoadTest {
             seekToSec = seekToSec,
         )
         return gps
+    }
+
+    @Test
+    fun theDisplayRefreshRequestIsOffUntilTheDeviceSettingTurnsItOn() = runTest {
+        val previous = Settings.getString(KEY_MATCH_DISPLAY_REFRESH)
+        try {
+            Settings.remove(KEY_MATCH_DISPLAY_REFRESH)
+            val off = FakePlayer().also { load(it, seekToSec = 0) }
+            Settings.putString(KEY_MATCH_DISPLAY_REFRESH, "true")
+            val on = FakePlayer().also { load(it, seekToSec = 0) }
+            assertTrue("matchDisplayRefresh:false" in off.calls, off.calls.toString())
+            assertTrue("matchDisplayRefresh:true" in on.calls, on.calls.toString())
+        } finally {
+            if (previous != null) Settings.putString(KEY_MATCH_DISPLAY_REFRESH, previous) else Settings.remove(KEY_MATCH_DISPLAY_REFRESH)
+        }
     }
 
     @Test
@@ -74,5 +90,15 @@ class GlobalPlayerLoadTest {
         val gps = kotlinx.coroutines.runBlocking { load(player, seekToSec = 0) }
         gps.playUnmuted(player)
         assertTrue(player.calls.none { it.startsWith("seek:") }, "unexpected seek: ${player.calls}")
+    }
+
+    /** A stream opened without a window decodes in software for its whole length; the report has to say so. */
+    @Test
+    fun aStartWithNoVideoOutputSaysSoInItsReport() = runTest {
+        val player = FakePlayer().apply { videoOutputReady.value = false }
+        val gps = load(player, seekToSec = 0)
+
+        assertTrue(gps.startEvents.any { "software" in it }, "nothing recorded: ${gps.startEvents}")
+        assertTrue(player.calls.contains("load"), "the stream was not opened anyway: ${player.calls}")
     }
 }

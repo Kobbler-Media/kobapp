@@ -685,6 +685,7 @@ data class StreamOption(
     val fileId: Int?,
     val publishDate: String?,
     val fileName: String? = null,
+    val playback: String? = null,
 )
 
 @Immutable

@@ -18,7 +18,6 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.data.RecentStreamDto
 import dev.kobbler.app.data.StreamOption
-import dev.kobbler.app.data.StreamResolveResult
 import dev.kobbler.app.data.StreamSearchResult
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
@@ -81,6 +80,7 @@ fun InlineMoviePlayer(
     var cachingProviderId by remember { mutableStateOf<String?>(null) }
     var cachingTorrentId by remember { mutableStateOf<String?>(null) }
     var cachingOption by remember { mutableStateOf<StreamOption?>(null) }
+    var cachingWalk by remember { mutableStateOf<DebridPlayback?>(null) }
 
     var debridFallback by remember { mutableStateOf(false) }
     // Carried to the caching poll, which resolves long after the press that asked for it.
@@ -148,6 +148,7 @@ fun InlineMoviePlayer(
         cachingProviderId = null
         cachingTorrentId = null
         cachingOption = null
+        cachingWalk = null
         gps.endCachingPreparation()
         // preparingFor too: left set it keeps gps.isActive true, and the next
         // beginPreparing silently no-ops — no loading shell on the following stream.
@@ -155,10 +156,11 @@ fun InlineMoviePlayer(
         gps.isPreparing = false
         gps.isFullscreen = false
     }
-    val startCaching: (String, String, StreamOption) -> Unit = { pid, tid, opt ->
-        cachingProviderId = pid
-        cachingTorrentId = tid
-        cachingOption = opt
+    val startCaching: (DebridPlayback, WalkResult.Caching) -> Unit = { walk, c ->
+        cachingProviderId = c.providerId
+        cachingTorrentId = c.torrentId
+        cachingOption = c.option
+        cachingWalk = walk
         gps.beginCachingPreparation(title = movie.title, onCancel = cancelCaching)
     }
 
@@ -203,40 +205,31 @@ fun InlineMoviePlayer(
         val pid = cachingProviderId ?: return@LaunchedEffect
         val tid = cachingTorrentId ?: return@LaunchedEffect
         val opt = cachingOption ?: return@LaunchedEffect
+        val walk = cachingWalk ?: return@LaunchedEffect
+        val clear = { cachingProviderId = null; cachingTorrentId = null; cachingOption = null; cachingWalk = null }
         while (true) {
             delay(3000)
             try {
                 val status = api.streamResolveStatus(pid, tid)
                 when (status.status) {
                     "ready" -> {
-                        val resumeSec = if (debridFromStart) 0 else movieProgress(api, movie)
-                        val result = api.streamResolve(
-                            opt, "movie", movie.id,
-                            startTime = resumeRequestSeconds(resumeSec),
-                            estimatedDuration = null,
-                        )
-                        if (result is StreamResolveResult.Ready && player != null) {
-                            gps.endCachingPreparation()
-                            playDebridSession(gps, player, api, result.session, movie, resumeSec)
-                        } else {
-                            cancelCaching()
-                        }
-                        cachingProviderId = null; cachingTorrentId = null; cachingOption = null
+                        clear()
+                        gps.endCachingPreparation()
+                        walk.start(opt, if (debridFromStart) 0 else movieProgress(api, movie))
                         break
                     }
                     "downloading" -> gps.setCachingProgress(status.progress?.toFloat() ?: 0f)
                     "error" -> {
-                        cachingProviderId = null; cachingTorrentId = null; cachingOption = null
-                        gps.failWith(
-                            IllegalStateException(status.message ?: "Stream failed"),
-                            listOf("Movie: ${movie.title}", "ID: ${movie.id}"),
-                        )
+                        clear()
+                        walk.giveUp(IllegalStateException(status.message ?: "Stream failed"))
                         break
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                cachingProviderId = null; cachingTorrentId = null; cachingOption = null
-                gps.failWith(e, listOf("Movie: ${movie.title}", "ID: ${movie.id}"))
+                clear()
+                walk.giveUp(e)
                 break
             }
         }
@@ -273,19 +266,15 @@ fun InlineMoviePlayer(
                 },
             )
             resolving = scope.launch {
-                val options = streamResult?.options
-                if (options.isNullOrEmpty()) {
-                    gps.cancelPreparing()
-                    showStreamOptions = true
-                } else {
-                    tryPlayWithFallback(
-                        api = api, player = player, gps = gps, movie = movie,
-                        options = options, option = options.first(),
-                        resumeSec = if (fromStart) 0 else movieProgress(api, movie),
-                        onCaching = startCaching,
-                    )
-                    if (gps.mediaId == null) gps.cancelPreparing()
-                }
+                val options = streamResult?.options.orEmpty()
+                tryPlayWithFallback(
+                    api = api, player = player, gps = gps, movie = movie,
+                    options = options, option = options.firstOrNull(),
+                    resumeSec = if (fromStart) 0 else movieProgress(api, movie),
+                    searchErrors = streamResult?.errors.orEmpty(),
+                    onCaching = startCaching,
+                )
+                if (gps.mediaId == null && gps.loadingError == null) gps.cancelPreparing()
             }
         }
     }
@@ -411,49 +400,26 @@ private suspend fun tryPlayWithFallback(
     gps: GlobalPlayerState,
     movie: Movie,
     options: List<StreamOption>,
-    option: StreamOption,
-    attempt: Int = 0,
+    option: StreamOption?,
     resumeSec: Int = 0,
-    onCaching: (providerId: String, torrentId: String, option: StreamOption) -> Unit,
+    searchErrors: List<String> = emptyList(),
+    onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
 ) {
     if (player == null) return
-    fallbackNote(attempt)?.let { gps.preparingNote = it }
-    try {
-        val result = api.streamResolve(
-            option = option,
-            mediaType = "movie",
-            mediaId = movie.id,
-            startTime = resumeRequestSeconds(resumeSec),
-        )
-        when (result) {
-            is StreamResolveResult.Ready -> playDebridSession(gps, player, api, result.session, movie, resumeSec)
-            is StreamResolveResult.Caching -> {
-                val currentIdx = options.indexOfFirst { it.id == option.id }
-                val next = options.drop(currentIdx + 1).firstOrNull()
-                if (next != null && attempt < MAX_AUTO_FALLBACK) {
-                    tryPlayWithFallback(api, player, gps, movie, options, next, attempt + 1, resumeSec, onCaching)
-                } else {
-                    onCaching(result.debridProviderId, result.torrentId, result.option)
-                }
-            }
-        }
-    } catch (e: CancellationException) {
-        // Not a dead option: the scope died. Falling through would burn the whole
-        // option list on a screen that is already gone and report them all as failures.
-        throw e
-    } catch (e: Exception) {
-        val currentIdx = options.indexOfFirst { it.id == option.id }
-        val next = options.getOrNull(currentIdx + 1)
-        if (next != null && attempt < MAX_AUTO_FALLBACK) {
-            tryPlayWithFallback(api, player, gps, movie, options, next, attempt + 1, resumeSec, onCaching)
-        } else {
-            gps.failWith(e, listOf(
-                "Movie: ${movie.title}",
-                "ID: ${movie.id}",
-                "All ${attempt + 1} debrid stream options failed",
-            ))
-        }
-    }
+    lateinit var walk: DebridPlayback
+    walk = DebridPlayback(
+        api = api, gps = gps, options = options,
+        resolve = { opt, resume ->
+            api.streamResolve(option = opt, mediaType = "movie", mediaId = movie.id, startTime = resumeRequestSeconds(resume))
+        },
+        play = { _, session, resume -> playDebridSession(gps, player, api, session, movie, resume) },
+        onCaching = { onCaching(walk, it) },
+        want = movie.takeIf { it.canBeWanted(api.canWant) }?.let { WantAction { api.wantMovieById(it.id) } },
+        title = movie.title,
+        posterUrl = movie.posterUrl,
+        context = listOf("Movie: ${movie.title}", "ID: ${movie.id}") + searchErrors,
+    )
+    walk.start(option, resumeSec)
 }
 
 private suspend fun playDebridSession(

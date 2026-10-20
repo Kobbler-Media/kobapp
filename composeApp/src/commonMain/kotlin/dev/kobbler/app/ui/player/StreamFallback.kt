@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.StreamOption
+
 /**
  * How many options auto-play tries before giving up and showing caching progress.
  *
@@ -8,6 +10,25 @@ package dev.kobbler.app.ui.player
  * falling onto it trades one cold wait for another.
  */
 internal const val MAX_AUTO_FALLBACK = 5
+
+internal const val PLAYBACK_FAILED = "failed"
+internal const val PLAYBACK_WORKED = "worked"
+
+/**
+ * The options an automatic walk will try, best first: the one asked for, then what is
+ * ranked after it. An option this server has watched fail goes behind every other — the
+ * server sinks those already, but [skip] only knows what failed in this sitting.
+ */
+internal fun fallbackCandidates(
+    options: List<StreamOption>,
+    from: StreamOption?,
+    skip: Set<String> = emptySet(),
+): List<StreamOption> {
+    val start = from?.let { f -> options.indexOfFirst { it.id == f.id }.coerceAtLeast(0) } ?: 0
+    val rest = options.drop(start).filter { it.id !in skip && it.id != from?.id }
+    val (failed, unknown) = rest.partition { it.playback == PLAYBACK_FAILED }
+    return (listOfNotNull(from) + unknown + failed).take(MAX_AUTO_FALLBACK + 1)
+}
 
 /**
  * What to tell the viewer while auto-play walks the option list. The first attempt is

@@ -47,7 +47,7 @@ class DebridResumeTest {
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
                     options = listOf(option), option = option,
                     resumeSec = resumeSec,
-                    onCaching = { _, _, _ -> },
+                    onCaching = { _, _ -> },
                 )
             }
         }

@@ -31,6 +31,7 @@ import coil3.size.Precision
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -45,7 +46,11 @@ data class ThumbnailCue(
 )
 
 suspend fun fetchThumbnailVttText(vttUrl: String, client: HttpClient, authToken: String): String? = try {
-    client.get(vttUrl) { header("Authorization", "Bearer $authToken") }.bodyAsText()
+    withContext(Dispatchers.Default) {
+        client.get(vttUrl) { header("Authorization", "Bearer $authToken") }.bodyAsText()
+    }
+} catch (e: CancellationException) {
+    throw e
 } catch (_: Exception) {
     null
 }
@@ -57,11 +62,6 @@ suspend fun fetchThumbnailVttText(vttUrl: String, client: HttpClient, authToken:
 fun thumbnailVttBaseUrl(vttUrl: String): String =
     if (vttUrl.endsWith(".vtt")) vttUrl.removeSuffix(".vtt") + "/"
     else vttUrl.substringBeforeLast('/') + "/"
-
-suspend fun parseThumbnailVtt(vttUrl: String, client: HttpClient, authToken: String): List<ThumbnailCue> {
-    val text = fetchThumbnailVttText(vttUrl, client, authToken) ?: return emptyList()
-    return parseThumbnailVttText(text, thumbnailVttBaseUrl(vttUrl))
-}
 
 fun parseThumbnailVttText(text: String, baseUrl: String): List<ThumbnailCue> {
     val cues = mutableListOf<ThumbnailCue>()

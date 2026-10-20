@@ -98,8 +98,24 @@ internal fun withPlaybackToken(url: String, token: String): String {
 private const val PlaybackTokenTtlHours = 24
 private val PlaybackTokenReuse = 20.hours
 
-class ApiException(val statusCode: Int, val statusDescription: String) :
-    Exception("Server error ($statusCode $statusDescription)")
+class ApiException(
+    val statusCode: Int,
+    val statusDescription: String,
+    val serverMessage: String? = null,
+    val reason: String? = null,
+) : Exception(serverMessage ?: "Server error ($statusCode $statusDescription)")
+
+private class ServerError(val message: String?, val reason: String?)
+
+private fun parseServerError(body: String): ServerError = try {
+    val obj = Json.parseToJsonElement(body).jsonObject
+    ServerError(
+        message = (obj["error"] ?: obj["message"])?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+        reason = obj["reason"]?.jsonPrimitive?.contentOrNull,
+    )
+} catch (_: Exception) {
+    ServerError(null, null)
+}
 
 // -- API response DTOs --
 
@@ -456,6 +472,7 @@ data class StreamOptionDto(
     @SerialName("source_type") val sourceType: String = "torrent",
     val files: List<StreamFileDto> = emptyList(),
     @SerialName("publish_date") val publishDate: String? = null,
+    val playback: String? = null,
 )
 
 @Serializable
@@ -1932,15 +1949,8 @@ private fun RecentItem.toRecentlyAddedItem(base: String): RecentlyAddedItem = Re
  * The synthesis endpoint reports refusals as `{"error": "..."}`, and that text names the
  * actual limit hit. Ktor's reason phrase alone ("Bad Request") is not diagnosable.
  */
-internal fun ttsErrorMessage(statusCode: Int, reason: String, body: String): String {
-    val fromBody = try {
-        val obj = Json.parseToJsonElement(body).jsonObject
-        (obj["error"] ?: obj["message"])?.jsonPrimitive?.contentOrNull
-    } catch (_: Exception) {
-        null
-    }
-    return fromBody?.takeIf { it.isNotBlank() } ?: "HTTP $statusCode $reason"
-}
+internal fun ttsErrorMessage(statusCode: Int, reason: String, body: String): String =
+    parseServerError(body).message ?: "HTTP $statusCode $reason"
 
 class KobblerApi(
     internal val httpClient: HttpClient,
@@ -2176,7 +2186,15 @@ class KobblerApi(
 
     private suspend fun HttpResponse.checkedBody(): String {
         if (!status.isSuccess()) {
-            throw ApiException(status.value, status.description)
+            val body = try {
+                bodyAsText()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                ""
+            }
+            val error = parseServerError(body)
+            throw ApiException(status.value, status.description, error.message, error.reason)
         }
         // bodyAsText() suspends on network I/O. Dispatching it to Dispatchers.Default pins a
         // CPU worker for the whole read, so concurrent requests queue behind core count and
@@ -2299,8 +2317,8 @@ class KobblerApi(
     }
 
     /** Want all episodes in a season. */
-    suspend fun wantSeason(showId: String, seasonId: String) {
-        post("/api/v1/admin/tv/shows/$showId/seasons/$seasonId/want", "{}")
+    suspend fun wantSeason(seasonId: String) {
+        post("/api/v1/admin/tv/seasons/$seasonId/want", "{}")
         invalidateTvShows()
     }
 
@@ -3526,6 +3544,7 @@ class KobblerApi(
             debridProviderId = debridProviderId, cached = cached, sourceType = sourceType,
             fileId = file?.id, publishDate = publishDate,
             fileName = file?.path?.substringAfterLast('/')?.takeIf { it.isNotBlank() },
+            playback = playback,
         )
     }
 
@@ -3697,6 +3716,32 @@ class KobblerApi(
     }
 
     /** Create a movie from discover data and mark it wanted. Returns the kobbler ID. */
+    /** Want one episode of a show the library may not have yet; the server creates what is missing. */
+    suspend fun wantDiscoverEpisode(detail: DiscoverDetail, episode: DiscoverEpisodeRef) {
+        val body = buildJsonObject {
+            put("provider", detail.provider)
+            put("provider_id", detail.providerId)
+            put("season_number", episode.season)
+            put("episode_number", episode.episode)
+            put("title", detail.title)
+            detail.year?.let { put("year", it) }
+            if (detail.identifiers.isNotEmpty()) {
+                putJsonObject("identifiers") { detail.identifiers.forEach { (k, v) -> put(k, v) } }
+            }
+            detail.description?.let { put("description", it) }
+            detail.posterUrl.takeIf { it.isNotEmpty() }?.let { put("poster_url", it) }
+            detail.backdropUrl?.let { put("backdrop_url", it) }
+            if (detail.genres.isNotEmpty()) {
+                putJsonArray("genres") { detail.genres.forEach { add(JsonPrimitive(it)) } }
+            }
+            detail.rating?.let { put("rating", it.toDouble()) }
+            detail.runtime?.let { put("runtime", it) }
+            detail.network?.let { put("network", it) }
+        }
+        post("/api/v1/admin/discover/want-episode", body.toString())
+        invalidateTvShows()
+    }
+
     suspend fun wantMovie(detail: DiscoverDetail): String {
         val body = buildJsonObject {
             put("title", detail.title)
@@ -3946,6 +3991,15 @@ class KobblerApi(
     /** Delete a debrid stream session. */
     suspend fun deleteDebridSession(sessionId: String) {
         quiet(Unit) { delete("/api/v1/admin/stream/$sessionId") }
+    }
+
+    /** Tell the server whether a debrid stream played, so the next search ranks by it. */
+    suspend fun reportStreamOutcome(sessionId: String, ok: Boolean, reason: String? = null) {
+        val body = buildJsonObject {
+            put("ok", ok)
+            reason?.let { put("reason", it.take(500)) }
+        }
+        quiet(Unit) { post("/api/v1/admin/stream/$sessionId/outcome", body.toString()) }
     }
 
     /** Fetch episodes for a discover TV show season. */

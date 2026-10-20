@@ -73,8 +73,11 @@ class GlobalPlayerState {
      * Shared by every detail screen that closes a session on dispose: the close has to
      * outlive the composable, and one scope for all of them is what keeps a long TV
      * session from accumulating one uncancellable scope per screen exit.
+     *
+     * Main, because what it runs also drives the player and writes this state: the Android
+     * player takes its commands, and attaches its video output, from the main thread.
      */
-    val teardownScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val teardownScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     // What's currently loaded
     var mediaType by mutableStateOf<String?>(null)        // "movie" or "episode"
@@ -209,7 +212,20 @@ class GlobalPlayerState {
 
     // Non-null when session creation or stream load failed. Rendered as an
     // error dialog over the player so the user can screenshot it and report.
-    var loadingError by mutableStateOf<String?>(null)
+    private var loadingErrorState by mutableStateOf<String?>(null)
+    var loadingError: String?
+        get() = loadingErrorState
+        set(value) {
+            loadingErrorState = value
+            if (value == null) failureHelp = null
+        }
+
+    /** The friendly half of [loadingError], for failures that have somewhere to go next. */
+    var failureHelp by mutableStateOf<PlaybackFailureHelp?>(null)
+        private set
+
+    /** The walk behind the debrid stream now loaded, so a start that fails can move on. */
+    internal var debridPlayback: DebridPlayback? = null
 
     /**
      * What was last handed to the player, kept so an open/decode failure can say
@@ -355,6 +371,7 @@ class GlobalPlayerState {
 
         if (id != mediaId) {
             recoveryMarks.clear()
+            debridPlayback = null
             // Answered by switching titles, or overtaken by the viewer picking another.
             handoff = null
         }
@@ -406,12 +423,14 @@ class GlobalPlayerState {
             } else null
 
         isStarting = true
+        pendingSeekMs = seekToSec * 1000L
         // Enter preload mode — suppresses all output (video surface detached,
         // audio silenced) while VLC buffers and decodes. No mute hack needed.
         player.setPreloading(true)
         mutedForPreload = true
         player.setAudioOutputMode(audioOutputModeSetting())
         player.setVideoDecoding(videoDecodingSetting())
+        player.setMatchDisplayRefresh(matchDisplayRefreshSetting())
 
         if (type != "livetv") liveFieldCoded = false
         val intent = trackIntent(
@@ -430,10 +449,7 @@ class GlobalPlayerState {
         // it is a silent drop to software decoding for the whole title — which is exactly
         // how it went unnoticed before there was anything watching for it.
         PlaybackTrace.mark(if (hasOutput) "surface" else "surface MISSING")
-        if (!hasOutput) {
-            println("[PlaybackTrace] no video output after 2s — opening the stream anyway, so it will decode in software")
-        }
-        pendingSeekMs = seekToSec * 1000L
+        if (!hasOutput) noteStartEvent("no video output after 2s, opened anyway: decodes in software")
         player.load(
             dev.kobbler.kobplayer.MediaSource.Url(
                 // Tokenised here rather than stored: lastStreamUrl above goes into failure
@@ -561,6 +577,7 @@ class GlobalPlayerState {
         selectedServerSubtitleTrackId = null
         selectedServerSubtitleStreamIndex = null
         isDebrid = false
+        debridPlayback = null
         onSwitchStream = null
         castSession = null
         onCastPlayPause = null
@@ -664,7 +681,11 @@ class GlobalPlayerState {
         }
     }
 
-    fun failWith(throwable: Throwable, contextLines: List<String> = emptyList()) {
+    fun failWith(
+        throwable: Throwable,
+        contextLines: List<String> = emptyList(),
+        help: PlaybackFailureHelp? = null,
+    ) {
         // Cancellation means we stopped, not that playback failed: leaving the screen
         // kills the in-flight resolve, and reporting that raised a dialog over nothing.
         if (throwable is CancellationException) {
@@ -690,6 +711,7 @@ class GlobalPlayerState {
             appendLine()
             append(throwable.stackTraceToString())
         }
+        failureHelp = help
         preparingFor = null
         isPreparing = false
         preparingNote = null

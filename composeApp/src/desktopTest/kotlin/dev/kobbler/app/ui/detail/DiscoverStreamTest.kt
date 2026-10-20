@@ -81,13 +81,17 @@ class DiscoverStreamTest {
         },
     )
 
-    private class Page(val viewed: MutableList<Pair<String, String>>, val backs: BackInterceptors) {
+    private class Page(
+        val viewed: MutableList<Pair<String, String>>,
+        val backs: BackInterceptors,
+        val gps: GlobalPlayerState,
+    ) {
         var leftPage = false
     }
 
     private fun ComposeUiTest.showPage(stub: StubServer, detail: DiscoverDetail): Page {
         val api = KobblerApi(HttpClient(), stub.url, "token").apply { canStream = true }
-        val page = Page(mutableListOf(), BackInterceptors())
+        val page = Page(mutableListOf(), BackInterceptors(), GlobalPlayerState())
         setContent {
             CompositionLocalProvider(LocalBackInterceptors provides page.backs) {
                 Box(Modifier.size(1280.dp, 720.dp)) {
@@ -97,7 +101,7 @@ class DiscoverStreamTest {
                             api = api,
                             formFactor = FormFactor.TV,
                             player = null,
-                            gps = GlobalPlayerState(),
+                            gps = page.gps,
                             onBack = { page.leftPage = true },
                             onViewInLibrary = { type, id -> page.viewed += type to id },
                         )
@@ -202,6 +206,30 @@ class DiscoverStreamTest {
             onNodeWithText("Mayor.of.Kingstown.S01E01.1080p.mkv", substring = true).assertIsDisplayed()
             onNodeWithText("Torrentio", substring = true).assertIsDisplayed()
             onNodeWithText("91%", substring = true).assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun `an episode nothing will stream for offers to want just that episode`() = runComposeUiTest {
+        val refused = """{"error":"Real-Debrid refused this release. Try a different source.","reason":"blocked"}"""
+        val failing = routes + mapOf(
+            "/api/v1/admin/stream/resolve" to { _: HttpExchange -> refused },
+            "/api/v1/admin/discover/want-episode" to { _: HttpExchange -> "{}" },
+        )
+        StubServer(failing, mapOf("/api/v1/admin/stream/resolve" to 502)).use { stub ->
+            val page = showPage(stub, show)
+            expandFirstSeason()
+            onNodeWithText("The Mayor").performClick()
+            waitUntil(timeoutMillis = 10_000) { page.gps.failureHelp != null }
+
+            val help = page.gps.failureHelp!!
+            assertTrue(help.summary.contains("refused"), help.summary)
+            kotlinx.coroutines.runBlocking { help.want!!.run() }
+            val want = stub.body("/api/v1/admin/discover/want-episode")
+            assertEquals(1, want["season_number"]?.jsonPrimitive?.int)
+            assertEquals(1, want["episode_number"]?.jsonPrimitive?.int)
+            assertEquals("97951", want["provider_id"]?.jsonPrimitive?.content)
+            assertTrue(page.viewed.isEmpty(), "opened a library page for a stream that never played")
         }
     }
 }

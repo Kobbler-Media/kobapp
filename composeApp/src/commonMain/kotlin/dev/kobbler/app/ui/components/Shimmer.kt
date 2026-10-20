@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -32,7 +33,8 @@ private val LocalShimmerOffset = staticCompositionLocalOf<State<Float>?> { null 
 
 @Composable
 private fun rememberShimmerOffset(): State<Float> =
-    rememberInfiniteTransition(label = "shimmer").animateFloat(
+    if (LocalCoveredByPlayer.current) remember { mutableFloatStateOf(0f) }
+    else rememberInfiniteTransition(label = "shimmer").animateFloat(
         initialValue = 0f,
         targetValue = SweepPx,
         animationSpec = infiniteRepeatable(

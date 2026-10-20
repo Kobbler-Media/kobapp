@@ -8,9 +8,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -109,7 +111,7 @@ private fun sseFrames(
         if (maxReconnects != null && ++reconnects > maxReconnects) return@flow
         delay(RECONNECT_DELAY_MS)
     }
-}
+}.flowOn(Dispatchers.Default)
 
 /** Library-wide events. The server holds this one open indefinitely. */
 fun libraryEventStream(

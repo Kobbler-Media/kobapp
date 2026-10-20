@@ -260,7 +260,7 @@ private class TvAutoGlowNode(
 
 @Composable
 fun Modifier.tvMarquee(focused: Boolean): Modifier =
-    if (focused && LocalTvFocusDecor.current) {
+    if (focused && LocalTvFocusDecor.current && !LocalCoveredByPlayer.current) {
         // Twice is enough to read it. Forever repaints the whole window every frame for as
         // long as the card holds focus, which on a TV stick is a GPU kept flat out by a
         // viewer who has stopped to think.

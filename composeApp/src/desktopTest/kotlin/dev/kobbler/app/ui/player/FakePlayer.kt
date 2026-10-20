@@ -31,8 +31,19 @@ class FakePlayer : Player {
      */
     var startTimeIgnored: Boolean = false
 
+    /** A source this answers true for errors on play, the way an unopenable stream does. */
+    var failsToOpen: (String) -> Boolean = { false }
+
     /** Accept this many seeks without performing them, the way a dropped seek reads. */
     var seeksDropped: Int = 0
+
+    /** Commands that arrived off the main thread, which a libVLC-backed player must never see. */
+    val offMainCalls: MutableList<String> = java.util.concurrent.CopyOnWriteArrayList()
+
+    private fun record(call: String) {
+        if (!javax.swing.SwingUtilities.isEventDispatchThread()) offMainCalls += call
+        calls += call
+    }
 
     override val state = MutableStateFlow(PlayerState.IDLE)
     override val isPlaying = MutableStateFlow(false)
@@ -59,6 +70,7 @@ class FakePlayer : Player {
     override fun load(source: MediaSource) {
         loadedSource = source as? MediaSource.Url
         loadedUrl = loadedSource?.url
+        error.value = null
         calls += "load"
         currentMs.value = if (startTimeIgnored) 0L
         else (loadedSource?.startTimeSec ?: 0).toLong() * 1000
@@ -68,6 +80,10 @@ class FakePlayer : Player {
     // session stuck in its opening posture, with the transport suppressed.
     override fun play() {
         calls += "play"
+        if (loadedUrl?.let(failsToOpen) == true) {
+            error.value = RuntimeException("VLC could not open $loadedUrl")
+            return
+        }
         if (playStalls) return
         isPlaying.value = true
         state.value = PlayerState.PLAYING
@@ -76,7 +92,7 @@ class FakePlayer : Player {
     override fun pause() { calls += "pause"; isPlaying.value = false }
     override fun togglePlayPause() = if (isPlaying.value) pause() else play()
     override fun seekTo(ms: Long) {
-        calls += "seek:$ms"
+        record("seek:$ms")
         // Like the real players: the position is reported optimistically, so a seek that
         // is dropped has to be caught by reading the clock again afterwards.
         if (seeksDropped > 0) {
@@ -92,10 +108,17 @@ class FakePlayer : Player {
     override fun volumeUp(step: Float) { }
     override fun volumeDown(step: Float) { }
     override fun setPlaybackSpeed(speed: Float) { playbackSpeed.value = speed }
-    override fun selectAudioTrack(track: TrackInfo?) { selectedAudioTrack.value = track }
-    override fun selectSubtitleTrack(track: TrackInfo?) { selectedSubtitleTrack.value = track }
+    override fun selectAudioTrack(track: TrackInfo?) {
+        record("audio:${track?.id}")
+        selectedAudioTrack.value = track
+    }
+    override fun selectSubtitleTrack(track: TrackInfo?) {
+        record("subtitle:${track?.id}")
+        selectedSubtitleTrack.value = track
+    }
     override fun setAspectRatio(ratio: AspectRatio) { aspectRatio.value = ratio }
     override fun setPreloading(preloading: Boolean) { calls += "preloading:$preloading" }
+    override fun setMatchDisplayRefresh(enabled: Boolean) { calls += "matchDisplayRefresh:$enabled" }
     override fun setChapter(chapter: Chapter) { currentChapter.value = chapter }
     override suspend fun takeScreenshot(path: String) { }
     override fun release() { }

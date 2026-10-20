@@ -52,6 +52,8 @@ actual fun VideoSurface(
     val videoSize by player.videoSize.collectAsState()
     val decodedPicture by android.decodedPicture.collectAsState()
     val contentFrameRate by android.contentFrameRate.collectAsState()
+    val modeSwitchAllowed by android.modeSwitchAllowed.collectAsState()
+    val matchDisplayRefresh by android.matchDisplayRefresh.collectAsState()
     val pictureReturns by android.pictureReturns.collectAsState()
     var frameView by remember { mutableStateOf<VideoFrameLayout?>(null) }
 
@@ -109,6 +111,8 @@ actual fun VideoSurface(
             update = {
                 it.picture = decodedPicture
                 it.frameRate = contentFrameRate
+                it.modeSwitchAllowed = modeSwitchAllowed
+                it.matchDisplayRefresh = matchDisplayRefresh
             },
             // Without it Compose discards and recreates the view inside any reusable
             // container, and a recreated SurfaceView is a destroyed surface.

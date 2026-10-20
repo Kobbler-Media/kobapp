@@ -13,11 +13,12 @@ import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverEpisodeRef
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.StreamOption
-import dev.kobbler.app.data.StreamResolveResult
+import dev.kobbler.app.data.isWantedStatus
 import dev.kobbler.app.data.StreamSearchResult
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.app.ui.player.GlobalPlayerState
-import dev.kobbler.app.ui.player.MAX_AUTO_FALLBACK
+import dev.kobbler.app.ui.player.DebridPlayback
+import dev.kobbler.app.ui.player.WantAction
 import dev.kobbler.app.ui.player.applyWarmReady
 import dev.kobbler.kobplayer.Player
 import kotlinx.coroutines.CancellationException
@@ -35,6 +36,7 @@ internal data class Caching(
     val torrentId: String,
     val option: StreamOption,
     val episode: DiscoverEpisodeRef?,
+    val walk: DebridPlayback,
 )
 
 /**
@@ -104,14 +106,9 @@ internal class DiscoverStreams(
             },
         )
         job = scope.launch {
-            val options = searchFor(episode).await().options
-            if (options.isEmpty()) {
-                gps.cancelPreparing()
-                pick(episode)
-                return@launch
-            }
-            resolveWithFallback(options, chosen ?: options.first(), episode)
-            if (gps.mediaId == null && caching == null) gps.cancelPreparing()
+            val found = searchFor(episode).await()
+            walkFor(found.options, episode, found.errors).start(chosen ?: found.options.firstOrNull(), resumeSec = 0)
+            if (gps.mediaId == null && caching == null && gps.loadingError == null) gps.cancelPreparing()
         }
     }
 
@@ -123,41 +120,34 @@ internal class DiscoverStreams(
         gps.isFullscreen = false
     }
 
-    private fun failureContext(vararg extra: String) =
-        listOf("Discover ${detail().mediaType}: ${detail().title}") + extra
-
-    private suspend fun resolveWithFallback(
+    private fun walkFor(
         options: List<StreamOption>,
-        option: StreamOption,
         episode: DiscoverEpisodeRef?,
-        attempt: Int = 0,
-    ) {
-        val next = options.getOrNull(options.indexOfFirst { it.id == option.id } + 1)
-            ?.takeIf { attempt < MAX_AUTO_FALLBACK }
-        try {
-            when (val r = resolve(option, episode)) {
-                is StreamResolveResult.Ready -> play(r.session, episode)
-                is StreamResolveResult.Caching -> {
-                    // The next option in order, not the next verified-cached one. kobload
-                    // ranks the list by real availability and warms the top WARM_TOP_N
-                    // precisely because the client walks it in order, and `cached` means a
-                    // first-hand probe only — so filtering on it passed over better-ranked
-                    // options whose availability was merely unprobed, and skipped every
-                    // usenet option outright, since that path reports cached = false.
-                    if (next != null) {
-                        resolveWithFallback(options, next, episode, attempt + 1)
-                    } else {
-                        caching = Caching(r.debridProviderId, r.torrentId, r.option, episode)
-                        gps.beginCachingPreparation(title = detail().title, onCancel = ::cancelCaching)
-                    }
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (next != null) resolveWithFallback(options, next, episode, attempt + 1)
-            else gps.failWith(e, failureContext("All debrid stream options failed"))
-        }
+        searchErrors: List<String> = emptyList(),
+    ): DebridPlayback {
+        val d = detail()
+        lateinit var walk: DebridPlayback
+        walk = DebridPlayback(
+            api = api, gps = gps, options = options,
+            resolve = { option, _ -> resolve(option, episode) },
+            play = { _, session, _ -> play(session, episode) },
+            onCaching = { c ->
+                caching = Caching(c.providerId, c.torrentId, c.option, episode, walk)
+                gps.beginCachingPreparation(title = d.title, onCancel = ::cancelCaching)
+            },
+            want = wantFor(d, episode),
+            title = d.title,
+            posterUrl = d.posterUrl,
+            context = listOfNotNull("Discover ${d.mediaType}: ${d.title}", episode?.label) + searchErrors,
+        )
+        return walk
+    }
+
+    private fun wantFor(d: DiscoverDetail, episode: DiscoverEpisodeRef?): WantAction? = when {
+        !api.canWant -> null
+        episode != null -> WantAction { api.wantDiscoverEpisode(d, episode) }
+        d.mediaType == "movie" && !isWantedStatus(d.wantStatus) -> WantAction { api.wantMovie(d) }
+        else -> null
     }
 
     private suspend fun resolve(option: StreamOption, episode: DiscoverEpisodeRef?) =
@@ -201,22 +191,23 @@ internal class DiscoverStreams(
                 val status = api.streamResolveStatus(c.providerId, c.torrentId)
                 when (status.status) {
                     "ready" -> {
-                        val r = resolve(c.option, c.episode)
                         caching = null
                         gps.endCachingPreparation()
-                        if (r is StreamResolveResult.Ready) play(r.session, c.episode) else gps.isFullscreen = false
+                        c.walk.start(c.option, resumeSec = 0)
                         return
                     }
                     "downloading" -> gps.setCachingProgress(status.progress?.toFloat() ?: 0f)
                     "error" -> {
                         caching = null
-                        gps.failWith(IllegalStateException(status.message ?: "Stream failed"), failureContext())
+                        c.walk.giveUp(IllegalStateException(status.message ?: "Stream failed"))
                         return
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 caching = null
-                gps.failWith(e, failureContext())
+                c.walk.giveUp(e)
                 return
             }
         }
