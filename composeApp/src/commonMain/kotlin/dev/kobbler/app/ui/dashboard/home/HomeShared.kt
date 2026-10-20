@@ -7,11 +7,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.data.DiscoverItem
+import dev.kobbler.app.data.ForYouItem
+import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.MediaType
 import dev.kobbler.app.data.StremioContinueItem
 import dev.kobbler.app.ui.components.PosterCard
@@ -78,6 +83,38 @@ fun StremioContinueCard(
         statusBadge = item.libraryStatus,
         progress = entry.progress,
         onClick = onClick,
+        width = width,
+        modifier = modifier,
+    )
+}
+
+const val ForYouTitle = "For You"
+
+fun becauseLabel(because: List<String>): String = when (because.size) {
+    0 -> ""
+    1 -> "Because you watched ${because[0]}"
+    else -> "Because you watched ${because[0]} +${because.size - 1}"
+}
+
+@Composable
+fun ForYouCard(
+    entry: ForYouItem,
+    api: KobblerApi,
+    onClick: (DiscoverItem) -> Unit,
+    modifier: Modifier = Modifier,
+    width: Dp? = null,
+) {
+    val item = entry.item
+    val wantScope = rememberCoroutineScope()
+    val menu = remember(item, api) { discoverContextMenu(item, api, wantScope, onClick) }
+    PosterCard(
+        title = item.title,
+        imageUrl = item.posterUrl,
+        subtitle = becauseLabel(entry.because),
+        accentColor = KobappTheme.colors.accentForRecentlyAdded(item.mediaType),
+        statusBadge = item.libraryStatus,
+        contextMenuItems = menu,
+        onClick = { onClick(item) },
         width = width,
         modifier = modifier,
     )

@@ -111,6 +111,7 @@ fun HomeWide(
     CenterFocusedPageRow(listState, focusedRow, topRow = upNextRow)
     val recentRow = if (homeData.recentlyAdded.isNotEmpty()) lazyIndex++ else -1
     val stremioRow = if (homeData.stremioContinue.isNotEmpty()) lazyIndex++ else -1
+    val forYouRow = if (homeData.forYou.isNotEmpty()) lazyIndex++ else -1
     val sectionRows = homeData.sections.map { lazyIndex++ }
 
     val density = LocalDensity.current
@@ -214,6 +215,30 @@ fun HomeWide(
                                             if (it.isFocused) {
                                                 rail.focused = c
                                                 focusedRow.intValue = stremioRow
+                                            }
+                                        },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (homeData.forYou.isNotEmpty()) {
+                    item(key = "foryou") {
+                        val rail = rememberRailFocus()
+                        HomeRail(title = ForYouTitle, state = rail.state, key = "foryou") {
+                            itemsIndexed(homeData.forYou) { c, entry ->
+                                ForYouCard(
+                                    entry = entry,
+                                    api = api,
+                                    onClick = onDiscoverItemClick,
+                                    modifier = Modifier
+                                        .focusKey("item.$c")
+                                        .spotlightOn(spotlight) { entry.item.spotlight() }
+                                        .onFocusChanged {
+                                            if (it.isFocused) {
+                                                rail.focused = c
+                                                focusedRow.intValue = forYouRow
                                             }
                                         },
                                 )

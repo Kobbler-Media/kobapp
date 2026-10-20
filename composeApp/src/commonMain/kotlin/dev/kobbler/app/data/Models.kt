@@ -582,7 +582,14 @@ data class HomeData(
     val watchNext: List<ContinueItem> = emptyList(),
     val recentlyAdded: List<RecentlyAddedItem> = emptyList(),
     val stremioContinue: List<StremioContinueItem> = emptyList(),
+    val forYou: List<ForYouItem> = emptyList(),
     val sections: List<DiscoverSection> = emptyList(),
+)
+
+@Immutable
+data class ForYouItem(
+    val item: DiscoverItem,
+    val because: List<String>,
 )
 
 @Immutable

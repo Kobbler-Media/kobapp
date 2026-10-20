@@ -1558,9 +1558,10 @@ data class DiscoverItemDto(
 data class DiscoverResponseDto(
     @SerialName("watch_next") val watchNext: List<InProgressItem> = emptyList(),
     @SerialName("recently_added") val recentlyAdded: List<RecentItem> = emptyList(),
-    // Each entry is a discover item with the Stremio fields alongside it, so it is decoded
+    // Each entry is a discover item with the row's own fields alongside it, so it is decoded
     // twice rather than repeating DiscoverItemDto's fields.
     @SerialName("stremio_continue") val stremioContinue: List<kotlinx.serialization.json.JsonObject> = emptyList(),
+    @SerialName("for_you") val forYou: List<kotlinx.serialization.json.JsonObject> = emptyList(),
     val sections: List<DiscoverSectionDto> = emptyList(),
 )
 
@@ -1569,6 +1570,11 @@ data class StremioContinueExtrasDto(
     val subtitle: String? = null,
     val season: Int? = null,
     @SerialName("progress_percent") val progressPercent: Double? = null,
+)
+
+@Serializable
+data class ForYouExtrasDto(
+    val because: List<String> = emptyList(),
 )
 
 @Serializable
@@ -1886,6 +1892,11 @@ private fun kotlinx.serialization.json.JsonObject.toStremioContinueItem(base: St
         progress = extras.progressPercent?.div(100.0)?.toFloat(),
     )
 }
+
+private fun kotlinx.serialization.json.JsonObject.toForYouItem(base: String): ForYouItem = ForYouItem(
+    item = json.decodeFromJsonElement(DiscoverItemDto.serializer(), this).toDiscoverItem(base),
+    because = json.decodeFromJsonElement(ForYouExtrasDto.serializer(), this).because,
+)
 
 private fun InProgressItem.toContinueItem(base: String): ContinueItem = ContinueItem(
     id = mediaId,
@@ -3607,6 +3618,7 @@ class KobblerApi(
                 watchNext = resp.watchNext.map { it.toContinueItem(apiUrl) },
                 recentlyAdded = resp.recentlyAdded.map { it.toRecentlyAddedItem(apiUrl) },
                 stremioContinue = resp.stremioContinue.map { it.toStremioContinueItem(apiUrl) },
+                forYou = resp.forYou.map { it.toForYouItem(apiUrl) },
                 sections = resp.sections
                     .sortedBy { it.sortOrder }
                     .map { s -> DiscoverSection(
