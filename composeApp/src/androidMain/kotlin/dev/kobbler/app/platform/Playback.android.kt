@@ -53,7 +53,7 @@ actual object PlaybackLifecycle {
         videoWidth: Int,
         videoHeight: Int,
     ) {
-        PlaybackBridge.updateNowPlaying(title, subtitle, coverUrl, isPlaying, currentMs, durationMs, isAudioOnly, videoWidth, videoHeight)
+        PlaybackBridge.updateNowPlaying(title, subtitle, coverUrl, isPlaying, isAudioOnly, videoWidth, videoHeight)
     }
 
     actual fun setControls(
@@ -61,9 +61,9 @@ actual object PlaybackLifecycle {
         onSkipForward: (() -> Unit)?,
         onSkipBack: (() -> Unit)?,
         onStop: (() -> Unit)?,
-        onSeekTo: ((Long) -> Unit)?,
+        timeline: PlaybackTimeline?,
     ) {
-        PlaybackBridge.setControls(onPlayPause, onSkipForward, onSkipBack, onStop, onSeekTo)
+        PlaybackBridge.setControls(onPlayPause, onSkipForward, onSkipBack, onStop, timeline)
     }
 
     actual fun setKeepScreenOn(on: Boolean) {

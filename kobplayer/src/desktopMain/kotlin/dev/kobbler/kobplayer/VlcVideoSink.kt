@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicInteger
 // on the CPU and copied again under the renderer's feet.
 internal class VlcVideoSink(
     mediaPlayer: MediaPlayer,
-    private val visibleSize: () -> Pair<Int, Int>?,
     private val onPicture: (FrameLayout) -> Unit,
 ) {
     val frameVersion = mutableIntStateOf(0)
@@ -44,7 +43,9 @@ internal class VlcVideoSink(
 
     private val format = libvlc_video_format_cb { _, chroma, width, height, pitches, lines ->
         val proposed = chroma.pointer.getString(0, "US-ASCII").take(4)
-        val (w, h) = negotiatedSize(width.getInt(0), height.getInt(0), visibleSize())
+        // vmem passes {coded, visible} for each: the track list learns the visible size an
+        // instant later, and a sink that asked it got the coded size whenever it won the race.
+        val (w, h) = negotiatedSize(width.getInt(0), height.getInt(0), width.getInt(4) to height.getInt(4))
         val layout = FrameLayout(PixelFormat.forDecoderChroma(proposed, SkiaTextures.alpha16 != null), w, h)
         chroma.pointer.write(0, layout.format.fourcc.toByteArray(Charsets.US_ASCII), 0, 4)
         width.setInt(0, w)

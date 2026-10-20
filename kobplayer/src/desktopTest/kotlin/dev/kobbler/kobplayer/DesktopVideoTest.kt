@@ -35,13 +35,19 @@ class DesktopVideoTest {
                 assertNotNull(frame, "${clip.resource} never produced a frame")
                 assertEquals(clip.format, frame.layout.format, clip.resource)
                 assertEquals(clip.picture, frame.layout.width to frame.layout.height, clip.resource)
-                assertEquals(clip.videoSize, player.videoSize.value, clip.resource)
+                assertEquals(clip.videoSize, awaitVideoSize(player, clip.videoSize), clip.resource)
                 assertPaintsRed(frame, clip.resource)
             } finally {
                 player.release()
                 scope.cancel()
             }
         }
+    }
+
+    private fun awaitVideoSize(player: DesktopPlayer, expected: Pair<Int, Int>): Pair<Int, Int> {
+        val deadline = System.nanoTime() + 2_000_000_000
+        while (player.videoSize.value != expected && System.nanoTime() < deadline) Thread.sleep(20)
+        return player.videoSize.value
     }
 
     private fun awaitFrame(sink: VlcVideoSink): DecodedFrame? {

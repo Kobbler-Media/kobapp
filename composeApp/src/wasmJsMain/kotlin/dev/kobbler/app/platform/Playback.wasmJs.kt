@@ -19,7 +19,7 @@ actual object PlaybackLifecycle {
     actual fun setControls(
         onPlayPause: (() -> Unit)?, onSkipForward: (() -> Unit)?,
         onSkipBack: (() -> Unit)?, onStop: (() -> Unit)?,
-        onSeekTo: ((Long) -> Unit)?,
+        timeline: PlaybackTimeline?,
     ) {}
     actual fun setKeepScreenOn(on: Boolean) {}
     actual fun setFullscreenMode(enabled: Boolean) {}

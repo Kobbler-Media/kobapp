@@ -1,6 +1,5 @@
 package dev.kobbler.app
 
-import android.net.Uri
 import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
@@ -36,6 +35,13 @@ class TtsMediaPlayer(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val mediaItemUid = Any()
 
+    var artworkData: ByteArray? = null
+        set(value) {
+            if (value === field) return
+            field = value
+            invalidateState()
+        }
+
     init {
         scope.launch { PlaybackBridge.nowPlaying.collect { invalidateState() } }
     }
@@ -48,7 +54,7 @@ class TtsMediaPlayer(
                 MediaMetadata.Builder()
                     .setTitle(info.title.ifEmpty { "Kobbler Reader" })
                     .setArtist(info.subtitle ?: "")
-                    .setArtworkUri(info.coverUrl?.let { Uri.parse(it) })
+                    .setArtworkData(artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                     .build()
             )
             .build()

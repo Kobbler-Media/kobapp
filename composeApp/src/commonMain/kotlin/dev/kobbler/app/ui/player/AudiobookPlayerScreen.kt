@@ -77,13 +77,13 @@ fun AudiobookPlayerScreen(
         PlaybackLifecycle.setPlayer(state.player)
         PlaybackLifecycle.setControls(
             onPlayPause = { state.player.togglePlayPause() },
-            onSkipForward = { state.player.skip(10_000) },
-            onSkipBack = { state.player.skip(-30_000) },
+            onSkipForward = state::skipForward,
+            onSkipBack = state::skipBack,
             onStop = {
                 state.saveProgress()
                 onBack()
             },
-            onSeekTo = { ms -> state.seekToGlobal(ms) },
+            timeline = state.playbackTimeline(),
         )
         onDispose {
             PlaybackLifecycle.setPlayer(null)
@@ -127,7 +127,7 @@ fun AudiobookPlayerScreen(
 }
 
 @Composable
-private fun AudiobookPlayerContent(
+internal fun AudiobookPlayerContent(
     book: Book,
     state: AudiobookPlayerState,
     onBack: () -> Unit,
@@ -280,8 +280,8 @@ private fun PhoneLayout(
                     speed = state.playbackSpeed,
                     volume = state.volume,
                     onPlayPause = { state.player.togglePlayPause() },
-                    onSkipBack = state::skipBack30,
-                    onSkipForward = state::skipForward10,
+                    onSkipBack = state::skipBack,
+                    onSkipForward = state::skipForward,
                     onSpeedChange = { state.player.setPlaybackSpeed(it) },
                     onVolumeChange = { state.volume = it; state.player.setVolume(it) },
                     playSize = 88.dp,
@@ -349,8 +349,8 @@ private fun WideLayout(
                 speed = state.playbackSpeed,
                 volume = state.volume,
                 onPlayPause = { state.player.togglePlayPause() },
-                onSkipBack = state::skipBack30,
-                onSkipForward = state::skipForward10,
+                onSkipBack = state::skipBack,
+                onSkipForward = state::skipForward,
                 onSpeedChange = { state.player.setPlaybackSpeed(it) },
                 onVolumeChange = { state.volume = it; state.player.setVolume(it) },
                 playSize = 96.dp,

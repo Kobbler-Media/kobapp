@@ -6,17 +6,17 @@ import kotlin.test.assertEquals
 class SurfaceReturnTest {
 
     @Test
-    fun redrawsOnlyATitleThatHasAlreadyShownPicture() {
+    fun aPausedTitleDefersItsRedraw() {
         mapOf(
-            PlayerState.PLAYING to true,
-            PlayerState.PAUSED to true,
-            PlayerState.BUFFERING to true,
-            PlayerState.IDLE to false,
-            PlayerState.LOADING to false,
-            PlayerState.FINISHED to false,
-            PlayerState.ERROR to false,
+            PlayerState.PLAYING to SurfaceReturnRedraw.Now,
+            PlayerState.BUFFERING to SurfaceReturnRedraw.Now,
+            PlayerState.PAUSED to SurfaceReturnRedraw.Deferred,
+            PlayerState.IDLE to SurfaceReturnRedraw.None,
+            PlayerState.LOADING to SurfaceReturnRedraw.None,
+            PlayerState.FINISHED to SurfaceReturnRedraw.None,
+            PlayerState.ERROR to SurfaceReturnRedraw.None,
         ).forEach { (state, expected) ->
-            assertEquals(expected, redrawsOnSurfaceReturn(state), state.toString())
+            assertEquals(expected, surfaceReturnRedraw(state), state.toString())
         }
     }
 }

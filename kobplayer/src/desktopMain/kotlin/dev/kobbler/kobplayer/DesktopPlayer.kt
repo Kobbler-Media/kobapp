@@ -69,11 +69,9 @@ internal class DesktopPlayer(
     internal val video: VlcVideoSink? = if (!config.audioOnly) {
         VlcVideoSink(
             vlcPlayer,
-            visibleSize = { withVideoTrack { it?.let { track -> track.width() to track.height() } } },
             onPicture = { layout ->
-                _videoSize.value = withVideoTrack { track ->
-                    displaySize(layout.width, layout.height, track?.sampleAspectRatio() ?: 0, track?.sampleAspectRatioBase() ?: 0)
-                }
+                pictureLayout = layout
+                updateVideoSize()
             },
         )
     } else null
@@ -147,6 +145,17 @@ internal class DesktopPlayer(
     override val aspectRatio: StateFlow<AspectRatio> = _aspectRatio.asStateFlow()
 
     private val _videoSize = MutableStateFlow(0 to 0)
+
+    // The picture can be negotiated before the track list has its aspect ratio; the size is
+    // worked out again when the track catches up.
+    @Volatile private var pictureLayout: FrameLayout? = null
+
+    private fun updateVideoSize() {
+        val layout = pictureLayout ?: return
+        _videoSize.value = withVideoTrack { track ->
+            displaySize(layout.width, layout.height, track?.sampleAspectRatio() ?: 0, track?.sampleAspectRatioBase() ?: 0)
+        }
+    }
     override val videoSize: StateFlow<Pair<Int, Int>> = _videoSize.asStateFlow()
 
     override val native: NativePlayer get() = NativePlayer.Vlcj(vlcPlayer)
@@ -227,8 +236,13 @@ internal class DesktopPlayer(
                 when (trackType) {
                     TrackType.AUDIO -> reloadAudioTracks()
                     TrackType.TEXT -> reloadSubtitleTracks()
+                    TrackType.VIDEO -> updateVideoSize()
                     else -> {}
                 }
+            }
+
+            override fun trackUpdated(mediaPlayer: MediaPlayer, trackType: TrackType, trackId: String) {
+                if (trackType == TrackType.VIDEO) updateVideoSize()
             }
 
             override fun mediaPlayerReady(mediaPlayer: MediaPlayer?) {

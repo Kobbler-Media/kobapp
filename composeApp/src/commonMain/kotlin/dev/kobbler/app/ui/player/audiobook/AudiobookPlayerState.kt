@@ -19,6 +19,7 @@ import dev.kobbler.app.data.BookmarkRepository
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TranscriptSegmentDto
 import dev.kobbler.app.data.UnifiedChapterDto
+import dev.kobbler.app.platform.PlaybackTimeline
 import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerConfig
@@ -42,6 +43,9 @@ import dev.kobbler.kobplayer.ui.formatTime
  */
 const val AUDIOBOOK_START_BUDGET_MS = 12_000L
 
+const val AUDIOBOOK_SKIP_BACK_MS = 30_000L
+const val AUDIOBOOK_SKIP_FORWARD_MS = 10_000L
+
 @Stable
 class AudiobookPlayerState internal constructor(
     val book: Book,
@@ -61,11 +65,11 @@ class AudiobookPlayerState internal constructor(
     var bookmarks by mutableStateOf(BookmarkRepository.getBookmarks(book.id))
     var activeTab by mutableStateOf(PanelTab.Chapters)
 
-    var playerState: PlayerState = PlayerState.IDLE
+    var playerState by mutableStateOf(PlayerState.IDLE)
         internal set
-    var currentMs: Long = 0L
+    var currentMs by mutableLongStateOf(0L)
         internal set
-    var playbackSpeed: Float = 1f
+    var playbackSpeed by mutableFloatStateOf(1f)
         internal set
 
     val fileTimeOffsetsMs: List<Long>
@@ -201,8 +205,16 @@ class AudiobookPlayerState internal constructor(
         else player.seekTo(localMs)
     }
 
-    fun skipBack30() = seekToGlobal((globalPositionMs - 30_000).coerceAtLeast(0))
-    fun skipForward10() = seekToGlobal((globalPositionMs + 10_000).coerceAtMost(totalBookDurationMs))
+    fun skipBack() = seekToGlobal((globalPositionMs - AUDIOBOOK_SKIP_BACK_MS).coerceAtLeast(0))
+    fun skipForward() = seekToGlobal((globalPositionMs + AUDIOBOOK_SKIP_FORWARD_MS).coerceAtMost(totalBookDurationMs))
+
+    fun playbackTimeline() = PlaybackTimeline(
+        positionMs = { (fileTimeOffsetsMs.getOrNull(currentFileIndex) ?: 0L) + player.currentMs.value },
+        durationMs = { totalBookDurationMs },
+        seekTo = ::seekToGlobal,
+        skipBackMs = AUDIOBOOK_SKIP_BACK_MS,
+        skipForwardMs = AUDIOBOOK_SKIP_FORWARD_MS,
+    )
 
     /**
      * Go to a position in a named file, which is how every target that knows its own file
@@ -263,9 +275,12 @@ class AudiobookPlayerState internal constructor(
 }
 
 @Composable
-fun rememberAudiobookState(book: Book, api: KobblerApi): AudiobookPlayerState {
+fun rememberAudiobookState(
+    book: Book,
+    api: KobblerApi,
+    player: Player = rememberPlayer(PlayerConfig(audioOnly = true)),
+): AudiobookPlayerState {
     val scope = rememberCoroutineScope()
-    val player = rememberPlayer(PlayerConfig(audioOnly = true))
     val state = remember(book.id) { AudiobookPlayerState(book, api, player, scope) }
 
     val playerState by player.state.collectAsState()

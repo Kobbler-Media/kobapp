@@ -1,8 +1,8 @@
 package dev.kobbler.kobplayer
 
-import android.net.Uri
 import android.os.Looper
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
@@ -33,6 +33,11 @@ class Media3PlayerAdapter(
     private val player: dev.kobbler.kobplayer.Player,
     /** Optional callback for stop commands (e.g. save progress). Falls back to pause. */
     var onStopRequested: (() -> Unit)? = null,
+    private val positionMs: () -> Long = { player.currentMs.value },
+    private val durationMs: () -> Long = { player.durationMs.value },
+    private val seekTo: (Long) -> Unit = player::seekTo,
+    private val seekBackIncrementMs: () -> Long = { C.DEFAULT_SEEK_BACK_INCREMENT_MS },
+    private val seekForwardIncrementMs: () -> Long = { C.DEFAULT_SEEK_FORWARD_INCREMENT_MS },
     looper: Looper = Looper.getMainLooper(),
 ) : SimpleBasePlayer(looper) {
 
@@ -42,7 +47,7 @@ class Media3PlayerAdapter(
     // Metadata (updated from app layer)
     private var title: CharSequence = ""
     private var artist: CharSequence = ""
-    private var artworkUri: Uri? = null
+    private var artworkData: ByteArray? = null
 
     init {
         // Invalidate when player state changes
@@ -61,10 +66,11 @@ class Media3PlayerAdapter(
     }
 
     /** Update media metadata shown in notification/lock screen. */
-    fun updateMetadata(title: String, artist: String?, artworkUri: Uri?) {
+    fun updateMetadata(title: String, artist: String?, artworkData: ByteArray?) {
+        if (title == this.title && (artist ?: "") == this.artist && artworkData === this.artworkData) return
         this.title = title
         this.artist = artist ?: ""
-        this.artworkUri = artworkUri
+        this.artworkData = artworkData
         invalidateState()
     }
 
@@ -85,12 +91,12 @@ class Media3PlayerAdapter(
                 MediaMetadata.Builder()
                     .setTitle(title)
                     .setArtist(artist)
-                    .setArtworkUri(artworkUri)
+                    .setArtworkData(artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                     .build()
             )
             .build()
 
-        val durationUs = player.durationMs.value * 1000
+        val durationUs = durationMs() * 1000
 
         val mediaItemData = MediaItemData.Builder(mediaItemUid)
             .setMediaItem(mediaItem)
@@ -100,7 +106,9 @@ class Media3PlayerAdapter(
         return State.Builder()
             .setPlaybackState(playbackState)
             .setPlayWhenReady(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
-            .setContentPositionMs(player.currentMs.value)
+            .setContentPositionMs(positionMs())
+            .setSeekBackIncrementMs(seekBackIncrementMs())
+            .setSeekForwardIncrementMs(seekForwardIncrementMs())
             .setPlaylist(listOf(mediaItemData))
             .setCurrentMediaItemIndex(0)
             .setAvailableCommands(
@@ -143,7 +151,7 @@ class Media3PlayerAdapter(
         positionMs: Long,
         seekCommand: @Player.Command Int,
     ): ListenableFuture<*> {
-        player.seekTo(positionMs)
+        seekTo(positionMs)
         return Futures.immediateVoidFuture()
     }
 

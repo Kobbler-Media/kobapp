@@ -281,10 +281,16 @@ fun clampSeekTarget(ms: Long, durationMs: Long): Long =
 /** What a play/pause tap should do to a player in a given state. */
 enum class PlayPauseIntent { Play, Pause, None }
 
+enum class SurfaceReturnRedraw { Now, Deferred, None }
+
 // A surface handed back mid-title gets a decoder that has lost its reference frames;
-// without a seek the screen stays black until the stream's next keyframe.
-fun redrawsOnSurfaceReturn(current: PlayerState): Boolean =
-    current == PlayerState.PLAYING || current == PlayerState.PAUSED || current == PlayerState.BUFFERING
+// without a seek the screen stays black until the stream's next keyframe. A paused title
+// waits for its video track to be reselected first, or for play, whichever comes first.
+fun surfaceReturnRedraw(current: PlayerState): SurfaceReturnRedraw = when (current) {
+    PlayerState.PLAYING, PlayerState.BUFFERING -> SurfaceReturnRedraw.Now
+    PlayerState.PAUSED -> SurfaceReturnRedraw.Deferred
+    PlayerState.IDLE, PlayerState.LOADING, PlayerState.FINISHED, PlayerState.ERROR -> SurfaceReturnRedraw.None
+}
 
 /**
  * A transport tap read against the state the player is in.

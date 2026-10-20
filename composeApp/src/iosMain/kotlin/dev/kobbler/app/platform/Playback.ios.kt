@@ -27,7 +27,7 @@ actual object PlaybackLifecycle {
     actual fun setControls(
         onPlayPause: (() -> Unit)?, onSkipForward: (() -> Unit)?,
         onSkipBack: (() -> Unit)?, onStop: (() -> Unit)?,
-        onSeekTo: ((Long) -> Unit)?,
+        timeline: PlaybackTimeline?,
     ) {
         // iOS: would use MPRemoteCommandCenter
     }

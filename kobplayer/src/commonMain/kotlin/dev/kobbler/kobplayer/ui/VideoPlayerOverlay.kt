@@ -239,6 +239,7 @@ fun VideoPlayerOverlay(
     val durationMsState by rememberUpdatedState(durationMs)
     val onSeekState by rememberUpdatedState(onSeek)
     val onPlayPauseState by rememberUpdatedState(onPlayPause)
+    val loadingState by rememberUpdatedState(loading)
 
     val topScrim = remember {
         Brush.verticalGradient(
@@ -258,6 +259,51 @@ fun VideoPlayerOverlay(
     fun onInteraction() {
         controlsVisible = true
         interactionTick++
+    }
+
+    // A stream that never finishes opening keeps every control away, and with them the
+    // only way out on a touch screen: a tap brings back the bar with the back arrow alone.
+    var loadingExitVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(loadingExitVisible, interactionTick) {
+        if (loadingExitVisible) {
+            delay(4000)
+            loadingExitVisible = false
+        }
+    }
+    if (!loading) loadingExitVisible = false
+
+    @Composable
+    fun TopBar(modifier: Modifier) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(topScrim)
+                .padding(top = 16.dp, bottom = 32.dp)
+                .windowInsetsPadding(playerChromeInsets),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // A TV exits with the remote's back key, which the host already
+                // handles; the arrow was a D-pad stop leading nowhere.
+                if (!tv) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = focusDecoration("back", 999f, 1.08f),
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.primary)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Column {
+                    Text(title, style = titleStyle, color = colors.primary)
+                    if (subtitle != null) {
+                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.primaryDim)
+                    }
+                }
+            }
+        }
     }
 
     // Auto-hide — suppressed while any menu is open, and while the host has a layer of its
@@ -351,6 +397,11 @@ fun VideoPlayerOverlay(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { offset ->
+                        if (loadingState) {
+                            loadingExitVisible = !loadingExitVisible
+                            interactionTick++
+                            return@detectTapGestures
+                        }
                         if (skipBurst != null) {
                             skipTaps(forward = offset.x > size.width / 2, taps = 1)
                             onInteraction()
@@ -606,38 +657,7 @@ fun VideoPlayerOverlay(
                     }
                 }
 
-                // Top scrim — edge-to-edge
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .background(topScrim)
-                        .padding(top = 16.dp, bottom = 32.dp)
-                        .windowInsetsPadding(playerChromeInsets),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // A TV exits with the remote's back key, which the host already
-                        // handles; the arrow was a D-pad stop leading nowhere.
-                        if (!tv) {
-                            IconButton(
-                                onClick = onBack,
-                                modifier = focusDecoration("back", 999f, 1.08f),
-                            ) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.primary)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Column {
-                            Text(title, style = titleStyle, color = colors.primary)
-                            if (subtitle != null) {
-                                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.primaryDim)
-                            }
-                        }
-                    }
-                }
+                TopBar(Modifier.align(Alignment.TopCenter))
 
                 // Bottom scrim — edge-to-edge, controls inset
                 Column(
@@ -916,6 +936,15 @@ fun VideoPlayerOverlay(
                     )
                 }
             }
+        }
+
+        AnimatedVisibility(
+            visible = loading && loadingExitVisible,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(Modifier.fillMaxSize()) { TopBar(Modifier.align(Alignment.TopCenter)) }
         }
     }
 }

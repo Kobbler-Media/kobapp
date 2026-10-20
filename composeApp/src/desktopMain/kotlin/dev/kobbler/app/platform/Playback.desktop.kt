@@ -22,10 +22,10 @@ actual object PlaybackLifecycle {
     actual fun setControls(
         onPlayPause: (() -> Unit)?, onSkipForward: (() -> Unit)?,
         onSkipBack: (() -> Unit)?, onStop: (() -> Unit)?,
-        onSeekTo: ((Long) -> Unit)?,
+        timeline: PlaybackTimeline?,
     ) {
         val mpris = SessionBus.mpris ?: return
-        mpris.setControls(onPlayPause, onSkipForward, onSkipBack, onStop, onSeekTo)
+        mpris.setControls(onPlayPause, onSkipForward, onSkipBack, onStop, timeline?.seekTo)
         // Every player clears its controls on the way out; that is the end of now-playing.
         if (onPlayPause == null && onStop == null) mpris.clear()
     }

@@ -16,8 +16,6 @@ data class NowPlayingInfo(
     val subtitle: String? = null,
     val coverUrl: String? = null,
     val isPlaying: Boolean = false,
-    val currentMs: Long = 0,
-    val durationMs: Long = 0,
     val isAudioOnly: Boolean = false,
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
@@ -40,7 +38,8 @@ object PlaybackBridge {
     var onSkipForward: (() -> Unit)? = null
     var onSkipBack: (() -> Unit)? = null
     var onStop: (() -> Unit)? = null
-    var onSeekTo: ((Long) -> Unit)? = null
+    // Read by the media session in place of the player's own clock.
+    var timeline: PlaybackTimeline? = null
 
     // PiP mode observable
     val isInPipMode = MutableStateFlow(false)
@@ -93,14 +92,13 @@ object PlaybackBridge {
         subtitle: String?,
         coverUrl: String?,
         isPlaying: Boolean,
-        currentMs: Long,
-        durationMs: Long,
         isAudioOnly: Boolean,
         videoWidth: Int = 0,
         videoHeight: Int = 0,
     ) {
-        _nowPlaying.value = NowPlayingInfo(title, subtitle, coverUrl, isPlaying, currentMs, durationMs, isAudioOnly, videoWidth, videoHeight)
-        host?.updatePipActions(isPlaying)
+        val wasPlaying = _nowPlaying.value.isPlaying
+        _nowPlaying.value = NowPlayingInfo(title, subtitle, coverUrl, isPlaying, isAudioOnly, videoWidth, videoHeight)
+        if (isPlaying != wasPlaying) host?.updatePipActions(isPlaying)
     }
 
     fun setControls(
@@ -108,13 +106,13 @@ object PlaybackBridge {
         onSkipForward: (() -> Unit)?,
         onSkipBack: (() -> Unit)?,
         onStop: (() -> Unit)?,
-        onSeekTo: ((Long) -> Unit)? = null,
+        timeline: PlaybackTimeline? = null,
     ) {
         this.onPlayPause = onPlayPause
         this.onSkipForward = onSkipForward
         this.onSkipBack = onSkipBack
         this.onStop = onStop
-        this.onSeekTo = onSeekTo
+        this.timeline = timeline
     }
 
     fun clearNowPlaying() {
@@ -123,7 +121,7 @@ object PlaybackBridge {
         onSkipForward = null
         onSkipBack = null
         onStop = null
-        onSeekTo = null
+        timeline = null
         playerFlow.value = null
     }
 }

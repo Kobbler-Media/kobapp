@@ -11,9 +11,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.annotation.OptIn
@@ -24,6 +22,7 @@ import dev.kobbler.app.android.R
 import androidx.media3.session.MediaSession
 import dev.kobbler.app.platform.NowPlayingInfo
 import dev.kobbler.app.platform.PlaybackBridge
+import dev.kobbler.app.platform.loadCoverArt
 import dev.kobbler.kobplayer.Media3PlayerAdapter
 import kotlinx.coroutines.*
 
@@ -36,6 +35,7 @@ class PlaybackService : Service() {
         const val ACTION_SKIP_FORWARD = "dev.kobbler.app.SKIP_FORWARD"
         const val ACTION_SKIP_BACK = "dev.kobbler.app.SKIP_BACK"
         const val ACTION_STOP = "dev.kobbler.app.STOP"
+        private const val DEFAULT_SKIP_MS = 10_000L
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -48,6 +48,7 @@ class PlaybackService : Service() {
     private var ttsPlayer: TtsMediaPlayer? = null
     private var cachedCoverUrl: String? = null
     private var cachedCoverBitmap: Bitmap? = null
+    private var cachedCoverData: ByteArray? = null
 
     // Pause on headphone disconnect
     private val noisyReceiver = object : BroadcastReceiver() {
@@ -90,7 +91,14 @@ class PlaybackService : Service() {
 
                 if (player != null) {
                     tearDownTtsSession()
-                    adapter = Media3PlayerAdapter(player).also { a ->
+                    adapter = Media3PlayerAdapter(
+                        player,
+                        positionMs = { PlaybackBridge.timeline?.positionMs?.invoke() ?: player.currentMs.value },
+                        durationMs = { PlaybackBridge.timeline?.durationMs?.invoke() ?: player.durationMs.value },
+                        seekTo = { ms -> PlaybackBridge.timeline?.seekTo?.invoke(ms) ?: player.seekTo(ms) },
+                        seekBackIncrementMs = { PlaybackBridge.timeline?.skipBackMs ?: DEFAULT_SKIP_MS },
+                        seekForwardIncrementMs = { PlaybackBridge.timeline?.skipForwardMs ?: DEFAULT_SKIP_MS },
+                    ).also { a ->
                         a.onStopRequested = {
                             PlaybackBridge.onStop?.invoke()
                             stopSelf()
@@ -112,11 +120,7 @@ class PlaybackService : Service() {
         // notification ended up sticking around with no media context.
         scope.launch {
             PlaybackBridge.nowPlaying.collect { info ->
-                adapter?.updateMetadata(
-                    info.title,
-                    info.subtitle,
-                    info.coverUrl?.let { Uri.parse(it) },
-                )
+                adapter?.updateMetadata(info.title, info.subtitle, cachedCoverData)
                 if (info.title.isEmpty()) {
                     tearDownTtsSession()
                     return@collect
@@ -150,7 +154,7 @@ class PlaybackService : Service() {
 
     private fun ensureTtsSession() {
         if (ttsSession != null) return
-        val player = TtsMediaPlayer()
+        val player = TtsMediaPlayer().also { it.artworkData = cachedCoverData }
         ttsPlayer = player
         ttsSession = MediaSession.Builder(this, player).build()
     }
@@ -225,15 +229,21 @@ class PlaybackService : Service() {
             this, 0, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Load cover art async if URL changed
-        if (info.coverUrl != null && info.coverUrl != cachedCoverUrl) {
-            cachedCoverUrl = info.coverUrl
+        val url = info.coverUrl
+        if (url != null && url != cachedCoverUrl) {
+            cachedCoverUrl = url
+            cachedCoverBitmap = null
+            cachedCoverData = null
             scope.launch {
                 try {
-                    val bitmap = withContext(Dispatchers.IO) {
-                        BitmapFactory.decodeStream(java.net.URL(info.coverUrl).openStream())
-                    }
+                    val (bitmap, data) = withContext(Dispatchers.IO) { loadCoverArt(this@PlaybackService, url) }
+                        ?: return@launch
+                    if (url != cachedCoverUrl) return@launch
                     cachedCoverBitmap = bitmap
+                    cachedCoverData = data
+                    val now = PlaybackBridge.nowPlaying.value
+                    adapter?.updateMetadata(now.title, now.subtitle, data)
+                    ttsPlayer?.artworkData = data
                     // buildNotification reads media3Session, whose getters are looper-confined
                     // since media3 1.11 — must stay on Main.
                     val nm = getSystemService(NotificationManager::class.java)
@@ -247,11 +257,14 @@ class PlaybackService : Service() {
         val actions = mutableListOf<NotificationCompat.Action>()
         val compactIndices = mutableListOf<Int>()
 
+        val timeline = PlaybackBridge.timeline
         if (PlaybackBridge.onSkipBack != null) {
+            val skipMs = timeline?.skipBackMs ?: DEFAULT_SKIP_MS
             compactIndices.add(actions.size)
             actions.add(
                 NotificationCompat.Action.Builder(
-                    R.drawable.ic_notification_replay_10, "Back 10s",
+                    if (skipMs == DEFAULT_SKIP_MS) R.drawable.ic_notification_replay_10 else R.drawable.ic_notification_rewind,
+                    "Back ${skipMs / 1000}s",
                     actionIntent(ACTION_SKIP_BACK)
                 ).build()
             )
@@ -267,10 +280,13 @@ class PlaybackService : Service() {
         )
 
         if (PlaybackBridge.onSkipForward != null) {
+            // Without a timeline the skip is the read-along's next sentence, not a duration.
+            val skipMs = timeline?.skipForwardMs
             compactIndices.add(actions.size)
             actions.add(
                 NotificationCompat.Action.Builder(
-                    R.drawable.ic_notification_forward_10, "Forward 10s",
+                    if (skipMs == DEFAULT_SKIP_MS) R.drawable.ic_notification_forward_10 else R.drawable.ic_notification_fast_forward,
+                    skipMs?.let { "Forward ${it / 1000}s" } ?: "Skip ahead",
                     actionIntent(ACTION_SKIP_FORWARD)
                 ).build()
             )

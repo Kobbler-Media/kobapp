@@ -39,6 +39,10 @@ private const val FieldDecodeProbePollMs = 500L
 // A paused title that cannot seek never redraws; the held frame must still go eventually.
 private const val PictureReturnTimeoutMs = 3_000L
 
+// Sought before libVLC 4 has reselected the video track for a returned surface, a paused
+// input wedges and never takes the resume. The reselection is the cue; this is the fallback.
+private const val PausedRedrawSettleMs = 1_000L
+
 private const val FrameRateProbeSettleMs = 1_000L
 private const val FrameRateProbeWindowMs = 4_000L
 
@@ -186,7 +190,7 @@ internal class AndroidPlayer(
                     FocusAction.Duck -> if (!_isMuted.value) vlcPlayer.volume = ((_volume.value * 100) * 0.3f).toInt()
                     FocusAction.Resume -> {
                         restoreVolume()
-                        vlc { play() }
+                        resume()
                     }
                     FocusAction.Restore -> restoreVolume()
                     FocusAction.None -> {}
@@ -233,15 +237,42 @@ internal class AndroidPlayer(
         attachVoutIfReady()
         _videoOutputReady.value = true
         pictureTimeout?.cancel()
-        if (redrawsOnSurfaceReturn(_state.value)) {
-            awaitingPicture = true
-            vlc { if (isSeekable) setTime(time) }
-            pictureTimeout = scope.launch {
-                delay(PictureReturnTimeoutMs)
-                markPictureReturned()
+        when (surfaceReturnRedraw(_state.value)) {
+            SurfaceReturnRedraw.Now -> redrawPicture()
+            SurfaceReturnRedraw.Deferred -> {
+                awaitingPicture = true
+                deferredRedraw?.cancel()
+                deferredRedraw = scope.launch {
+                    delay(PausedRedrawSettleMs)
+                    deferredRedraw = null
+                    redrawPicture()
+                }
             }
-        } else {
+            SurfaceReturnRedraw.None -> markPictureReturned()
+        }
+    }
+
+    private var deferredRedraw: Job? = null
+
+    private fun redrawPicture() {
+        awaitingPicture = true
+        vlc { if (isSeekable) setTime(time) }
+        pictureTimeout?.cancel()
+        pictureTimeout = scope.launch {
+            delay(PictureReturnTimeoutMs)
             markPictureReturned()
+        }
+    }
+
+    private fun resume() {
+        vlc {
+            pauseWhenPausable = false
+            play()
+        }
+        deferredRedraw?.let {
+            it.cancel()
+            deferredRedraw = null
+            redrawPicture()
         }
     }
 
@@ -258,6 +289,8 @@ internal class AndroidPlayer(
     }
 
     internal fun onSurfaceDestroyed() {
+        deferredRedraw?.cancel()
+        deferredRedraw = null
         _videoOutputReady.value = false
         pendingSurface = null
         detachVout()
@@ -408,7 +441,14 @@ internal class AndroidPlayer(
                     updateVideoSize()
                     applyAudioOutput()
                 }
-                MediaPlayer.Event.ESSelected -> applyAudioOutput()
+                MediaPlayer.Event.ESSelected -> {
+                    applyAudioOutput()
+                    if (event.esChangedType == IMedia.Track.Type.Video) deferredRedraw?.let {
+                        it.cancel()
+                        deferredRedraw = null
+                        redrawPicture()
+                    }
+                }
                 MediaPlayer.Event.Vout -> {
                     // The only evidence that the decoder emitted anything. A video track
                     // exists in the elementary stream either way, so its dimensions prove
@@ -438,6 +478,8 @@ internal class AndroidPlayer(
     }
 
     private fun open(source: MediaSource.Url) {
+        deferredRedraw?.cancel()
+        deferredRedraw = null
         presentedVideo.value = false
         _contentFrameRate.value = 0f
         armFrameRateProbe()
@@ -583,10 +625,7 @@ internal class AndroidPlayer(
     override fun play() {
         focusResume.forget()
         requestAudioFocus()
-        vlc {
-            pauseWhenPausable = false
-            play()
-        }
+        resume()
     }
 
     override fun pause() {
@@ -607,6 +646,8 @@ internal class AndroidPlayer(
     }
 
     override fun stop() {
+        deferredRedraw?.cancel()
+        deferredRedraw = null
         fieldDecodeProbe?.cancel()
         frameRateProbe?.cancel()
         vlc {
@@ -626,7 +667,7 @@ internal class AndroidPlayer(
     override fun togglePlayPause() {
         focusResume.forget()
         when (playPauseIntent(_state.value)) {
-            PlayPauseIntent.Play -> vlc { play() }
+            PlayPauseIntent.Play -> resume()
             // Not vlcPlayer.pause(): libvlc's is a toggle, so it restarts a stream that
             // is not actually running. pause() carries that guard.
             PlayPauseIntent.Pause -> pauseIfPlaying()

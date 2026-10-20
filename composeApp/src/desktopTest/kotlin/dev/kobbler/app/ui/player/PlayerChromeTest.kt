@@ -26,7 +26,7 @@ class PlayerChromeTest {
         var playPauses = 0
     }
 
-    private fun player(formFactor: FormFactor, test: DesktopComposeUiTest.(Rig) -> Unit) =
+    private fun player(formFactor: FormFactor, loading: Boolean = false, test: DesktopComposeUiTest.(Rig) -> Unit) =
         runDesktopComposeUiTest(width = 1280, height = 720) {
             val rig = Rig()
             setContent {
@@ -39,6 +39,7 @@ class PlayerChromeTest {
                         onPlayPause = { rig.playPauses++ },
                         onSeek = {},
                         onBack = { rig.backs++ },
+                        loading = loading,
                     )
                 }
             }
@@ -53,6 +54,32 @@ class PlayerChromeTest {
                 assertEquals(expected, onAllNodesWithContentDescription("Back").fetchSemanticsNodes().size, "back buttons on $ff")
             }
         }
+    }
+
+    @Test
+    fun `a tap on a stream that is still opening offers the way out`() {
+        listOf(FormFactor.Phone, FormFactor.Desktop).forEach { ff ->
+            player(ff, loading = true) { rig ->
+                assertTrue(onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty(), "back over the logo before a tap on $ff")
+                onRoot().performMouseInput { click(Offset(640f, 360f)) }
+                mainClock.advanceTimeBy(1_000)
+                waitForIdle()
+                onNodeWithContentDescription("Back").performClick()
+                assertEquals(1, rig.backs, "back from the loading screen on $ff")
+                assertEquals(0, rig.playPauses, "the tap that asked for a way out played or paused on $ff")
+            }
+        }
+    }
+
+    @Test
+    fun `the way out steps aside again`() = player(FormFactor.Phone, loading = true) {
+        onRoot().performMouseInput { click(Offset(640f, 360f)) }
+        mainClock.advanceTimeBy(1_000)
+        waitForIdle()
+        onNodeWithContentDescription("Back").assertExists()
+        mainClock.advanceTimeBy(6_000)
+        waitForIdle()
+        assertTrue(onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isEmpty(), "back stayed over the logo")
     }
 
     @Test

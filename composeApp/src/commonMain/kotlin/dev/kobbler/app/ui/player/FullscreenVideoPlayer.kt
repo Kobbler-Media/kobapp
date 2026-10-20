@@ -54,6 +54,7 @@ import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.PlaybackLifecycle
+import dev.kobbler.app.platform.PlaybackTimeline
 import dev.kobbler.app.platform.Settings
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.Section
@@ -94,6 +95,7 @@ private val SEGMENT_LABELS = mapOf(
 // A detected end lands a little short of EOF, and a stream's duration is not the file's to
 // the millisecond.
 private const val SKIP_END_SLACK_MS = 5_000L
+private const val VIDEO_SKIP_MS = 10_000L
 
 private fun skipRunsToEnd(endMs: Long, durationMs: Long): Boolean =
     durationMs > 0 && endMs >= durationMs - SKIP_END_SLACK_MS
@@ -192,8 +194,8 @@ fun FullscreenVideoPlayer(
                     player.togglePlayPause()
                 }
             },
-            onSkipForward = { seekPlayerTo((player.currentMs.value + 10_000).coerceAtMost(player.durationMs.value)) },
-            onSkipBack = { seekPlayerTo((player.currentMs.value - 10_000).coerceAtLeast(0)) },
+            onSkipForward = { seekPlayerTo((player.currentMs.value + VIDEO_SKIP_MS).coerceAtMost(player.durationMs.value)) },
+            onSkipBack = { seekPlayerTo((player.currentMs.value - VIDEO_SKIP_MS).coerceAtLeast(0)) },
             onStop = {
                 val pos = state.timeline.toAbsoluteMs(player.currentMs.value)
                 if (pos > 5000) {
@@ -201,7 +203,13 @@ fun FullscreenVideoPlayer(
                 }
                 state.stop(player, api, controlScope)
             },
-            onSeekTo = { ms -> seekPlayerTo(state.timeline.toPlayerMs(ms)) },
+            timeline = PlaybackTimeline(
+                positionMs = { state.timeline.toAbsoluteMs(player.currentMs.value) },
+                durationMs = { state.timeline.absoluteDurationMs(player.durationMs.value) },
+                seekTo = { ms -> seekPlayerTo(state.timeline.toPlayerMs(ms)) },
+                skipBackMs = VIDEO_SKIP_MS,
+                skipForwardMs = VIDEO_SKIP_MS,
+            ),
         )
         onDispose { }
     }

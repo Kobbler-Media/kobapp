@@ -123,7 +123,7 @@ class AudiobookJumpTest {
         state.currentFileIndex = 1
         state.currentMs = 10_000L
 
-        state.skipBack30()
+        state.skipBack()
 
         assertEquals(0, state.currentFileIndex)
         assertEquals(580, player.loadedSource?.startTimeSec)

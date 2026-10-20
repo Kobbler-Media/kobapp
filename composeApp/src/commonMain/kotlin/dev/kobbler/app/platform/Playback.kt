@@ -4,6 +4,18 @@ import dev.kobbler.kobplayer.Player as KobPlayer
 import kotlinx.coroutines.flow.StateFlow
 
 /**
+ * The title as the viewer sees it, for system media controls: a book across its files, a
+ * show on its absolute clock rather than the player's rebased one.
+ */
+class PlaybackTimeline(
+    val positionMs: () -> Long,
+    val durationMs: () -> Long,
+    val seekTo: (Long) -> Unit,
+    val skipBackMs: Long,
+    val skipForwardMs: Long,
+)
+
+/**
  * Platform-specific playback lifecycle hooks.
  * On Android: starts/stops a foreground service for background playback
  * and manages media notification with controls.
@@ -44,7 +56,7 @@ expect object PlaybackLifecycle {
         onSkipForward: (() -> Unit)?,
         onSkipBack: (() -> Unit)?,
         onStop: (() -> Unit)?,
-        onSeekTo: ((Long) -> Unit)? = null,
+        timeline: PlaybackTimeline? = null,
     )
 
     /** Keep screen on during video playback (prevents display timeout). */
