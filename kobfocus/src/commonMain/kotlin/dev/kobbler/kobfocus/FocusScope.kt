@@ -88,13 +88,14 @@ class FocusScope {
     }
 
     /**
-     * requestFocus() returns Unit and does NOT throw when the target has no focus
-     * target behind it — a disabled button, or one inside an inert layer, being the
-     * common cases. Treating "didn't throw" as success silently leaves nothing focused,
-     * so confirm against what the key's own node reports it is holding now.
+     * A refusal costs nothing, and only a grant waits a frame to be confirmed against what
+     * the key's own node reports holding. A touchscreen refuses every clickable, so a frame
+     * spent per refusal kept a page of episode rows waking the UI thread at every vsync for
+     * minutes; and a grant is not trusted alone, since a target behind an inert layer
+     * reports one and then holds nothing.
      */
     private suspend fun FocusRequester.takesFocus(key: String): Boolean {
-        runCatching { requestFocus() }.getOrElse { return false }
+        if (!runCatching { requestFocus() }.getOrDefault(false)) return false
         withFrameNanos { }
         return focusedKey == key
     }

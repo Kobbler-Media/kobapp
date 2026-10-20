@@ -28,6 +28,7 @@ fun SpotlightBackdrop(
     dim: () -> Float,
     modifier: Modifier = Modifier,
     scrims: Boolean = true,
+    sideScrimReach: Float = 0.6f,
 ) {
     val colors = KobappTheme.colors
     val spot = spotlight()
@@ -41,8 +42,8 @@ fun SpotlightBackdrop(
             1f to colors.bg.copy(alpha = 0.94f),
         )
     }
-    val sideScrim = remember(colors.bg) {
-        Brush.horizontalGradient(0f to colors.bg.copy(alpha = 0.88f), 0.60f to Color.Transparent)
+    val sideScrim = remember(colors.bg, sideScrimReach) {
+        Brush.horizontalGradient(0f to colors.bg.copy(alpha = 0.88f), sideScrimReach to Color.Transparent)
     }
     Box(
         modifier

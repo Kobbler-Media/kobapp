@@ -8,7 +8,6 @@ import dev.kobbler.app.ui.components.spotlight
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,9 +35,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -50,7 +46,6 @@ import dev.kobbler.app.data.Season
 import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.CastRow
 import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.detail.tvshow.EpisodeList
@@ -227,7 +222,7 @@ private fun WideLayout(
             DetailPoster(show.posterUrl, accent, Modifier.width(posterWidth))
 
             Column(modifier = Modifier.weight(1f)) {
-                TitleBlock(show.title, colors.textHi)
+                DetailTitle(show.title, show.year)
                 Spacer(Modifier.height(14.dp))
                 MetaRow(show)
                 if (show.synopsis != null) {
@@ -317,7 +312,7 @@ private fun PhoneLayout(
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
             DetailPoster(show.posterUrl, accent, Modifier.width(120.dp))
             Column(modifier = Modifier.weight(1f)) {
-                TitleBlock(show.title, colors.textHi)
+                DetailTitle(show.title, show.year)
                 Spacer(Modifier.height(8.dp))
                 MetaRow(show)
             }
@@ -369,78 +364,15 @@ private fun PhoneLayout(
 }
 
 @Composable
-private fun TitleBlock(title: String, color: Color) {
-    // The two-line split is a 10-foot/desktop flourish: it halves a title that already
-    // wraps three times in a phone hero's 194dp column.
-    val (head, tail) = if (LocalFormFactor.current == FormFactor.Phone) title.trim() to null else splitShowTitle(title)
-    Column {
-        SerifTitle(head, color, italic = false)
-        if (tail != null) SerifTitle(tail, color, italic = true)
-    }
-}
-
-@Composable
-private fun SerifTitle(text: String, color: Color, italic: Boolean) {
-    Text(
-        text,
-        style = KobappTheme.displayTitle.copy(
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Medium,
-            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-            letterSpacing = (-0.03).em,
-        ),
-        color = color,
-    )
-}
-
-@Composable
 private fun MetaRow(show: TvShow) {
-    val colors = KobappTheme.colors
-    // Flow, not Row: on a phone these overflow, and a Row squeezed the last item until
-    // it broke mid-word. Each separator travels with the item it precedes so a wrapped
-    // line never opens with a dangling dot.
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(show.year.toString(), style = KobappTheme.type.bodySm, color = colors.textMd)
-        if (show.network != null) {
-            MetaItem { Text(show.network, style = KobappTheme.type.bodySm, color = colors.textMd) }
-        }
-        if (show.rating != null) {
-            MetaItem { RatingBadge(show.rating) }
-        }
-        if (show.contentRating != null) {
-            MetaItem { Text(show.contentRating, style = KobappTheme.type.bodySm, color = colors.textMd) }
-        }
-        if (show.seasons.isNotEmpty()) {
-            val total = show.seasons.sumOf { it.episodes.size }
-            MetaItem {
-                Text(
-                    "${show.seasons.size} season${if (show.seasons.size != 1) "s" else ""} · $total ep",
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textMd,
-                )
-            }
-        }
-        if (show.nextAiring != null) {
-            MetaItem {
-                Text("Next: ${show.nextAiring}", style = KobappTheme.type.bodySm, color = colors.textMd)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetaItem(content: @Composable () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        MetaDot()
-        content()
-    }
+    val total = show.seasons.sumOf { it.episodes.size }
+    DetailMeta(
+        metaText(show.network),
+        metaRating(show.rating),
+        metaText(show.contentRating),
+        metaText(show.seasons.size.takeIf { it > 0 }?.let { n -> "$n season${if (n != 1) "s" else ""} · $total ep" }),
+        metaText(show.nextAiring?.let { "Next: $it" }),
+    )
 }
 
 @Composable
@@ -516,15 +448,6 @@ private fun TopBar(
     }
 }
 
-private fun splitShowTitle(title: String): Pair<String, String?> {
-    val trimmed = title.trim()
-    if (trimmed.length < 18) return trimmed to null
-    val mid = trimmed.length / 2
-    val splitAt = (mid until trimmed.length).firstOrNull { trimmed[it] == ' ' }
-        ?: (mid downTo 0).firstOrNull { trimmed[it] == ' ' }
-        ?: return trimmed to null
-    return trimmed.substring(0, splitAt) to trimmed.substring(splitAt + 1)
-}
 
 
 /** Watched state after any change this screen has made since the show was fetched. */

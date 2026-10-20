@@ -4,6 +4,9 @@ import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
@@ -35,8 +38,13 @@ class BrowseCategoriesTest {
 
     private val genres = """{"genres":[{"name":"Family","count":2},{"name":"Horror","count":1}]}"""
 
-    private fun browse(tv: Boolean, test: DesktopComposeUiTest.() -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 900) {
+    private fun browse(
+        tv: Boolean,
+        formFactor: FormFactor = FormFactor.Desktop,
+        width: Int = 1280,
+        test: DesktopComposeUiTest.() -> Unit,
+    ) =
+        runDesktopComposeUiTest(width = width, height = 900) {
             DataCache.clear()
             StubServer(
                 mapOf(
@@ -50,10 +58,10 @@ class BrowseCategoriesTest {
             ).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 setContent {
-                    KobappTheme(formFactor = FormFactor.Desktop) {
+                    KobappTheme(formFactor = formFactor) {
                         FocusScopeHost(id = "browse") {
-                            if (tv) TvShowsScreen(api = api, formFactor = FormFactor.Desktop, onShowClick = {})
-                            else MoviesScreen(api = api, formFactor = FormFactor.Desktop, onMovieClick = {})
+                            if (tv) TvShowsScreen(api = api, formFactor = formFactor, onShowClick = {})
+                            else MoviesScreen(api = api, formFactor = formFactor, onMovieClick = {})
                         }
                     }
                 }
@@ -75,6 +83,58 @@ class BrowseCategoriesTest {
             waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("All categories").fetchSemanticsNodes().isNotEmpty() }
             onAllNodesWithText("All categories").onFirst().performClick()
             waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
+        }
+    }
+
+    private fun DesktopComposeUiTest.pickFamily() {
+        onAllNodesWithText("Categories").onFirst().performClick()
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
+        onAllNodesWithText("Family").onFirst().performClick()
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test
+    fun `the category is a segment beside all library, and all library clears it`() {
+        for (tv in listOf(false, true)) browse(tv) {
+            pickFamily()
+            onAllNodesWithText("Categories").assertCountEquals(0)
+            onNodeWithText("All library").performClick()
+            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Categories").assertExists()
+        }
+    }
+
+    @Test
+    fun `continuing replaces a picked category`() = browse(tv = true) {
+        pickFamily()
+        onNodeWithText("Continuing").performClick()
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Categories").fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test
+    fun `the title and the selector share a centre line`() {
+        for (tv in listOf(false, true)) for (phone in listOf(false, true)) browse(
+            tv,
+            formFactor = if (phone) FormFactor.Phone else FormFactor.Desktop,
+            width = if (phone) 412 else 1280,
+        ) {
+            val title = onNodeWithText(if (tv) "TV Shows" else "Movies").getBoundsInRoot()
+            val selector = onNodeWithText("Categories").getBoundsInRoot()
+            val drift = ((title.top + title.bottom) - (selector.top + selector.bottom)) / 2
+            assertTrue(drift.value in -2f..2f, "tv=$tv phone=$phone: selector sits ${drift} off the title's centre")
+        }
+    }
+
+    @Test
+    fun `the grid has a heading of its own that carries the count`() {
+        for (tv in listOf(false, true)) browse(tv) {
+            val all = if (tv) "All shows" else "All movies"
+            onNodeWithText(all).assertExists()
+            onNodeWithText("3").assertExists()
+            onAllNodesWithText("in library", substring = true).assertCountEquals(0)
+            pickFamily()
+            onNodeWithText("2").assertExists()
+            assertTrue(onAllNodesWithText("Family").fetchSemanticsNodes().size >= 2, "tv=$tv: the grid heading did not name the category")
         }
     }
 }

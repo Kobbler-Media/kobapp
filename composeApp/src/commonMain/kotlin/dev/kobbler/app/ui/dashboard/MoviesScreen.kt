@@ -47,6 +47,14 @@ fun MoviesScreen(
     var totalCount by remember { mutableStateOf<Long?>(null) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
     var pickingCategory by remember { mutableStateOf(false) }
+    val pickGenre: (String?) -> Unit = { picked ->
+        if (picked != genre) {
+            genre = picked
+            movies.clear()
+            nextCursor = null
+            prevCursor = null
+        }
+    }
 
     suspend fun fetch(cursor: String? = null, direction: String? = null, around: String? = null, aroundBefore: Int? = null) =
         api.getMoviesList(cursor = cursor, direction = direction, around = around, aroundBefore = aroundBefore, genre = genre)
@@ -124,7 +132,8 @@ fun MoviesScreen(
         val totalItems = gridMovies.size
         val watchNextIndex = if (watchNext.isNotEmpty()) 1 else -1
         val recentIndex = if (recentMovies.isNotEmpty()) 1 + (if (watchNextIndex >= 0) 1 else 0) else -1
-        val headerCount = (if (watchNextIndex >= 0) 1 else 0) + (if (recentIndex >= 0) 1 else 0)
+        // The rails, plus the grid's own heading when there is a grid to head.
+        val headerCount = (if (watchNextIndex >= 0) 1 else 0) + (if (recentIndex >= 0) 1 else 0) + (if (totalItems > 0) 1 else 0)
         val topRowKey: () -> Any? = {
             if (watchNext.isNotEmpty()) "watchnext" else if (recentIndex >= 0) "recent" else
                 gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == headerCount + 1 }?.row
@@ -218,13 +227,24 @@ fun MoviesScreen(
                 verticalArrangement = Arrangement.spacedBy(dimens.s4),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
-                    Column {
+                    // Fixed-size columns leave the grid's slack past the last one, and a
+                    // full-span item is only as wide as the columns: the header's selector
+                    // stopped short of the rails' edge, and on a phone wrapped under the title.
+                    Column(Modifier.bleedHorizontally(start = 0.dp, end = railBleedEnd - railEnd)) {
                         BrowseHeader(
                             title = "Movies",
                             accent = accent,
-                            countLine = countLine(totalCount, movies.size, "in library"),
                             compact = compact,
-                            trailing = { CategoriesButton(genre, accent, onClick = { pickingCategory = true }) },
+                            trailing = {
+                                BrowseScopeFilter(
+                                    scopes = listOf(allLabel(compact)),
+                                    selectedScope = 0,
+                                    category = genre,
+                                    accent = accent,
+                                    onScope = { pickGenre(null) },
+                                    onCategories = { pickingCategory = true },
+                                )
+                            },
                         )
                         Spacer(Modifier.height(dimens.s4))
                     }
@@ -240,7 +260,6 @@ fun MoviesScreen(
                             rowState = watchNextRow,
                             title = "Continue Watching",
                             accentColor = accent,
-                            badge = "Watching",
                             modifier = Modifier.focusKeyGroup("watchnext"),
                         ) {
                             itemsIndexed(watchNext, key = { _, item -> item.id }) { idx, item ->
@@ -286,6 +305,17 @@ fun MoviesScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                if (totalItems > 0) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "all-heading") {
+                        BrowseGridHeading(
+                            title = genre ?: "All movies",
+                            count = gridCount(totalCount, totalItems),
+                            accent = accent,
+                            modifier = Modifier.bleedHorizontally(start = 0.dp, end = railBleedEnd - railEnd),
+                        )
                     }
                 }
 
@@ -351,12 +381,7 @@ fun MoviesScreen(
                     onDismiss = { pickingCategory = false },
                     onPick = { picked ->
                         pickingCategory = false
-                        if (picked != genre) {
-                            genre = picked
-                            movies.clear()
-                            nextCursor = null
-                            prevCursor = null
-                        }
+                        pickGenre(picked)
                     },
                 )
             }

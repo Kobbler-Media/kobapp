@@ -162,12 +162,14 @@ class PlayFromStartTest {
     fun markingAMovieUnwatchedForgetsWhereItWasLeft() = runComposeUiTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
-            onNodeWithContentDescription("Watched").performClick()
+            onNodeWithContentDescription("More").performClick()
+            onNodeWithText("Mark unwatched").performClick()
             waitUntil(timeoutMillis = 5_000) { rig.stub.requestBodies[MOVIE_STATE].orEmpty().contains("watched") }
             val sent = rig.stub.requestBodies.getValue(MOVIE_STATE)
             assertTrue(sent.contains("\"watched\":false"), sent)
             assertTrue(sent.contains("\"position_seconds\":0"), "unwatching kept the old position: $sent")
-            onNodeWithContentDescription("Mark watched").assertExists()
+            onNodeWithContentDescription("More").performClick()
+            onNodeWithText("Mark watched").assertExists()
             onNodeWithText("Play").assertExists()
             onAllNodesWithText("Resume").assertCountEquals(0)
         }

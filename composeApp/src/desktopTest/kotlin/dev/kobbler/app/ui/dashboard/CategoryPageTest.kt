@@ -109,7 +109,7 @@ class CategoryPageTest {
         press(Key.DirectionCenter)
         waitUntil(timeoutMillis = 5_000) { queries.any { "genre=Drama" in it } }
         assertTrue(onAllNodesWithText("Action").fetchSemanticsNodes().isEmpty(), "the page stayed open")
-        onNodeWithText("Drama").assertExists()
+        assertTrue(onAllNodesWithText("Drama").fetchSemanticsNodes().isNotEmpty(), "the picked category is not shown")
     }
 
     @Test

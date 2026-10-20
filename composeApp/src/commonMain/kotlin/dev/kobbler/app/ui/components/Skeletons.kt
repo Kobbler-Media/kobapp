@@ -142,18 +142,18 @@ fun BrowseSkeleton(modifier: Modifier = Modifier) {
         Column(Modifier.fillMaxSize().padding(top = dimens.s4)) {
             Row(
                 Modifier.fillMaxWidth().padding(start = gutter, end = end),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 SkeletonLine(if (compact) KobappTheme.type.h2 else KobappTheme.type.h1, Modifier.width(if (compact) 110.dp else 150.dp))
-                SkeletonLine(if (compact) KobappTheme.type.caption else KobappTheme.type.body, Modifier.width(100.dp))
                 Spacer(Modifier.weight(1f))
-                SkeletonLine(KobappTheme.type.bodySm, Modifier.padding(end = 16.dp).width(96.dp))
+                ShimmerBox(Modifier.size(width = if (compact) 190.dp else 220.dp, height = 34.dp), cornerRadius = 999.dp)
             }
             Spacer(Modifier.height(dimens.s4 * 3))
             SectionHeadingSkeleton(Modifier.padding(start = gutter))
             Spacer(Modifier.height(10.dp))
             SkeletonRail(dimens.s3, Modifier.padding(start = gutter)) { repeat(10) { PosterSkeleton() } }
+            Spacer(Modifier.height(dimens.s4))
+            SectionHeadingSkeleton(Modifier.padding(start = gutter))
             PosterGridSkeleton(endPadding = end)
         }
         if (!compact) {

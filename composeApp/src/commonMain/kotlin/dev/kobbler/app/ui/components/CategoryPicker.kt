@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,15 +54,31 @@ import dev.kobbler.kobfocus.focusKey
 private const val AllCategories = "All categories"
 
 /** Shows the category in force, so the page says what it is narrowed to without opening anything. */
+// A phone's title, count and three segments came to a few dp more than its width, which
+// sent the selector to a line of its own; the shorter label keeps them on one.
+fun allLabel(compact: Boolean): String = if (compact) "All" else "All library"
+
+/**
+ * A browse screen's scopes with the category as their last segment: "Categories" until one
+ * is picked, then its name. Choosing a scope clears the category, and the category segment
+ * always opens the picker, so one control says what the grid is showing.
+ */
 @Composable
-fun CategoriesButton(selected: String?, accent: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    KobButton(
-        text = selected ?: "Categories",
-        onClick = onClick,
-        style = if (selected != null) KobButtonStyle.Accent else KobButtonStyle.Ghost,
+fun BrowseScopeFilter(
+    scopes: List<String>,
+    selectedScope: Int,
+    category: String?,
+    accent: Color,
+    onScope: (Int) -> Unit,
+    onCategories: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SegmentedFilter(
+        options = scopes + (category ?: "Categories"),
+        selectedIndex = if (category != null) scopes.size else selectedScope,
         accent = accent,
-        modifier = modifier.focusKey("categories"),
-        leading = { Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(16.dp)) },
+        modifier = modifier,
+        onSelected = { if (it < scopes.size) onScope(it) else onCategories() },
     )
 }
 

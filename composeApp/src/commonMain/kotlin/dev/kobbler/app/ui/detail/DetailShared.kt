@@ -26,8 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.PlaylistAdd
-import androidx.compose.material.icons.outlined.PlaylistAddCheck
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.animation.AnimatedVisibility
@@ -298,7 +296,11 @@ class PageTopHold internal constructor(
             // edge has its focus ring and its scale-up — both drawn outside its own
             // bounds — clipped off, and nothing below it to move on to.
             val target = ((containerSize - size) / 2f).coerceAtLeast(start)
-            return offset - target
+            // Never more than the page has: the scroller asks again every frame until the
+            // distance is covered, so an unreachable one keeps a frame callback armed for as
+            // long as the page is open. The page itself is a focus target taller than the
+            // viewport, and at the top it always wants to move down to the margin.
+            return (offset - target).coerceIn((-scroll.value).toFloat(), (scroll.maxValue - scroll.value).toFloat())
         }
     }
 
@@ -490,52 +492,6 @@ internal fun gutterFor(formFactor: FormFactor): androidx.compose.ui.unit.Dp = wh
 // "Want to watch" — per-user list
 // =============================================================================
 
-/// The whole point of this control is that it costs nothing: no disk, no
-/// download, no confirmation. So it is one icon, and the toast carries the
-/// meaning rather than a label competing with Play for the eye.
-@Composable
-fun WatchlistToggle(
-    inWatchlist: Boolean,
-    accent: Color,
-    toast: ToastState,
-    onToggle: suspend (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    focusKeyName: String = "action.watchlist",
-) {
-    val colors = KobappTheme.colors
-    // Optimistic: the server round trip is not worth a spinner on a control whose
-    // entire value is feeling instant. A failure reverts and says so.
-    var on by remember(inWatchlist) { mutableStateOf(inWatchlist) }
-    var busy by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    // NOT the eye: `Visibility` is already the watched toggle on these screens, and one
-    // glyph meaning two things is worse than a duller one.
-    IconAction(
-        icon = if (on) Icons.Outlined.PlaylistAddCheck else Icons.Outlined.PlaylistAdd,
-        label = if (on) "On your list" else "Add to your list",
-        tint = if (on) accent else colors.textHi,
-        accent = accent,
-        onClick = {
-            if (busy) return@IconAction
-            val next = !on
-            on = next
-            busy = true
-            scope.launch {
-                runCatching { onToggle(next) }
-                    .onSuccess {
-                        toast.show(if (next) "Added to your list" else "Removed from your list")
-                    }
-                    .onFailure {
-                        on = !next
-                        toast.show("Could not update your list")
-                    }
-                busy = false
-            }
-        },
-        modifier = modifier.focusKey(focusKeyName),
-    )
-}
 
 @Stable
 class ToastState {

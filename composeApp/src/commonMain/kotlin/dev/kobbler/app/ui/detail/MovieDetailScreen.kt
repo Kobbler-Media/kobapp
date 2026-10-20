@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
@@ -37,9 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -49,10 +48,8 @@ import dev.kobbler.app.data.Movie
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.CastRow
 import dev.kobbler.app.ui.components.ExpandableText
-import dev.kobbler.app.ui.components.rememberPalette
 import dev.kobbler.app.ui.player.resumeSeconds
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
@@ -76,7 +73,6 @@ fun MovieDetailScreen(
     val colors = KobappTheme.colors
     val accent = colors.accMovies
     val toast = rememberToastState()
-    val palette = rememberPalette(movie.posterUrl)
     val gutter = gutterFor(formFactor)
     val isPhone = formFactor == FormFactor.Phone
 
@@ -88,13 +84,21 @@ fun MovieDetailScreen(
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
             if (stacked) {
-                PhoneMovieHero(movie, accent, palette.darkAccent)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(kobTopInset + 72.dp))
                 Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
-                    if (movie.genres.isNotEmpty()) {
-                        GenreChips(movie.genres, accent = accent)
-                        Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+                        DetailPoster(movie.posterUrl, accent, Modifier.width(120.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            DetailTitle(movie.title, movie.year)
+                            if (movie.tagline != null) {
+                                Spacer(Modifier.height(6.dp))
+                                Tagline(movie.tagline)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            MovieMeta(movie)
+                        }
                     }
+                    Spacer(Modifier.height(16.dp))
                     ActionRow(
                         movie = movie, api = api, accent = accent,
                         onPlay = onPlay, onStream = onStream, onStreamPick = onStreamPick,
@@ -106,6 +110,7 @@ fun MovieDetailScreen(
                         Spacer(Modifier.height(18.dp))
                         ExpandableText(movie.synopsis)
                     }
+                    Spacer(Modifier.height(16.dp))
                     CreditLines(movie, formFactor)
                 }
             } else {
@@ -127,13 +132,13 @@ fun MovieDetailScreen(
                         ),
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        MovieTitleBlock(movie.title, colors.textHi)
+                        DetailTitle(movie.title, movie.year)
                         if (movie.tagline != null) {
                             Spacer(Modifier.height(10.dp))
                             Tagline(movie.tagline)
                         }
-                        Spacer(Modifier.height(26.dp))
-                        StatRow(movie)
+                        Spacer(Modifier.height(16.dp))
+                        MovieMeta(movie)
                         if (movie.synopsis != null) {
                             Spacer(Modifier.height(26.dp))
                             // Capped where the page is not: a synopsis set across a 1600dp
@@ -154,10 +159,6 @@ fun MovieDetailScreen(
                             wide = true,
                             modifier = pageTopHold.anchor,
                         )
-                        if (movie.genres.isNotEmpty()) {
-                            Spacer(Modifier.height(20.dp))
-                            GenreChips(movie.genres, accent = accent)
-                        }
                         Spacer(Modifier.height(24.dp))
                         CreditLines(movie, formFactor)
                     }
@@ -191,37 +192,6 @@ fun MovieDetailScreen(
 }
 
 @Composable
-private fun PhoneMovieHero(movie: Movie, accent: Color, paletteAccent: Color) {
-    DetailHero(
-        backdropUrl = movie.backdropUrl,
-        posterUrl = movie.posterUrl,
-        formFactor = FormFactor.Phone,
-        accentTint = paletteAccent,
-        accent = accent,
-    ) {
-        val colors = KobappTheme.colors
-        val crumb = buildString {
-            append("Movie")
-            if (movie.year != 0) append(" · ${movie.year}")
-            if (movie.duration != null) append(" · ${movie.duration}")
-            if (movie.contentRating != null) append(" · ${movie.contentRating}")
-            if (movie.rating != null) append(" · ★ ${formatRating(movie.rating)}")
-        }
-        Text(
-            crumb.uppercase(),
-            style = KobappTheme.type.bodySm.copy(letterSpacing = 0.12.em),
-            color = colors.textLo,
-        )
-        Spacer(Modifier.height(8.dp))
-        MovieTitleBlock(movie.title, colors.textHi)
-        if (movie.tagline != null) {
-            Spacer(Modifier.height(6.dp))
-            Tagline(movie.tagline)
-        }
-    }
-}
-
-@Composable
 private fun Tagline(text: String) {
     Text(
         text,
@@ -231,68 +201,13 @@ private fun Tagline(text: String) {
 }
 
 @Composable
-private fun MovieTitleBlock(title: String, color: Color) {
-    // The two-line split is a 10-foot/desktop flourish: it halves a title that already
-    // wraps three times in a phone hero's 194dp column.
-    val parts = if (LocalFormFactor.current == FormFactor.Phone) TitleParts(title.trim(), null) else splitTitle(title)
-    Column {
-        SerifTitle(parts.head, color)
-        if (parts.tail != null) SerifTitle(parts.tail, color, italic = true)
-    }
-}
-
-@Composable
-private fun SerifTitle(
-    text: String,
-    color: Color,
-    italic: Boolean = false,
-) {
-    Text(
-        text,
-        style = KobappTheme.displayTitle.copy(
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Medium,
-            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-            letterSpacing = (-0.03).em,
-        ),
-        color = color,
+private fun MovieMeta(movie: Movie) {
+    DetailMeta(
+        metaText(movie.duration),
+        metaText(movie.contentRating),
+        metaRating(movie.rating),
+        metaText(movie.genres.take(3).joinToString(", ").ifEmpty { null }),
     )
-}
-
-@Composable
-private fun StatRow(movie: Movie) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
-    ) {
-        if (movie.year != 0) Stat("Year", movie.year.toString())
-        if (movie.duration != null) Stat("Runtime", movie.duration)
-        if (movie.rating != null) {
-            Column {
-                Text(
-                    "RATING",
-                    style = KobappTheme.type.label.copy(letterSpacing = 0.12.em),
-                    color = KobappTheme.colors.textLo,
-                )
-                Spacer(Modifier.height(4.dp))
-                RatingBadge(movie.rating)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: String) {
-    val colors = KobappTheme.colors
-    Column {
-        Text(
-            label.uppercase(),
-            style = KobappTheme.type.label.copy(letterSpacing = 0.12.em),
-            color = colors.textLo,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(value, style = KobappTheme.type.body, color = colors.textHi)
-    }
 }
 
 @Composable
@@ -314,6 +229,10 @@ private fun ActionRow(
     val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
     val resumeAt = movie.resumeSeconds
     val total = movie.runtimeMinutes?.times(60)
+    var inList by remember(movie.inWatchlist) { mutableStateOf(movie.inWatchlist) }
+    // Owned by the row, not the menu: an item closes the menu, disposing its content,
+    // before its request finishes.
+    val actionScope = rememberCoroutineScope()
     DetailActionRow(
         wide = wide,
         modifier = modifier,
@@ -348,19 +267,6 @@ private fun ActionRow(
             )
         }
 
-        if (api.canWant) {
-            WatchlistToggle(
-                inWatchlist = movie.inWatchlist,
-                accent = accent,
-                toast = toast,
-                onToggle = { on ->
-                    if (on) api.addToWatchlist("movie", movie.id)
-                    else api.removeFromWatchlist("movie", movie.id)
-                },
-                focusKeyName = "watchlist",
-            )
-        }
-
         if (movie.canBeWanted(api.canWant)) {
             var wanted by remember { mutableStateOf(false) }
             val wantScope = rememberCoroutineScope()
@@ -380,30 +286,39 @@ private fun ActionRow(
             )
         }
 
-        if (canPlay) {
-            val watched = movie.isWatched
-            val watchScope = rememberCoroutineScope()
-            IconAction(
-                icon = if (watched) Icons.Outlined.Check else Icons.Outlined.Visibility,
-                label = if (watched) "Watched" else "Mark watched",
-                tint = if (watched) colors.ok else colors.textHi,
-                accent = accent,
-                onClick = {
-                    val newState = !watched
-                    onWatchedChanged(newState)
-                    watchScope.launch {
-                        try { api.setMovieWatched(movie.id, newState) }
-                        catch (_: Exception) { onWatchedChanged(!newState) }
-                    }
-                },
-                modifier = Modifier.focusKey("watched"),
-            )
+        // Rarely-reached state toggles, kept off the row so Resume has the room on a phone.
+        if (api.canWant || canPlay || kids != null) OverflowActions(accent = accent) { close ->
+            if (api.canWant) {
+                WatchlistItem(
+                    inList = inList,
+                    accent = accent,
+                    toast = toast,
+                    scope = actionScope,
+                    onChanged = { inList = it },
+                    toggle = { on -> if (on) api.addToWatchlist("movie", movie.id) else api.removeFromWatchlist("movie", movie.id) },
+                    close = close,
+                )
+            }
+            if (canPlay) {
+                OverflowItem(
+                    key = "watched",
+                    icon = if (movie.isWatched) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    label = if (movie.isWatched) "Mark unwatched" else "Mark watched",
+                    accent = accent,
+                    onClick = {
+                        val newState = !movie.isWatched
+                        close()
+                        onWatchedChanged(newState)
+                        actionScope.launch {
+                            try { api.setMovieWatched(movie.id, newState) }
+                            catch (_: Exception) { onWatchedChanged(!newState) }
+                        }
+                    },
+                )
+            }
+            if (kids != null) KidsAccessItem(kids, accent, close)
         }
-
-        if (kids != null) {
-            OverflowActions(accent = accent) { close -> KidsAccessItem(kids, accent, close) }
-            KidsAccessDialog(kids, accent)
-        }
+        if (kids != null) KidsAccessDialog(kids, accent)
     }
 }
 
@@ -485,14 +400,3 @@ private fun TopBar(
     }
 }
 
-private data class TitleParts(val head: String, val tail: String?)
-
-private fun splitTitle(title: String): TitleParts {
-    val trimmed = title.trim()
-    if (trimmed.length < 18) return TitleParts(trimmed, null)
-    val mid = trimmed.length / 2
-    val splitAt = (mid until trimmed.length).firstOrNull { trimmed[it] == ' ' }
-        ?: (mid downTo 0).firstOrNull { trimmed[it] == ' ' }
-        ?: return TitleParts(trimmed, null)
-    return TitleParts(trimmed.substring(0, splitAt), trimmed.substring(splitAt + 1))
-}

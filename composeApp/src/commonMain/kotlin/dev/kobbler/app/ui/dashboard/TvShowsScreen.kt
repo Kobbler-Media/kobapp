@@ -53,6 +53,16 @@ fun TvShowsScreen(
     var filterIndex by remember { mutableIntStateOf(0) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
     var pickingCategory by remember { mutableStateOf(false) }
+    // Scope and category are one choice: Continuing and a category do not stack.
+    val browse: (Int, String?) -> Unit = { scope, picked ->
+        if (scope != filterIndex || picked != genre) {
+            filterIndex = scope
+            genre = picked
+            shows.clear()
+            nextCursor = null
+            prevCursor = null
+        }
+    }
     var isReloading by remember { mutableStateOf(true) }
     // The list is a cursor window, so `shows.size` is the page, not the library. The
     // server only counts on the first page (tv.rs is_first_page), so hold on to it.
@@ -160,7 +170,8 @@ fun TvShowsScreen(
         val totalItems = gridShows.size
         val watchNextIndex = if (watchNext.isNotEmpty()) 1 else -1
         val recentIndex = if (recentShows.isNotEmpty()) 1 + (if (watchNextIndex >= 0) 1 else 0) else -1
-        val headerCount = (if (watchNextIndex >= 0) 1 else 0) + (if (recentIndex >= 0) 1 else 0)
+        // The rails, plus the grid's own heading when there is a grid to head.
+        val headerCount = (if (watchNextIndex >= 0) 1 else 0) + (if (recentIndex >= 0) 1 else 0) + (if (totalItems > 0) 1 else 0)
         val topRowKey: () -> Any? = {
             if (watchNext.isNotEmpty()) "watchnext" else if (recentIndex >= 0) "recent" else
                 gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == headerCount + 1 }?.row
@@ -259,33 +270,24 @@ fun TvShowsScreen(
                 modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
-                    Column {
+                    // Fixed-size columns leave the grid's slack past the last one, and a
+                    // full-span item is only as wide as the columns: the header's selector
+                    // stopped short of the rails' edge, and on a phone wrapped under the title.
+                    Column(Modifier.bleedHorizontally(start = 0.dp, end = railBleedEnd - railEnd)) {
                         BrowseHeader(
                             title = if (sportsOnly) "Sports" else "TV Shows",
                             accent = accentColor,
-                            countLine = countLine(totalCount, shows.size, if (continuingOnly) "continuing" else "in library"),
                             compact = compact,
                             trailing = if (sportsOnly) null else {
                                 {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(spacing.s3),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        CategoriesButton(genre, accentColor, onClick = { pickingCategory = true })
-                                        SegmentedFilter(
-                                            options = listOf("All library", "Continuing"),
-                                            selectedIndex = filterIndex,
-                                            accent = accentColor,
-                                            onSelected = {
-                                                if (it != filterIndex) {
-                                                    filterIndex = it
-                                                    shows.clear()
-                                                    nextCursor = null
-                                                    prevCursor = null
-                                                }
-                                            },
-                                        )
-                                    }
+                                    BrowseScopeFilter(
+                                        scopes = listOf(allLabel(compact), "Continuing"),
+                                        selectedScope = filterIndex,
+                                        category = genre,
+                                        accent = accentColor,
+                                        onScope = { browse(it, null) },
+                                        onCategories = { pickingCategory = true },
+                                    )
                                 }
                             },
                         )
@@ -302,7 +304,6 @@ fun TvShowsScreen(
                             rowState = watchNextRow,
                             title = "Continue Watching",
                             accentColor = accentColor,
-                            badge = "Watching",
                             modifier = Modifier.focusKeyGroup("watchnext"),
                         ) {
                             itemsIndexed(watchNext, key = { _, item -> item.id }) { idx, item ->
@@ -350,6 +351,17 @@ fun TvShowsScreen(
                     }
                 }
 
+                if (totalItems > 0) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "all-heading") {
+                        BrowseGridHeading(
+                            title = genre ?: when { sportsOnly -> "All sports"; continuingOnly -> "Continuing"; else -> "All shows" },
+                            count = gridCount(totalCount, totalItems),
+                            accent = accentColor,
+                            modifier = Modifier.bleedHorizontally(start = 0.dp, end = railBleedEnd - railEnd),
+                        )
+                    }
+                }
+
                 if (totalItems == 0 && !isReloading) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
                         EmptyState(
@@ -394,12 +406,7 @@ fun TvShowsScreen(
                     onDismiss = { pickingCategory = false },
                     onPick = { picked ->
                         pickingCategory = false
-                        if (picked != genre) {
-                            genre = picked
-                            shows.clear()
-                            nextCursor = null
-                            prevCursor = null
-                        }
+                        browse(0, picked)
                     },
                 )
             }

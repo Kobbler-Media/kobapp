@@ -2,7 +2,6 @@ package dev.kobbler.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.LocalFormFactor
+import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
@@ -45,19 +46,34 @@ import dev.kobbler.app.ui.components.tvFocusGlow
  * passes only `compact = true`).
  */
 /**
- * `"1,204 in library"`, from the server's total when it sent one.
- *
- * [loaded] is only the cursor window that happens to be in memory, so it is a last
- * resort — reporting it as the library size makes a filtered list claim the same count
- * as the unfiltered one whenever both fit in one page.
+ * A browse grid's size, from the server's total when it sent one. [loaded] is only the
+ * cursor window that happens to be in memory, so it is a last resort — reporting it as
+ * the library size makes a filtered list claim the same count as the unfiltered one
+ * whenever both fit in one page.
  */
-fun countLine(total: Long?, loaded: Int, suffix: String): String =
-    "${(total ?: loaded.toLong()).withThousands()} $suffix"
+fun gridCount(total: Long?, loaded: Int): String = (total ?: loaded.toLong()).withThousands()
 
 private fun Long.withThousands(): String {
     val digits = toString()
     if (digits.length <= 3) return digits
     return digits.reversed().chunked(3).joinToString(",").reversed()
+}
+
+/**
+ * The heading over a browse screen's full grid, styled as the rails above it are. Without
+ * one the grid read as more of the last rail, and on a phone Recently Added looked like a
+ * vertical list. It carries the count the page header used to.
+ */
+@Composable
+fun BrowseGridHeading(title: String, count: String, accent: Color, modifier: Modifier = Modifier) {
+    SectionHeading(
+        title = title,
+        accent = accent,
+        modifier = modifier.padding(top = KobappTheme.dimens.s2),
+        trailing = {
+            Text(count, color = KobappTheme.colors.textLo, style = KobappTheme.type.label, modifier = Modifier.padding(end = KobappTheme.dimens.s2))
+        },
+    )
 }
 
 @Composable
@@ -80,7 +96,7 @@ fun BrowseHeader(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalArrangement = Arrangement.spacedBy(gap),
-            itemVerticalAlignment = Alignment.Bottom,
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 verticalAlignment = Alignment.Bottom,
@@ -98,7 +114,7 @@ fun BrowseHeader(
                 if (countLine != null) {
                     Text(
                         countLine,
-                        color = colors.textLo,
+                        color = if (compact) colors.textXlo else colors.textLo,
                         style = if (compact) KobappTheme.type.caption else KobappTheme.type.body,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -130,6 +146,7 @@ fun SegmentedFilter(
 ) {
     val colors = KobappTheme.colors
     val shape = KobappTheme.shapes.pill
+    val dense = LocalFormFactor.current == FormFactor.Phone
     Row(
         modifier = modifier
             .let { if (fillWidth) it.fillMaxWidth() else it }
@@ -153,7 +170,7 @@ fun SegmentedFilter(
                     .background(if (active) colors.elev3 else Color.Transparent)
                     .pointerHoverIcon(PointerIcon.Hand)
                     .tvClickable(focusState) { onSelected(i) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = if (dense) 10.dp else 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

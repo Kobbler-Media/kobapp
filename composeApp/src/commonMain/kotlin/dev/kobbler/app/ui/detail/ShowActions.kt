@@ -7,8 +7,6 @@ import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.PlaylistAdd
-import androidx.compose.material.icons.outlined.PlaylistAddCheck
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.SkipNext
@@ -186,29 +184,14 @@ internal fun ShowActions(
         if (api != null && hasOverflow) {
             OverflowActions(accent = accent) { close ->
                 if (canWatchlist) {
-                    OverflowItem(
-                        key = "watchlist",
-                        icon = if (inList) Icons.Outlined.PlaylistAddCheck else Icons.Outlined.PlaylistAdd,
-                        label = if (inList) "Remove from your list" else "Add to your list",
+                    WatchlistItem(
+                        inList = inList,
                         accent = accent,
-                        onClick = {
-                            val next = !inList
-                            inList = next
-                            close()
-                            actionScope.launch {
-                                runCatching {
-                                    if (next) api.addToWatchlist("show", show.id)
-                                    else api.removeFromWatchlist("show", show.id)
-                                }
-                                    .onSuccess {
-                                        toast.show(if (next) "Added to your list" else "Removed from your list")
-                                    }
-                                    .onFailure {
-                                        inList = !next
-                                        toast.show("Could not update your list")
-                                    }
-                            }
-                        },
+                        toast = toast,
+                        scope = actionScope,
+                        onChanged = { inList = it },
+                        toggle = { on -> if (on) api.addToWatchlist("show", show.id) else api.removeFromWatchlist("show", show.id) },
+                        close = close,
                     )
                 }
 

@@ -51,6 +51,9 @@ import dev.kobbler.app.ui.components.spotlight
 import dev.kobbler.app.ui.components.showingBadge
 import dev.kobbler.app.ui.components.spotlightOn
 import dev.kobbler.app.ui.components.rememberCached
+import dev.kobbler.app.ui.components.bleedHorizontally
+import dev.kobbler.app.ui.components.gridCount
+import dev.kobbler.app.ui.components.BrowseGridHeading
 import dev.kobbler.app.ui.components.tvAutoGlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -158,10 +161,11 @@ private fun AllBooksGrid(
     // all-ebook page.
     val format = if (audiobooksOnly) "audiobook" else null
 
+    var totalCount by remember(cacheKey) { mutableStateOf<Long?>(null) }
     val (state, retry) = rememberCached(cacheKey) {
         val result = api.getBooks(format = format)
         val books = withContext(Dispatchers.Default) { api.bookListToModels(result.items) }
-        CachedPage(books, result.nextCursor, result.prevCursor)
+        CachedPage(books, result.nextCursor, result.prevCursor, result.totalCount)
     }
 
     // Not filled by the loader: a warm TTL entry skips it, and a consumer that loses the
@@ -172,6 +176,7 @@ private fun AllBooksGrid(
         books.addAll(page.items)
         nextCursor = page.next
         prevCursor = page.prev
+        totalCount = page.total
     }
 
     // Read next from cached dashboard data
@@ -213,7 +218,8 @@ private fun AllBooksGrid(
         val gridState = rememberLazyGridState()
         val readNextIndex = if (readNext.isNotEmpty()) 0 else -1
         val recentIndex = if (recentBooks.isNotEmpty()) (if (readNextIndex >= 0) 1 else 0) else -1
-        val headerCount = (if (readNext.isNotEmpty()) 1 else 0) + (if (recentBooks.isNotEmpty()) 1 else 0)
+        // The rails, plus the grid's own heading when there is a grid to head.
+        val headerCount = (if (readNext.isNotEmpty()) 1 else 0) + (if (recentBooks.isNotEmpty()) 1 else 0) + (if (books.isNotEmpty()) 1 else 0)
         val topRowKey: () -> Any? = {
             if (readNext.isNotEmpty()) "readnext" else if (recentBooks.isNotEmpty()) "recent" else
                 gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == headerCount }?.row
@@ -319,7 +325,6 @@ private fun AllBooksGrid(
                             rowState = readNextRow,
                             title = if (audiobooksOnly) "Continue Listening" else "Continue Reading",
                             accentColor = accentColor,
-                            badge = "Reading",
                             modifier = Modifier.focusKeyGroup("readnext"),
                         ) {
                             itemsIndexed(readNext, key = { _, item -> item.id }) { idx, item ->
@@ -344,6 +349,17 @@ private fun AllBooksGrid(
                                 dev.kobbler.app.ui.components.PosterCard(title = b.title, imageUrl = b.coverUrl, subtitle = b.author, accentColor = accentColor, onClick = { onBookClick(b) }, modifier = Modifier.spotlightOn(pointer) { b.spotlight() }.showingBadge(swiper, b.spotlight()).focusKey("book.${b.id}", preferredEntry = recentIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } })
                             }
                         }
+                    }
+                }
+
+                if (books.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "all-heading") {
+                        BrowseGridHeading(
+                            title = if (audiobooksOnly) "All audiobooks" else "All books",
+                            count = gridCount(totalCount, books.size),
+                            accent = accentColor,
+                            modifier = Modifier.bleedHorizontally(start = 0.dp, end = railBleedEnd - railEnd),
+                        )
                     }
                 }
 

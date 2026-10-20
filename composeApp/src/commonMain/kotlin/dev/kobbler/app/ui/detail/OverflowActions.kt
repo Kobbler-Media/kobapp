@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreHoriz
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import androidx.compose.material.icons.outlined.PlaylistAddCheck
+import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -153,5 +157,43 @@ internal fun OverflowItem(
             .then(if (isEntry && entry != null) Modifier.focusRequester(entry.requester) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .background(if (focused) accent.copy(alpha = 0.18f) else Color.Transparent),
+    )
+}
+
+/**
+ * Optimistic: the server round trip is not worth a spinner on a control whose entire
+ * value is feeling instant. A failure reverts and says so. [scope] belongs to the page,
+ * not the menu: the menu is disposed as it closes, and the request with it.
+ */
+@Composable
+internal fun WatchlistItem(
+    inList: Boolean,
+    accent: Color,
+    toast: ToastState,
+    scope: CoroutineScope,
+    onChanged: (Boolean) -> Unit,
+    toggle: suspend (Boolean) -> Unit,
+    close: () -> Unit,
+) {
+    // NOT the eye: `Visibility` is the watched toggle, and one glyph meaning two things is
+    // worse than a duller one.
+    OverflowItem(
+        key = "watchlist",
+        icon = if (inList) Icons.Outlined.PlaylistAddCheck else Icons.Outlined.PlaylistAdd,
+        label = if (inList) "Remove from your list" else "Add to your list",
+        accent = accent,
+        onClick = {
+            val next = !inList
+            onChanged(next)
+            close()
+            scope.launch {
+                runCatching { toggle(next) }
+                    .onSuccess { toast.show(if (next) "Added to your list" else "Removed from your list") }
+                    .onFailure {
+                        onChanged(!next)
+                        toast.show("Could not update your list")
+                    }
+            }
+        },
     )
 }
