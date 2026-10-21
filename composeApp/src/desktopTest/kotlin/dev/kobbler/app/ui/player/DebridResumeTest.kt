@@ -45,7 +45,7 @@ class DebridResumeTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    options = listOf(option), option = option,
+                    search = { found(listOf(option)) }, option = option,
                     resumeSec = resumeSec,
                     onCaching = { _, _ -> },
                 )

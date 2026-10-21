@@ -1,13 +1,16 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamQuality
 import dev.kobbler.app.data.StreamResolveResult
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.testTimeSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -26,6 +29,7 @@ class StreamWalkTest {
 
     private fun ready(id: String) = StreamResolveResult.Ready(KobblerApi.StreamSession(url = "u-$id", sessionId = "s-$id"))
     private fun caching(o: StreamOption) = StreamResolveResult.Caching("p1", "t-${o.id}", o)
+    private fun refused(reason: String): StreamResolveResult = throw ApiException(502, "Bad Gateway", reason, reason)
 
     private class Script(val plan: Map<String, suspend () -> StreamResolveResult>) {
         val started = mutableListOf<String>()
@@ -43,8 +47,8 @@ class StreamWalkTest {
         }
     }
 
-    private suspend fun Script.walk(from: List<StreamOption> = options) =
-        walkStreamOptions(candidates = from, resolve = { resolve(it) })
+    private suspend fun Script.walk(from: List<StreamOption> = options, onAttemptFailed: () -> Unit = {}) =
+        walkStreamOptions(candidates = from, resolve = { resolve(it) }, onAttemptFailed = onAttemptFailed)
 
     @Test
     fun theFirstThatPlaysIsTakenWithoutTouchingTheRest() = runTest {
@@ -88,15 +92,99 @@ class StreamWalkTest {
     }
 
     @Test
-    fun theWalkIsBoundedByItsBudget() {
-        val all = options + options.map { it.copy(id = it.id + "2") }
-        val picked = fallbackCandidates(all, from = all[1], skip = setOf("c"))
-        assertEquals(listOf("b", "d", "e", "f", "g", "h"), picked.map { it.id })
-        assertEquals(MAX_AUTO_FALLBACK + 1, picked.size)
+    fun theWalkIsBoundedByItsBudget() = runTest {
+        val s = Script(emptyMap())
+        val out = s.walk()
+        assertIs<WalkResult.Exhausted>(out)
+        assertEquals(MAX_AUTO_FALLBACK + 1, s.started.size)
+        assertEquals(MAX_AUTO_FALLBACK + 1, out.attempts)
     }
 
     @Test
-    fun knownFailuresGoLast() {
+    fun refusalsAreInstantSkipsThatSpendNothing() = runTest {
+        val s = Script(mapOf(
+            "a" to { refused("blocked") },
+            "b" to { refused("not_video") },
+            "c" to { refused("blocked") },
+            "e" to { ready("e") },
+        ))
+        var notes = 0
+        val out = walkStreamOptions(options, resolve = { s.resolve(it) }, attempts = 2, onAttemptFailed = { notes++ })
+        assertIs<WalkResult.Ready>(out)
+        assertEquals("e", out.option.id)
+        assertEquals(2, out.attempts, "a refusal was charged as an attempt")
+        assertEquals(1, notes, "announced a retry for an instant refusal")
+    }
+
+    /** The incident: three refusals and a caching answer used up the walk before anything that would play. */
+    @Test
+    fun cachingAndRefusalsDoNotHideAPlayableOptionFurtherDown() = runTest {
+        val s = Script(mapOf(
+            "a" to { caching(options[0]) },
+            "b" to { refused("blocked") },
+            "c" to { refused("blocked") },
+            "d" to { refused("blocked") },
+            "e" to { caching(options[4]) },
+            "f" to { refused("blocked") },
+            "g" to { ready("g") },
+        ))
+        val out = s.walk(fallbackCandidates(options, from = null))
+        assertIs<WalkResult.Ready>(out)
+        assertEquals("g", out.option.id)
+    }
+
+    @Test
+    fun uncachedOptionsGoLastAndOnlyOneIsAskedToCache() = runTest {
+        val list = listOf(
+            option("a").copy(availability = "uncached"),
+            option("b").copy(availability = "ready"),
+            option("c").copy(availability = "unknown"),
+            option("d").copy(availability = "uncached"),
+        )
+        assertEquals(listOf("b", "c", "a", "d"), fallbackCandidates(list, from = null).map { it.id })
+
+        val s = Script(mapOf("a" to { caching(list[0]) }, "d" to { caching(list[3]) }))
+        val out = s.walk(fallbackCandidates(list, from = null))
+        assertIs<WalkResult.Caching>(out)
+        assertEquals("a", out.option.id)
+        assertEquals(listOf("b", "c", "a"), s.started, "queued a second download on the debrid service")
+    }
+
+    @Test
+    fun aCachingAnswerAlreadyInHandSparesTheUncached() = runTest {
+        val list = listOf(option("a"), option("b").copy(availability = "uncached"))
+        val s = Script(mapOf("a" to { caching(list[0]) }, "b" to { caching(list[1]) }))
+        val out = s.walk(fallbackCandidates(list, from = null))
+        assertIs<WalkResult.Caching>(out)
+        assertEquals(listOf("a"), s.started)
+    }
+
+    @Test
+    fun aRateLimitStopsTheWalk() = runTest {
+        val s = Script(mapOf("b" to { refused("rate_limited") }, "c" to { ready("c") }))
+        val out = s.walk()
+        assertIs<WalkResult.Exhausted>(out)
+        assertEquals("rate_limited", (out.lastError as ApiException).reason)
+        assertEquals(listOf("a", "b"), s.started)
+    }
+
+    @Test
+    fun theWalkIsBoundedByResolves() = runTest {
+        val many = (1..30).map { option("x$it") }
+        val s = Script(many.associate { o -> o.id to suspend { refused("blocked") } })
+        s.walk(many)
+        assertEquals(MAX_WALK_RESOLVES, s.started.size)
+    }
+
+    @Test
+    fun theWalkIsBoundedByTime() = runTest {
+        val s = Script(options.associate { o -> o.id to suspend { delay(12_000); refused("blocked") } })
+        walkStreamOptions(options, resolve = { s.resolve(it) }, timeSource = testTimeSource)
+        assertEquals(3, s.started.size, "kept resolving past the time cap")
+    }
+
+    @Test
+    fun knownFailuresGoAfterTheRest() {
         val bad = options[0].copy(playback = "failed")
         val list = listOf(bad) + options.drop(1).take(2)
         val picked = fallbackCandidates(list, from = bad)

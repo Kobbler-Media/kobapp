@@ -17,6 +17,8 @@ expect val deviceLabel: String
 /** Stable client family for this install: android, androidtv, desktop, ios, web. */
 expect val clientKind: String
 
+expect val deviceRegion: String?
+
 @Composable
 expect fun BackHandler(enabled: Boolean = true, onBack: () -> Unit)
 

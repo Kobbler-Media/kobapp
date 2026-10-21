@@ -55,3 +55,16 @@ fun trackIntent(
 
     return TrackIntent(audioLanguage, subtitleOrdinal, subtitlesOff)
 }
+
+/**
+ * The audio track a stream should open on. A debrid release is handed over whole and
+ * unprobed for preferences, so without the viewer's language here it opens on whatever
+ * the release marked default — often a dub.
+ */
+fun startAudioIndex(
+    audioTracks: List<AudioTrackDto>,
+    serverPick: Int?,
+    preferredLanguage: String?,
+): Int? = serverPick
+    ?: audioTracks.firstOrNull { sameLanguage(it.language, preferredLanguage) }?.streamIndex
+    ?: audioTracks.firstOrNull { it.isDefault }?.streamIndex

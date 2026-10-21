@@ -11,20 +11,6 @@ import kotlin.test.assertTrue
 
 class StreamFallbackTest {
 
-    @Test
-    fun theFirstAttemptSaysNothing() {
-        // Until one option fails there is nothing to count, and the caller's own
-        // message ("searching for a stream") is the useful one.
-        assertNull(fallbackNote(0))
-        assertNull(fallbackNote(-1))
-    }
-
-    @Test
-    fun laterAttemptsCountFromTwo() {
-        assertEquals("Trying stream 2 of 6…", fallbackNote(1))
-        assertEquals("Trying stream 6 of 6…", fallbackNote(5))
-    }
-
     private fun option(id: String, hash: String?, fileId: Int?, cached: Boolean = false) =
         StreamOption(
             id = id, releaseTitle = id, size = 0, indexer = "", infoHash = hash,

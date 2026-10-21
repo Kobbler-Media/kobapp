@@ -55,6 +55,19 @@ class DetailPhoneLayoutTest {
                 onBack = {}, onViewInLibrary = { _, _ -> },
             )
         },
+        "discover show" to {
+            DiscoverDetailScreen(
+                detail = DiscoverDetail(
+                    mediaType = "tv", provider = "tmdb", title = "Found", year = 2026,
+                    description = prose, posterUrl = "", backdropUrl = null, genres = emptyList(),
+                    rating = null, cast = emptyList(), network = null, runtime = null,
+                    authors = emptyList(), libraryId = null, wantStatus = null, isInLibrary = false,
+                    identifiers = emptyMap(), providerId = "43",
+                ),
+                api = api, formFactor = FormFactor.Phone, player = null, gps = GlobalPlayerState(),
+                onBack = {}, onViewInLibrary = { _, _ -> },
+            )
+        },
         "book" to {
             BookDetailScreen(
                 book = Book(id = "b1", title = "Book", author = "Writer", coverUrl = "", description = prose),

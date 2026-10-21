@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.StreamSearchResult
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.Episode
@@ -96,7 +97,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    options = options, option = options.first(),
+                    search = { found(options) }, option = options.first(),
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (gps.sessionId != "s2" || stub.outcome("s2") == null) delay(20)
@@ -119,7 +120,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = FakePlayer(), gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    options = options, option = options.first(),
+                    search = { found(options) }, option = options.first(),
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
 
@@ -146,8 +147,15 @@ class DebridFallbackTest {
         }
     }
 
-    @Test
-    fun `a stream that drops after playing is reopened once on the same release, then given up on`() {
+    private fun resolvedStart(stub: StubServer) =
+        Json.parseToJsonElement(stub.requestBodies.getValue("/api/v1/admin/stream/resolve"))
+            .jsonObject["start_time"]?.jsonPrimitive?.content?.toInt()
+
+    /** Plays [first], drops it at 600s, lets the reopen play, and drops that at 900s. */
+    private fun dropsTwiceMidway(
+        candidates: List<StreamOption>,
+        after: suspend CoroutineScope.(StubServer, FakePlayer, GlobalPlayerState) -> Unit,
+    ) {
         val player = FakePlayer().apply { durationMs.value = 3_600_000 }
         val minted = mutableMapOf<String, Int>()
         val resolve = resolveBy { hash ->
@@ -159,7 +167,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    options = options, option = options.first(),
+                    search = { found(candidates) }, option = candidates.first(),
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (stub.outcome("s1") == null) delay(20)
@@ -171,13 +179,33 @@ class DebridFallbackTest {
                 assertEquals(600, player.loadedSource?.startTimeSec, "reopened somewhere other than where it dropped")
                 assertEquals(true, stub.outcome("s1")?.get("ok")?.jsonPrimitive?.boolean, "a hiccup was blamed on the release")
 
+                player.currentMs.value = 900_000
                 player.error.value = RuntimeException("connection reset again")
-                while (gps.failureHelp == null) delay(20)
-                assertEquals("The stream stopped and couldn't be picked up again.", gps.failureHelp!!.summary)
-                assertEquals(false, stub.outcome("s1b")?.get("ok")?.jsonPrimitive?.boolean)
+                after(stub, player, gps)
             }
         }
     }
+
+    @Test
+    fun `a stream that drops again after its reopen switches to the next release where it left off`() =
+        dropsTwiceMidway(options) { stub, player, gps ->
+            while (gps.sessionId != "s2" || stub.outcome("s2") == null) delay(20)
+            assertEquals(listOf("h1", "h1", "h2"), resolved.toList())
+            assertEquals(895, resolvedStart(stub), "the next release was not asked for the position it dropped at")
+            assertEquals(895, player.loadedSource?.startTimeSec)
+            assertNull(gps.failureHelp, "a working release was left untried behind the dialog")
+            assertEquals("Switched to another source", gps.playerNote)
+            assertEquals(false, stub.outcome("s1b")?.get("ok")?.jsonPrimitive?.boolean)
+        }
+
+    @Test
+    fun `a stream that drops again with nothing left to switch to gets the dialog`() =
+        dropsTwiceMidway(options.take(1)) { stub, _, gps ->
+            while (gps.failureHelp == null) delay(20)
+            assertEquals("The stream stopped and couldn't be picked up again.", gps.failureHelp!!.summary)
+            assertEquals(false, stub.outcome("s1b")?.get("ok")?.jsonPrimitive?.boolean)
+            assertNull(gps.playerNote)
+        }
 
     @Test
     fun `a search with nothing in it says so and offers a download instead of an empty list`() {
@@ -186,8 +214,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = FakePlayer(), gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    options = emptyList(), option = null,
-                    searchErrors = listOf("No debrid providers configured"),
+                    search = { StreamSearchResult(emptyList(), listOf("No debrid providers configured")) }, option = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 val help = assertNotNull(gps.failureHelp)
@@ -195,6 +222,107 @@ class DebridFallbackTest {
                 assertTrue(help.alternatives.isEmpty())
                 assertNotNull(help.want)
                 assertTrue(gps.loadingError!!.contains("No debrid providers configured"))
+            }
+        }
+    }
+
+    private val stalledButDownloading =
+        """{"session_id":"s1","state":"ready","method":"direct_play","is_live":false,"source_readable":true,""" +
+            """"feed":{"requests_open":1,"bytes_served":4096,"idle_ms":15000,"source":"remote",""" +
+            """"downloaded_bytes":150000000,"total_bytes":909281669,"download_bps":30000000}}"""
+
+    private fun FakePlayer.startsPlaying() {
+        playStalls = false
+        isPlaying.value = true
+        state.value = dev.kobbler.kobplayer.PlayerState.PLAYING
+    }
+
+    /**
+     * The server still had the file coming and the player had simply stopped reading: the
+     * release was fine. Blaming it threw away the one working option and walked onto
+     * refusals and a cold cache.
+     */
+    @Test
+    fun `a start that stalls while the server is still downloading reopens the same session first`() {
+        val player = FakePlayer().apply { durationMs.value = 3_600_000; playStalls = true }
+        val probes = java.util.concurrent.atomic.AtomicInteger()
+        val routes = routes(resolveBy { hash -> session(hash.removePrefix("h")) }) + mapOf(
+            "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange ->
+                if (probes.incrementAndGet() > 1) player.startsPlaying()
+                stalledButDownloading
+            },
+        )
+        StubServer(routes).also { stub = it }.use { stub ->
+            watched(stub, player) { api, gps ->
+                tryPlayTvWithFallback(
+                    api = api, player = player, gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options) }, option = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+                while (stub.outcome("s1") == null) delay(20)
+
+                assertEquals(listOf("h1"), resolved.toList(), "walked on from a release that was still downloading")
+                assertEquals(2, player.calls.count { it == "load" }, "did not reopen the stream")
+                assertEquals("s1", gps.sessionId)
+                assertEquals(true, stub.outcome("s1")?.get("ok")?.jsonPrimitive?.boolean)
+                assertTrue("/api/v1/admin/stream/s1" !in stub.requestBodies, "deleted the session it was about to reopen")
+            }
+        }
+    }
+
+    @Test
+    fun `a reopened session that stalls again is given up and the walk moves on`() {
+        val player = FakePlayer().apply { durationMs.value = 3_600_000; playStalls = true }
+        val routes = routes(resolveBy { hash -> session(hash.removePrefix("h")) }) + mapOf(
+            "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange -> stalledButDownloading },
+            "/api/v1/admin/playback/sessions/s2/status" to { _: HttpExchange ->
+                player.startsPlaying()
+                """{"session_id":"s2","state":"ready","method":"direct_play","is_live":false,"source_readable":true}"""
+            },
+            "/api/v1/admin/stream/s1" to { _: HttpExchange -> "{}" },
+        )
+        StubServer(routes).also { stub = it }.use { stub ->
+            watched(stub, player) { api, gps ->
+                tryPlayTvWithFallback(
+                    api = api, player = player, gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options) }, option = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+                while (stub.outcome("s2") == null) delay(20)
+
+                assertEquals(listOf("h1", "h2"), resolved.toList())
+                assertEquals(false, stub.outcome("s1")?.get("ok")?.jsonPrimitive?.boolean)
+                assertTrue("/api/v1/admin/stream/s1" in stub.requestBodies, "the dead session was left on the server")
+            }
+        }
+    }
+
+    /** The incident's thumbnails were asked after every five seconds for a session already deleted. */
+    @Test
+    fun `a session given up on is retired so nothing keeps polling it`() {
+        val player = FakePlayer().apply {
+            durationMs.value = 3_600_000
+            failsToOpen = { it.contains("/s1/") }
+        }
+        val withThumbs = { _: HttpExchange ->
+            resolved += "h1"
+            """{"session_id":"s1","method":"DirectPlay","direct_url":"/api/v1/admin/stream/s1/play",""" +
+                """"thumbnails_url":"/api/v1/admin/playback/sessions/s1/thumbnails.vtt","duration_seconds":3600}"""
+        }
+        StubServer(routes(withThumbs)).use { stub ->
+            watched(stub, player) { api, gps ->
+                tryPlayTvWithFallback(
+                    api = api, player = player, gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options.take(1)) }, option = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+                while (gps.failureHelp == null) delay(20)
+
+                assertNull(gps.sessionId, "the deleted session is still the one the player asks about")
+                assertNull(gps.thumbnailsUrl)
             }
         }
     }

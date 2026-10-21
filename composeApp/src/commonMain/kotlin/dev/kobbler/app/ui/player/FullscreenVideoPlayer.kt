@@ -5,13 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
@@ -20,6 +15,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material.icons.outlined.LibraryAdd
+import androidx.compose.material.icons.outlined.LibraryAddCheck
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Tv
@@ -52,7 +49,9 @@ import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.AudioTrackDto
+import dev.kobbler.app.data.KeepState
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.ThumbnailsProbe
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.PlaybackLifecycle
 import dev.kobbler.app.platform.PlaybackTimeline
@@ -133,8 +132,13 @@ fun FullscreenVideoPlayer(
     onOpenGuide: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
-    val mediaId = state.mediaId ?: return
-    val mediaType = state.mediaType ?: return
+    val mediaId = state.mediaId
+    val mediaType = state.mediaType
+    // Raised by beginPreparing before there is a session: the stream is still being found.
+    if (mediaId == null || mediaType == null) {
+        if (state.isPreparing) PendingStart(state, KobappTheme.colors.accentFor(section))
+        return
+    }
 
     // One rule for every press that moves the playhead, so no control can find the end of
     // a live playlist on its own. See liveSafeSeekMs.
@@ -272,13 +276,14 @@ fun FullscreenVideoPlayer(
         val poll = ThumbnailPoll(live = state.isLive)
         var lastVtt: String? = null
         while (true) {
-            val text = fetchThumbnailVttText(url, api.httpClient, authToken)
-            val fetch = when (text) {
-                null -> ThumbnailFetch.Failed
-                lastVtt -> ThumbnailFetch.Unchanged
-                else -> {
-                    thumbnailCues = withContext(Dispatchers.Default) { parseThumbnailVttText(text, baseUrl) }
-                    lastVtt = text
+            val fetch = when (val resp = fetchThumbnailVtt(url, api.httpClient, authToken)) {
+                VttResponse.Gone -> ThumbnailFetch.Gone
+                VttResponse.Failed -> ThumbnailFetch.Failed
+                is VttResponse.Text -> if (resp.body == lastVtt) {
+                    ThumbnailFetch.Unchanged
+                } else {
+                    thumbnailCues = withContext(Dispatchers.Default) { parseThumbnailVttText(resp.body, baseUrl) }
+                    lastVtt = resp.body
                     ThumbnailFetch.Changed
                 }
             }
@@ -305,7 +310,9 @@ fun FullscreenVideoPlayer(
                     // The event carries the URL, but it is the same one the poll below
                     // builds — so use the event only as the trigger and let the existing
                     // helper resolve it and confirm the file is really servable.
-                    "thumbnails_ready" -> api.checkThumbnailsReady(sid)?.let { state.thumbnailsUrl = it }
+                    "thumbnails_ready" -> (api.checkThumbnailsReady(sid) as? ThumbnailsProbe.Ready)?.let {
+                        state.thumbnailsUrl = it.url
+                    }
                 }
             }
         }
@@ -358,15 +365,7 @@ fun FullscreenVideoPlayer(
     LaunchedEffect(state.sessionId, state.thumbnailsUrl) {
         val sid = state.sessionId ?: return@LaunchedEffect
         if (state.thumbnailsUrl != null) return@LaunchedEffect
-        for (i in 0 until 60) {
-            delay(5_000)
-            if (state.thumbnailsUrl != null) return@LaunchedEffect
-            val url = api.checkThumbnailsReady(sid)
-            if (url != null) {
-                state.thumbnailsUrl = url
-                return@LaunchedEffect
-            }
-        }
+        awaitThumbnails(probe = { api.checkThumbnailsReady(sid) })?.let { state.thumbnailsUrl = it }
     }
 
     val saveAndBack = {
@@ -636,6 +635,7 @@ fun FullscreenVideoPlayer(
       Box(Modifier.focusKeyGroup("player").focusInert(overlaid)) {
         if (videoSurface != null) videoSurface(Modifier.fillMaxSize())
         else VideoSurface(player, Modifier.fillMaxSize())
+        StartBackdrop(state)
 
         if (!isInPip) {
             PlayerOverlay(
@@ -780,7 +780,33 @@ fun FullscreenVideoPlayer(
                             Icon(Icons.Outlined.SwapHoriz, "Switch stream", tint = colors.textHi)
                         }
                     }
+                    val keepSession = state.sessionId?.takeIf { state.isDebrid }
+                    if (keepSession != null) {
+                        val kept = state.keeps[keepSession]
+                        IconButton(
+                            onClick = { state.keep(api, keepSession) },
+                            enabled = kept == null || kept.state == KeepState.Failed,
+                            modifier = Modifier
+                                .focusKey("ctrl.keep")
+                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+                        ) {
+                            Icon(
+                                if (kept?.state == KeepState.Done) Icons.Outlined.LibraryAddCheck else Icons.Outlined.LibraryAdd,
+                                keepLabel(kept),
+                                tint = colors.textHi,
+                            )
+                        }
+                    }
                 },
+            )
+
+            StartingNote(
+                state,
+                Modifier.align(Alignment.BottomCenter).safeContentPadding().padding(bottom = dimens.s6),
+            )
+            PlayerNote(
+                state,
+                Modifier.align(Alignment.TopCenter).safeContentPadding().padding(top = dimens.s6),
             )
 
             val skip = activeSkip
@@ -869,77 +895,15 @@ fun FullscreenVideoPlayer(
         }
 
         if (state.isPreparing) {
-            val cachingProgress = state.cachingProgress
-            val preparingTitle = state.cachingTitle ?: state.title.takeIf { it.isNotBlank() }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .focusKeyGroup("prepare")
-                    .focusInert(showSubtitleSearch || railOpen)
-                    .background(colors.bg.copy(alpha = 0.85f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.widthIn(max = 420.dp).padding(horizontal = dimens.s5),
-                ) {
-                    if (cachingProgress != null) {
-                        Text(
-                            text = "Preparing stream",
-                            style = type.h3,
-                            color = colors.textHi,
-                        )
-                        if (preparingTitle != null) {
-                            Spacer(Modifier.height(dimens.s1))
-                            Text(
-                                text = preparingTitle,
-                                style = type.bodySm,
-                                color = colors.textMd,
-                            )
-                        }
-                        Spacer(Modifier.height(dimens.s5))
-                        androidx.compose.material3.LinearProgressIndicator(
-                            progress = { cachingProgress },
-                            color = sectionAccent,
-                            trackColor = colors.elev2,
-                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
-                        )
-                        Spacer(Modifier.height(dimens.s2))
-                        Text(
-                            text = "${(cachingProgress * 100).toInt()}%",
-                            style = type.caption,
-                            color = colors.textLo,
-                        )
-                    } else {
-                        CircularProgressIndicator(color = sectionAccent)
-                        Spacer(Modifier.height(dimens.s5))
-                        Text(
-                            text = "Connecting${if (preparingTitle != null) " to $preparingTitle" else ""}…",
-                            style = type.h3,
-                            color = colors.textHi,
-                        )
-                        val note = state.preparingNote
-                        if (note != null) {
-                            Spacer(Modifier.height(dimens.s2))
-                            Text(
-                                text = note,
-                                style = type.bodySm,
-                                color = colors.textMd,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(dimens.s5))
-                    KobButton(
-                        text = "Cancel",
-                        onClick = {
-                            val onCancel = state.onPreparingCancel
-                            if (onCancel != null) onCancel() else state.stop(player, api, scope)
-                        },
-                        style = KobButtonStyle.Ghost,
-                        modifier = Modifier.focusKey("cancel"),
-                    )
-                }
-            }
+            PreparingShell(
+                state = state,
+                accent = sectionAccent,
+                inert = showSubtitleSearch || railOpen,
+                onCancel = {
+                    val onCancel = state.onPreparingCancel
+                    if (onCancel != null) onCancel() else state.stop(player, api, scope)
+                },
+            )
         }
 
         if (showSubtitleSearch && state.sessionId != null) {

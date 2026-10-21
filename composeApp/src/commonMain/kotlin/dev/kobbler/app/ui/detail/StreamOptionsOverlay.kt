@@ -1,7 +1,6 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -32,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,11 +42,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.RecentStreamDto
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.ui.player.PLAYBACK_FAILED
 import dev.kobbler.app.ui.player.PLAYBACK_WORKED
+import dev.kobbler.app.ui.player.isInstant
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
@@ -62,7 +58,6 @@ import dev.kobbler.app.ui.navigation.InterceptBack
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.app.ui.safeBottomPadding
 
@@ -73,20 +68,16 @@ fun StreamOptionsOverlay(
     loading: Boolean,
     onSelect: (StreamOption) -> Unit,
     onDismiss: () -> Unit,
-    api: KobblerApi? = null,
-    recentStreams: List<RecentStreamDto> = emptyList(),
-    onPlayRecent: ((RecentStreamDto) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     val accent = colors.accMovies
-    // Confirmed-instant only; the rest are unknown rather than known-uncached.
-    val instantCount = options.count { it.cached }
+    val instantCount = options.count { it.isInstant }
     val provider = options.firstOrNull()?.debridProvider?.takeIf { it.isNotBlank() }
     val firstStreamFocus = remember { FocusRequester() }
     InterceptBack(enabled = true, onBack = onDismiss)
 
-    androidx.compose.runtime.LaunchedEffect(options, recentStreams, loading) {
-        if (!loading && (options.isNotEmpty() || recentStreams.isNotEmpty())) {
+    androidx.compose.runtime.LaunchedEffect(options, loading) {
+        if (!loading && options.isNotEmpty()) {
             delay(100)
             runCatching { firstStreamFocus.requestFocus() }
         }
@@ -124,13 +115,10 @@ fun StreamOptionsOverlay(
 
                 when {
                     loading -> LoadingState()
-                    options.isEmpty() && recentStreams.isEmpty() -> EmptyState()
+                    options.isEmpty() -> EmptyState()
                     else -> StreamList(
                         options = options,
-                        recentStreams = recentStreams,
                         onSelect = onSelect,
-                        onPlayRecent = onPlayRecent,
-                        api = api,
                         accent = accent,
                         firstStreamFocus = firstStreamFocus,
                     )
@@ -246,78 +234,26 @@ private fun EmptyState() {
 @Composable
 private fun StreamList(
     options: List<StreamOption>,
-    recentStreams: List<RecentStreamDto>,
     onSelect: (StreamOption) -> Unit,
-    onPlayRecent: ((RecentStreamDto) -> Unit)?,
-    api: KobblerApi?,
     accent: Color,
     firstStreamFocus: FocusRequester,
 ) {
-    val colors = KobappTheme.colors
-    val scope = rememberCoroutineScope()
-    val playRecent = onPlayRecent.takeIf { recentStreams.isNotEmpty() }
-
     LazyColumn(
         contentPadding = PaddingValues(vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        if (playRecent != null) {
-            item {
-                SectionLabel("Recent")
-                Spacer(Modifier.height(4.dp))
-            }
-            itemsIndexed(recentStreams, key = { _, item -> "recent-${item.id}" }) { idx, recent ->
-                var pinned by remember(recent.id) { mutableStateOf(recent.pinned) }
-                RecentStreamRow(
-                    recent = recent,
-                    pinned = pinned,
-                    accent = accent,
-                    entryFocus = if (idx == 0) firstStreamFocus else null,
-                    onPlay = { playRecent(recent) },
-                    onTogglePin = {
-                        if (api != null) {
-                            scope.launch {
-                                try {
-                                    if (pinned) api.unpinStream(recent.id)
-                                    else api.pinStream(recent.id)
-                                    pinned = !pinned
-                                } catch (_: Exception) {}
-                            }
-                        }
-                    },
-                )
-            }
-            item {
-                Spacer(Modifier.height(8.dp))
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.lineSoft))
-                Spacer(Modifier.height(8.dp))
-                SectionLabel("Available")
-                Spacer(Modifier.height(4.dp))
-            }
-        }
-
         itemsIndexed(options, key = { _, item -> item.id }) { idx, option ->
             StreamRow(
                 option = option,
                 accent = accent,
                 modifier = Modifier
                     .focusKey("option.${option.id}")
-                    .then(if (playRecent == null && idx == 0) Modifier.focusRequester(firstStreamFocus) else Modifier),
+                    .then(if (idx == 0) Modifier.focusRequester(firstStreamFocus) else Modifier),
                 onSelect = { onSelect(option) },
             )
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    val colors = KobappTheme.colors
-    Text(
-        text.uppercase(),
-        style = KobappTheme.type.label.copy(letterSpacing = 0.12.em),
-        color = colors.textLo,
-    )
 }
 
 @Composable
@@ -395,18 +331,17 @@ private fun StreamRow(
             }
         }
 
-        // Availability is three-valued — verified cached, unknown, known uncached —
-        // and only the first is worth a badge. "WILL CACHE" was drawn on every option
-        // that was not confirmed instant, which is the opposite of the truth for any
-        // option kobload simply had not probed.
+        // Of ready / likely / unknown / uncached, only the first is worth a badge. "WILL
+        // CACHE" was drawn on every option not confirmed instant, which is the opposite of
+        // the truth for any option kobload simply had not probed.
         val history = when (option.playback) {
             PLAYBACK_WORKED -> "PLAYED BEFORE" to accent
             PLAYBACK_FAILED -> "FAILED BEFORE" to colors.err
             else -> null
         }
-        if (option.cached || history != null) {
+        if (option.isInstant || history != null) {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (option.cached) StreamPill("INSTANT", colors.ok)
+                if (option.isInstant) StreamPill("INSTANT", colors.ok)
                 history?.let { (label, tint) -> StreamPill(label, tint) }
             }
         }
@@ -434,95 +369,12 @@ private fun StreamPill(label: String, acc: Color) {
     }
 }
 
-@Composable
-private fun RecentStreamRow(
-    recent: RecentStreamDto,
-    pinned: Boolean,
-    accent: Color,
-    entryFocus: FocusRequester?,
-    modifier: Modifier = Modifier,
-    onPlay: () -> Unit,
-    onTogglePin: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val focus = rememberTvFocusState()
-    val isFocused = focus.isFocused
-    val rowShape = RoundedCornerShape(10.dp)
-    val bg = if (isFocused) colors.elev3 else Color.Transparent
-    val borderColor =
-        if (isFocused) lerp(Color.Transparent, accent, 0.25f) else Color.Transparent
-
-    // The pin is a sibling of the row body, not a child of it: a focusable ancestor
-    // swallows a D-pad press aimed at its own descendants, so nesting it left it
-    // reachable only with a mouse. See EpisodeRowFocusTest.
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .focusKeyGroup("recent.${recent.id}")
-            .clip(rowShape)
-            .background(bg)
-            .border(1.dp, borderColor, rowShape)
-            .focusGroup()
-            .padding(14.dp),
-    ) {
-        Column(
-            Modifier
-                .weight(1f)
-                .focusKey("row")
-                .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
-                .tvFocusGlow(focus, cornerRadiusDp = 10f, scale = 1.01f)
-                .clip(rowShape)
-                .tvClickable(focus, onPlay),
-        ) {
-            Text(
-                recent.mediaTitle ?: recent.releaseTitle,
-                style = KobappTheme.type.body.copy(fontWeight = FontWeight.Medium),
-                color = colors.textHi,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            val meta = buildString {
-                append(recent.debridProvider)
-                val size = formatFileSize(recent.filesize)
-                if (size.isNotEmpty()) append(" · ").append(size)
-            }
-            Text(
-                meta,
-                style = KobappTheme.type.bodySm,
-                color = colors.textLo,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        val pinFocus = rememberTvFocusState()
-        Box(
-            modifier = Modifier
-                .focusKey("pin")
-                .size(32.dp)
-                .clip(CircleShape)
-                .tvFocusGlow(pinFocus, cornerRadiusDp = 16f)
-                .tvClickable(pinFocus, onTogglePin),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Outlined.PushPin,
-                contentDescription = if (pinned) "Unpin" else "Pin",
-                tint = if (pinned) accent else colors.textXlo,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
 private fun summaryLine(option: StreamOption): String = buildList {
     add(sourceName(option))
     option.quality.codec?.let { add(it) }
     option.quality.hdr?.let { add(it) }
     option.quality.audio?.let { add(it) }
+    if (option.audioLanguages.isNotEmpty()) add(option.audioLanguages.joinToString("/") { it.uppercase() })
 }.joinToString(" · ")
 
 private fun sourceName(option: StreamOption): String {

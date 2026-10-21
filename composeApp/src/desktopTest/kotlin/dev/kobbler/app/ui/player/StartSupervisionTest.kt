@@ -3,7 +3,9 @@ package dev.kobbler.app.ui.player
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import dev.kobbler.kobplayer.PlayerState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -106,7 +108,7 @@ class StartSupervisionTest {
 
             val outcome = gps.superviseStart(stalled(), api, probeIntervalMs = 50)
 
-            assertEquals(StartOutcome.Stalled, outcome)
+            assertIs<StartOutcome.Stalled>(outcome)
         }
     }
 
@@ -123,7 +125,7 @@ class StartSupervisionTest {
 
             val outcome = watching().superviseStart(stalled(), api, probeIntervalMs = 50)
 
-            assertEquals(StartOutcome.Stalled, outcome)
+            assertIs<StartOutcome.Stalled>(outcome)
             assertTrue(
                 testScheduler.currentTime >= START_CEILING_MS,
                 "gave up after ${testScheduler.currentTime}ms on a transcode the server said was coming",
@@ -144,7 +146,7 @@ class StartSupervisionTest {
 
             val outcome = watching().superviseStart(stalled(), api, probeIntervalMs = 50)
 
-            assertEquals(StartOutcome.Stalled, outcome)
+            assertIs<StartOutcome.Stalled>(outcome)
             assertTrue(
                 testScheduler.currentTime < START_CEILING_MS,
                 "waited the whole ceiling out on a session the server called ready",
@@ -166,7 +168,7 @@ class StartSupervisionTest {
             val outcome = watching(method = "direct_play")
                 .superviseStart(stalled(), api, probeIntervalMs = 50)
 
-            assertEquals(StartOutcome.Stalled, outcome)
+            assertIs<StartOutcome.Stalled>(outcome)
             assertTrue(
                 testScheduler.currentTime < TRANSCODE_START_BUDGET_MS,
                 "a local file sat in a spinner for ${testScheduler.currentTime}ms",
@@ -182,7 +184,7 @@ class StartSupervisionTest {
         val outcome = watching(method = "direct_play")
             .superviseStart(stalled(), api, probeIntervalMs = 50)
 
-        assertEquals(StartOutcome.Stalled, outcome, "read a failed request as a failed session")
+        assertIs<StartOutcome.Stalled>(outcome, "read a failed request as a failed session")
     }
 
     @Test
@@ -196,6 +198,132 @@ class StartSupervisionTest {
                 StartOutcome.Playing,
                 watching().superviseStart(player, api, probeIntervalMs = 50),
             )
+        }
+    }
+
+    private fun status(state: String, feed: String? = null) =
+        """{"session_id":"s1","state":"$state","method":"direct_play","is_live":false,"source_readable":true""" +
+            (feed?.let { ""","feed":$it""" } ?: "") + "}"
+
+    private fun feed(served: Long, idleMs: Long?, downloadBps: Long = 0, downloaded: Long = 0) =
+        """{"requests_open":1,"bytes_served":$served,"idle_ms":${idleMs ?: "null"},"source":"remote",""" +
+            """"downloaded_bytes":$downloaded,"total_bytes":909281669,"download_bps":$downloadBps}"""
+
+    /**
+     * Driven by the probes rather than by scheduled coroutines: virtual time leaps ahead
+     * while a probe is out on a real socket, so anything scheduled would fire mid-request.
+     */
+    private fun TestScope.timeline(
+        vararg phases: Pair<Long, (Long) -> String>,
+        player: FakePlayer? = null,
+        playsAtMs: Long = Long.MAX_VALUE,
+    ) = mapOf(
+        "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange ->
+            val now = testScheduler.currentTime
+            if (player != null && now >= playsAtMs) {
+                player.isPlaying.value = true
+                player.state.value = PlayerState.PLAYING
+            }
+            phases.last { now >= it.first }.second(now)
+        },
+    )
+
+    /**
+     * The incident: the server spent 5.5s getting the first bytes while it called the
+     * session preparing, and the six-second budget had been running the whole time. The
+     * file was healthy and the bytes were flowing when the start was called lost.
+     */
+    @Test
+    fun `a start whose bytes are flowing is not called lost because the server was slow to begin`() = runTest {
+        val player = stalled()
+        val routes = timeline(
+            0L to { _ -> status("preparing") },
+            5_500L to { now -> status("ready", feed(served = (now - 5_500) * 2_000, idleMs = 200)) },
+            player = player, playsAtMs = 14_000,
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            val outcome = watching(method = "direct_play").superviseStart(player, api, probeIntervalMs = 50)
+
+            assertEquals(StartOutcome.Playing, outcome)
+        }
+    }
+
+    /** No feed to read: the budget still only starts once the server stops preparing. */
+    @Test
+    fun `the budget runs from when the session became ready, not from the press`() = runTest {
+        val player = stalled()
+        val routes = timeline(
+            0L to { _ -> status("preparing") },
+            5_500L to { _ -> status("ready") },
+            player = player, playsAtMs = 10_000,
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            val outcome = watching(method = "direct_play").superviseStart(player, api, probeIntervalMs = 50)
+
+            assertEquals(StartOutcome.Playing, outcome)
+        }
+    }
+
+    @Test
+    fun `a feed that goes quiet is called lost long before the ceiling`() = runTest {
+        StubServer(timeline(0L to { now -> status("ready", feed(served = 1_000, idleMs = now)) })).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            val outcome = watching(method = "direct_play").superviseStart(stalled(), api, probeIntervalMs = 50)
+
+            assertIs<StartOutcome.Stalled>(outcome)
+            assertTrue(testScheduler.currentTime in FEED_IDLE_STALL_MS..<START_CEILING_MS, "called at ${testScheduler.currentTime}ms")
+        }
+    }
+
+    @Test
+    fun `a player that never asks for the stream is called on the direct budget`() = runTest {
+        StubServer(statusRoute(status("ready", feed(served = 0, idleMs = null)))).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            val outcome = watching(method = "video_transcode").superviseStart(stalled(), api, probeIntervalMs = 50)
+
+            assertIs<StartOutcome.Stalled>(outcome)
+            assertTrue(testScheduler.currentTime < TRANSCODE_START_BUDGET_MS, "called at ${testScheduler.currentTime}ms")
+        }
+    }
+
+    @Test
+    fun `a stall while the server is still downloading says the source is healthy`() = runTest {
+        val routes = timeline(0L to { now ->
+            status("ready", feed(served = 1_000, idleMs = now, downloadBps = 30_000_000, downloaded = now * 30_000))
+        })
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            val outcome = watching(method = "direct_play").superviseStart(stalled(), api, probeIntervalMs = 50)
+
+            assertIs<StartOutcome.Stalled>(outcome)
+            assertTrue(outcome.sourceHealthy, "a source still downloading was blamed")
+        }
+    }
+
+    @Test
+    fun `the feed is described once a start has been slow for a moment`() = runTest {
+        val gps = watching(method = "direct_play")
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        val player = stalled()
+        val routes = timeline(
+            0L to { _ -> seen += gps.startProgress; status("ready", feed(served = 24_000_000, idleMs = 100)) },
+            player = player, playsAtMs = 5_000,
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+
+            gps.superviseStart(player, api, probeIntervalMs = 50)
+
+            assertEquals(null, seen.first(), "described the feed before the start was slow")
+            assertTrue("Buffering · 24 MB" in seen, "never described the feed: $seen")
+            assertEquals(null, gps.startProgress, "left the description up after the start")
         }
     }
 }

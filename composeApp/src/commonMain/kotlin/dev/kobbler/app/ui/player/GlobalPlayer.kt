@@ -86,6 +86,7 @@ class GlobalPlayerState {
     var subtitle by mutableStateOf<String?>(null)
     var posterUrl by mutableStateOf<String?>(null)
     var logoUrl by mutableStateOf<String?>(null)
+    var backdropUrl by mutableStateOf<String?>(null)
 
     // Where to navigate when tapping the mini player
     var detailDestination by mutableStateOf<Destination?>(null)
@@ -202,10 +203,33 @@ class GlobalPlayerState {
     // page. Paired with [cachingTitle] / [onPreparingCancel].
     var cachingProgress by mutableStateOf<Float?>(null)
     var cachingTitle by mutableStateOf<String?>(null)
+    var cachingNote by mutableStateOf<String?>(null)
+    var onChooseRelease by mutableStateOf<(() -> Unit)?>(null)
 
     // What the wait is for, shown under "Connecting…". Each caller names its own —
     // a debrid search, a live probe and a session negotiation are not the same wait.
     var preparingNote by mutableStateOf<String?>(null)
+
+    // How a slow start's feed is doing, once it has been slow long enough to say.
+    var startProgress by mutableStateOf<String?>(null)
+
+    var playerNote by mutableStateOf<String?>(null)
+        private set
+    private var noteJob: Job? = null
+
+    fun flashNote(text: String, holdMs: Long = 4_000) {
+        noteJob?.cancel()
+        playerNote = text
+        noteJob = teardownScope.launch {
+            delay(holdMs)
+            playerNote = null
+        }
+    }
+
+    fun holdNote(text: String?) {
+        noteJob?.cancel()
+        playerNote = text
+    }
 
     // Cancels whatever raised the preparing overlay, whichever phase it is in.
     var onPreparingCancel: (() -> Unit)? = null
@@ -223,6 +247,11 @@ class GlobalPlayerState {
     /** The friendly half of [loadingError], for failures that have somewhere to go next. */
     var failureHelp by mutableStateOf<PlaybackFailureHelp?>(null)
         private set
+
+    val instant = InstantStreams()
+
+    // Outlives the playback it was started from: an import finishes long after the viewer stops.
+    val keeps = mutableStateMapOf<String, dev.kobbler.app.data.KeepProgress>()
 
     /** The walk behind the debrid stream now loaded, so a start that fails can move on. */
     internal var debridPlayback: DebridPlayback? = null
@@ -372,6 +401,8 @@ class GlobalPlayerState {
         if (id != mediaId) {
             recoveryMarks.clear()
             debridPlayback = null
+            // Art raised by beginPreparing belongs to this load; anything older is another title's.
+            if (preparingFor == null) backdropUrl = null
             // Answered by switching titles, or overtaken by the viewer picking another.
             handoff = null
         }
@@ -398,11 +429,12 @@ class GlobalPlayerState {
         videoWidth = session?.videoWidth
         videoHeight = session?.videoHeight
         serverAudioTracks = session?.audioTracks ?: emptyList()
-        // Server reports the actually-selected audio in selectedAudioIndex (it honors
-        // user language prefs we passed at session creation). Fall back to the
-        // file's "is_default" flag when the server didn't report a selection.
-        selectedServerAudioIndex = session?.selectedAudioIndex
-            ?: session?.audioTracks?.firstOrNull { it.isDefault }?.streamIndex
+        selectedServerAudioIndex = startAudioIndex(
+            audioTracks = serverAudioTracks,
+            serverPick = session?.selectedAudioIndex,
+            preferredLanguage = dev.kobbler.app.data.UserSettings
+                .getString(dev.kobbler.app.ui.dashboard.KEY_DEFAULT_AUDIO_LANG),
+        )
         val subs = session?.subtitles ?: emptyList()
         serverSubtitleTracks = subs
         // Prefer the server's selectedSubtitleIndex (new server respects the
@@ -549,6 +581,7 @@ class GlobalPlayerState {
         subtitle = null
         posterUrl = null
         logoUrl = null
+        backdropUrl = null
         detailDestination = null
         sessionId = null
         sessionMethod = null
@@ -589,8 +622,7 @@ class GlobalPlayerState {
         isLive = false
         isPreparing = false
         preparingNote = null
-        cachingProgress = null
-        cachingTitle = null
+        clearCaching()
         onPreparingCancel = null
         onSkipNext = null
         onSkipPrevious = null
@@ -602,6 +634,7 @@ class GlobalPlayerState {
         recoveryMarks.clear()
         startJob?.cancel()
         startJob = null
+        holdNote(null)
     }
 
     /**
@@ -693,8 +726,7 @@ class GlobalPlayerState {
             isPreparing = false
             isStarting = false
             preparingNote = null
-            cachingProgress = null
-            cachingTitle = null
+            clearCaching()
             onPreparingCancel = null
             return
         }
@@ -715,8 +747,7 @@ class GlobalPlayerState {
         preparingFor = null
         isPreparing = false
         preparingNote = null
-        cachingProgress = null
-        cachingTitle = null
+        clearCaching()
         onPreparingCancel = null
     }
 
@@ -738,6 +769,7 @@ class GlobalPlayerState {
         newSubtitle: String?,
         newPosterUrl: String?,
         note: String? = null,
+        newBackdropUrl: String? = null,
         onCancel: (() -> Unit)? = null,
     ) {
         if (isActive) return
@@ -745,6 +777,7 @@ class GlobalPlayerState {
         title = newTitle
         subtitle = newSubtitle
         posterUrl = newPosterUrl
+        backdropUrl = newBackdropUrl
         preparingNote = note
         onPreparingCancel = onCancel
         loadingError = null
@@ -762,13 +795,15 @@ class GlobalPlayerState {
         title = ""
         subtitle = null
         posterUrl = null
+        backdropUrl = null
         preparingNote = null
         onPreparingCancel = null
     }
 
-    fun beginCachingPreparation(title: String, onCancel: () -> Unit) {
+    fun beginCachingPreparation(title: String, onCancel: () -> Unit, onChooseRelease: (() -> Unit)? = null) {
         cachingProgress = 0f
         cachingTitle = title
+        this.onChooseRelease = onChooseRelease
         onPreparingCancel = onCancel
         isPreparing = true
         isFullscreen = true
@@ -779,9 +814,15 @@ class GlobalPlayerState {
     }
 
     fun endCachingPreparation() {
+        clearCaching()
+        onPreparingCancel = null
+    }
+
+    private fun clearCaching() {
         cachingProgress = null
         cachingTitle = null
-        onPreparingCancel = null
+        cachingNote = null
+        onChooseRelease = null
     }
 
     /**

@@ -15,18 +15,21 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.isWantedStatus
 import dev.kobbler.app.data.StreamSearchResult
+import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.app.ui.player.DebridPlayback
+import dev.kobbler.app.ui.player.InstantStart
+import dev.kobbler.app.ui.player.resumeRequestSeconds
+import dev.kobbler.app.ui.player.resumeSeekSeconds
 import dev.kobbler.app.ui.player.WantAction
 import dev.kobbler.app.ui.player.applyWarmReady
+import dev.kobbler.app.ui.player.awaitDebridCache
 import dev.kobbler.kobplayer.Player
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -99,15 +102,18 @@ internal class DiscoverStreams(
             newTitle = d.title,
             newSubtitle = episode?.label,
             newPosterUrl = d.posterUrl,
-            note = "Not in your library — searching for a stream.",
+            newBackdropUrl = d.backdropUrl,
+            note = FINDING_NOTE,
             onCancel = {
                 job?.cancel()
                 gps.cancelPreparing()
             },
         )
         job = scope.launch {
-            val found = searchFor(episode).await()
-            walkFor(found.options, episode, found.errors).start(chosen ?: found.options.firstOrNull(), resumeSec = 0)
+            val claim: (suspend () -> InstantStart?)? = if (chosen == null) {
+                { gps.instant.claim(api, StreamTarget.discover(d, episode)) }
+            } else null
+            walkFor(episode, claim).start(chosen, resumeSec = 0)
             if (gps.mediaId == null && caching == null && gps.loadingError == null) gps.cancelPreparing()
         }
     }
@@ -120,25 +126,29 @@ internal class DiscoverStreams(
         gps.isFullscreen = false
     }
 
-    private fun walkFor(
-        options: List<StreamOption>,
-        episode: DiscoverEpisodeRef?,
-        searchErrors: List<String> = emptyList(),
-    ): DebridPlayback {
+    private fun walkFor(episode: DiscoverEpisodeRef?, claim: (suspend () -> InstantStart?)?): DebridPlayback {
         val d = detail()
         lateinit var walk: DebridPlayback
         walk = DebridPlayback(
-            api = api, gps = gps, options = options,
-            resolve = { option, _ -> resolve(option, episode) },
-            play = { _, session, _ -> play(session, episode) },
+            api = api, gps = gps, search = { searchFor(episode).await() },
+            resolve = { option, resume -> resolve(option, episode, resume) },
+            play = { _, session, resume -> play(session, episode, resume) },
             onCaching = { c ->
                 caching = Caching(c.providerId, c.torrentId, c.option, episode, walk)
-                gps.beginCachingPreparation(title = d.title, onCancel = ::cancelCaching)
+                gps.beginCachingPreparation(
+                    title = d.title,
+                    onCancel = ::cancelCaching,
+                    onChooseRelease = {
+                        cancelCaching()
+                        pick(episode)
+                    },
+                )
             },
             want = wantFor(d, episode),
             title = d.title,
             posterUrl = d.posterUrl,
-            context = listOfNotNull("Discover ${d.mediaType}: ${d.title}", episode?.label) + searchErrors,
+            context = listOfNotNull("Discover ${d.mediaType}: ${d.title}", episode?.label),
+            claim = claim,
         )
         return walk
     }
@@ -150,15 +160,16 @@ internal class DiscoverStreams(
         else -> null
     }
 
-    private suspend fun resolve(option: StreamOption, episode: DiscoverEpisodeRef?) =
+    private suspend fun resolve(option: StreamOption, episode: DiscoverEpisodeRef?, resumeSec: Int) =
         api.streamResolve(
             option = option,
             mediaType = detail().mediaType,
+            startTime = resumeRequestSeconds(resumeSec),
             autoCreate = detail(),
             autoCreateEpisode = episode,
         )
 
-    private suspend fun play(session: KobblerApi.StreamSession, episode: DiscoverEpisodeRef?) {
+    private suspend fun play(session: KobblerApi.StreamSession, episode: DiscoverEpisodeRef?, resumeSec: Int) {
         val mediaId = session.mediaId ?: return
         val d = detail()
         val (libraryType, libraryId) =
@@ -175,8 +186,10 @@ internal class DiscoverStreams(
                 ).joinToString(" • "),
                 newPosterUrl = d.posterUrl, newLogoUrl = null,
                 destination = if (episode == null) Destination.MovieDetail(libraryId) else Destination.TvShowDetail(libraryId),
+                seekToSec = resumeSeekSeconds(resumeSec, session.serverStartSeconds),
                 session = session,
             )
+            gps.isDebrid = true
             gps.playUnmuted(p)
             gps.isFullscreen = true
         }
@@ -185,32 +198,15 @@ internal class DiscoverStreams(
 
     suspend fun pollCaching() {
         val c = caching ?: return
-        while (true) {
-            delay(3000)
-            try {
-                val status = api.streamResolveStatus(c.providerId, c.torrentId)
-                when (status.status) {
-                    "ready" -> {
-                        caching = null
-                        gps.endCachingPreparation()
-                        c.walk.start(c.option, resumeSec = 0)
-                        return
-                    }
-                    "downloading" -> gps.setCachingProgress(status.progress?.toFloat() ?: 0f)
-                    "error" -> {
-                        caching = null
-                        c.walk.giveUp(IllegalStateException(status.message ?: "Stream failed"))
-                        return
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                caching = null
-                c.walk.giveUp(e)
-                return
-            }
+        val failure = gps.awaitDebridCache(api, c.providerId, c.torrentId, c.option.debridProvider)
+        // Clearing [caching] ends the effect running this, so the walk is handed off rather than run here.
+        caching = null
+        if (failure != null) {
+            c.walk.giveUp(failure)
+            return
         }
+        gps.endCachingPreparation()
+        c.walk.resumeCached(c.option) { 0 }
     }
 
     // Warming finishes after the search returns, so an option listed as unknown can
@@ -227,6 +223,8 @@ internal class DiscoverStreams(
 }
 
 private val DiscoverEpisodeRef.label get() = "S$season E$episode"
+
+private const val FINDING_NOTE = "Finding a stream…"
 
 @Composable
 internal fun rememberDiscoverStreams(

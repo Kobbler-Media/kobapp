@@ -10,15 +10,17 @@ import java.util.concurrent.Executors
 class StubServer(
     private val routes: Map<String, (HttpExchange) -> String>,
     private val codes: Map<String, Int> = emptyMap(),
+    private val codeFor: (path: String, body: String) -> Int? = { _, _ -> null },
 ) : AutoCloseable {
     // Written from the server's pool, one thread per request in flight.
     val requestBodies: MutableMap<String, String> = ConcurrentHashMap()
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
             val path = exchange.requestURI.path
-            requestBodies[path] = exchange.requestBody.readBytes().decodeToString()
+            val request = exchange.requestBody.readBytes().decodeToString()
+            requestBodies[path] = request
             val handler = routes[path]
-            val (code, body) = if (handler == null) 404 to "{}" else (codes[path] ?: 200) to handler(exchange)
+            val (code, body) = if (handler == null) 404 to "{}" else (codeFor(path, request) ?: codes[path] ?: 200) to handler(exchange)
             val bytes = body.encodeToByteArray()
             exchange.responseHeaders.add("Content-Type", "application/json")
             exchange.sendResponseHeaders(code, bytes.size.toLong())

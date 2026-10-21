@@ -18,28 +18,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.kobbler.app.data.DiscoverDetail
-import dev.kobbler.app.data.LibraryStatus
+import dev.kobbler.app.data.localToday
 import dev.kobbler.app.platform.FormFactor
+import dev.kobbler.app.platform.deviceRegion
 import dev.kobbler.app.theme.KobappTheme
 
 @Composable
 internal fun ReleaseAvailabilityStrip(
-    detail: DiscoverDetail,
+    availability: ReleaseAvailability,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
-    val theatrical = detail.year?.toString() ?: "—"
-    val streaming = "—"
-    val library = when (detail.libraryStatus) {
-        LibraryStatus.Wanted -> "Wanted"
-        LibraryStatus.InLibrary -> "In library"
-        LibraryStatus.NotInLibrary -> "—"
-    }
-    val libraryColor = when (detail.libraryStatus) {
-        LibraryStatus.Wanted, LibraryStatus.InLibrary -> accent
-        LibraryStatus.NotInLibrary -> colors.textLo
-    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -55,14 +45,18 @@ internal fun ReleaseAvailabilityStrip(
             color = colors.textLo,
         )
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.lineSoft))
-        AvailabilityRow("Theatrical", theatrical, colors.textMd)
-        AvailabilityRow("Streaming", streaming, colors.textLo)
-        AvailabilityRow("Library", library, libraryColor)
+        availability.rows.forEach { row ->
+            AvailabilityLine(row.label, row.value, if (row.emphasised) accent else colors.textMd)
+        }
+        availability.regionNote?.let { Text(it, style = KobappTheme.type.bodySm, color = colors.textLo) }
     }
 }
 
+internal fun DiscoverDetail.availability(streaming: StreamingAvailability): ReleaseAvailability =
+    releaseAvailability(releaseDate, year, releaseDates, deviceRegion, localToday(), streaming, libraryStatus)
+
 @Composable
-private fun AvailabilityRow(label: String, value: String, valueColor: Color) {
+private fun AvailabilityLine(label: String, value: String, valueColor: Color) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,

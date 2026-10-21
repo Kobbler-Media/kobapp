@@ -28,6 +28,7 @@ import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
+import dev.kobbler.app.ui.player.KeepAction
 import dev.kobbler.app.ui.player.resumeRequestSeconds
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
@@ -47,6 +48,7 @@ internal fun ShowActions(
     wide: Boolean,
     modifier: Modifier = Modifier,
     exitDown: FocusRequester? = null,
+    keep: KeepAction? = null,
 ) {
     val resume = show.continueEpisode
     val firstUnwatchedIdx = selectedSeason?.episodes?.indexOfFirst {
@@ -67,11 +69,7 @@ internal fun ShowActions(
     // Toggling watched on the episode clears its saved position, which `show` cannot know.
     val resumePosition = if (resumeEpisode?.id in watchedOverrides) 0 else resume?.positionSeconds ?: 0
     val canRestart = resume != null && supportsVideoPlayback && resumeRequestSeconds(resumePosition) != null
-    val resumeTag = if (resumeSeasonNumber != null && resumeEpisode != null) {
-        "S${resumeSeasonNumber.pad2()} E${resumeEpisode.number.pad2()}"
-    } else {
-        null
-    }
+    val resumeTag = if (resumeSeasonNumber != null && resumeEpisode != null) episodeTag(resumeSeasonNumber, resumeEpisode.number) else null
 
     val playButton: @Composable (Modifier) -> Unit = { playFill ->
         if (resume != null && supportsVideoPlayback) {
@@ -179,7 +177,7 @@ internal fun ShowActions(
         )
     val kids = rememberShowKidsAccess(show, api, toast)
 
-    val hasOverflow = api != null && (canWantShow || canWatchlist || canRewatch || kids != null)
+    val hasOverflow = api != null && (canWantShow || canWatchlist || canRewatch || kids != null || keep != null)
     val overflowButton: @Composable () -> Unit = {
         if (api != null && hasOverflow) {
             OverflowActions(accent = accent) { close ->
@@ -223,6 +221,7 @@ internal fun ShowActions(
                     )
                 }
 
+                if (keep != null) KeepItem(keep, accent, close)
                 if (kids != null) KidsAccessItem(kids, accent, close)
             }
         }
@@ -343,5 +342,7 @@ internal fun remainingLabel(seconds: Int): String? {
     val minutes = seconds / 60
     return if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m left" else "${minutes}m left"
 }
+
+internal fun episodeTag(season: Int, episode: Int) = "S${season.pad2()} E${episode.pad2()}"
 
 internal fun Int.pad2(): String = if (this < 10) "0$this" else this.toString()

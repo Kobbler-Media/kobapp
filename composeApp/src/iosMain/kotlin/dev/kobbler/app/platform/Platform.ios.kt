@@ -19,6 +19,8 @@ actual fun defaultFormFactor(): FormFactor {
 }
 actual val supportsVideoPlayback: Boolean = false
 
+actual val deviceRegion: String? get() = platform.Foundation.NSLocale.currentLocale.countryCode
+
 actual val deviceLabel: String
     get() = platform.UIKit.UIDevice.currentDevice.name
 

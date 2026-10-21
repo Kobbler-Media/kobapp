@@ -43,10 +43,25 @@ data class Movie(
     val isWatched: Boolean = false,
     val watchPositionSeconds: Int? = null,
     val inWatchlist: Boolean = false,
+    val releaseDate: LocalDate? = null,
+    val releaseDates: ReleaseDates? = null,
 ) {
     val isWanted: Boolean get() = isWantedStatus(wantStatus)
 
     fun canBeWanted(canWant: Boolean): Boolean = canBeWanted(filePath, wantStatus, canWant)
+}
+
+@Immutable
+data class ReleaseDates(
+    val region: String? = null,
+    val premiere: LocalDate? = null,
+    val theatricalLimited: LocalDate? = null,
+    val theatrical: LocalDate? = null,
+    val digital: LocalDate? = null,
+    val physical: LocalDate? = null,
+    val tv: LocalDate? = null,
+) {
+    val cinema: LocalDate? get() = theatrical ?: theatricalLimited ?: premiere
 }
 
 fun isWantedStatus(wantStatus: String?): Boolean =
@@ -641,6 +656,8 @@ data class DiscoverDetail(
     val providerId: String,
     val seasons: List<DiscoverSeason> = emptyList(),
     val ratingCount: Int? = null,
+    val releaseDate: LocalDate? = null,
+    val releaseDates: ReleaseDates? = null,
 ) {
     val libraryStatus: LibraryStatus get() = when {
         isInLibrary -> LibraryStatus.InLibrary
@@ -664,6 +681,7 @@ data class DiscoverEpisode(
     val airDate: String?,
     val runtime: Int?,
     val stillUrl: String?,
+    val description: String? = null,
 )
 
 // -- Debrid Streaming --
@@ -686,6 +704,8 @@ data class StreamOption(
     val publishDate: String?,
     val fileName: String? = null,
     val playback: String? = null,
+    val availability: String? = null,
+    val audioLanguages: List<String> = emptyList(),
 )
 
 @Immutable
@@ -704,6 +724,13 @@ data class StreamSearchResult(
     val options: List<StreamOption>,
     val errors: List<String>,
 )
+
+/** 404 is "not generated yet"; 410 is the session itself being gone, so asking again is pointless. */
+sealed interface ThumbnailsProbe {
+    data class Ready(val url: String) : ThumbnailsProbe
+    data object Pending : ThumbnailsProbe
+    data object Gone : ThumbnailsProbe
+}
 
 sealed interface StreamResolveResult {
     data class Ready(val session: KobblerApi.StreamSession) : StreamResolveResult

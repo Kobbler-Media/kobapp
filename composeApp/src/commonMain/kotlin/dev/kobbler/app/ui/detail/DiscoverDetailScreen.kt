@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,38 +15,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Text
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.kobbler.kobfocus.focusInert
-import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.app.data.DiscoverDetail
-import dev.kobbler.app.data.DiscoverEpisodeRef
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LibraryStatus
 import dev.kobbler.app.platform.FormFactor
@@ -57,10 +50,12 @@ import dev.kobbler.app.ui.components.PillStatus
 import dev.kobbler.app.ui.components.StatusPill
 import dev.kobbler.app.ui.components.rememberPalette
 import dev.kobbler.app.ui.player.GlobalPlayerState
+import dev.kobbler.app.ui.player.WarmStream
+import dev.kobbler.app.data.StreamTarget
+import dev.kobbler.app.ui.player.isInstant
 import dev.kobbler.kobplayer.Player
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DiscoverDetailScreen(
     detail: DiscoverDetail,
@@ -73,8 +68,12 @@ fun DiscoverDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
-    val accent = colors.accWanted
-    var currentDetail by remember { mutableStateOf(detail) }
+    val accent = when (detail.mediaType) {
+        "tv" -> colors.accTv
+        "movie" -> colors.accMovies
+        else -> colors.accWanted
+    }
+    var currentDetail by remember(detail) { mutableStateOf(detail) }
     var wantLoading by remember { mutableStateOf(false) }
     var showWantPicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -96,9 +95,9 @@ fun DiscoverDetailScreen(
     LaunchedEffect(currentDetail.providerId) {
         if (canStreamMedia && currentDetail.mediaType == "movie") streams.prefetch(null)
     }
-
-    val palette = rememberPalette(currentDetail.posterUrl)
-    val gutter = gutterFor(formFactor)
+    if (currentDetail.mediaType == "movie") {
+        WarmStream(gps, api, StreamTarget.discover(currentDetail, null).takeIf { canStreamMedia && player != null })
+    }
 
     // A show is asked for the same way as one already in the library: how much of it to
     // want is the question, and "monitor" — which collects nothing that has already aired
@@ -129,75 +128,69 @@ fun DiscoverDetailScreen(
         if (currentDetail.mediaType == "tv") showWantPicker = true else onWant("new_only")
     }
 
-    val onStreamEpisode: (Int, Int) -> Unit = { season, episode -> streams.play(DiscoverEpisodeRef(season, episode)) }
-    val onStreamEpisodePick: (Int, Int) -> Unit = { season, episode -> streams.pick(DiscoverEpisodeRef(season, episode)) }
+    val actions: @Composable (Boolean, Modifier, FocusRequester?, DiscoverStreamAction?) -> Unit = { wide, anchor, exitDown, stream ->
+        DiscoverActions(
+            detail = currentDetail,
+            accent = accent,
+            stream = stream,
+            wantLoading = wantLoading,
+            showWant = api.canWant,
+            onWant = onWantPressed,
+            wide = wide,
+            exitDown = exitDown,
+            modifier = anchor,
+        )
+    }
 
-    val pageScroll = rememberScrollState()
-    val pageTopHold = rememberPageTopHold(pageScroll)
-    val pageScope = rememberCoroutineScope()
-    val pageFocusManager = LocalFocusManager.current
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val stacked = detailStacked(formFactor, maxWidth)
-        CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .focusInert(streams.showOptions)
-                .scrollWhenFocusIsStuck(pageScroll)
-                .verticalScroll(pageScroll),
-        ) {
-            DetailHero(
-                backdropUrl = currentDetail.backdropUrl,
-                posterUrl = currentDetail.posterUrl,
+    Box(modifier.fillMaxSize()) {
+        when (currentDetail.mediaType) {
+            "tv" -> DiscoverShowPage(
+                detail = currentDetail,
+                api = api,
                 formFactor = formFactor,
-                accentTint = palette.darkAccent,
                 accent = accent,
-            ) {
-                HeroCrumb(currentDetail)
-                Spacer(Modifier.height(8.dp))
-                DiscoverTitleBlock(currentDetail.title, colors.textHi)
-            }
-
-            if (stacked) {
-                PhoneBody(
-                    detail = currentDetail,
-                    accent = accent,
-                    canStreamMedia = canStreamMedia,
-                    wantLoading = wantLoading,
-                    showWant = api.canWant,
-                    api = api,
-                    gutter = gutter,
-                    onWant = onWantPressed,
-                    onPlay = { streams.play(null) },
-                    onShowStreams = { streams.pick(null) },
-                    onStreamEpisode = onStreamEpisode,
-                    onStreamEpisodePick = onStreamEpisodePick,
-                )
-            } else {
-                WideBody(
-                    detail = currentDetail,
-                    actionsAnchor = pageTopHold.anchor,
-                    formFactor = formFactor,
-                    accent = accent,
-                    canStreamMedia = canStreamMedia,
-                    wantLoading = wantLoading,
-                    showWant = api.canWant,
-                    api = api,
-                    gutter = gutter,
-                    onWant = onWantPressed,
-                    onPlay = { streams.play(null) },
-                    onShowStreams = { streams.pick(null) },
-                    onStreamEpisode = onStreamEpisode,
-                    onStreamEpisodePick = onStreamEpisodePick,
-                )
-            }
-
-            Spacer(Modifier.height(64.dp))
-        }
-        }
-
-        Box(Modifier.focusInert(streams.showOptions)) {
-            DetailBackButton(onBack, formFactor, accent = accent)
+                onBack = onBack,
+                onStreamEpisode = if (canStreamMedia) { ref -> streams.play(ref) } else null,
+                onStreamEpisodePick = if (canStreamMedia) { ref -> streams.pick(ref) } else null,
+                actions = { wide, anchor, exitDown, target ->
+                    WarmStream(gps, api, target?.takeIf { canStreamMedia && player != null }?.let { StreamTarget.discover(currentDetail, it) })
+                    val stream = target?.takeIf { canStreamMedia }?.let {
+                        DiscoverStreamAction("Stream", episodeTag(it.season, it.episode), { streams.play(it) }, { streams.pick(it) })
+                    }
+                    actions(wide, anchor, exitDown, stream)
+                },
+                modifier = Modifier.focusInert(streams.showOptions),
+            )
+            "movie" -> MovieDetailLayout(
+                movie = currentDetail.asMovie(),
+                formFactor = formFactor,
+                accent = accent,
+                onBack = onBack,
+                onPersonClick = null,
+                actions = { wide, anchor ->
+                    val stream = if (canStreamMedia) DiscoverStreamAction("Play", null, { streams.play(null) }, { streams.pick(null) }) else null
+                    actions(wide, anchor, null, stream)
+                },
+                topBarStatus = { DiscoverStatus(currentDetail.libraryStatus) },
+                aside = { wide ->
+                    val streaming = streamingAvailability(
+                        canStream = canStreamMedia,
+                        searching = streams.loading,
+                        found = streams.result?.options?.map { it.isInstant },
+                    )
+                    ReleaseAvailabilityStrip(currentDetail.availability(streaming), accent)
+                    if (wide) DiscoverDetailsPanel(currentDetail, formFactor)
+                },
+                modifier = Modifier.focusInert(streams.showOptions),
+            )
+            else -> DiscoverHeroPage(
+                detail = currentDetail,
+                formFactor = formFactor,
+                accent = accent,
+                inert = streams.showOptions,
+                onBack = onBack,
+                actions = { wide, anchor -> actions(wide, anchor, null, null) },
+            )
         }
 
         if (showWantPicker) {
@@ -221,10 +214,67 @@ fun DiscoverDetailScreen(
                 loading = streams.loading,
                 onSelect = streams::playPicked,
                 onDismiss = { streams.showOptions = false },
-                api = api,
             )
         }
+    }
+}
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DiscoverHeroPage(
+    detail: DiscoverDetail,
+    formFactor: FormFactor,
+    accent: Color,
+    inert: Boolean,
+    onBack: () -> Unit,
+    actions: @Composable (wide: Boolean, anchor: Modifier) -> Unit,
+) {
+    val colors = KobappTheme.colors
+    val palette = rememberPalette(detail.posterUrl)
+    val gutter = gutterFor(formFactor)
+    val pageScroll = rememberScrollState()
+    val pageTopHold = rememberPageTopHold(pageScroll)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val stacked = detailStacked(formFactor, maxWidth)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .focusInert(inert)
+                .scrollWhenFocusIsStuck(pageScroll)
+                .verticalScroll(pageScroll),
+        ) {
+            DetailHero(
+                backdropUrl = detail.backdropUrl,
+                posterUrl = detail.posterUrl,
+                formFactor = formFactor,
+                accentTint = palette.darkAccent,
+                accent = accent,
+            ) {
+                HeroCrumb(detail)
+                Spacer(Modifier.height(8.dp))
+                DiscoverTitleBlock(detail.title, colors.textHi)
+            }
+
+            if (stacked) {
+                PhoneBody(detail = detail, accent = accent, gutter = gutter, actions = { actions(false, Modifier) })
+            } else {
+                WideBody(
+                    detail = detail,
+                    formFactor = formFactor,
+                    accent = accent,
+                    gutter = gutter,
+                    actions = { actions(true, pageTopHold.anchor) },
+                )
+            }
+
+            Spacer(Modifier.height(64.dp))
+        }
+        }
+
+        Box(Modifier.focusInert(inert)) {
+            DetailBackButton(onBack, formFactor, accent = accent)
+        }
     }
 }
 
@@ -256,16 +306,8 @@ private fun ColumnScope.HeroCrumb(detail: DiscoverDetail) {
 private fun PhoneBody(
     detail: DiscoverDetail,
     accent: Color,
-    canStreamMedia: Boolean,
-    wantLoading: Boolean,
-    showWant: Boolean,
-    api: KobblerApi,
-    gutter: androidx.compose.ui.unit.Dp,
-    onWant: () -> Unit,
-    onPlay: () -> Unit,
-    onShowStreams: () -> Unit,
-    onStreamEpisode: (Int, Int) -> Unit,
-    onStreamEpisodePick: (Int, Int) -> Unit,
+    gutter: Dp,
+    actions: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
         Spacer(Modifier.height(14.dp))
@@ -275,37 +317,15 @@ private fun PhoneBody(
             GenreChips(detail.genres, accent = accent)
             Spacer(Modifier.height(14.dp))
         }
-        ActionRow(
-            detail = detail,
-            accent = accent,
-            canStreamMedia = canStreamMedia,
-            wantLoading = wantLoading,
-            showWant = showWant,
-            onWant = onWant,
-            onPlay = onPlay,
-            onShowStreams = onShowStreams,
-            wide = false,
-        )
+        actions()
         ReleaseAvailabilityStrip(
-            detail = detail,
+            availability = detail.availability(StreamingAvailability.Hidden),
             accent = accent,
             modifier = Modifier.padding(top = 18.dp),
         )
         if (detail.description != null) {
             Spacer(Modifier.height(20.dp))
             ExpandableText(detail.description)
-        }
-        if (detail.mediaType == "tv" && detail.seasons.isNotEmpty()) {
-            Spacer(Modifier.height(24.dp))
-            DiscoverSeasonsSection(
-                seasons = detail.seasons.filter { it.seasonNumber > 0 },
-                api = api,
-                detail = detail,
-                accent = accent,
-                canStream = canStreamMedia,
-                onStreamEpisode = onStreamEpisode,
-                onStreamEpisodePick = onStreamEpisodePick,
-            )
         }
         if (detail.cast.isNotEmpty()) {
             Spacer(Modifier.height(28.dp))
@@ -317,19 +337,10 @@ private fun PhoneBody(
 @Composable
 private fun WideBody(
     detail: DiscoverDetail,
-    actionsAnchor: Modifier,
     formFactor: FormFactor,
     accent: Color,
-    canStreamMedia: Boolean,
-    wantLoading: Boolean,
-    showWant: Boolean,
-    api: KobblerApi,
-    gutter: androidx.compose.ui.unit.Dp,
-    onWant: () -> Unit,
-    onPlay: () -> Unit,
-    onShowStreams: () -> Unit,
-    onStreamEpisode: (Int, Int) -> Unit,
-    onStreamEpisodePick: (Int, Int) -> Unit,
+    gutter: Dp,
+    actions: @Composable () -> Unit,
 ) {
     Spacer(Modifier.height(32.dp))
     Row(
@@ -348,18 +359,7 @@ private fun WideBody(
                 )
             }
             Spacer(Modifier.height(26.dp))
-            ActionRow(
-                detail = detail,
-                accent = accent,
-                canStreamMedia = canStreamMedia,
-                wantLoading = wantLoading,
-                showWant = showWant,
-                onWant = onWant,
-                onPlay = onPlay,
-                onShowStreams = onShowStreams,
-                wide = true,
-                modifier = actionsAnchor,
-            )
+            actions()
             if (detail.genres.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
                 GenreChips(detail.genres, accent = accent)
@@ -370,18 +370,6 @@ private fun WideBody(
                     detail.authors.joinToString(", "),
                     style = KobappTheme.type.bodySm,
                     color = KobappTheme.colors.textMd,
-                )
-            }
-            if (detail.mediaType == "tv" && detail.seasons.isNotEmpty()) {
-                Spacer(Modifier.height(28.dp))
-                DiscoverSeasonsSection(
-                    seasons = detail.seasons.filter { it.seasonNumber > 0 },
-                    api = api,
-                    detail = detail,
-                    accent = accent,
-                    canStream = canStreamMedia,
-                    onStreamEpisode = onStreamEpisode,
-                    onStreamEpisodePick = onStreamEpisodePick,
                 )
             }
             if (detail.cast.isNotEmpty()) {
@@ -395,7 +383,7 @@ private fun WideBody(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             StatusPill(PillStatus.NotInLibrary)
-            ReleaseAvailabilityStrip(detail = detail, accent = accent)
+            ReleaseAvailabilityStrip(availability = detail.availability(StreamingAvailability.Hidden), accent = accent)
             DiscoverDetailsPanel(detail = detail, formFactor = formFactor)
         }
     }
@@ -467,79 +455,6 @@ private fun Stat(label: String, value: String) {
         )
         Spacer(Modifier.height(4.dp))
         Text(value, style = KobappTheme.type.body, color = colors.textHi)
-    }
-}
-
-@Composable
-private fun ActionRow(
-    detail: DiscoverDetail,
-    accent: Color,
-    canStreamMedia: Boolean,
-    wantLoading: Boolean,
-    showWant: Boolean,
-    onWant: () -> Unit,
-    onPlay: () -> Unit,
-    onShowStreams: () -> Unit,
-    wide: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val colors = KobappTheme.colors
-    val playable = canStreamMedia && detail.mediaType == "movie"
-    val wantable = showWant && detail.libraryStatus == LibraryStatus.NotInLibrary
-    val wantLabel = if (wantLoading) "Adding…" else "Want"
-    DetailActionRow(
-        wide = wide,
-        modifier = modifier,
-        primary = when {
-            playable -> { fill ->
-                PrimaryAction(
-                    icon = Icons.Outlined.PlayArrow,
-                    label = "Play",
-                    onClick = onPlay,
-                    modifier = Modifier.focusKey("play", preferredEntry = true).then(fill),
-                )
-            }
-            wantable -> { fill ->
-                PrimaryAction(
-                    icon = Icons.Outlined.BookmarkAdd,
-                    label = wantLabel,
-                    onClick = onWant,
-                    enabled = !wantLoading,
-                    modifier = Modifier.focusKey("want", preferredEntry = true).then(fill),
-                )
-            }
-            else -> null
-        },
-    ) {
-        if (playable) {
-            IconAction(
-                icon = Icons.Outlined.Tune,
-                label = "Stream options",
-                accent = accent,
-                onClick = onShowStreams,
-                modifier = Modifier.focusKey("streams"),
-            )
-            if (wantable) {
-                IconAction(
-                    icon = Icons.Outlined.BookmarkAdd,
-                    label = wantLabel,
-                    accent = accent,
-                    onClick = onWant,
-                    enabled = !wantLoading,
-                    modifier = Modifier.focusKey("want"),
-                )
-            }
-        }
-        if (showWant && detail.libraryStatus == LibraryStatus.Wanted) {
-            IconAction(
-                icon = Icons.Outlined.Check,
-                label = "Wanted",
-                tint = colors.warn,
-                accent = accent,
-                onClick = {},
-                modifier = Modifier.focusKey("wanted"),
-            )
-        }
     }
 }
 

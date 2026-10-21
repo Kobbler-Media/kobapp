@@ -3,7 +3,8 @@ package dev.kobbler.app.ui.player
 import dev.kobbler.app.data.StreamOption
 
 /**
- * How many options auto-play tries before giving up and showing caching progress.
+ * How many real attempts auto-play makes before giving up and showing caching progress.
+ * Instant refusals are not attempts; see [walkStreamOptions].
  *
  * Keep at or below kobload's `WARM_TOP_N` (`warm_cache.rs`, currently 8): only the top
  * N are submitted for cache warming, so an option past that depth was never probed and
@@ -14,10 +15,17 @@ internal const val MAX_AUTO_FALLBACK = 5
 internal const val PLAYBACK_FAILED = "failed"
 internal const val PLAYBACK_WORKED = "worked"
 
+internal const val AVAILABILITY_READY = "ready"
+internal const val AVAILABILITY_UNCACHED = "uncached"
+
+internal val StreamOption.isInstant: Boolean get() = cached || availability == AVAILABILITY_READY
+
 /**
  * The options an automatic walk will try, best first: the one asked for, then what is
- * ranked after it. An option this server has watched fail goes behind every other — the
- * server sinks those already, but [skip] only knows what failed in this sitting.
+ * ranked after it in the server's order. An option this server has watched fail goes
+ * behind every other — the server sinks those already, but [skip] only knows what failed
+ * in this sitting — and one the debrid service does not hold goes last of all, since the
+ * best it can do is start a download.
  */
 internal fun fallbackCandidates(
     options: List<StreamOption>,
@@ -26,17 +34,10 @@ internal fun fallbackCandidates(
 ): List<StreamOption> {
     val start = from?.let { f -> options.indexOfFirst { it.id == f.id }.coerceAtLeast(0) } ?: 0
     val rest = options.drop(start).filter { it.id !in skip && it.id != from?.id }
-    val (failed, unknown) = rest.partition { it.playback == PLAYBACK_FAILED }
-    return (listOfNotNull(from) + unknown + failed).take(MAX_AUTO_FALLBACK + 1)
+    val (uncached, held) = rest.partition { it.availability == AVAILABILITY_UNCACHED }
+    val (failed, fresh) = held.partition { it.playback == PLAYBACK_FAILED }
+    return listOfNotNull(from) + fresh + failed + uncached
 }
-
-/**
- * What to tell the viewer while auto-play walks the option list. The first attempt is
- * the caller's own message — "searching for a stream" or similar — because until one
- * fails there is nothing to count.
- */
-internal fun fallbackNote(attempt: Int): String? =
-    if (attempt <= 0) null else "Trying stream ${attempt + 1} of ${MAX_AUTO_FALLBACK + 1}…"
 
 /**
  * Fold a `stream_warm_ready` event into a search result, marking the option that just

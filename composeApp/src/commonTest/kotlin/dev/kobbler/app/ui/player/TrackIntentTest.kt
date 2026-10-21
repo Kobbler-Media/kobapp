@@ -73,4 +73,24 @@ class TrackIntentTest {
         val intent = trackIntent(audio(1 to null, 2 to null), 2, emptyList(), null)
         assertNull(intent.audioLanguage)
     }
+
+    private fun tracks(vararg pairs: Pair<Int, String>, default: Int) =
+        pairs.map { (idx, lang) -> AudioTrackDto(streamIndex = idx, language = lang, isDefault = idx == default) }
+
+    @Test
+    fun `the start track follows the server, then the preferred language, then the file's default`() {
+        val italianFirst = tracks(1 to "ita", 2 to "eng", default = 1)
+        val shortCodes = tracks(1 to "it", 2 to "en", default = 1)
+        data class Case(val name: String, val tracks: List<AudioTrackDto>, val server: Int?, val preferred: String?, val expected: Int?)
+        listOf(
+            Case("server pick wins", italianFirst, 1, "eng", 1),
+            Case("preferred language over the default", italianFirst, null, "eng", 2),
+            Case("ISO 639-1 tracks match a 639-2 preference", shortCodes, null, "eng", 2),
+            Case("no match keeps the default", italianFirst, null, "jpn", 1),
+            Case("no preference keeps the default", italianFirst, null, null, 1),
+            Case("no tracks, nothing to pick", emptyList(), null, "eng", null),
+        ).forEach { c ->
+            assertEquals(c.expected, startAudioIndex(c.tracks, c.server, c.preferred), c.name)
+        }
+    }
 }

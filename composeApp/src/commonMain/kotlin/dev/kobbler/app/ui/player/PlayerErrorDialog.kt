@@ -267,7 +267,7 @@ private fun AlternativesSection(
     onPick: (StreamOption) -> Unit,
 ) {
     val colors = KobappTheme.colors
-    val cachedCount = alternatives.count { it.cached }
+    val cachedCount = alternatives.count { it.isInstant }
     Column(
         Modifier
             .fillMaxWidth()
@@ -351,7 +351,7 @@ private fun AlternativeRow(
                 )
             }
         }
-        if (option.cached) {
+        if (option.isInstant) {
             StatusPill(PillStatus.InLibrary)
         } else {
             Box(

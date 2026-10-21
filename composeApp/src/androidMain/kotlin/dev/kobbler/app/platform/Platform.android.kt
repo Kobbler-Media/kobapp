@@ -29,6 +29,8 @@ actual fun defaultFormFactor(): FormFactor {
 internal var settingsContext: android.content.Context? = null
 actual val supportsVideoPlayback: Boolean = true
 
+actual val deviceRegion: String? get() = java.util.Locale.getDefault().country.takeIf { it.isNotEmpty() }
+
 actual val deviceLabel: String
     get() {
         val model = listOf(android.os.Build.MANUFACTURER, android.os.Build.MODEL)

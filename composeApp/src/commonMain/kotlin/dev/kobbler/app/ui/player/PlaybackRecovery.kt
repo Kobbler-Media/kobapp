@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.player
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.SessionFeed
 import dev.kobbler.app.data.SessionStatus
 import dev.kobbler.app.data.SessionStatusDto
 import dev.kobbler.kobplayer.Player
@@ -66,9 +67,12 @@ internal sealed interface StartOutcome {
     /** The server named a fault. [cause] carries what it said. */
     data class Broken(val cause: Throwable) : StartOutcome
 
-    /** Nothing played and nobody could say why. */
-    data object Stalled : StartOutcome
+    /** Nothing played. [sourceHealthy]: the server still had the file coming when it was called. */
+    data class Stalled(val reason: String, val sourceHealthy: Boolean = false) : StartOutcome
 }
+
+/** A start that never played, as the failure handed to whoever takes it over. */
+internal class StartStall(reason: String, val sourceHealthy: Boolean) : IllegalStateException(reason)
 
 /**
  * Wait for a stream that was asked to play to actually play, asking the server what it
@@ -77,61 +81,73 @@ internal sealed interface StartOutcome {
  * The player cannot tell a slow start from a dead one: a reaped session answers, with a
  * playlist that never produces a segment, so there is no error for it to report and the
  * absence of playback is the only signal it has. The server, meanwhile, knows the moment
- * the transcode exits or the file goes unreadable. Asking costs one small request per
- * [probeIntervalMs] and turns most of these from a whole budget into half a second.
+ * the transcode exits or the file goes unreadable — and, for a debrid session, whether
+ * bytes are still reaching the player. See [judgeStart] for how that is read.
  */
 internal suspend fun GlobalPlayerState.superviseStart(
     player: Player,
     api: KobblerApi,
     probeIntervalMs: Long = START_PROBE_INTERVAL_MS,
 ): StartOutcome {
-    var deadline = startBudgetMs(sessionMethod)
     var waited = 0L
     var interval = probeIntervalMs
-    while (true) {
-        // The timeout only bounds the wait — a stream that starts reports it at once, so
-        // backing this off never delays noticing that it did.
-        val playing = withTimeoutOrNull(interval) {
-            player.state.first { it == PlayerState.PLAYING }
-        } != null
-        if (playing) return StartOutcome.Playing
-        waited += interval
-        if (waited >= SLOW_PROBE_AFTER_MS) interval = maxOf(probeIntervalMs, SLOW_PROBE_INTERVAL_MS)
+    var budget = startBudgetMs(sessionMethod)
+    var readyAt: Long? = 0L
+    var feed: SessionFeed? = null
+    try {
+        while (true) {
+            // The timeout only bounds the wait — a stream that starts reports it at once, so
+            // backing this off never delays noticing that it did.
+            val playing = withTimeoutOrNull(interval) {
+                player.state.first { it == PlayerState.PLAYING }
+            } != null
+            if (playing) return StartOutcome.Playing
+            waited += interval
+            if (waited >= SLOW_PROBE_AFTER_MS) interval = maxOf(probeIntervalMs, SLOW_PROBE_INTERVAL_MS)
 
-        val sid = sessionId
-        if (sid != null) {
-            val status = api.sessionStatus(sid)
-            // A session replaced mid-probe answers for the one that went, not this start.
-            if (sid != sessionId) continue
-            when (status) {
-                // A request that never arrived says nothing about the session, and
-                // reading it as a death is how a reconnect loop starts on a flaky link.
-                is SessionStatus.Unknown -> {}
-                is SessionStatus.Missing -> return StartOutcome.Broken(
-                    IllegalStateException("The server has no record of this playback session"),
-                )
-                is SessionStatusDto -> {
-                    if (status.state == "failed") {
-                        return StartOutcome.Broken(
-                            IllegalStateException(
-                                status.message ?: status.error ?: "The server gave up on this stream",
-                            ),
-                        )
-                    }
-                    val budget = startBudgetMs(status.method ?: sessionMethod)
-                    // A stream the server is still building is a wait with an end the
-                    // server itself enforces, so the clock keeps resetting while it says
-                    // so. What this budget is really for is the other case: the server
-                    // reporting a perfectly healthy session that never produces a picture.
-                    deadline = if (status.state == "preparing") {
-                        (waited + budget).coerceAtMost(START_CEILING_MS)
-                    } else {
-                        budget
+            var servedGrew = false
+            var downloadGrew = false
+            val sid = sessionId
+            if (sid != null) {
+                val status = api.sessionStatus(sid)
+                // A session replaced mid-probe answers for the one that went, not this start.
+                if (sid != sessionId) continue
+                when (status) {
+                    // A request that never arrived says nothing about the session, and
+                    // reading it as a death is how a reconnect loop starts on a flaky link.
+                    is SessionStatus.Unknown -> {}
+                    is SessionStatus.Missing -> return StartOutcome.Broken(
+                        IllegalStateException("The server has no record of this playback session"),
+                    )
+                    is SessionStatusDto -> {
+                        if (status.state == "failed") {
+                            return StartOutcome.Broken(
+                                IllegalStateException(
+                                    status.message ?: status.error ?: "The server gave up on this stream",
+                                ),
+                            )
+                        }
+                        budget = startBudgetMs(status.method ?: sessionMethod)
+                        readyAt = if (status.state == "preparing") null else readyAt ?: waited
+                        status.feed?.let { now ->
+                            val before = feed
+                            servedGrew = before != null && now.bytesServed > before.bytesServed
+                            downloadGrew = before != null && (now.downloadedBytes ?: 0) > (before.downloadedBytes ?: 0)
+                            feed = now
+                        }
                     }
                 }
             }
+            if (player.state.value == PlayerState.PLAYING) return StartOutcome.Playing
+            startProgress = if (waited >= FEED_NOTE_AFTER_MS) startFeedLine(feed) else null
+            val probe = StartProbe(waited, readyAt?.let { waited - it }, budget, feed, servedGrew, downloadGrew)
+            when (val verdict = judgeStart(probe)) {
+                StartVerdict.Wait -> {}
+                is StartVerdict.Stalled -> return StartOutcome.Stalled(verdict.reason, verdict.sourceHealthy)
+            }
         }
-        if (waited >= deadline) return StartOutcome.Stalled
+    } finally {
+        startProgress = null
     }
 }
 
@@ -207,11 +223,8 @@ suspend fun GlobalPlayerState.watchPlayback(player: Player, api: KobblerApi) = c
                     debridPlayback?.onPlaying(sessionId)
                 }
                 is StartOutcome.Broken -> handleLostStart(player, api, outcome.cause)
-                StartOutcome.Stalled -> handleLostStart(
-                    player, api,
-                    IllegalStateException(
-                        "Nothing played within ${startBudgetMs(sessionMethod) / 1000}s of the stream opening",
-                    ),
+                is StartOutcome.Stalled -> handleLostStart(
+                    player, api, StartStall(outcome.reason, outcome.sourceHealthy),
                 )
             }
         }
@@ -421,17 +434,27 @@ private suspend fun GlobalPlayerState.reopenVod(
         teardownScope.launch { api.closeSession(session.sessionId) }
         return true
     }
-    load(
-        player = player, api = api, type = type, id = id,
-        streamUrl = session.url, newSessionId = session.sessionId,
-        newTitle = title, newSubtitle = subtitle,
-        newPosterUrl = posterUrl, newLogoUrl = logoUrl,
-        destination = detailDestination,
-        seekToSec = resumeSeekSeconds(resumeSec, session.serverStartSeconds),
-        session = session,
-    )
+    loadInPlace(player, api, type, id, session, resumeSec)
     return true
 }
+
+/** Open [session] for the title already showing, keeping everything the viewer sees about it. */
+internal suspend fun GlobalPlayerState.loadInPlace(
+    player: Player,
+    api: KobblerApi,
+    type: String,
+    id: String,
+    session: KobblerApi.StreamSession,
+    resumeSec: Int,
+) = load(
+    player = player, api = api, type = type, id = id,
+    streamUrl = session.url, newSessionId = session.sessionId,
+    newTitle = title, newSubtitle = subtitle,
+    newPosterUrl = posterUrl, newLogoUrl = logoUrl,
+    destination = detailDestination,
+    seekToSec = resumeSeekSeconds(resumeSec, session.serverStartSeconds),
+    session = session,
+)
 
 /**
  * Tune the channel again.

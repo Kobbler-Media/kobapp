@@ -15,9 +15,9 @@ import androidx.compose.ui.Modifier
 import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.RecentStreamDto
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamSearchResult
+import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.data.indexOfEpisode
 import dev.kobbler.app.platform.FormFactor
@@ -28,10 +28,10 @@ import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.kobplayer.Player
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 
@@ -86,12 +86,27 @@ fun InlineTvPlayer(
         gps.isPreparing = false
         gps.isFullscreen = false
     }
+    val chooseRelease: () -> Unit = {
+        cancelCaching()
+        showStreamOptions = true
+    }
     val startCaching: (DebridPlayback, WalkResult.Caching) -> Unit = { walk, c ->
         cachingProviderId = c.providerId
         cachingTorrentId = c.torrentId
         cachingOption = c.option
         cachingWalk = walk
-        gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching)
+        gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching, onChooseRelease = chooseRelease)
+    }
+
+    suspend fun episodeStreams(episodeId: String): StreamSearchResult {
+        streamResult?.takeIf { streamSearchedEpisodeId == episodeId }?.let { return it }
+        streamLoading = true
+        val found = runCatching { api.streamSearch(episodeId = episodeId) }
+            .getOrElse { StreamSearchResult(emptyList(), listOf("Search failed")) }
+        streamResult = found
+        streamSearchedEpisodeId = episodeId
+        streamLoading = false
+        return found
     }
 
     LaunchedEffect(show.id) {
@@ -139,18 +154,13 @@ fun InlineTvPlayer(
                     streamingSeasonIdx = match.first
                     streamingEpisodeIdx = match.second
                 }
-                streamLoading = true
-                streamResult = runCatching { api.streamSearch(episodeId = episodeId) }.getOrNull()
-                streamSearchedEpisodeId = episodeId
-                streamLoading = false
-                val options = streamResult?.options.orEmpty()
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = episodeId, seasonIdx = streamingSeasonIdx, episodeIdx = streamingEpisodeIdx,
-                    options = options, option = options.firstOrNull(),
+                    search = { episodeStreams(episodeId) }, option = null,
                     resumeSec = api.getEpisodeProgress(episodeId) ?: cachedSec,
-                    searchErrors = streamResult?.errors.orEmpty(),
                     onCaching = startCaching,
+                    claim = { gps.instant.claim(api, StreamTarget.episode(episodeId)) },
                 )
             }
         } catch (_: Exception) {
@@ -175,33 +185,15 @@ fun InlineTvPlayer(
         val opt = cachingOption ?: return@LaunchedEffect
         val walk = cachingWalk ?: return@LaunchedEffect
         val epId = streamingEpisodeId ?: return@LaunchedEffect
-        val clear = { cachingProviderId = null; cachingTorrentId = null; cachingOption = null; cachingWalk = null }
-        while (true) {
-            delay(3000)
-            try {
-                val status = api.streamResolveStatus(pid, tid)
-                when (status.status) {
-                    "ready" -> {
-                        clear()
-                        gps.endCachingPreparation()
-                        walk.start(opt, if (streamFromStart) 0 else (api.getEpisodeProgress(epId) ?: 0))
-                        break
-                    }
-                    "downloading" -> gps.setCachingProgress(status.progress?.toFloat() ?: 0f)
-                    "error" -> {
-                        clear()
-                        walk.giveUp(IllegalStateException(status.message ?: "Stream failed"))
-                        break
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                clear()
-                walk.giveUp(e)
-                break
-            }
+        val failure = gps.awaitDebridCache(api, pid, tid, opt.debridProvider)
+        cachingProviderId = null; cachingTorrentId = null; cachingOption = null; cachingWalk = null
+        if (failure != null) {
+            walk.giveUp(failure)
+            return@LaunchedEffect
         }
+        gps.endCachingPreparation()
+        val fromStart = streamFromStart
+        walk.resumeCached(opt) { if (fromStart) 0 else (api.getEpisodeProgress(epId) ?: 0) }
     }
 
     DisposableEffect(show.id) {
@@ -215,17 +207,37 @@ fun InlineTvPlayer(
         }
     }
 
-    DisposableEffect(show.id) {
+    DisposableEffect(show) {
         gps.onFinished = onEpisodeFinishedHandler(
             scope = scope, api = api, player = player, gps = gps, show = show,
             onStartCaching = { walk, c, sIdx, eIdx, epId ->
                 cachingProviderId = c.providerId; cachingTorrentId = c.torrentId; cachingOption = c.option
                 cachingWalk = walk
                 streamingEpisodeId = epId; streamingSeasonIdx = sIdx; streamingEpisodeIdx = eIdx
-                gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching)
+                gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching, onChooseRelease = chooseRelease)
             },
         )
         onDispose { gps.onFinished = null }
+    }
+
+    WarmStream(
+        gps, api,
+        target = show.instantTarget()?.takeIf { player != null && api.canStream && supportsVideoPlayback },
+        startTime = show.continueEpisode?.positionSeconds,
+    )
+
+    // The next episode is asked for well before the credits, so autoplay or a skip onto it
+    // claims a stream the server already has open rather than starting a search.
+    // Keyed on the target, not the playback: a refresh that brings the next episode's file
+    // in ends the warm and releases whatever was already held.
+    val nextWarm = nextEpisodeWarmTarget(show, gps.mediaId)?.takeIf { gps.isDebrid && api.canStream }
+    LaunchedEffect(nextWarm) {
+        val target = nextWarm ?: return@LaunchedEffect
+        if (player == null) return@LaunchedEffect
+        combine(player.currentMs, player.durationMs) { pos, dur ->
+            nextEpisodeDue(gps.timeline.toAbsoluteMs(pos), gps.timeline.absoluteDurationMs(dur))
+        }.first { it }
+        gps.instant.keepWarm(api, target, startTime = { null }, busy = { false }, settleMs = 0)
     }
 
     // Recomputed as playback moves so the controls can hide a step that has nowhere to
@@ -235,7 +247,7 @@ fun InlineTvPlayer(
             cachingProviderId = c.providerId; cachingTorrentId = c.torrentId; cachingOption = c.option
             cachingWalk = walk
             streamingEpisodeId = epId; streamingSeasonIdx = sIdx; streamingEpisodeIdx = eIdx
-            gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching)
+            gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching, onChooseRelease = chooseRelease)
         }
         gps.onSkipNext = neighbourEpisode(show, gps.mediaId, 1)?.let { target ->
             { playNeighbourEpisode(scope, api, player, gps, show, target, startCachingAt) }
@@ -284,20 +296,13 @@ fun InlineTvPlayer(
             },
         )
         search = scope.launch {
-            if (streamResult == null || streamSearchedEpisodeId != episodeId) {
-                streamLoading = true
-                streamResult = runCatching { api.streamSearch(episodeId = episodeId) }.getOrNull()
-                streamSearchedEpisodeId = episodeId
-                streamLoading = false
-            }
-            val options = streamResult?.options.orEmpty()
             tryPlayTvWithFallback(
                 api = api, player = player, gps = gps, show = show,
                 episodeId = episodeId, seasonIdx = sIdx, episodeIdx = eIdx,
-                options = options, option = options.firstOrNull(),
+                search = { episodeStreams(episodeId) }, option = null,
                 resumeSec = if (fromStart) 0 else (api.getEpisodeProgress(episodeId) ?: 0),
-                searchErrors = streamResult?.errors.orEmpty(),
                 onCaching = startCaching,
+                claim = { gps.instant.claim(api, StreamTarget.episode(episodeId)) },
             )
             if (gps.mediaId == null && gps.loadingError == null) gps.cancelPreparing()
         }
@@ -318,6 +323,10 @@ fun InlineTvPlayer(
             val fid = frame.data["file_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
             streamResult = applyWarmReady(streamResult, hash, fid, providerId)
         }
+    }
+
+    val streamedEpisodeIds = remember(show) {
+        show.seasons.flatMap { it.episodes }.filter { it.filePath == null }.mapNotNull { it.id }.toSet()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -373,6 +382,7 @@ fun InlineTvPlayer(
                 }
             },
             onPersonClick = onPersonClick,
+            keep = rememberKeepAction(api, gps, "episode", streamedEpisodeIds),
             onStreamEpisode = if (api.canStream && supportsVideoPlayback) { sIdx, eIdx ->
                 autoPlayDebridEpisode(sIdx, eIdx)
             } else null,
@@ -395,10 +405,6 @@ fun InlineTvPlayer(
       }
 
         if (showStreamOptions) {
-            var recentStreams by remember { mutableStateOf<List<RecentStreamDto>>(emptyList()) }
-            LaunchedEffect(Unit) {
-                runCatching { recentStreams = api.getRecentStreams() }
-            }
             StreamOptionsOverlay(
                 options = streamResult?.options ?: emptyList(),
                 errors = streamResult?.errors ?: emptyList(),
@@ -411,7 +417,7 @@ fun InlineTvPlayer(
                         tryPlayTvWithFallback(
                             api = api, player = player, gps = gps, show = show,
                             episodeId = epId, seasonIdx = streamingSeasonIdx, episodeIdx = streamingEpisodeIdx,
-                            options = streamResult?.options ?: emptyList(),
+                            search = { episodeStreams(epId) },
                             option = option,
                             resumeSec = (api.getEpisodeProgress(epId) ?: 0),
                             onCaching = startCaching,
@@ -419,8 +425,6 @@ fun InlineTvPlayer(
                     }
                 },
                 onDismiss = { showStreamOptions = false },
-                api = api,
-                recentStreams = recentStreams,
             )
         }
 
@@ -477,7 +481,7 @@ internal suspend fun GlobalPlayerState.loadEpisode(
  * The episode [delta] steps from [currentEpId] in broadcast order, across season
  * boundaries. Null at either end of the show.
  */
-private fun neighbourEpisode(show: TvShow, currentEpId: String?, delta: Int): Triple<Int, Int, Episode>? {
+internal fun neighbourEpisode(show: TvShow, currentEpId: String?, delta: Int): Triple<Int, Int, Episode>? {
     if (currentEpId == null) return null
     val allEps = show.seasons.flatMapIndexed { sIdx, season ->
         season.episodes.mapIndexed { eIdx, ep -> Triple(sIdx, eIdx, ep) }
@@ -514,6 +518,9 @@ private fun playNeighbourEpisode(
             val oldSid = gps.sessionId
             if (oldSid != null) gps.teardownScope.launch { api.closeSession(oldSid) }
             val start = startPlayback(api, "episode", epId)
+            if (start == null && ep.filePath != null) {
+                throw IllegalStateException("Episode $epId has a library file but no playback session")
+            }
             if (start != null && player != null) {
                 gps.loadEpisode(
                     player = player, api = api, show = show,
@@ -524,15 +531,17 @@ private fun playNeighbourEpisode(
                 )
                 gps.playUnmuted(player)
             } else if (allowDebridFallback && api.canStream && player != null) {
-                val searchResult = runCatching { api.streamSearch(episodeId = epId) }.getOrNull()
-                val options = searchResult?.options
-                if (!options.isNullOrEmpty()) {
+                val claimed = gps.instant.claim(api, StreamTarget.episode(epId))
+                val searchResult = if (claimed == null) runCatching { api.streamSearch(episodeId = epId) }.getOrNull() else null
+                if (claimed != null || !searchResult?.options.isNullOrEmpty()) {
                     tryPlayTvWithFallback(
                         api = api, player = player, gps = gps, show = show,
                         episodeId = epId, seasonIdx = sIdx, episodeIdx = eIdx,
-                        options = options, option = options.first(),
+                        search = { searchResult ?: api.streamSearch(episodeId = epId) },
+                        option = null,
                         resumeSec = (api.getEpisodeProgress(epId) ?: 0),
                         onCaching = { walk, c -> onStartCaching(walk, c, sIdx, eIdx, epId) },
+                        claim = { claimed },
                     )
                 } else {
                     // Nothing on debrid for this episode (not aired yet, no release
@@ -583,18 +592,18 @@ internal suspend fun tryPlayTvWithFallback(
     episodeId: String,
     seasonIdx: Int,
     episodeIdx: Int,
-    options: List<StreamOption>,
+    search: suspend () -> StreamSearchResult,
     option: StreamOption?,
     resumeSec: Int = 0,
-    searchErrors: List<String> = emptyList(),
     onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
+    claim: (suspend () -> InstantStart?)? = null,
 ) {
     if (player == null) return
     val season = show.seasons.getOrNull(seasonIdx)
     val episode = season?.episodes?.getOrNull(episodeIdx)
     lateinit var walk: DebridPlayback
     walk = DebridPlayback(
-        api = api, gps = gps, options = options,
+        api = api, gps = gps, search = search,
         resolve = { opt, resume ->
             api.streamResolve(option = opt, mediaType = "episode", mediaId = episodeId, startTime = resumeRequestSeconds(resume))
         },
@@ -618,7 +627,8 @@ internal suspend fun tryPlayTvWithFallback(
             "Show: ${show.title}",
             "Episode: S${season?.number ?: "?"}E${episode?.number ?: "?"} ${episode?.title ?: ""}",
             "ID: $episodeId",
-        ) + searchErrors,
+        ),
+        claim = claim,
     )
     walk.start(option, resumeSec)
 }

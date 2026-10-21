@@ -211,6 +211,7 @@ fun EpisodeList(
     onStreamEpisodePick: ((Int, Int) -> Unit)?,
     wantOverrides: SnapshotStateMap<String, Boolean>,
     seasonEntry: FocusRequester? = null,
+    isUpcoming: ((Episode) -> Boolean)? = null,
 ) {
     if (season == null) return
     // Above the first row is the tab strip, and a geometric search up out of the list
@@ -229,14 +230,17 @@ fun EpisodeList(
     Column(Modifier.fillMaxWidth().focusKeyGroup("season.${season.number}").then(exitUp)) {
         season.episodes.forEachIndexed { idx, ep ->
             val isCurrent = currentEpisodeId != null && ep.id == currentEpisodeId
+            val canPlayLocal = ep.filePath != null && supportsVideoPlayback
+            val canStream = onStreamEpisode != null && supportsVideoPlayback
             EpisodeRow(
                 // Toggling watched clears the saved position, which `ep` cannot know.
                 episode = if (ep.id != null && ep.id in watchedOverrides) ep.copy(watchProgress = null) else ep,
                 accent = accent,
                 isCurrent = isCurrent,
                 watched = ep.isWatchedNow(watchedOverrides),
-                canPlayLocal = ep.filePath != null && supportsVideoPlayback,
-                canStream = onStreamEpisode != null && supportsVideoPlayback,
+                canPlayLocal = canPlayLocal,
+                canStream = canStream,
+                airsSoon = isUpcoming?.invoke(ep) ?: (!canPlayLocal && ep.filePath == null && !canStream),
                 onClick = {
                     if (ep.filePath != null) onPlayEpisode(seasonIdx, idx, false)
                     else if (onStreamEpisode != null) onStreamEpisode(seasonIdx, idx)
@@ -276,6 +280,7 @@ private fun EpisodeRow(
     watched: Boolean,
     canPlayLocal: Boolean,
     canStream: Boolean,
+    airsSoon: Boolean,
     wanted: Boolean,
     onClick: () -> Unit,
     onStreamPick: (() -> Unit)?,
@@ -285,7 +290,6 @@ private fun EpisodeRow(
 ) {
     val colors = KobappTheme.colors
     val hasPlayback = canPlayLocal || canStream
-    val airsSoon = !canPlayLocal && episode.filePath == null && !canStream
     val scope = rememberCoroutineScope()
     val rowBg = if (isCurrent) accent.copy(alpha = 0.08f) else Color.Transparent
     val focusState = rememberTvFocusState()

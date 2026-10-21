@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import dev.kobbler.app.ui.player.ThumbnailFetch.Changed
 import dev.kobbler.app.ui.player.ThumbnailFetch.Failed
+import dev.kobbler.app.ui.player.ThumbnailFetch.Gone
 import dev.kobbler.app.ui.player.ThumbnailFetch.Unchanged
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,5 +38,11 @@ class ThumbnailPollTest {
             listOf(15_000L, 30_000L, 60_000L, 120_000L, 120_000L, 15_000L),
             delays(live = true, Changed, Unchanged, Unchanged, Unchanged, Unchanged, Changed),
         )
+    }
+
+    @Test
+    fun `a session that is gone is never asked again, live or not`() {
+        assertEquals(listOf(15_000L, null), delays(live = false, Changed, Gone))
+        assertEquals(listOf(30_000L, null), delays(live = true, Failed, Gone))
     }
 }

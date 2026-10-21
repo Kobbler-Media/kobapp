@@ -202,6 +202,21 @@ class NavigationState {
         }
     }
 
+    /**
+     * Swap [from] for [to] where it sits in the stack, so BACK never returns to a page that
+     * would only send the viewer forward again. A [to] already directly beneath absorbs it.
+     */
+    fun replace(from: Destination, to: Destination) {
+        val i = _stack.lastIndexOf(from)
+        if (i < 0) return
+        if (_stack.getOrNull(i - 1) == to) {
+            _stack.removeAt(i)
+            if (searchResultDepth > i) searchResultDepth--
+        } else {
+            _stack[i] = to
+        }
+    }
+
     fun navigateFromSearch(dest: Destination) {
         searchOpen = false
         navigate(dest)
@@ -1378,7 +1393,7 @@ private fun DetailContent(
                     gps = gps,
                     onBack = { nav.goBack() },
                     onViewInLibrary = { mediaType, libraryId ->
-                        libraryDestination(mediaType, libraryId)?.let { nav.navigate(it) }
+                        libraryDestination(mediaType, libraryId)?.let { nav.replace(dest, it) }
                     },
                 )
             }

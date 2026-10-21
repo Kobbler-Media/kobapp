@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 actual fun defaultFormFactor(): FormFactor = FormFactor.Desktop
 actual val supportsVideoPlayback: Boolean = true
 
+actual val deviceRegion: String? get() = java.util.Locale.getDefault().country.takeIf { it.isNotEmpty() }
+
 actual val deviceLabel: String
     get() {
         val host = runCatching { java.net.InetAddress.getLocalHost().hostName }

@@ -1,7 +1,6 @@
 package dev.kobbler.app.data
 
 import dev.kobbler.app.platform.connectRoundTripMs
-import kotlinx.datetime.LocalDate
 import dev.kobbler.app.platform.AppVersion
 import dev.kobbler.app.platform.clientKind
 import dev.kobbler.app.platform.deviceLabel
@@ -27,6 +26,7 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -39,10 +39,7 @@ import kotlinx.serialization.json.putJsonObject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
-import dev.kobbler.app.ui.dashboard.KEY_DEFAULT_AUDIO_LANG
-import dev.kobbler.app.ui.dashboard.KEY_DEFAULT_SUBTITLE_LANG
 import dev.kobbler.app.ui.dashboard.KEY_STREAMING_QUALITY
-import dev.kobbler.app.ui.dashboard.KEY_SUBTITLES_ENABLED
 import io.ktor.client.HttpClient
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -216,6 +213,29 @@ data class MovieDetailDto(
     @SerialName("in_watchlist") val inWatchlist: Boolean = false,
     val cast: List<CastDto> = emptyList(),
     val crew: List<CrewDto> = emptyList(),
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("release_dates") val releaseDates: ReleaseDatesDto? = null,
+)
+
+@Serializable
+data class ReleaseDatesDto(
+    val region: String? = null,
+    val premiere: String? = null,
+    @SerialName("theatrical_limited") val theatricalLimited: String? = null,
+    val theatrical: String? = null,
+    val digital: String? = null,
+    val physical: String? = null,
+    val tv: String? = null,
+)
+
+internal fun ReleaseDatesDto.toModel() = ReleaseDates(
+    region = region,
+    premiere = parseIsoDate(premiere),
+    theatricalLimited = parseIsoDate(theatricalLimited),
+    theatrical = parseIsoDate(theatrical),
+    digital = parseIsoDate(digital),
+    physical = parseIsoDate(physical),
+    tv = parseIsoDate(tv),
 )
 
 @Serializable
@@ -375,6 +395,7 @@ data class SessionResponse(
     val subtitles: List<PlaybackSubtitleTrackDto> = emptyList(),
     /** Stream index actually selected for playback (matches one of audio_tracks). */
     @SerialName("selected_audio_index") val selectedAudioIndex: Int? = null,
+    @SerialName("preferred_audio_stream_index") val preferredAudioStreamIndex: Int? = null,
     /** Stream index actually selected for playback (matches one of subtitles). */
     @SerialName("selected_subtitle_index") val selectedSubtitleIndex: Int? = null,
     /** Media ID of the auto-created entity (set on debrid resolve with auto_create). */
@@ -424,7 +445,21 @@ data class SessionStatusDto(
     @SerialName("source_readable") val sourceReadable: Boolean = true,
     @SerialName("transcode_running") val transcodeRunning: Boolean? = null,
     @SerialName("segments_ready") val segmentsReady: Int? = null,
+    val feed: SessionFeed? = null,
 ) : SessionStatus
+
+/** What a debrid session has sent the player, and how its own download is going. */
+@Serializable
+data class SessionFeed(
+    @SerialName("requests_open") val requestsOpen: Int = 0,
+    @SerialName("bytes_served") val bytesServed: Long = 0,
+    /** Null until the player has made its first request. */
+    @SerialName("idle_ms") val idleMs: Long? = null,
+    val source: String? = null,
+    @SerialName("downloaded_bytes") val downloadedBytes: Long? = null,
+    @SerialName("total_bytes") val totalBytes: Long? = null,
+    @SerialName("download_bps") val downloadBps: Long? = null,
+)
 
 @Serializable
 data class AudioTrackDto(
@@ -473,6 +508,8 @@ data class StreamOptionDto(
     val files: List<StreamFileDto> = emptyList(),
     @SerialName("publish_date") val publishDate: String? = null,
     val playback: String? = null,
+    val availability: String? = null,
+    @SerialName("audio_languages") val audioLanguages: List<String> = emptyList(),
 )
 
 @Serializable
@@ -515,6 +552,7 @@ data class DiscoverEpisodeDto(
     @SerialName("air_date") val airDate: String? = null,
     val runtime: Int? = null,
     @SerialName("still_url") val stillUrl: String? = null,
+    val description: String? = null,
 )
 
 @Serializable
@@ -1516,7 +1554,6 @@ data class RecentStreamDto(
     @SerialName("debrid_provider") val debridProvider: String,
     val filename: String,
     val filesize: Long = 0,
-    val pinned: Boolean = false,
     @SerialName("progress_seconds") val progressSeconds: Double? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("media_title") val mediaTitle: String? = null,
@@ -1678,7 +1715,7 @@ data class ExternalBookDto(
 
 // -- Mapping to UI models --
 
-private fun formatRuntime(minutes: Int?): String? {
+internal fun formatRuntime(minutes: Int?): String? {
     if (minutes == null) return null
     val h = minutes / 60
     val m = minutes % 60
@@ -1722,6 +1759,8 @@ internal fun MovieDetailDto.toMovie(base: String): Movie = Movie(
     isWatched = watched ?: false,
     watchPositionSeconds = watchPositionSeconds,
     inWatchlist = inWatchlist,
+    releaseDate = parseIsoDate(releaseDate),
+    releaseDates = releaseDates?.toModel(),
 )
 
 private fun List<CrewDto>.creditsFor(vararg jobs: String): List<String> =
@@ -1747,7 +1786,7 @@ internal fun ShowDetailDto.toTvShow(base: String): TvShow {
                         filePath = if (e.isInLibrary) "stream" else null,
                         isWatched = e.watched ?: false,
                         wantStatus = e.wantStatus,
-                        airDate = e.airDate?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() },
+                        airDate = parseIsoDate(e.airDate),
                         watchProgress = if (e.watchPositionSeconds != null && e.runtime != null && e.runtime > 0)
                             (e.watchPositionSeconds / (e.runtime * 60f)).coerceIn(0f, 1f)
                         else null,
@@ -2247,6 +2286,14 @@ class KobblerApi(
         DataCache.invalidate("home", "dashboard", "movies", "wanted")
         DataCache.invalidatePrefix("movie-")
         DataCache.invalidatePrefix("movies:")
+    }
+
+    // A Discover page held in the back stack for this title would otherwise come back
+    // from cache still offering to stream something that is now in the library.
+    private fun invalidateAutoCreated() {
+        DataCache.invalidatePrefix("discover-")
+        invalidateMovies()
+        invalidateTvShows()
     }
 
     private fun invalidateTvShows() {
@@ -3355,22 +3402,7 @@ class KobblerApi(
     }
 
     suspend fun getLiveRecordingPlayback(recordingId: String): StreamSession? {
-        val session = decode<SessionResponse>(get("/api/v1/admin/livetv/recordings/$recordingId/playback"))
-        val url = session.directUrl ?: session.playlistUrl ?: return null
-        return StreamSession(
-            url = resolveUrl(apiUrl, url),
-            sessionId = session.sessionId,
-            chapters = session.chapters,
-            skipSegments = session.skipSegments,
-            thumbnailsUrl = session.thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
-            lufs = session.lufs,
-            audioTracks = session.audioTracks,
-            subtitles = session.subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
-            selectedAudioIndex = session.selectedAudioIndex,
-            selectedSubtitleIndex = session.selectedSubtitleIndex,
-            videoWidth = session.videoWidth,
-            videoHeight = session.videoHeight,
-        )
+        return decode<SessionResponse>(get("/api/v1/admin/livetv/recordings/$recordingId/playback")).toStreamSession()
     }
 
     private fun LiveSessionDto.toModel(base: String): LiveSession {
@@ -3545,6 +3577,8 @@ class KobblerApi(
             fileId = file?.id, publishDate = publishDate,
             fileName = file?.path?.substringAfterLast('/')?.takeIf { it.isNotBlank() },
             playback = playback,
+            availability = availability,
+            audioLanguages = audioLanguages,
         )
     }
 
@@ -3711,6 +3745,10 @@ class KobblerApi(
                 providerId = providerId,
                 seasons = seasons,
                 ratingCount = int("rating_count"),
+                releaseDate = parseIsoDate(str("release_date")),
+                releaseDates = runCatching {
+                    (d["release_dates"] as? JsonObject)?.let { json.decodeFromJsonElement(ReleaseDatesDto.serializer(), it).toModel() }
+                }.getOrNull(),
             )
         }
     }
@@ -3912,72 +3950,108 @@ class KobblerApi(
         autoCreate: DiscoverDetail? = null,
         autoCreateEpisode: DiscoverEpisodeRef? = null,
     ): StreamResolveResult {
+        val target = StreamTarget(mediaType, mediaId, autoCreate, autoCreateEpisode)
         val body = buildJsonObject {
             put("debrid_provider_id", option.debridProviderId)
             option.infoHash?.let { put("info_hash", it) }
             option.fileId?.let { put("file_id", it) }
-            put("media_type", mediaType)
-            mediaId?.let { put("media_id", it) }
             put("release_title", option.releaseTitle)
             put("debrid_provider", option.debridProvider)
             option.qualityJson?.let { put("quality", it) }
-            startTime?.let { put("start_time", it) }
-            putJsonObject("capabilities") {
-                putJsonArray("video_codecs") { VLC_CAPABILITIES.videoCodecs.forEach { add(JsonPrimitive(it)) } }
-                putJsonArray("audio_codecs") { VLC_CAPABILITIES.audioCodecs.forEach { add(JsonPrimitive(it)) } }
-                putJsonArray("containers") { VLC_CAPABILITIES.containers.forEach { add(JsonPrimitive(it)) } }
-            }
             estimatedDuration?.let { put("estimated_duration", it) }
-            autoCreate?.let { ac ->
-                putJsonObject("auto_create") {
-                    put("title", ac.title)
-                    ac.year?.let { put("year", it) }
-                    if (ac.identifiers.isNotEmpty()) {
-                        putJsonObject("identifiers") { ac.identifiers.forEach { (k, v) -> put(k, v) } }
-                    }
-                    ac.description?.let { put("description", it) }
-                    ac.posterUrl.takeIf { it.isNotEmpty() }?.let { put("poster_url", it) }
-                    ac.backdropUrl?.let { put("backdrop_url", it) }
-                    if (ac.genres.isNotEmpty()) {
-                        putJsonArray("genres") { ac.genres.forEach { add(JsonPrimitive(it)) } }
-                    }
-                    ac.rating?.let { put("rating", it.toDouble()) }
-                    ac.ratingCount?.let { put("rating_count", it) }
-                    ac.runtime?.let { put("runtime", it) }
-                    ac.network?.let { put("network", it) }
-                    autoCreateEpisode?.let { ep ->
-                        put("provider", ac.provider)
-                        put("provider_id", ac.providerId)
-                        put("season_number", ep.season)
-                        put("episode_number", ep.episode)
-                    }
-                }
-            }
+            putStreamTarget(target, startTime)
         }
         val respText = post("/api/v1/admin/stream/resolve", body.toString())
         val disc = decode<StreamResolveDiscriminatorDto>(respText)
         if (disc.sessionId != null) {
             // Cached / instant — returns a full playback session
-            val session = decode<SessionResponse>(respText)
-            val url = session.directUrl ?: session.playlistUrl ?: error("No stream URL in resolve response")
-            return StreamResolveResult.Ready(StreamSession(
-                url = resolveUrl(apiUrl, url),
-                sessionId = session.sessionId,
-                chapters = session.chapters,
-                skipSegments = session.skipSegments,
-                thumbnailsUrl = session.thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
-                lufs = session.lufs,
-                audioTracks = session.audioTracks,
-                subtitles = session.subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
-                mediaId = session.mediaId,
-                serverStartSeconds = session.rebaseSeconds(),
-                videoWidth = session.videoWidth,
-                videoHeight = session.videoHeight,
-            ))
+            val session = decode<SessionResponse>(respText).toStreamSession()
+                ?: error("No stream URL in resolve response")
+            if (autoCreate != null && session.mediaId != null) invalidateAutoCreated()
+            return StreamResolveResult.Ready(session)
         }
         val providerId = disc.debridProviderId ?: error("Missing debrid_provider_id")
         val torrentId = disc.torrentId ?: error("Missing torrent_id")
         return StreamResolveResult.Caching(providerId, torrentId, option)
+    }
+
+    private fun JsonObjectBuilder.putStreamTarget(target: StreamTarget, startTime: Int?) {
+        put("media_type", target.mediaType)
+        target.mediaId?.let { put("media_id", it) }
+        startTime?.let { put("start_time", it) }
+        TrackPrefs.current().putInto(this)
+        putJsonObject("capabilities") {
+            putJsonArray("video_codecs") { VLC_CAPABILITIES.videoCodecs.forEach { add(JsonPrimitive(it)) } }
+            putJsonArray("audio_codecs") { VLC_CAPABILITIES.audioCodecs.forEach { add(JsonPrimitive(it)) } }
+            putJsonArray("containers") { VLC_CAPABILITIES.containers.forEach { add(JsonPrimitive(it)) } }
+        }
+        target.discover?.let { ac ->
+            putJsonObject("auto_create") {
+                put("title", ac.title)
+                ac.year?.let { put("year", it) }
+                if (ac.identifiers.isNotEmpty()) {
+                    putJsonObject("identifiers") { ac.identifiers.forEach { (k, v) -> put(k, v) } }
+                }
+                ac.description?.let { put("description", it) }
+                ac.posterUrl.takeIf { it.isNotEmpty() }?.let { put("poster_url", it) }
+                ac.backdropUrl?.let { put("backdrop_url", it) }
+                if (ac.genres.isNotEmpty()) {
+                    putJsonArray("genres") { ac.genres.forEach { add(JsonPrimitive(it)) } }
+                }
+                ac.rating?.let { put("rating", it.toDouble()) }
+                ac.ratingCount?.let { put("rating_count", it) }
+                ac.runtime?.let { put("runtime", it) }
+                ac.network?.let { put("network", it) }
+                target.episode?.let { ep ->
+                    put("provider", ac.provider)
+                    put("provider_id", ac.providerId)
+                    put("season_number", ep.season)
+                    put("episode_number", ep.episode)
+                }
+            }
+        }
+    }
+
+    suspend fun prewarmStream(target: StreamTarget, startTime: Int? = null): Prewarm? {
+        val body = buildJsonObject {
+            putStreamTarget(target, startTime)
+            target.episode?.let {
+                put("season", it.season)
+                put("episode", it.episode)
+            }
+        }
+        val text = post("/api/v1/admin/stream/prewarm", body.toString())
+        if (text.isBlank()) return null
+        val dto = decode<PrewarmDto>(text)
+        val id = dto.prewarmId ?: return null
+        return Prewarm(id = id, ready = dto.state == "ready", option = dto.option?.toModel())
+    }
+
+    suspend fun claimPrewarm(prewarmId: String, autoCreated: Boolean): StreamSession {
+        val session = decode<SessionResponse>(post("/api/v1/admin/stream/prewarm/$prewarmId/claim", "{}")).toStreamSession()
+            ?: error("No stream URL in claimed prewarm")
+        if (autoCreated && session.mediaId != null) invalidateAutoCreated()
+        return session
+    }
+
+    /** False once the server no longer holds it. */
+    suspend fun touchPrewarm(prewarmId: String): Boolean =
+        quiet(false) { post("/api/v1/admin/stream/prewarm/$prewarmId/touch", "{}"); true }
+
+    suspend fun releasePrewarm(prewarmId: String) {
+        quiet(Unit) { delete("/api/v1/admin/stream/prewarm/$prewarmId") }
+    }
+
+    suspend fun keepStream(sessionId: String): KeepProgress =
+        decode<KeepDto>(post("/api/v1/admin/stream/$sessionId/keep", "{}")).toModel()
+
+    suspend fun keepStatus(sessionId: String): KeepProgress =
+        decode<KeepDto>(get("/api/v1/admin/stream/$sessionId/keep")).toModel()
+
+    /** A kept stream lands as a file on a library title the cached pages still show as streamable. */
+    fun invalidateKept() {
+        invalidateMovies()
+        invalidateTvShows()
     }
 
     /** Poll debrid caching status. */
@@ -4014,6 +4088,7 @@ class KobblerApi(
                     airDate = ep.airDate,
                     runtime = ep.runtime,
                     stillUrl = ep.stillUrl?.let { resolveUrlOrNull(apiUrl, it) },
+                    description = ep.description,
                 )
             }
         }
@@ -4157,18 +4232,16 @@ class KobblerApi(
             "480" -> 2000
             else -> null
         }
-        val audioLang = UserSettings.getString(KEY_DEFAULT_AUDIO_LANG)?.takeIf { it.isNotBlank() }
-        val subtitleLang = UserSettings.getString(KEY_DEFAULT_SUBTITLE_LANG)?.takeIf { it.isNotBlank() }
-        val subtitlesEnabled = UserSettings.getString(KEY_SUBTITLES_ENABLED) != "false"
+        val prefs = TrackPrefs.current()
         val reqBody = json.encodeToString(CreateSessionRequest.serializer(), CreateSessionRequest(
             mediaType = mediaType,
             mediaId = mediaId,
             capabilities = VLC_CAPABILITIES,
             forceTranscode = forceTranscode,
             maxBitrateKbps = maxBitrate,
-            preferredAudioLanguage = audioLang,
-            preferredSubtitleLanguage = subtitleLang,
-            subtitlesEnabled = subtitlesEnabled,
+            preferredAudioLanguage = prefs.audioLanguage,
+            preferredSubtitleLanguage = prefs.subtitleLanguage,
+            subtitlesEnabled = prefs.subtitlesEnabled,
             startTime = startTimeSec,
         ))
         // 404 is "this media has no file we can play", which is the caller's cue to go
@@ -4179,25 +4252,7 @@ class KobblerApi(
         } catch (e: ApiException) {
             if (e.statusCode == 404) return null else throw e
         }
-        val session = decode<SessionResponse>(respJson)
-        val url = session.directUrl ?: session.playlistUrl ?: return null
-        return StreamSession(
-            url = resolveUrl(apiUrl, url),
-            sessionId = session.sessionId,
-            chapters = session.chapters,
-            skipSegments = session.skipSegments,
-            thumbnailsUrl = session.thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
-            lufs = session.lufs,
-            audioTracks = session.audioTracks,
-            subtitles = session.subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
-            selectedAudioIndex = session.selectedAudioIndex,
-            selectedSubtitleIndex = session.selectedSubtitleIndex,
-            serverStartSeconds = session.rebaseSeconds(),
-            videoWidth = session.videoWidth,
-            videoHeight = session.videoHeight,
-            fileId = session.fileId,
-            method = session.method,
-        )
+        return decode<SessionResponse>(respJson).toStreamSession()
     }
 
     /** Switch audio track for a playback session. Returns updated session. */
@@ -4212,40 +4267,43 @@ class KobblerApi(
             put("resume_time", resumeTime)
         }
         val respJson = post("/api/v1/admin/playback/sessions/$sessionId/switch-audio", body.toString())
-        val session = decode<SessionResponse>(respJson)
-        val url = session.directUrl ?: session.playlistUrl ?: return null
+        // Switching audio does not change which file is playing, and a null file id here
+        // would silently stop skip segments arriving after load().
+        return decode<SessionResponse>(respJson).toStreamSession(fileId = fileId)
+    }
+
+    private fun SessionResponse.toStreamSession(fileId: String? = this.fileId): StreamSession? {
+        val url = directUrl ?: playlistUrl ?: return null
         return StreamSession(
             url = resolveUrl(apiUrl, url),
-            sessionId = session.sessionId,
-            chapters = session.chapters,
-            skipSegments = session.skipSegments,
-            thumbnailsUrl = session.thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
-            lufs = session.lufs,
-            audioTracks = session.audioTracks,
-            subtitles = session.subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
-            selectedAudioIndex = session.selectedAudioIndex,
-            selectedSubtitleIndex = session.selectedSubtitleIndex,
-            mediaId = session.mediaId,
-            // A switch restarts the transcode at resume_time, so the new playlist is
-            // rebased there even though the old one was not.
-            serverStartSeconds = session.rebaseSeconds(),
-            videoWidth = session.videoWidth,
-            videoHeight = session.videoHeight,
-            // Switching audio does not change which file is playing. The one caller
-            // copies fields by hand today, but handing this straight to load() would
-            // otherwise null the file id and silently stop skip segments arriving.
+            sessionId = sessionId,
+            chapters = chapters,
+            skipSegments = skipSegments,
+            thumbnailsUrl = thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
+            lufs = lufs,
+            audioTracks = audioTracks,
+            subtitles = subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
+            selectedAudioIndex = preferredAudioStreamIndex ?: selectedAudioIndex,
+            selectedSubtitleIndex = selectedSubtitleIndex,
+            mediaId = mediaId,
+            serverStartSeconds = rebaseSeconds(),
+            videoWidth = videoWidth,
+            videoHeight = videoHeight,
             fileId = fileId,
-            method = session.method,
+            method = method,
         )
     }
 
-    /** Check if thumbnails VTT is ready for a session. Returns full URL if ready, null otherwise. */
-    suspend fun checkThumbnailsReady(sessionId: String): String? = quiet<String?>(null) {
+    suspend fun checkThumbnailsReady(sessionId: String): ThumbnailsProbe = quiet<ThumbnailsProbe>(ThumbnailsProbe.Pending) {
         val url = "/api/v1/admin/playback/sessions/$sessionId/thumbnails.vtt"
         val resp = httpClient.head("$apiUrl$url") {
             header(HttpHeaders.Authorization, "Bearer $token")
         }
-        if (resp.status.isSuccess()) resolveUrl(apiUrl, url) else null
+        when {
+            resp.status.isSuccess() -> ThumbnailsProbe.Ready(resolveUrl(apiUrl, url))
+            resp.status == HttpStatusCode.Gone -> ThumbnailsProbe.Gone
+            else -> ThumbnailsProbe.Pending
+        }
     }
 
     // -- Notifications --
@@ -4281,16 +4339,6 @@ class KobblerApi(
             if (cursor != null) append("&cursor=$cursor")
         }
         return decode<DownloadsResponse>(get(path))
-    }
-
-    // -- Stream Pin & Recent --
-
-    suspend fun pinStream(streamId: String) {
-        post("/api/v1/admin/stream/$streamId/pin", "{}")
-    }
-
-    suspend fun unpinStream(streamId: String) {
-        delete("/api/v1/admin/stream/$streamId/pin")
     }
 
     suspend fun getRecentStreams(): List<RecentStreamDto> =

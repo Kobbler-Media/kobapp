@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LibraryAdd
 import androidx.compose.material.icons.outlined.MoreHoriz
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButtonStyle
+import dev.kobbler.app.ui.player.KeepAction
 import dev.kobbler.kobfocus.focusKey
 
 /**
@@ -194,6 +196,21 @@ internal fun WatchlistItem(
                         toast.show("Could not update your list")
                     }
             }
+        },
+    )
+}
+
+@Composable
+internal fun KeepItem(keep: KeepAction, accent: Color, close: () -> Unit) {
+    OverflowItem(
+        key = "keep",
+        icon = Icons.Outlined.LibraryAdd,
+        label = keep.label,
+        accent = accent,
+        enabled = keep.enabled,
+        onClick = {
+            close()
+            keep.run()
         },
     )
 }

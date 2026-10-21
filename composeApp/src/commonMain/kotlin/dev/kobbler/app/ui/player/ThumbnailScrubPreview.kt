@@ -31,6 +31,8 @@ import coil3.size.Precision
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -45,14 +47,25 @@ data class ThumbnailCue(
     val cropH: Int = 0,
 )
 
-suspend fun fetchThumbnailVttText(vttUrl: String, client: HttpClient, authToken: String): String? = try {
+sealed interface VttResponse {
+    data class Text(val body: String) : VttResponse
+    data object Gone : VttResponse
+    data object Failed : VttResponse
+}
+
+suspend fun fetchThumbnailVtt(vttUrl: String, client: HttpClient, authToken: String): VttResponse = try {
     withContext(Dispatchers.Default) {
-        client.get(vttUrl) { header("Authorization", "Bearer $authToken") }.bodyAsText()
+        val resp = client.get(vttUrl) { header("Authorization", "Bearer $authToken") }
+        when {
+            resp.status.isSuccess() -> VttResponse.Text(resp.bodyAsText())
+            resp.status == HttpStatusCode.Gone -> VttResponse.Gone
+            else -> VttResponse.Failed
+        }
     }
 } catch (e: CancellationException) {
     throw e
 } catch (_: Exception) {
-    null
+    VttResponse.Failed
 }
 
 // kobbler serves the VTT at `.../thumbnails.vtt` and the sprite sheets it

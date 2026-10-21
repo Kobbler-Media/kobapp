@@ -11,6 +11,9 @@ import kotlinx.coroutines.Dispatchers
 actual fun defaultFormFactor(): FormFactor = FormFactor.Desktop
 actual val supportsVideoPlayback: Boolean = false
 
+actual val deviceRegion: String?
+    get() = kotlinx.browser.window.navigator.language.substringAfter('-', "").uppercase().takeIf { it.length == 2 }
+
 actual val deviceLabel: String = "Web app"
 
 actual val clientKind: String = "web"

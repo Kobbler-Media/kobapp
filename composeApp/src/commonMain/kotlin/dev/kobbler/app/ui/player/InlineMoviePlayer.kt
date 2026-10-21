@@ -16,20 +16,19 @@ import androidx.compose.ui.Modifier
 import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
-import dev.kobbler.app.data.RecentStreamDto
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamSearchResult
+import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.ui.detail.MovieDetailScreen
 import dev.kobbler.app.ui.detail.StreamOptionsOverlay
+import dev.kobbler.app.ui.detail.streamingAvailability
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.kobplayer.Player
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -89,6 +88,12 @@ fun InlineMoviePlayer(
 
     val movieSubtitle = "${movie.year} • ${movie.duration ?: ""}"
 
+    WarmStream(
+        gps, api,
+        target = movie.instantTarget()?.takeIf { player != null && api.canStream && supportsVideoPlayback },
+        startTime = movie.resumeSeconds,
+    )
+
     LaunchedEffect(movie.id, prewarmGeneration) {
       try {
         if (movie.filePath != null && supportsVideoPlayback) {
@@ -144,6 +149,11 @@ fun InlineMoviePlayer(
       }
     }
 
+    suspend fun movieStreams(): StreamSearchResult = streamResult
+        ?: runCatching { api.streamSearch(movieId = movie.id) }
+            .getOrElse { StreamSearchResult(emptyList(), listOf("Search failed")) }
+            .also { streamResult = it }
+
     val cancelCaching: () -> Unit = {
         cachingProviderId = null
         cachingTorrentId = null
@@ -161,7 +171,14 @@ fun InlineMoviePlayer(
         cachingTorrentId = c.torrentId
         cachingOption = c.option
         cachingWalk = walk
-        gps.beginCachingPreparation(title = movie.title, onCancel = cancelCaching)
+        gps.beginCachingPreparation(
+            title = movie.title,
+            onCancel = cancelCaching,
+            onChooseRelease = {
+                cancelCaching()
+                showStreamOptions = true
+            },
+        )
     }
 
     // `autoPlay` rides on the nav destination, so it stays set for as long as this screen
@@ -185,13 +202,12 @@ fun InlineMoviePlayer(
             gps.playUnmuted(player)
             gps.isFullscreen = true
         } else {
-            val options = streamResult?.options.orEmpty()
-            val first = options.firstOrNull() ?: return@LaunchedEffect
             tryPlayWithFallback(
                 api = api, player = player, gps = gps, movie = movie,
-                options = options, option = first,
+                search = { movieStreams() }, option = null,
                 resumeSec = movieProgress(api, movie),
                 onCaching = startCaching,
+                claim = { gps.instant.claim(api, StreamTarget.movie(movie.id)) },
             )
         }
     }
@@ -206,33 +222,15 @@ fun InlineMoviePlayer(
         val tid = cachingTorrentId ?: return@LaunchedEffect
         val opt = cachingOption ?: return@LaunchedEffect
         val walk = cachingWalk ?: return@LaunchedEffect
-        val clear = { cachingProviderId = null; cachingTorrentId = null; cachingOption = null; cachingWalk = null }
-        while (true) {
-            delay(3000)
-            try {
-                val status = api.streamResolveStatus(pid, tid)
-                when (status.status) {
-                    "ready" -> {
-                        clear()
-                        gps.endCachingPreparation()
-                        walk.start(opt, if (debridFromStart) 0 else movieProgress(api, movie))
-                        break
-                    }
-                    "downloading" -> gps.setCachingProgress(status.progress?.toFloat() ?: 0f)
-                    "error" -> {
-                        clear()
-                        walk.giveUp(IllegalStateException(status.message ?: "Stream failed"))
-                        break
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                clear()
-                walk.giveUp(e)
-                break
-            }
+        val failure = gps.awaitDebridCache(api, pid, tid, opt.debridProvider)
+        cachingProviderId = null; cachingTorrentId = null; cachingOption = null; cachingWalk = null
+        if (failure != null) {
+            walk.giveUp(failure)
+            return@LaunchedEffect
         }
+        gps.endCachingPreparation()
+        val fromStart = debridFromStart
+        walk.resumeCached(opt) { if (fromStart) 0 else movieProgress(api, movie) }
     }
 
     DisposableEffect(movie.id) {
@@ -252,7 +250,7 @@ fun InlineMoviePlayer(
             var resolving: Job? = null
             // Same reason the episode path raises one: walking the option list is a
             // resolve round-trip each, and without the shell the tap sits there looking
-            // dead until one of them answers. It also gives fallbackNote somewhere to
+            // dead until one of them answers. It also gives the retry note somewhere to
             // print — the note is only ever drawn while isPreparing.
             gps.beginPreparing(
                 id = movie.id,
@@ -266,13 +264,12 @@ fun InlineMoviePlayer(
                 },
             )
             resolving = scope.launch {
-                val options = streamResult?.options.orEmpty()
                 tryPlayWithFallback(
                     api = api, player = player, gps = gps, movie = movie,
-                    options = options, option = options.firstOrNull(),
+                    search = { movieStreams() }, option = null,
                     resumeSec = if (fromStart) 0 else movieProgress(api, movie),
-                    searchErrors = streamResult?.errors.orEmpty(),
                     onCaching = startCaching,
+                    claim = { gps.instant.claim(api, StreamTarget.movie(movie.id)) },
                 )
                 if (gps.mediaId == null && gps.loadingError == null) gps.cancelPreparing()
             }
@@ -356,6 +353,12 @@ fun InlineMoviePlayer(
                 }
             },
             onPersonClick = onPersonClick,
+            keep = rememberKeepAction(api, gps, "movie", if (movie.filePath == null) setOf(movie.id) else emptySet()),
+            streaming = streamingAvailability(
+                canStream = isDebrid && supportsVideoPlayback,
+                searching = streamLoading,
+                found = streamResult?.options?.map { it.isInstant },
+            ),
             onStream = if (isDebrid && supportsVideoPlayback) autoPlayDebrid else null,
             onStreamPick = if (isDebrid && supportsVideoPlayback) {
                 { showStreamOptions = true }
@@ -364,10 +367,6 @@ fun InlineMoviePlayer(
       }
 
         if (showStreamOptions) {
-            var recentStreams by remember { mutableStateOf<List<RecentStreamDto>>(emptyList()) }
-            LaunchedEffect(Unit) {
-                runCatching { recentStreams = api.getRecentStreams() }
-            }
             StreamOptionsOverlay(
                 options = streamResult?.options ?: emptyList(),
                 errors = streamResult?.errors ?: emptyList(),
@@ -378,7 +377,7 @@ fun InlineMoviePlayer(
                     scope.launch {
                         tryPlayWithFallback(
                             api = api, player = player, gps = gps, movie = movie,
-                            options = streamResult?.options ?: emptyList(),
+                            search = { movieStreams() },
                             option = option,
                             resumeSec = movieProgress(api, movie),
                             onCaching = startCaching,
@@ -386,8 +385,6 @@ fun InlineMoviePlayer(
                     }
                 },
                 onDismiss = { showStreamOptions = false },
-                api = api,
-                recentStreams = recentStreams,
             )
         }
 
@@ -399,16 +396,16 @@ private suspend fun tryPlayWithFallback(
     player: Player?,
     gps: GlobalPlayerState,
     movie: Movie,
-    options: List<StreamOption>,
+    search: suspend () -> StreamSearchResult,
     option: StreamOption?,
     resumeSec: Int = 0,
-    searchErrors: List<String> = emptyList(),
     onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
+    claim: (suspend () -> InstantStart?)? = null,
 ) {
     if (player == null) return
     lateinit var walk: DebridPlayback
     walk = DebridPlayback(
-        api = api, gps = gps, options = options,
+        api = api, gps = gps, search = search,
         resolve = { opt, resume ->
             api.streamResolve(option = opt, mediaType = "movie", mediaId = movie.id, startTime = resumeRequestSeconds(resume))
         },
@@ -417,7 +414,8 @@ private suspend fun tryPlayWithFallback(
         want = movie.takeIf { it.canBeWanted(api.canWant) }?.let { WantAction { api.wantMovieById(it.id) } },
         title = movie.title,
         posterUrl = movie.posterUrl,
-        context = listOf("Movie: ${movie.title}", "ID: ${movie.id}") + searchErrors,
+        context = listOf("Movie: ${movie.title}", "ID: ${movie.id}"),
+        claim = claim,
     )
     walk.start(option, resumeSec)
 }
