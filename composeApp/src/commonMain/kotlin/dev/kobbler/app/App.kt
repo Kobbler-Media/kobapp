@@ -17,6 +17,8 @@ import coil3.compose.setSingletonImageLoaderFactory
 import dev.kobbler.app.data.AppForeground
 import dev.kobbler.app.data.AuthScreen
 import dev.kobbler.app.data.AuthState
+import dev.kobbler.app.data.SharedHttp
+import dev.kobbler.app.data.imageAuthToken
 import dev.kobbler.app.data.kobImageLoader
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.defaultFormFactor
@@ -30,8 +32,6 @@ import dev.kobbler.app.ui.auth.ProfilePickerScreen
 import dev.kobbler.app.ui.components.RefreshWatchStateOnFocus
 import dev.kobbler.app.ui.navigation.AdaptiveScaffold
 import io.ktor.client.*
-import io.ktor.client.request.*
-import io.ktor.http.*
 
 @Composable
 fun App(
@@ -42,20 +42,10 @@ fun App(
     val scope = rememberCoroutineScope()
     val auth = remember { AuthState(scope, formFactor) }
 
-    // Use a shared HttpClient whose auth header updates when token changes.
-    // Falls back to any linked profile's token so the picker can load avatars
-    // before a profile is confirmed.
+    // Falls back to any linked profile's token so the picker can load avatars before a
+    // profile is confirmed.
     val imageHttpClient = remember {
-        HttpClient().also { client ->
-            client.requestPipeline.intercept(HttpRequestPipeline.State) {
-                val tok = dev.kobbler.app.data.imageAuthToken(
-                    context.url.buildString(),
-                    auth.currentProfile,
-                    auth.profiles,
-                )
-                tok?.let { context.header(HttpHeaders.Authorization, "Bearer $it") }
-            }
-        }
+        SharedHttp.imageClient { url -> imageAuthToken(url, auth.currentProfile, auth.profiles) }
     }
 
     setSingletonImageLoaderFactory { context ->

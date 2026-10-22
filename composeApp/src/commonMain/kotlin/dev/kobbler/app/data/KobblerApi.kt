@@ -5,7 +5,6 @@ import dev.kobbler.app.platform.AppVersion
 import dev.kobbler.app.platform.clientKind
 import dev.kobbler.app.platform.deviceLabel
 import dev.kobbler.app.ui.components.DataCache
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.plugins.timeout
 import io.ktor.client.*
@@ -2099,26 +2098,8 @@ class KobblerApi(
         minted
     }
 
-    internal val fileClient: HttpClient by lazy {
-        HttpClient {
-            install(HttpTimeout) {
-                requestTimeoutMillis = BookFetchTimeoutMs
-                socketTimeoutMillis = BookFetchTimeoutMs
-                connectTimeoutMillis = 15_000L
-            }
-        }
-    }
-    // Timeouts are infinite by construction: an idle SSE connection is the normal state,
-    // not a hung one.
-    internal val eventClient: HttpClient by lazy {
-        HttpClient {
-            install(HttpTimeout) {
-                requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                connectTimeoutMillis = 15_000L
-            }
-        }
-    }
+    internal val fileClient: HttpClient by lazy { SharedHttp.fileClient() }
+    internal val eventClient: HttpClient by lazy { SharedHttp.eventClient() }
 
     /**
      * How close the server actually is, fed by every request that goes to it. See

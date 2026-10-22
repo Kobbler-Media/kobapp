@@ -8,7 +8,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.ui.components.DataCache
 import io.ktor.client.*
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -157,17 +156,7 @@ class AuthState(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    val httpClient = HttpClient {
-        install(HttpTimeout) {
-            // A guard against a hung connection, not a UX budget — screens show skeletons
-            // while they wait, and navigating away cancels. The previous 15s was picked
-            // without measuring anything and produced spurious "request timeout" screens on
-            // list and discover routes, so err long. Bulk transfers use KobblerApi.fileClient.
-            requestTimeoutMillis = 60_000L
-            connectTimeoutMillis = 15_000L
-            socketTimeoutMillis = 30_000L
-        }
-    }
+    val httpClient = SharedHttp.apiClient()
 
     private class StoredProfiles(
         val profiles: List<Profile>,
