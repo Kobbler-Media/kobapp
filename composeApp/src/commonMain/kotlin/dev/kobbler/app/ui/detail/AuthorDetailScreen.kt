@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,14 +59,16 @@ fun AuthorDetailScreen(
     val accent = colors.accBooks
     val gutter = gutterFor(formFactor)
 
-    val seriesGroups: List<Triple<String, String, List<Book>>> = books
-        .filter { it.seriesId != null }
-        .groupBy { it.seriesId!! to (it.seriesName ?: "Unknown Series") }
-        .map { (key, value) ->
-            Triple(key.first, key.second, value.sortedBy { it.seriesIndex ?: Double.MAX_VALUE })
-        }
-        .sortedBy { it.second }
-    val standaloneBooks = books.filter { it.seriesId == null }
+    val seriesGroups: List<Triple<String, String, List<Book>>> = remember(books) {
+        books
+            .filter { it.seriesId != null }
+            .groupBy { it.seriesId!! to (it.seriesName ?: "Unknown Series") }
+            .map { (key, value) ->
+                Triple(key.first, key.second, value.sortedBy { it.seriesIndex ?: Double.MAX_VALUE })
+            }
+            .sortedBy { it.second }
+    }
+    val standaloneBooks = remember(books) { books.filter { it.seriesId == null } }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)

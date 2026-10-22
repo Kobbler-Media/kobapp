@@ -8,9 +8,20 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.JsonObject
@@ -27,7 +38,57 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 data class LibraryEventFrame(val kind: String, val data: JsonObject)
 
-private const val RECONNECT_DELAY_MS = 5_000L
+internal enum class StreamOutcome { Connected, Dropped, Rejected }
+
+private val RejectedStatuses = setOf(401, 403, 404, 410)
+
+internal class ReconnectPolicy(
+    val baseMs: Long = 5_000L,
+    val maxMs: Long = 60_000L,
+    val rejectedMs: Long = 300_000L,
+) {
+    // A refusal (revoked token, a server without the endpoint) will not fix itself in a
+    // few seconds, and a dead network should not be polled at the pace of a blip.
+    fun next(previousMs: Long, outcome: StreamOutcome): Long = when (outcome) {
+        StreamOutcome.Connected -> baseMs
+        StreamOutcome.Rejected -> rejectedMs
+        StreamOutcome.Dropped -> if (previousMs <= 0) baseMs else (previousMs * 2).coerceAtMost(maxMs)
+    }
+}
+
+/**
+ * One connection for every listener, and none at all while the app is in the background:
+ * each screen and player collecting its own stream held several sockets open per page, and
+ * kept them — and the radio — up behind a locked phone.
+ *
+ * A listener that joins an already-open stream is handed its own [STREAM_CONNECTED], since
+ * the real one went by before it subscribed and that frame is how listeners resync.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal class SharedEventStream(
+    upstream: Flow<LibraryEventFrame>,
+    foreground: StateFlow<Boolean>,
+    scope: CoroutineScope,
+    stopTimeoutMs: Long = 5_000L,
+) {
+    private val connected = MutableStateFlow(false)
+
+    private val shared = foreground
+        .flatMapLatest { inFront ->
+            if (!inFront) {
+                emptyFlow()
+            } else {
+                upstream
+                    .onEach { if (it.kind == STREAM_CONNECTED) connected.value = true }
+                    .onCompletion { connected.value = false }
+            }
+        }
+        .shareIn(scope, SharingStarted.WhileSubscribed(stopTimeoutMs))
+
+    val events: Flow<LibraryEventFrame> = shared.onSubscription {
+        if (connected.value) emit(LibraryEventFrame(STREAM_CONNECTED, JsonObject(emptyMap())))
+    }
+}
 
 /**
  * A frame the client makes up, not the server: emitted each time a stream (re)connects.
@@ -62,9 +123,12 @@ private fun sseFrames(
     token: String,
     json: kotlinx.serialization.json.Json,
     maxReconnects: Int?,
+    policy: ReconnectPolicy = ReconnectPolicy(),
 ): Flow<LibraryEventFrame> = flow {
     var reconnects = 0
+    var delayMs = 0L
     while (true) {
+        var outcome = StreamOutcome.Dropped
         try {
             httpClient.prepareGet(url) {
                 header(HttpHeaders.Authorization, "Bearer $token")
@@ -72,7 +136,11 @@ private fun sseFrames(
             }.execute { response ->
                 // No expectSuccess on this client, so a 401 arrives as a short body and
                 // an immediate EOF. Without this it would reconnect forever, silently.
-                if (!response.status.isSuccess()) return@execute
+                if (!response.status.isSuccess()) {
+                    if (response.status.value in RejectedStatuses) outcome = StreamOutcome.Rejected
+                    return@execute
+                }
+                outcome = StreamOutcome.Connected
                 emit(LibraryEventFrame(STREAM_CONNECTED, JsonObject(emptyMap())))
                 val channel = response.bodyAsChannel()
                 var eventName: String? = null
@@ -109,7 +177,8 @@ private fun sseFrames(
             // Fall through to the delay and try again.
         }
         if (maxReconnects != null && ++reconnects > maxReconnects) return@flow
-        delay(RECONNECT_DELAY_MS)
+        delayMs = policy.next(delayMs, outcome)
+        delay(delayMs)
     }
 }.flowOn(Dispatchers.Default)
 
@@ -155,6 +224,14 @@ private fun parseFrame(
         ?: return null
     LibraryEventFrame(kind = kind, data = obj)
 }.getOrNull()
+
+internal fun sseFramesForTest(
+    httpClient: HttpClient,
+    url: String,
+    token: String,
+    json: kotlinx.serialization.json.Json,
+    policy: ReconnectPolicy,
+): Flow<LibraryEventFrame> = sseFrames(httpClient, url, token, json, maxReconnects = null, policy = policy)
 
 /** Test seam for [parseFrame], which is the only part of the stream worth unit testing. */
 internal fun parseFrameForTest(

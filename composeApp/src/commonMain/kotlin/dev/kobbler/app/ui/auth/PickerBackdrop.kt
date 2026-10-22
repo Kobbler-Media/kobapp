@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -63,8 +64,11 @@ internal fun PickerBackdrop(auth: AuthState, accent: Color, content: @Composable
         }
     }
     var index by remember(arrivals) { mutableIntStateOf(0) }
-    LaunchedEffect(arrivals) {
-        if (arrivals.size < 2) return@LaunchedEffect
+    // A TV left on the picker behind a screensaver would otherwise decode a full-screen
+    // still every few seconds for as long as it stays powered.
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(arrivals, windowFocused) {
+        if (arrivals.size < 2 || !windowFocused) return@LaunchedEffect
         while (true) {
             delay(PickerCycleMs)
             index = (index + 1) % arrivals.size

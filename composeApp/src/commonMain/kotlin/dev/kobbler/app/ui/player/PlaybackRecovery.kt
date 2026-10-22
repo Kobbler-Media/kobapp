@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import dev.kobbler.app.data.AppForeground
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.SessionFeed
 import dev.kobbler.app.data.SessionStatus
@@ -12,9 +13,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 
@@ -303,12 +306,24 @@ fun PlaybackSessionHeartbeat(
 fun KeepSessionWarm(api: KobblerApi, sessionId: String?, onLost: () -> Unit) {
     LaunchedEffect(sessionId) {
         if (sessionId == null) return@LaunchedEffect
-        while (true) {
-            delay(PREWARM_TOUCH_INTERVAL_MS)
-            if (api.sessionGone(sessionId)) {
-                onLost()
-                return@LaunchedEffect
-            }
+        keepSessionWarm(PREWARM_TOUCH_INTERVAL_MS.milliseconds, AppForeground.state, { api.sessionGone(sessionId) }, onLost)
+    }
+}
+
+// Backgrounded, the touch waits for the app to return rather than wake the radio; that first
+// touch back is also what finds out whether the session outlived the absence.
+internal suspend fun keepSessionWarm(
+    interval: Duration,
+    foreground: StateFlow<Boolean>,
+    sessionGone: suspend () -> Boolean,
+    onLost: () -> Unit,
+) {
+    while (true) {
+        delay(interval)
+        foreground.first { it }
+        if (sessionGone()) {
+            onLost()
+            return
         }
     }
 }

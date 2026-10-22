@@ -54,6 +54,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.theme.KobappTheme
@@ -63,6 +65,7 @@ import dev.kobbler.app.ui.safeBottomPadding
 import dev.kobbler.app.ui.safeTopPadding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -164,10 +167,14 @@ private fun ComicPager(
         activityTick++
     }
 
-    LaunchedEffect(activityTick, chromeVisible) {
-        if (chromeVisible) {
-            delay(3000)
-            chromeVisible = false
+    // Collected rather than keyed: a pinch bumps the tick every frame, and a key read
+    // here would recompose the whole pager for each one.
+    LaunchedEffect(Unit) {
+        snapshotFlow { activityTick to chromeVisible }.collectLatest { (_, visible) ->
+            if (visible) {
+                delay(3000)
+                chromeVisible = false
+            }
         }
     }
 
@@ -212,12 +219,12 @@ private fun ComicPager(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y,
-                ),
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             items(source.pageCount, key = { it }) { index ->
@@ -232,8 +239,12 @@ private fun ComicPager(
                             .background(colors.elev1)
                     )
                 } else {
+                    val context = LocalPlatformContext.current
+                    val request = remember(bytes) {
+                        ImageRequest.Builder(context).data(bytes).memoryCacheKey("comic:${book.id}:$index").build()
+                    }
                     AsyncImage(
-                        model = bytes,
+                        model = request,
                         contentDescription = null,
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth(),
@@ -277,6 +288,7 @@ private fun ComicPager(
             ThumbnailStrip(
                 pageCount = source.pageCount,
                 thumbnail = { thumbCache[it] },
+                cacheKey = { "comic:${book.id}:$it:thumb" },
                 currentPage = currentPage,
                 state = thumbState,
                 onSelect = { idx ->
@@ -344,6 +356,7 @@ private fun TopChrome(
 private fun ThumbnailStrip(
     pageCount: Int,
     thumbnail: (Int) -> ByteArray?,
+    cacheKey: (Int) -> String,
     currentPage: Int,
     state: LazyListState,
     onSelect: (Int) -> Unit,
@@ -381,8 +394,16 @@ private fun ThumbnailStrip(
                 ) {
                     val bytes = thumbnail(index)
                     if (bytes != null) {
+                        val context = LocalPlatformContext.current
+                        val request = remember(bytes) {
+                            ImageRequest.Builder(context)
+                                .data(bytes)
+                                .memoryCacheKey(cacheKey(index))
+                                .size(ThumbDecodeWidthPx, ThumbDecodeHeightPx)
+                                .build()
+                        }
                         AsyncImage(
-                            model = bytes,
+                            model = request,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -393,3 +414,7 @@ private fun ThumbnailStrip(
         }
     }
 }
+
+// 48x64dp thumbnails at up to 2x density; the pages behind them are full scans.
+private const val ThumbDecodeWidthPx = 96
+private const val ThumbDecodeHeightPx = 128

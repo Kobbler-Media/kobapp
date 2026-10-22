@@ -23,7 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -36,10 +38,13 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.kobbler.app.data.LiveChannel
@@ -56,6 +61,8 @@ import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlin.time.Instant
 
 private val ChannelColumnWidth = 250.dp
@@ -92,6 +99,7 @@ private val PreviewWidthDense = 234.dp
 
 // Fast enough to feel like the cursor landing, slow enough to read as a zoom.
 private const val FocusZoomMs = 140
+private const val ArtworkSettleMs = 150L
 
 /**
  * The 10-foot guide: a preview pane describing whatever the cursor is on, a facet strip,
@@ -131,7 +139,7 @@ fun LiveGuideGrid(
     val density = LocalDensity.current
     CenterFocusedRow(listState, focus)
 
-    BoxWithConstraints(modifier.fillMaxSize().background(colors.bg)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val dense = maxHeight < DenseGuideMaxHeight
         val rowHeight = if (dense) GuideRowHeightDense else GuideRowHeight
         val vGap = if (dense) dimens.s2 else dimens.s3
@@ -272,6 +280,8 @@ fun LiveGuideGrid(
     }
 }
 
+private class GuideSpan(val entry: LiveGuideEntry, val startMs: Long, val endMs: Long)
+
 @Composable
 private fun BoxScope.GuideCells(
     row: LiveGuideChannel,
@@ -289,15 +299,22 @@ private fun BoxScope.GuideCells(
 ) {
     val startMs = windowStart.toEpochMilliseconds()
     val endMs = startMs + windowMinutes * 60_000L
+    val spans = remember(row.entries) {
+        row.entries.mapNotNull { e ->
+            val s = parseLiveInstant(e.startTime)?.toEpochMilliseconds() ?: return@mapNotNull null
+            val en = parseLiveInstant(e.endTime)?.toEpochMilliseconds() ?: return@mapNotNull null
+            GuideSpan(e, s, en)
+        }
+    }
     // Everything the track has scrolled past. Drawn, they are cells the cursor can land
     // on and the one press the page is for does nothing from — and the guide would be
-    // holding open a lane for hours nobody can watch.
-    val liveEdge = maxOf(windowStart, clock.now)
-    val liveMs = liveEdge.toEpochMilliseconds()
-    val visible = row.entries.filter { e ->
-        val s = parseLiveInstant(e.startTime)?.toEpochMilliseconds() ?: return@filter false
-        val en = parseLiveInstant(e.endTime)?.toEpochMilliseconds() ?: return@filter false
-        en > liveMs && s < endMs
+    // holding open a lane for hours nobody can watch. Derived so a clock tick only
+    // recomposes the row when a programme actually ends.
+    val visible by remember(spans, startMs, endMs, clock) {
+        derivedStateOf {
+            val liveMs = maxOf(startMs, clock.now.toEpochMilliseconds())
+            spans.filter { it.endMs > liveMs && it.startMs < endMs }
+        }
     }
     if (visible.isEmpty()) {
         Text(
@@ -308,49 +325,48 @@ private fun BoxScope.GuideCells(
         )
         return
     }
-    visible.forEach { entry ->
-        val s = parseLiveInstant(entry.startTime)!!.toEpochMilliseconds().coerceAtLeast(liveMs)
-        val e = parseLiveInstant(entry.endTime)!!.toEpochMilliseconds().coerceAtMost(endMs)
-        val key = "e.${entry.id}"
+    visible.forEachIndexed { i, span ->
+        val entry = span.entry
         GuideCell(
-            entry = entry,
+            span = span,
             channelId = row.channel.id,
             rowIndex = rowIndex,
             guide = guide,
             nav = nav,
-            liveEdge = liveEdge,
+            windowStart = windowStart,
+            windowEndMs = endMs,
+            clipToLive = i == 0,
+            minuteWidth = minuteWidth,
             clock = clock,
             accent = accent,
-            widthDp = minuteWidth * ((e - s) / 60_000f),
-            key = key,
             dense = dense,
             onSelect = { onSelect(LiveGuideSelection(row.channel, entry)) },
             // The one press the whole page is for, and only for what is on air. Moving
             // onto a cell has already selected it, so answering the press with another
             // selection is a control that does nothing.
             onWatch = { onWatch(row.channel) },
-            modifier = Modifier.offset(x = minuteWidth * ((s - startMs) / 60_000f)),
         )
     }
 }
 
 @Composable
 private fun GuideCell(
-    entry: LiveGuideEntry,
+    span: GuideSpan,
     channelId: String,
     rowIndex: Int,
     guide: List<LiveGuideChannel>,
     nav: GuideNav,
-    liveEdge: Instant,
+    windowStart: Instant,
+    windowEndMs: Long,
+    clipToLive: Boolean,
+    minuteWidth: Dp,
     clock: GuideClock,
     accent: Color,
-    widthDp: Dp,
-    key: String,
     dense: Boolean,
     onSelect: () -> Unit,
     onWatch: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
+    val entry = span.entry
     val colors = KobappTheme.colors
     val focusState = rememberTvFocusState()
     val requester = remember { FocusRequester() }
@@ -359,28 +375,51 @@ private fun GuideCell(
         onDispose { nav.unregister(channelId, entry.id, requester) }
     }
     val recording = entry.recordingId != null
-    // Read here, in the leaf that draws it: a tick redraws the two cells either side of a
-    // programme change and nothing else on the page.
-    val onAir = entry.isAiringAt(clock.now)
+    val onAir by remember(span, clock) {
+        derivedStateOf { clock.now.toEpochMilliseconds().let { it >= span.startMs && it < span.endMs } }
+    }
+    val windowStartMs = windowStart.toEpochMilliseconds()
+    // Only the row's first cell is cut by the live edge, so only it follows every tick.
+    val shownStartMs = if (clipToLive) {
+        maxOf(span.startMs, windowStartMs, clock.now.toEpochMilliseconds())
+    } else {
+        maxOf(span.startMs, windowStartMs)
+    }
+    val widthDp = minuteWidth * ((span.endMs.coerceAtMost(windowEndMs) - shownStartMs) / 60_000f)
+    val meta = remember(entry) {
+        listOfNotNull(
+            parseLiveInstant(entry.startTime)?.localHhMm(),
+            entry.episodeNumber,
+            entry.genres.firstOrNull(),
+        ).joinToString(" · ")
+    }
     val border = when {
         recording -> colors.err
         onAir -> accent
         else -> colors.lineSoft
     }
     val minWidth = if (dense) FocusedCellMinWidthDense else FocusedCellMinWidth
-    val width by animateDpAsState(
+    val width = animateDpAsState(
         targetValue = if (focusState.isFocused) widthDp.coerceAtLeast(minWidth) else widthDp,
         animationSpec = tween(FocusZoomMs),
     )
+    val metaThreshold = if (dense) 128.dp else 96.dp
+    val showMeta by remember(width, metaThreshold) { derivedStateOf { width.value > metaThreshold } }
+    val showRecordingIcon by remember(width) { derivedStateOf { width.value > 72.dp } }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
+        modifier = Modifier
+            .offset(x = minuteWidth * ((shownStartMs - windowStartMs) / 60_000f))
             // Over the neighbour it has grown into, not under it.
             .zIndex(if (focusState.isFocused) 1f else 0f)
-            .width(width)
+            .layout { measurable, constraints ->
+                val w = constraints.constrainWidth(width.value.roundToPx())
+                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                layout(w, placeable.height) { placeable.place(0, 0) }
+            }
             .fillMaxHeight()
             .padding(vertical = if (dense) 3.dp else 5.dp, horizontal = 2.dp)
-            .focusKey(key, focusRequester = requester)
+            .focusKey("e.${entry.id}", focusRequester = requester)
             .focusProperties {
                 down = nav.target(guide, rowIndex, 1)
                 up = nav.target(guide, rowIndex, -1)
@@ -391,7 +430,7 @@ private fun GuideCell(
             .border(1.dp, border, RoundedCornerShape(10.dp))
             .onFocusChanged {
                 if (it.isFocused) {
-                    nav.onFocused(entry, liveEdge)
+                    nav.onFocused(entry, maxOf(windowStart, clock.now))
                     onSelect()
                 }
             }
@@ -409,12 +448,7 @@ private fun GuideCell(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val meta = listOfNotNull(
-                parseLiveInstant(entry.startTime)?.localHhMm(),
-                entry.episodeNumber,
-                entry.genres.firstOrNull(),
-            ).joinToString(" · ")
-            if (meta.isNotEmpty() && width > (if (dense) 128.dp else 96.dp)) {
+            if (meta.isNotEmpty() && showMeta) {
                 Text(
                     meta,
                     style = KobappTheme.type.caption,
@@ -424,7 +458,7 @@ private fun GuideCell(
                 )
             }
         }
-        if (recording && width > 72.dp) {
+        if (recording && showRecordingIcon) {
             Icon(
                 Icons.Outlined.FiberManualRecord,
                 contentDescription = "Recording",
@@ -445,12 +479,16 @@ private fun BoxScope.NowMarker(
 ) {
     val startMs = windowStart.toEpochMilliseconds()
     val spanMs = windowMinutes * 60_000L
-    val nowMs = clock.now.toEpochMilliseconds()
-    if (nowMs < startMs || nowMs > startMs + spanMs) return
-    val leftDp = minuteWidth * ((nowMs - startMs) / 60_000f)
+    val inWindow by remember(startMs, spanMs, clock) {
+        derivedStateOf { clock.now.toEpochMilliseconds().let { it in startMs..(startMs + spanMs) } }
+    }
+    if (!inWindow) return
     Box(
         Modifier
-            .offset(x = leftDp)
+            .offset {
+                val minutes = (clock.now.toEpochMilliseconds() - startMs) / 60_000f
+                IntOffset((minuteWidth * minutes).roundToPx(), 0)
+            }
             .width(3.dp)
             .fillMaxHeight()
             .background(accent),
@@ -547,6 +585,7 @@ private fun GuideChannelLabel(channel: LiveChannel, accent: Color, width: Dp, de
     }
 }
 
+@OptIn(FlowPreview::class)
 @Composable
 private fun LiveGuidePreview(
     selection: LiveGuideSelectionHolder,
@@ -562,6 +601,11 @@ private fun LiveGuidePreview(
     val colors = KobappTheme.colors
     val dimens = KobappTheme.dimens
     val selected = selection.value
+    // Trails the cursor: every D-pad step through the grid would otherwise start a fetch
+    // and decode for a still nobody stops on.
+    val artEntry by produceState(selected?.entry, selection) {
+        snapshotFlow { selection.value?.entry }.debounce(ArtworkSettleMs).collect { value = it }
+    }
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (dense) dimens.s4 else dimens.s6)) {
         Column(
             Modifier.width(if (dense) PreviewWidthDense else PreviewWidth),
@@ -576,7 +620,7 @@ private fun LiveGuidePreview(
                     .border(1.dp, colors.line, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                GuideArtwork(selected?.entry, Color.Transparent, Modifier.matchParentSize(), scrim = 0.55f)
+                GuideArtwork(artEntry, Color.Transparent, Modifier.matchParentSize(), scrim = 0.55f)
                 val previewChannel = selected?.channel
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(dimens.s2)) {
                     if (previewChannel != null) {

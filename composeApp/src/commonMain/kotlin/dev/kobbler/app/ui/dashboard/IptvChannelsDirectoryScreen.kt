@@ -22,6 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.IptvChannel
@@ -36,6 +41,20 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 // The directory is thousands of rows on a full playlist. Pages keep the first paint cheap
 // and each response small; the rest stream in behind it.
 private const val ChannelPageSize = 100
+private val ChannelPublishInterval = 1.seconds
+
+private class ChannelDirectory(val count: Int, val groups: List<Pair<String, List<IptvChannel>>>) {
+    companion object {
+        val Empty = ChannelDirectory(0, emptyList())
+
+        fun of(channels: List<IptvChannel>) = ChannelDirectory(
+            channels.size,
+            channels.groupBy { it.category?.takeIf { c -> c.isNotBlank() } ?: "Uncategorised" }
+                .toList()
+                .sortedBy { it.first },
+        )
+    }
+}
 
 @Composable
 fun IptvChannelsDirectoryScreen(
@@ -54,36 +73,41 @@ fun IptvChannelsDirectoryScreen(
         FormFactor.Phone -> dimens.pageGutterPhone
         else -> dimens.pageGutter
     }
-    var channels by remember { mutableStateOf<List<IptvChannel>>(emptyList()) }
+    var directory by remember { mutableStateOf(ChannelDirectory.Empty) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Sequential rather than scroll-driven: the sections are sorted by category name, so
     // a page fetched on demand can insert a whole new heading above whatever the viewer
     // is looking at. Loading straight through settles the order once and for good.
+    // Regrouping the whole directory on every page is quadratic over a 26k-channel
+    // playlist, so it runs off the main thread and is published at most once a second.
     LaunchedEffect(Unit) {
+        val fetched = ArrayList<IptvChannel>()
+        var lastPublish = TimeSource.Monotonic.markNow()
+        suspend fun publish() {
+            directory = withContext(Dispatchers.Default) { ChannelDirectory.of(fetched) }
+            lastPublish = TimeSource.Monotonic.markNow()
+            loading = false
+        }
         try {
             var offset = 0
             while (true) {
                 val page = api.getIptvChannels(limit = ChannelPageSize, offset = offset)
                 if (page.channels.isEmpty()) break
-                channels = channels + page.channels
-                loading = false
+                fetched += page.channels
                 offset += page.channels.size
                 if (offset >= page.total) break
+                if (directory.count == 0 || lastPublish.elapsedNow() >= ChannelPublishInterval) publish()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = e.message
-        } finally {
-            loading = false
         }
+        publish()
     }
-
-    val grouped: List<Pair<String, List<IptvChannel>>> = remember(channels) {
-        channels.groupBy { it.category?.takeIf { c -> c.isNotBlank() } ?: "Uncategorised" }
-            .toList()
-            .sortedBy { it.first }
-    }
+    val grouped = directory.groups
 
     Column(modifier.fillMaxSize()) {
         if (showHeader) {
@@ -91,7 +115,7 @@ fun IptvChannelsDirectoryScreen(
                 BrowseHeader(
                     title = "Channels",
                     accent = accent,
-                    countLine = "${channels.size} channels · ${grouped.size} categories",
+                    countLine = "${directory.count} channels · ${grouped.size} categories",
                     compact = compact,
                 )
             }
@@ -102,12 +126,12 @@ fun IptvChannelsDirectoryScreen(
             }
             // A page that fails part way through leaves the ones already in hand on
             // screen; only a directory with nothing in it reads as an error.
-            error != null && channels.isEmpty() -> EmptyState(
+            error != null && directory.count == 0 -> EmptyState(
                 icon = Icons.Outlined.LiveTv,
                 title = "Couldn't load channels",
                 subtitle = error ?: "",
             )
-            channels.isEmpty() -> EmptyState(
+            directory.count == 0 -> EmptyState(
                 icon = Icons.Outlined.LiveTv,
                 title = "No channels available",
                 subtitle = "Configure an IPTV source on the server to see channels.",

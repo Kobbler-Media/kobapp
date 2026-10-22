@@ -135,7 +135,7 @@ fun ActivityScreen(
                 subtitle = "Watching, reading, and listening events will show up here.",
             )
             else -> {
-                val grouped = remember(events.toList()) { groupEventsByDay(events) }
+                val grouped = remember(events.size, retryToken) { groupEventsByDay(events) }
                 LazyColumn(
                     contentPadding = PaddingValues(
                         start = gutter, end = gutter,

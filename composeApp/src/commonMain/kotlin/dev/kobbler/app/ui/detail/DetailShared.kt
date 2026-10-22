@@ -107,40 +107,33 @@ fun DetailHero(
             accent = accentColor,
             opacity = 0.32f,
             withRadialOverlay = false,
+            cached = true,
             modifier = Modifier.matchParentSize(),
         )
 
         val bgUrl = backdropUrl ?: posterUrl
         if (!bgUrl.isNullOrEmpty()) {
-            if (backdropUrl != null) {
-                AsyncImage(
-                    model = bgUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize().graphicsLayer { alpha = 0.85f },
-                )
-            } else {
-                AsyncImage(
-                    model = softenedArt(bgUrl),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize().graphicsLayer { alpha = 0.55f },
-                )
-            }
-        }
-
-        if (accentTint != Color.Unspecified) {
-            Box(Modifier.matchParentSize().background(accentTint.copy(alpha = 0.18f)))
-        }
-
-        Box(
-            Modifier.matchParentSize().background(
-                Brush.verticalGradient(
-                    0.0f to Color.Transparent,
-                    0.4f to colors.bg.copy(alpha = 0.45f),
-                    1.0f to colors.bg,
-                )
+            AsyncImage(
+                model = if (backdropUrl != null) bgUrl else softenedArt(bgUrl),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = if (backdropUrl != null) 0.85f else 0.55f,
+                modifier = Modifier.matchParentSize(),
             )
+        }
+
+        val scrim = remember(colors.bg) {
+            Brush.verticalGradient(
+                0.0f to Color.Transparent,
+                0.4f to colors.bg.copy(alpha = 0.45f),
+                1.0f to colors.bg,
+            )
+        }
+        Box(
+            Modifier.matchParentSize().drawBehind {
+                if (accentTint != Color.Unspecified) drawRect(accentTint.copy(alpha = 0.18f))
+                drawRect(scrim)
+            }
         )
 
         Row(

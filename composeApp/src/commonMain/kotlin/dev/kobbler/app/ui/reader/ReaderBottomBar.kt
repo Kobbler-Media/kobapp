@@ -27,8 +27,7 @@ import dev.kobbler.app.ui.safeBottomPadding
 
 @Composable
 internal fun ReaderBottomBar(
-    currentPage: Int,
-    totalPages: Int,
+    pages: () -> Pair<Int, Int>,
     currentChapter: Int,
     totalChapters: Int,
     onSliderChange: (Float) -> Unit,
@@ -45,9 +44,14 @@ internal fun ReaderBottomBar(
             .safeBottomPadding()
     ) {
         if (showSlider && totalChapters > 1) {
+            var dragged by remember { mutableStateOf<Float?>(null) }
             Slider(
-                value = currentChapter.toFloat() / (totalChapters - 1).coerceAtLeast(1),
-                onValueChange = onSliderChange,
+                value = dragged ?: (currentChapter.toFloat() / (totalChapters - 1).coerceAtLeast(1)),
+                onValueChange = { dragged = it },
+                onValueChangeFinished = {
+                    dragged?.let(onSliderChange)
+                    dragged = null
+                },
                 modifier = Modifier.height(28.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = theme.linkColor,
@@ -64,6 +68,7 @@ internal fun ReaderBottomBar(
                 .padding(vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
+            val (currentPage, totalPages) = pages()
             val overallPercent = if (totalChapters > 0) {
                 ((currentChapter.toFloat() + currentPage.toFloat() / totalPages.coerceAtLeast(1)) / totalChapters * 100).toInt()
             } else 0

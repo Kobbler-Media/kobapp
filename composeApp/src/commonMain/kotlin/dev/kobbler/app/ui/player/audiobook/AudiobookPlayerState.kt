@@ -3,7 +3,7 @@ package dev.kobbler.app.ui.player.audiobook
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.data.AudioFileDto
 import dev.kobbler.app.data.Book
@@ -29,6 +30,7 @@ import dev.kobbler.app.ui.player.RESUME_MIN_SECONDS
 import dev.kobbler.app.ui.player.settleAt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -72,58 +74,60 @@ class AudiobookPlayerState internal constructor(
     var playbackSpeed by mutableFloatStateOf(1f)
         internal set
 
-    val fileTimeOffsetsMs: List<Long>
-        get() {
-            var offset = 0L
-            return audioFiles.map { f ->
-                val o = offset
-                offset += ((f.durationSeconds ?: 0.0) * 1000).toLong()
-                o
-            }
+    val fileTimeOffsetsMs: List<Long> by derivedStateOf {
+        var offset = 0L
+        audioFiles.map { f ->
+            val o = offset
+            offset += ((f.durationSeconds ?: 0.0) * 1000).toLong()
+            o
         }
+    }
 
-    val totalBookDurationMs: Long
-        get() = audioFiles.sumOf { ((it.durationSeconds ?: 0.0) * 1000).toLong() }
+    val totalBookDurationMs: Long by derivedStateOf {
+        audioFiles.sumOf { ((it.durationSeconds ?: 0.0) * 1000).toLong() }
+    }
 
     val globalPositionMs: Long
         get() = (fileTimeOffsetsMs.getOrNull(currentFileIndex) ?: 0L) + currentMs
 
-    val chapterMarkers: List<Float>
-        get() {
-            val total = totalBookDurationMs
-            return if (total <= 0) emptyList()
-            else chapters.map { (it.globalStartSeconds * 1000 / total).toFloat() }
-        }
+    val chapterMarkers: List<Float> by derivedStateOf {
+        val total = totalBookDurationMs
+        if (total <= 0) emptyList()
+        else chapters.map { (it.globalStartSeconds * 1000 / total).toFloat() }
+    }
 
-    val currentChapter: UnifiedChapterDto?
-        get() {
-            val pos = globalPositionMs
-            return chapters.lastOrNull { (it.globalStartSeconds * 1000).toLong() <= pos }
-        }
+    val currentChapter: UnifiedChapterDto? by derivedStateOf {
+        val pos = globalPositionMs
+        chapters.lastOrNull { (it.globalStartSeconds * 1000).toLong() <= pos }
+    }
 
     val chapterRemainingMs: Long?
         get() = currentChapter?.let { ch ->
             ((ch.globalEndSeconds * 1000).toLong() - globalPositionMs).coerceAtLeast(0)
         }
 
-    val activeSegmentIndex: Int
-        get() {
-            val posSeconds = currentMs / 1000.0
-            val fileId = audioFiles.getOrNull(currentFileIndex)?.id ?: return -1
-            val fileSegments = transcriptSegments.filter { it.fileId == fileId }
-            var result = -1
-            var lo = 0; var hi = fileSegments.size - 1
-            while (lo <= hi) {
-                val mid = (lo + hi) / 2
-                if (fileSegments[mid].startSeconds <= posSeconds) {
-                    result = transcriptSegments.indexOf(fileSegments[mid])
-                    lo = mid + 1
-                } else {
-                    hi = mid - 1
-                }
+    private val segmentIndicesByFile: Map<String, List<Int>> by derivedStateOf {
+        transcriptSegments.indices.groupBy { transcriptSegments[it].fileId }
+    }
+
+    val activeSegmentIndex: Int by derivedStateOf {
+        val fileId = audioFiles.getOrNull(currentFileIndex)?.id ?: return@derivedStateOf -1
+        val indices = segmentIndicesByFile[fileId] ?: return@derivedStateOf -1
+        val posSeconds = currentMs / 1000.0
+        var result = -1
+        var lo = 0
+        var hi = indices.lastIndex
+        while (lo <= hi) {
+            val mid = (lo + hi) / 2
+            if (transcriptSegments[indices[mid]].startSeconds <= posSeconds) {
+                result = indices[mid]
+                lo = mid + 1
+            } else {
+                hi = mid - 1
             }
-            return result
         }
+        result
+    }
 
     val hasPanelContent: Boolean
         get() = chapters.isNotEmpty() || transcriptSegments.isNotEmpty() || bookmarks.isNotEmpty()
@@ -283,12 +287,11 @@ fun rememberAudiobookState(
     val scope = rememberCoroutineScope()
     val state = remember(book.id) { AudiobookPlayerState(book, api, player, scope) }
 
-    val playerState by player.state.collectAsState()
-    val currentMs by player.currentMs.collectAsState()
-    val playbackSpeed by player.playbackSpeed.collectAsState()
-    state.playerState = playerState
-    state.currentMs = currentMs
-    state.playbackSpeed = playbackSpeed
+    LaunchedEffect(state) {
+        launch { player.state.collect { state.playerState = it } }
+        launch { player.currentMs.collect { state.currentMs = it } }
+        launch { player.playbackSpeed.collect { state.playbackSpeed = it } }
+    }
 
     LaunchedEffect(book.id) {
         try {
@@ -323,11 +326,13 @@ fun rememberAudiobookState(
         }
     }
 
-    LaunchedEffect(playerState) {
-        if (playerState == PlayerState.FINISHED && state.dataLoaded && state.audioFiles.isNotEmpty()) {
-            if (state.currentFileIndex < state.audioFiles.lastIndex) {
-                state.playFileAt(state.currentFileIndex + 1, positionMs = 0)
-                state.awaitFileStart(positionMs = 0)
+    LaunchedEffect(state) {
+        snapshotFlow { state.playerState }.collectLatest { playerState ->
+            if (playerState == PlayerState.FINISHED && state.dataLoaded && state.audioFiles.isNotEmpty()) {
+                if (state.currentFileIndex < state.audioFiles.lastIndex) {
+                    state.playFileAt(state.currentFileIndex + 1, positionMs = 0)
+                    state.awaitFileStart(positionMs = 0)
+                }
             }
         }
     }
@@ -352,16 +357,12 @@ fun rememberAudiobookState(
         state.sleepMode = SleepMode.Off
     }
 
-    var sleepChapter by remember { mutableStateOf<UnifiedChapterDto?>(null) }
     LaunchedEffect(state.sleepMode) {
-        if (state.sleepMode == SleepMode.EndOfChapter) sleepChapter = state.currentChapter
-    }
-    LaunchedEffect(state.currentChapter) {
-        if (state.sleepMode == SleepMode.EndOfChapter && sleepChapter != null && state.currentChapter != sleepChapter) {
-            player.pause()
-            state.sleepMode = SleepMode.Off
-            sleepChapter = null
-        }
+        if (state.sleepMode != SleepMode.EndOfChapter) return@LaunchedEffect
+        val sleepChapter = state.currentChapter ?: return@LaunchedEffect
+        snapshotFlow { state.currentChapter }.first { it != sleepChapter }
+        player.pause()
+        state.sleepMode = SleepMode.Off
     }
 
     return state

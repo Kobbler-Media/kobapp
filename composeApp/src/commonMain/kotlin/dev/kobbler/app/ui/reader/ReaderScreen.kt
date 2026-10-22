@@ -38,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -150,14 +151,20 @@ fun ReaderScreen(
         UserSettings.putString("reader_font_family", readerFontFamily.name)
         UserSettings.putString("reader_brightness", brightness.toString())
     }
+    SaveWhenSettled(listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness)) {
+        saveSettings()
+    }
 
     val scrollState = rememberScrollState()
     var contentHeight by remember { mutableIntStateOf(0) }
     var viewportHeight by remember { mutableIntStateOf(0) }
-    val (currentPage, totalPages) = pageCounter(scrollState.value, viewportHeight, scrollState.maxValue)
+    val pages = remember(scrollState) {
+        derivedStateOf { pageCounter(scrollState.value, viewportHeight, scrollState.maxValue) }
+    }
 
     val weights = remember(epubBook) { epubBook?.let { chapterWeights(it.chapters) } ?: emptyList() }
 
+    val progressSaver = remember(book.id, api) { ProgressSaver { api.saveReaderProgress(book.id, savedCfi, it) } }
     val persistProgress: suspend () -> Unit = persist@{
         if (epubBook == null) return@persist
         if (!readingStateLoaded) return@persist
@@ -167,13 +174,13 @@ fun ReaderScreen(
             scrollOffset = scrollState.value,
             maxScroll = scrollState.maxValue,
         )
-        try { api.saveReaderProgress(book.id, savedCfi, percent) } catch (_: Exception) {}
+        progressSaver.save(percent)
     }
 
     val ttsController = remember { TtsController(api, scope) }
     val ttsState by ttsController.state.collectAsState()
     val ttsSentence by ttsController.currentSentence.collectAsState()
-    val ttsWordIndex by ttsController.currentWordIndex.collectAsState()
+    val ttsWordIndex = ttsController.currentWordIndex.collectAsState()
     val ttsVoices by ttsController.voices.collectAsState()
     val ttsError by ttsController.error.collectAsState()
 
@@ -346,7 +353,7 @@ fun ReaderScreen(
                 ttsController = ttsController,
                 ttsState = ttsState,
                 ttsVoices = ttsVoices,
-                ttsWordIndex = ttsWordIndex,
+                ttsWordIndex = { ttsWordIndex.value },
                 synthStartWordIndex = synthStartWordIndex,
                 onSynthStartWordIndexChange = { synthStartWordIndex = it },
                 onStartReadAloud = { scope.launch { readAloudFrom(epubBook!!, currentChapter) } },
@@ -364,8 +371,7 @@ fun ReaderScreen(
                 onViewportHeightChange = { viewportHeight = it },
                 contentHeight = contentHeight,
                 onContentHeightChange = { contentHeight = it },
-                currentPage = currentPage,
-                totalPages = totalPages,
+                pages = { pages.value },
                 showToc = showToc,
                 onShowTocChange = { showToc = it },
                 showSearch = showSearch,
@@ -374,12 +380,12 @@ fun ReaderScreen(
                 onShowSettingsChange = { showSettings = it },
                 readerBookmarks = readerBookmarks,
                 onBookmarksChange = { readerBookmarks = it },
-                onThemeModeChange = { themeMode = it; saveSettings() },
-                onFontSizeChange = { fontSize = it; saveSettings() },
-                onLineHeightChange = { lineHeightMultiplier = it; saveSettings() },
-                onPaddingChange = { horizontalPadding = it; saveSettings() },
-                onFontFamilyChange = { readerFontFamily = it; saveSettings() },
-                onBrightnessChange = { brightness = it; saveSettings() },
+                onThemeModeChange = { themeMode = it },
+                onFontSizeChange = { fontSize = it },
+                onLineHeightChange = { lineHeightMultiplier = it },
+                onPaddingChange = { horizontalPadding = it },
+                onFontFamilyChange = { readerFontFamily = it },
+                onBrightnessChange = { brightness = it },
             )
         }
 
@@ -439,7 +445,7 @@ private fun ReaderLoaded(
     ttsController: TtsController,
     ttsState: TtsState,
     ttsVoices: List<TtsVoiceDto>,
-    ttsWordIndex: Int,
+    ttsWordIndex: () -> Int,
     synthStartWordIndex: Int,
     onSynthStartWordIndexChange: (Int) -> Unit,
     onStartReadAloud: () -> Unit,
@@ -456,8 +462,7 @@ private fun ReaderLoaded(
     onViewportHeightChange: (Int) -> Unit,
     contentHeight: Int,
     onContentHeightChange: (Int) -> Unit,
-    currentPage: Int,
-    totalPages: Int,
+    pages: () -> Pair<Int, Int>,
     showToc: Boolean,
     onShowTocChange: (Boolean) -> Unit,
     showSearch: Boolean,
@@ -477,11 +482,14 @@ private fun ReaderLoaded(
     val nav = rememberReaderNavState(keyNav = keyNav, immersive = immersive, holdChrome = panelOpen)
 
     val chapterView = rememberChapterView(epub, currentChapter)
-    val activeWordHighlight = remember(ttsWordIndex, chapterView, synthStartWordIndex) {
-        val words = chapterView?.tts?.words
-        val word = if (ttsWordIndex < 0 || words == null) null
-            else words.getOrNull(synthStartWordIndex + ttsWordIndex)
-        word?.highlightCharRange?.let { TtsWordHighlight(word.blockIndex, it) }
+    val activeWordHighlight = remember(chapterView, synthStartWordIndex) {
+        derivedStateOf {
+            val index = ttsWordIndex()
+            val words = chapterView?.tts?.words
+            val word = if (index < 0 || words == null) null
+                else words.getOrNull(synthStartWordIndex + index)
+            word?.highlightCharRange?.let { TtsWordHighlight(word.blockIndex, it) }
+        }
     }
     val tocEntries = rememberTocEntries(epub)
     val searchIndex = rememberEpubSearchIndex(epub, active = showSearch)
@@ -504,14 +512,16 @@ private fun ReaderLoaded(
             ?.let(onSynthStartWordIndexChange)
     }
 
-    val cursor = if (!keyNav) null else ReaderCursorConfig(
-        bounds = blockBounds,
-        scrollState = scrollState,
-        viewportHeight = viewportHeight,
-        bandColor = theme.highlightColor.copy(alpha = theme.highlightColor.alpha * 0.55f),
-        onScrollTo = { target -> scrollTo(target) },
-        onStartReadingAt = { idx -> startReadingAt(idx) },
-    )
+    val cursor = remember(keyNav, blockBounds, scrollState, viewportHeight, theme.highlightColor, chapterView) {
+        if (!keyNav) null else ReaderCursorConfig(
+            bounds = blockBounds,
+            scrollState = scrollState,
+            viewportHeight = viewportHeight,
+            bandColor = theme.highlightColor.copy(alpha = theme.highlightColor.alpha * 0.55f),
+            onScrollTo = { target -> scrollTo(target) },
+            onStartReadingAt = { idx -> startReadingAt(idx) },
+        )
+    }
 
     fun goNextPage() {
         val base = pageTurnBase(committedScroll, scrollState.value, viewportHeight)
@@ -646,8 +656,7 @@ private fun ReaderLoaded(
                 )
             }
             ReaderBottomBar(
-                currentPage = currentPage,
-                totalPages = totalPages,
+                pages = pages,
                 currentChapter = currentChapter,
                 totalChapters = epub.chapters.size,
                 onSliderChange = { frac ->
@@ -712,7 +721,7 @@ private fun ReaderLoaded(
                                 blocks = chapterView.blocks,
                                 theme = theme,
                                 highlightedText = activeHighlight,
-                                wordHighlight = activeWordHighlight,
+                                wordHighlight = { activeWordHighlight.value },
                                 imageResolver = imageResolver,
                                 pageHeight = viewportHeight,
                                 onActiveBlockY = { y ->
@@ -726,7 +735,8 @@ private fun ReaderLoaded(
                                     }
                                 },
                                 onBlockPositioned = { idx, topY, height ->
-                                    blockBounds[idx] = topY..(topY + height - 1).coerceAtLeast(topY)
+                                    val bounds = topY..(topY + height - 1).coerceAtLeast(topY)
+                                    if (blockBounds[idx] != bounds) blockBounds[idx] = bounds
                                 },
                             )
                         }

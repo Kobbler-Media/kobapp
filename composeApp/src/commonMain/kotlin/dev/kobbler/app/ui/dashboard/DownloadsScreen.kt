@@ -57,6 +57,8 @@ private enum class DownloadFilter(val label: String, val statuses: String?) {
     Failed("Failed", "failed,error"),
 }
 
+private val DownloadFilterLabels = DownloadFilter.entries.map { it.label }
+
 private val ActiveStatuses = setOf("pending", "queued", "searching", "downloading", "processing")
 
 @Composable
@@ -119,25 +121,26 @@ internal fun DownloadsScreen(
                 if (payloads.isEmpty()) return@runCatching
                 val allowed = filter.statuses?.split(',')?.toSet()
                 var membershipChanged = false
-                val byId = rows.associateBy { it.id }
+                val indexById = rows.withIndex().associate { it.value.id to it.index }
                 val merged = payloads.mapNotNull { it.toDownloadRow(api.apiUrl) }
                 val updated = rows.toMutableList()
+                val removed = HashSet<String>()
                 for (row in merged) {
-                    val existingIdx = updated.indexOfFirst { it.id == row.id }
-                    if (existingIdx < 0) {
+                    val existingIdx = indexById[row.id]
+                    if (existingIdx == null) {
                         // Never seen, so there is nothing to merge into and no enrichment
                         // to preserve — let the refetch bring it in properly.
                         if (allowed == null || row.status in allowed) membershipChanged = true
                         continue
                     }
                     if (allowed != null && row.status !in allowed) {
-                        updated.removeAt(existingIdx)
+                        removed += row.id
                         membershipChanged = true
                         continue
                     }
-                    updated[existingIdx] = byId.getValue(row.id).mergeVolatile(row)
+                    updated[existingIdx] = rows[existingIdx].mergeVolatile(row)
                 }
-                rows = updated
+                rows = if (removed.isEmpty()) updated else updated.filterNot { it.id in removed }
                 if (membershipChanged) refetchRequests++
             }
         }
@@ -163,7 +166,7 @@ internal fun DownloadsScreen(
                 trailing = sectionSwitch,
                 secondaryRow = {
                     SegmentedFilter(
-                        options = DownloadFilter.entries.map { it.label },
+                        options = DownloadFilterLabels,
                         selectedIndex = filterIdx,
                         accent = accent,
                         onSelected = { filterIdx = it },

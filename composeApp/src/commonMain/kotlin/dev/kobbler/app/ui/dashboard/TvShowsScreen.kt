@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LiveTv
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -115,8 +114,10 @@ fun TvShowsScreen(
     // whole page down under the viewer's focus. Wait for them to settle first.
     val watchNextType = if (sportsOnly) MediaType.SportsEvent else MediaType.TvShow
     // A category is a narrower question than the rails above the grid answer.
-    val watchNext = if (genre != null) emptyList()
-    else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == watchNextType } ?: emptyList()
+    val watchNext = remember(homeState, genre, watchNextType) {
+        if (genre != null) emptyList()
+        else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == watchNextType } ?: emptyList()
+    }
 
     // Recently added from cached dashboard data
     val (dashState, _) = rememberCached("dashboard") { api.getDashboard() }
@@ -139,8 +140,10 @@ fun TvShowsScreen(
         try { letters = if (sportsOnly) api.getSportsLetters() else api.getTvLetters() } catch (_: Exception) {}
     }
 
-    // Entry focus goes to the first row that actually exists, in reading order.
-    var entryFocusPending by remember(filterIndex) { mutableStateOf(true) }
+    // Entry focus goes to the first row that actually exists, in reading order. A new
+    // category re-arms it: the picker's dialog closes onto a selector that has just been
+    // replaced and a grid still loading, which leaves the D-pad focused on nothing.
+    var entryFocusPending by remember(filterIndex, genre) { mutableStateOf(true) }
     val continueIsEntry = watchNext.isNotEmpty()
     val recentIsEntry = !continueIsEntry && recentShows.isNotEmpty()
     val gridIsEntry = !continueIsEntry && !recentIsEntry && shows.isNotEmpty()
@@ -437,11 +440,7 @@ fun TvShowsScreen(
                 )
             }
 
-            if (isLoadingMore) {
-                Box(Modifier.fillMaxWidth().padding(16.dp).align(Alignment.BottomCenter), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = accentColor, modifier = Modifier.size(24.dp))
-                }
-            }
+            LoadingMoreIndicator({ isLoadingMore }, accentColor)
         }
     }
 }

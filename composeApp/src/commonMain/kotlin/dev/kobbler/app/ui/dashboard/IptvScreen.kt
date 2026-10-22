@@ -66,6 +66,8 @@ private enum class IptvTab(val label: String) {
     Guide("Guide"), Channels("Channels"), Recordings("Recordings"),
 }
 
+private val IptvTabLabels = IptvTab.entries.map { it.label }
+
 @OptIn(FlowPreview::class)
 @Composable
 fun IptvScreen(
@@ -203,7 +205,9 @@ fun IptvScreen(
             FormFactor.Phone -> dimens.pageGutterPhone
             else -> dimens.pageGutter
         }
-        val isSearching = searchQuery.isNotBlank()
+        // Derived, and read through the delegate: the load-more check below must see a search
+        // that starts after it was created, and typing should not recompose the whole page.
+        val isSearching by remember { derivedStateOf { searchQuery.isNotBlank() } }
         val listState = rememberLazyListState()
 
         val clearSearch = {
@@ -265,7 +269,7 @@ fun IptvScreen(
             wantGuideFocus = false
         }
 
-        Column(Modifier.fillMaxSize().background(colors.bg).imePaddingUnlessTv()) {
+        Column(Modifier.fillMaxSize().imePaddingUnlessTv()) {
             Column(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
                 BrowseHeader(
                     title = "IPTV",
@@ -274,7 +278,7 @@ fun IptvScreen(
                     compact = compact,
                     trailing = {
                         SegmentedFilter(
-                            options = IptvTab.entries.map { it.label },
+                            options = IptvTabLabels,
                             selectedIndex = tabIdx,
                             accent = accent,
                             onSelected = { tabIdx = it },
@@ -286,7 +290,7 @@ fun IptvScreen(
                     Spacer(Modifier.height(dimens.s3))
 
                     IptvSearchField(
-                        query = searchQuery,
+                        query = { searchQuery },
                         onQueryChange = { searchQuery = it },
                         onCommit = { wantGuideFocus = true },
                         onClear = clearSearch,
@@ -518,7 +522,7 @@ private suspend fun toggleFavourite(api: KobblerApi, channel: IptvChannel) {
 
 @Composable
 private fun IptvSearchField(
-    query: String,
+    query: () -> String,
     onQueryChange: (String) -> Unit,
     onCommit: () -> Unit,
     onClear: () -> Unit,
@@ -526,8 +530,9 @@ private fun IptvSearchField(
 ) {
     val colors = KobappTheme.colors
     val keyboardController = LocalSoftwareKeyboardController.current
+    val text = query()
     OutlinedTextField(
-        value = query,
+        value = text,
         onValueChange = onQueryChange,
         placeholder = {
             Text(
@@ -539,7 +544,7 @@ private fun IptvSearchField(
         leadingIcon = {
             Icon(Icons.Outlined.Search, contentDescription = null, tint = colors.textLo)
         },
-        trailingIcon = if (query.isEmpty()) {
+        trailingIcon = if (text.isEmpty()) {
             null
         } else {
             {

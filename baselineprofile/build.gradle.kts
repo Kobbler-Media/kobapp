@@ -23,6 +23,14 @@ android {
         testInstrumentationRunnerArguments["targetAppId"] = "dev.kobbler.app"
     }
 
+    // Mirrors androidApp's perf build type: release code over the paired .dbg install, so a
+    // device that already runs the debug app profiles without being linked again.
+    buildTypes {
+        create("perf") {
+            matchingFallbacks += "release"
+        }
+    }
+
     targetProjectPath = ":androidApp"
 }
 

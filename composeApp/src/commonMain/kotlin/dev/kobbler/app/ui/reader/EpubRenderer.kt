@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,7 +29,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
@@ -62,88 +62,92 @@ fun EpubContent(
     blocks: List<XhtmlBlock>,
     theme: ReaderTheme,
     highlightedText: String? = null,
-    wordHighlight: TtsWordHighlight? = null,
+    wordHighlight: () -> TtsWordHighlight? = { null },
     imageResolver: ((String) -> Any?)? = null,
     pageHeight: Int = 0,
     onActiveBlockY: ((Int) -> Unit)? = null,
     onBlockPositioned: ((blockIndex: Int, topY: Int, height: Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val activeIndex = remember(blocks, highlightedText, wordHighlight) {
-        wordHighlight?.blockIndex ?: findActiveBlockIndex(blocks, highlightedText)
-    }
+    val word = wordHighlight()
+    val sentenceIndex = remember(blocks, highlightedText) { findActiveBlockIndex(blocks, highlightedText) }
+    val activeIndex = word?.blockIndex ?: sentenceIndex
     val contentModifier = modifier.padding(horizontal = theme.horizontalPadding.dp)
 
-    var activeBlockY by remember { mutableStateOf(IndexedY(-1, -1)) }
+    var placedYs by remember { mutableStateOf(IntArray(0)) }
     var highlightLocalY by remember { mutableStateOf(IndexedY(-1, 0)) }
-    LaunchedEffect(activeBlockY, highlightLocalY, activeIndex) {
-        val a = activeBlockY
+    LaunchedEffect(placedYs, highlightLocalY, activeIndex) {
+        val blockY = placedYs.getOrNull(activeIndex) ?: return@LaunchedEffect
         val h = highlightLocalY
-        if (activeIndex >= 0 && a.index == activeIndex && a.y >= 0) {
-            val localY = if (h.index == activeIndex) h.y else 0
-            onActiveBlockY?.invoke(a.y + localY)
-        }
+        val localY = if (h.index == activeIndex) h.y else 0
+        onActiveBlockY?.invoke(blockY + localY)
     }
 
-    // Every block's modifier is memoised: a fresh onGloballyPositioned lambda invalidates
-    // that node's layout, and wordHighlight changes several times a second under TTS.
     val trackActive = onActiveBlockY != null && activeIndex >= 0
-    val onActivePositioned = remember(activeIndex) {
-        { coords: LayoutCoordinates -> activeBlockY = IndexedY(activeIndex, coords.positionInParent().y.toInt()) }
-    }
     val onActiveHighlightY = remember(activeIndex) {
         { y: Int -> highlightLocalY = IndexedY(activeIndex, y) }
     }
-    val blockModifiers = remember(blocks.size, activeIndex, trackActive, onBlockPositioned) {
-        List(blocks.size) { i ->
-            var mod: Modifier = Modifier.fillMaxWidth()
-            if (trackActive && i == activeIndex) mod = mod.onGloballyPositioned(onActivePositioned)
-            if (onBlockPositioned != null) {
-                mod = mod.onGloballyPositioned { coords ->
-                    onBlockPositioned(i, coords.positionInParent().y.toInt(), coords.size.height)
-                }
-            }
-            mod
+    val currentOnBlockPositioned by rememberUpdatedState(onBlockPositioned)
+    val onBlocksPlaced = remember {
+        { ys: IntArray, heights: IntArray ->
+            placedYs = ys
+            val report = currentOnBlockPositioned
+            if (report != null) for (i in ys.indices) report(i, ys[i], heights[i])
         }
     }
 
-    val renderBlocks = @Composable {
+    BlockColumn(pageHeight = pageHeight, onPlaced = onBlocksPlaced, modifier = contentModifier) {
         for ((i, block) in blocks.withIndex()) {
             val isActive = trackActive && i == activeIndex
-            val blockWordRange = if (i == wordHighlight?.blockIndex) wordHighlight.charRange else null
-            Box(blockModifiers[i]) {
+            val blockWordRange = if (i == word?.blockIndex) word.charRange else null
+            Box(Modifier.fillMaxWidth()) {
                 RenderBlock(
-                    block, theme, highlightedText, blockWordRange, imageResolver,
+                    block, theme, if (i == activeIndex) highlightedText else null, blockWordRange, imageResolver,
                     onHighlightLocalY = if (isActive) onActiveHighlightY else null,
                 )
             }
         }
     }
-    if (pageHeight > 0) {
-        PaginatedColumn(pageHeight = pageHeight, modifier = contentModifier, content = renderBlocks)
-    } else {
-        Column(contentModifier, content = { renderBlocks() })
-    }
 }
 
+// Bounds come from placement rather than per-block onGloballyPositioned: that callback
+// fires for every block on every scroll frame, and the reader turns pages by scrolling.
 @Composable
-private fun PaginatedColumn(
+private fun BlockColumn(
     pageHeight: Int,
+    onPlaced: (ys: IntArray, heights: IntArray) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val last = remember { PlacedBlocks() }
     Layout(content = content, modifier = modifier) { measurables, constraints ->
         val childConstraints = Constraints(maxWidth = constraints.maxWidth)
         val placeables = measurables.map { it.measure(childConstraints) }
         val heights = IntArray(placeables.size) { placeables[it].height }
-        val result = computePaginatedLayout(heights, pageHeight)
-        layout(constraints.maxWidth, result.totalHeight) {
-            for (i in placeables.indices) {
-                placeables[i].placeRelative(0, result.blockYs[i])
+        val ys: IntArray
+        val totalHeight: Int
+        if (pageHeight > 0) {
+            val result = computePaginatedLayout(heights, pageHeight)
+            ys = result.blockYs
+            totalHeight = result.totalHeight
+        } else {
+            ys = IntArray(heights.size)
+            var y = 0
+            for (i in heights.indices) { ys[i] = y; y += heights[i] }
+            totalHeight = y
+        }
+        layout(constraints.maxWidth, totalHeight) {
+            for (i in placeables.indices) placeables[i].placeRelative(0, ys[i])
+            if (!ys.contentEquals(last.ys) || !heights.contentEquals(last.heights)) {
+                last.ys = ys
+                last.heights = heights
+                onPlaced(ys, heights)
             }
         }
     }
 }
+
+private class PlacedBlocks(var ys: IntArray = IntArray(0), var heights: IntArray = IntArray(0))
 
 @Composable
 private fun RenderBlock(

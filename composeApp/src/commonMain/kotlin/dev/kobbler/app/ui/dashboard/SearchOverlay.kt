@@ -247,7 +247,8 @@ fun SearchOverlay(
             else -> Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(colors.bg.copy(alpha = 0.78f))
+                    // The TV panel is full-bleed and opaque, so a scrim under it is never seen.
+                    .then(if (tv) Modifier else Modifier.background(colors.bg.copy(alpha = 0.78f)))
                     .then(escapeToDismiss)
                     .focusProperties { canFocus = false }
                     .clickable(

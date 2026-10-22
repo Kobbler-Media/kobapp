@@ -85,7 +85,9 @@ internal fun ShowDetailLayout(
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
             Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
                 Spacer(Modifier.height(kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp))
-                val body = ShowBody(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, onPersonClick, actions, seasonMenu, episodes)
+                val body = remember(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, onPersonClick, actions, seasonMenu, episodes) {
+                    ShowBody(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, onPersonClick, actions, seasonMenu, episodes)
+                }
                 if (stacked) PhoneLayout(body, gutter, pageTopHold.anchor) else WideLayout(body, gutter, formFactor, pageTopHold.anchor)
                 Spacer(Modifier.height(64.dp))
             }

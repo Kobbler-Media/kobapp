@@ -1,5 +1,8 @@
 package dev.kobbler.kobplayer
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.round
 import kotlin.math.roundToInt
@@ -71,6 +74,32 @@ fun measuredFrameRate(pictures: Long, elapsedMs: Long): Float {
     val fps = pictures * 1000f / elapsedMs
     val nearest = BroadcastFrameRates.minBy { abs(it - fps) }
     return if (abs(nearest - fps) / nearest <= FrameRateSnapTolerance) nearest else 0f
+}
+
+const val FrameRateProbeAttempts = 5
+
+/**
+ * Counts pictures over a stretch of clean playback, where [sample] answers (pictures shown,
+ * clock) or null when the stretch is not clean. Waits on [state] rather than polling, so a
+ * paused title costs nothing, and gives up after a few tries: a stream that never plays
+ * cleanly at 1x would otherwise be probed for as long as it stays open.
+ */
+suspend fun probeFrameRate(
+    state: StateFlow<PlayerState>,
+    settleMs: Long,
+    windowMs: Long,
+    sample: suspend () -> Pair<Long, Long>?,
+): Float {
+    repeat(FrameRateProbeAttempts) {
+        state.first { it == PlayerState.PLAYING }
+        delay(settleMs)
+        val start = sample() ?: return@repeat
+        delay(windowMs)
+        val end = sample() ?: return@repeat
+        val rate = measuredFrameRate(end.first - start.first, end.second - start.second)
+        if (rate > 0f) return rate
+    }
+    return 0f
 }
 
 // Android's guidance: a non-seamless refresh switch blanks the panel for a second or two, which

@@ -136,7 +136,7 @@ fun FullscreenVideoPlayer(
     val mediaType = state.mediaType
     // Raised by beginPreparing before there is a session: the stream is still being found.
     if (mediaId == null || mediaType == null) {
-        if (state.isPreparing) PendingStart(state, KobappTheme.colors.accentFor(section))
+        if (state.isPreparing && state.isStreamStart) PendingStart(state, KobappTheme.colors.accentFor(section))
         return
     }
 
@@ -149,7 +149,6 @@ fun FullscreenVideoPlayer(
     }
 
     DisposableEffect(Unit) {
-        PlaybackLifecycle.setKeepScreenOn(true)
         PlaybackLifecycle.setFullscreenMode(true)
         onDispose {
             PlaybackLifecycle.setBrightnessLock(-1f)
@@ -165,6 +164,9 @@ fun FullscreenVideoPlayer(
     // no way back to the full player except through it.
     LaunchedEffect(player) {
         player.isPlaying.collect { PlaybackLifecycle.setVideoPlaying(it) }
+    }
+    LaunchedEffect(player) {
+        holdScreenWhilePlaying(player.isPlaying, setKeepScreenOn = PlaybackLifecycle::setKeepScreenOn)
     }
 
     var playerBrightness by remember {

@@ -3,6 +3,7 @@
 package dev.kobbler.app
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -10,7 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.compose.setSingletonImageLoaderFactory
+import dev.kobbler.app.data.AppForeground
 import dev.kobbler.app.data.AuthScreen
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.kobImageLoader
@@ -59,6 +63,11 @@ fun App(
     }
 
     RefreshWatchStateOnFocus(LocalWindowInfo.current.isWindowFocused)
+
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.currentStateFlow.collect { AppForeground.set(it.isAtLeast(Lifecycle.State.STARTED)) }
+    }
 
     KobappTheme(formFactor = formFactor) {
         // The one full-screen background under every screen; the window draws none.

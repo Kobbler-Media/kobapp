@@ -395,10 +395,18 @@ private const val RefreshCoalesceMs = 2_000L
  * until something else happens to invalidate it.
  */
 @Composable
-fun RefreshWatchStateOnFocus(focused: Boolean) {
-    var wasFocused by remember { mutableStateOf(focused) }
+fun RefreshWatchStateOnFocus(focused: Boolean, timeSource: TimeSource = TimeSource.Monotonic) {
+    var leftAt by remember { mutableStateOf<TimeMark?>(null) }
     LaunchedEffect(focused) {
-        if (focused && !wasFocused) DataCache.invalidateWatchProgress()
-        wasFocused = focused
+        if (!focused) {
+            leftAt = timeSource.markNow()
+            return@LaunchedEffect
+        }
+        // A glance at a notification or an alt-tab is not long enough for another device
+        // to have moved anything, and every refetch redraws the page under the viewer.
+        if (leftAt?.let { it.elapsedNow() >= RefocusRefreshAfter } == true) DataCache.invalidateWatchProgress()
+        leftAt = null
     }
 }
+
+private val RefocusRefreshAfter = 30.seconds

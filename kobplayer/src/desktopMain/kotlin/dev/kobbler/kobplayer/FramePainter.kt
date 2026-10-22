@@ -15,6 +15,7 @@ import org.jetbrains.skia.Rect
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.SamplingMode
+import org.jetbrains.skia.Shader
 
 internal class DecodedFrame(val layout: FrameLayout, val memory: Pointer)
 
@@ -24,10 +25,21 @@ internal class FramePainter : AutoCloseable {
     private val paint = Paint()
     private var frame: DecodedFrame? = null
     private var planes: List<Image> = emptyList()
+    private var shader: Shader? = null
+    private var shaderDst: Rect? = null
 
+    // Compose redraws the video node whenever anything over it animates; the same frame at
+    // the same size reuses its shader rather than rebuilding the effect per draw.
     fun draw(canvas: Canvas, frame: DecodedFrame, dst: Rect) {
         if (frame !== this.frame) wrap(frame)
-        val layout = frame.layout
+        val current = shader?.takeIf { shaderDst?.sameAs(dst) == true } ?: buildShader(frame.layout, dst)
+        paint.shader = current
+        canvas.drawRect(dst, paint)
+        paint.shader = null
+    }
+
+    private fun buildShader(layout: FrameLayout, dst: Rect): Shader {
+        shader?.close()
         val scale = dst.height / layout.height
         // Cubic only pays off when magnifying; shrinking with it just costs taps.
         val lumaSampling = if (scale > 1.01f) SamplingMode.CATMULL_ROM else SamplingMode.LINEAR
@@ -54,18 +66,20 @@ internal class FramePainter : AutoCloseable {
         builder.uniform("toG", coefficients.toG)
         builder.uniform("toB", coefficients.toB)
 
-        val shader = builder.makeShader(
+        val built = builder.makeShader(
             Matrix33(dst.width / layout.width, 0f, dst.left, 0f, scale, dst.top, 0f, 0f, 1f),
         )
-        paint.shader = shader
-        canvas.drawRect(dst, paint)
-        paint.shader = null
-        shader.close()
         children.forEach { it.close() }
         builder.close()
+        shader = built
+        shaderDst = dst
+        return built
     }
 
     fun forget() {
+        shader?.close()
+        shader = null
+        shaderDst = null
         planes.forEach { it.close() }
         planes = emptyList()
         frame = null
@@ -180,3 +194,6 @@ internal object SkiaTextures {
         }
     }.getOrDefault(false)
 }
+
+private fun Rect.sameAs(other: Rect) =
+    left == other.left && top == other.top && right == other.right && bottom == other.bottom

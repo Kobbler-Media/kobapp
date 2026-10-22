@@ -59,7 +59,7 @@ internal val ActivateKeys = setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnte
  * Idle: thin 3dp track, no visible thumb.
  * Active (touch/drag): 6dp track with a 14dp thumb dot.
  *
- * @param progress Current progress [0..1]
+ * @param progress Current progress [0..1], read at draw time so a ticking playhead only redraws
  * @param onSeek Called with the new fraction when the user finishes seeking
  * @param onSeeking Called continuously during drag with the preview fraction
  * @param activeColor Fill color for played portion and thumb
@@ -78,7 +78,7 @@ internal val ActivateKeys = setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnte
  */
 @Composable
 fun MediaSeekBar(
-    progress: Float,
+    progress: () -> Float,
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
     onSeeking: ((Float) -> Unit)? = null,
@@ -113,7 +113,7 @@ fun MediaSeekBar(
         animationSpec = tween(150),
     )
 
-    val displayFraction = keyFraction ?: if (isDragging) dragFraction else progress.coerceIn(0f, 1f)
+    fun displayFraction() = keyFraction ?: if (isDragging) dragFraction else progress().coerceIn(0f, 1f)
     val onHoverState by rememberUpdatedState(onHover)
     val onSeekState by rememberUpdatedState(onSeek)
     val onActivateState by rememberUpdatedState(onActivate)
@@ -148,7 +148,7 @@ fun MediaSeekBar(
                                 activate()
                                 return@onKeyEvent true
                             }
-                            val base = keyFraction ?: displayFraction
+                            val base = keyFraction ?: displayFraction()
                             val forward = when (event.key) {
                                 Key.DirectionLeft -> false
                                 Key.DirectionRight -> true
@@ -260,7 +260,7 @@ fun MediaSeekBar(
             }
 
             // Active progress
-            val activeWidth = width * displayFraction
+            val activeWidth = width * displayFraction()
             if (activeWidth > 0f) {
                 drawRoundRect(
                     color = activeColor,

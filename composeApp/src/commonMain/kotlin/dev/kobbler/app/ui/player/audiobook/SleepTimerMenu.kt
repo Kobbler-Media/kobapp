@@ -22,7 +22,7 @@ import dev.kobbler.kobfocus.focusKey
 @Composable
 fun SleepTimerMenu(
     mode: SleepMode,
-    remainingMs: Long,
+    remainingMs: () -> Long,
     onSelect: (SleepMode) -> Unit,
 ) {
     val colors = KobappTheme.colors
@@ -34,14 +34,15 @@ fun SleepTimerMenu(
             modifier = Modifier.focusKey("sleep").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
         ) {
             if (mode != SleepMode.Off) {
+                val ms = remainingMs()
                 val label = when {
                     mode == SleepMode.EndOfChapter -> "EoC"
-                    remainingMs < 5 * 60 * 1000L -> {
-                        val mins = remainingMs / 60000
-                        val secs = (remainingMs % 60000) / 1000
+                    ms < 5 * 60 * 1000L -> {
+                        val mins = ms / 60000
+                        val secs = (ms % 60000) / 1000
                         "$mins:${secs.toString().padStart(2, '0')}"
                     }
-                    else -> "${remainingMs / 60000}m"
+                    else -> "${ms / 60000}m"
                 }
                 Text(label, color = colors.accAudio, style = type.bodySm, fontWeight = FontWeight.Bold)
             } else {

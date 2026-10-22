@@ -29,7 +29,6 @@ import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.zIndex
-import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalKobappColors
 import dev.kobbler.app.theme.LocalSection
 import dev.kobbler.app.theme.accentFor
@@ -79,17 +78,19 @@ fun Modifier.tvClickable(
     .onFocusChanged { state.isFocused = it.isFocused }
     .clickable(onClick = onClick)
 
-@Composable
+/**
+ * Decoration driven by [state] rather than by a focus target below it, for elements whose
+ * focusable sits elsewhere in the chain. The node observes [state] itself, so a focus
+ * change animates the ring without recomposing the caller.
+ */
 fun Modifier.tvFocusGlow(
     state: TvFocusState,
     cornerRadiusDp: Float = 8f,
     scale: Float = TvFocusScale.Standard,
-): Modifier {
-    val progress = tvFocusProgress(state.isFocused)
-    return this
-        .tvFocusScale(progress, scale)
-        .kobFocusRing(progress, cornerRadiusDp, KobappTheme.accent)
-}
+    accent: Color = Color.Unspecified,
+): Modifier = this
+    .zIndex(FocusedZIndex)
+    .then(TvAutoGlowElement(cornerRadiusDp, snapFocusScale(scale), state, accent))
 
 fun Modifier.tvAutoGlow(
     cornerRadiusDp: Float = 8f,
@@ -166,12 +167,20 @@ private fun DrawScope.drawFocusRing(progress: Float, cornerRadiusDp: Float, acce
 private data class TvAutoGlowElement(
     val cornerRadiusDp: Float,
     val focusScale: Float,
+    val source: TvFocusState? = null,
+    val accent: Color = Color.Unspecified,
 ) : ModifierNodeElement<TvAutoGlowNode>() {
-    override fun create() = TvAutoGlowNode(cornerRadiusDp, focusScale)
+    override fun create() = TvAutoGlowNode(cornerRadiusDp, focusScale, source, accent)
 
     override fun update(node: TvAutoGlowNode) {
         node.cornerRadiusDp = cornerRadiusDp
         node.focusScale = focusScale
+        node.accentOverride = accent
+        if (node.source !== source) {
+            node.source = source
+            if (node.isAttached) node.onObservedReadsChanged()
+        }
+        if (node.isAttached) node.invalidateDraw()
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -184,6 +193,8 @@ private data class TvAutoGlowElement(
 private class TvAutoGlowNode(
     var cornerRadiusDp: Float,
     var focusScale: Float,
+    var source: TvFocusState?,
+    var accentOverride: Color,
 ) : Modifier.Node(),
     DrawModifierNode,
     FocusEventModifierNode,
@@ -196,7 +207,8 @@ private class TvAutoGlowNode(
     private var decorate = true
 
     private val accent: Color
-        get() = currentValueOf(LocalKobappColors).accentFor(currentValueOf(LocalSection))
+        get() = accentOverride.takeIf { it != Color.Unspecified }
+            ?: currentValueOf(LocalKobappColors).accentFor(currentValueOf(LocalSection))
 
     // Reading LocalTvFocusDecor from draw() would suppress the ring but not the fade, so
     // it is observed here instead: the node re-targets its own animation and the ring
@@ -206,7 +218,10 @@ private class TvAutoGlowNode(
     override fun onObservedReadsChanged() = readDecor()
 
     private fun readDecor() {
-        observeReads { decorate = currentValueOf(LocalTvFocusDecor) }
+        observeReads {
+            decorate = currentValueOf(LocalTvFocusDecor)
+            source?.let { focused = it.isFocused }
+        }
         retarget()
     }
 
@@ -220,12 +235,13 @@ private class TvAutoGlowNode(
     override fun onReset() {
         animation?.cancel()
         animation = null
-        focused = false
+        focused = source?.isFocused ?: false
         progress = Animatable(0f)
         if (isAttached) invalidateDraw()
     }
 
     override fun onFocusEvent(focusState: FocusState) {
+        if (source != null) return
         focused = focusState.isFocused
         retarget()
     }

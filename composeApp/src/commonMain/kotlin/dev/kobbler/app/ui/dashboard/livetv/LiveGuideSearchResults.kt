@@ -69,7 +69,7 @@ fun LiveGuideSearchResults(
             .sortedBy { parseLiveInstant(it.entry.startTime) ?: Instant.DISTANT_FUTURE }
     }
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         if (hits.isEmpty()) {
             if (loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -34,13 +34,30 @@ actual object AppVersion {
     actual val versionName: String = "web"
 }
 
-actual object FileCache {
-    // WASM: no filesystem. Use in-memory cache only (cleared on page refresh).
-    // Could use IndexedDB for persistence but that requires async APIs.
-    private val cache = mutableMapOf<String, ByteArray>()
+// No filesystem here, so the cache is the tab's heap: bounded, least recently used out.
+private const val FileCacheMaxBytes = 200L * 1024 * 1024
 
-    actual fun get(key: String): ByteArray? = cache[key]
-    actual fun put(key: String, data: ByteArray) { cache[key] = data }
+actual object FileCache {
+    private val cache = LinkedHashMap<String, ByteArray>()
+    private var bytes = 0L
+
+    actual fun get(key: String): ByteArray? {
+        val data = cache.remove(key) ?: return null
+        cache[key] = data
+        return data
+    }
+
+    actual fun put(key: String, data: ByteArray) {
+        cache.remove(key)?.let { bytes -= it.size }
+        cache[key] = data
+        bytes += data.size
+        val keys = cache.keys.iterator()
+        while (bytes > FileCacheMaxBytes && cache.size > 1) {
+            val oldest = keys.next()
+            bytes -= cache.getValue(oldest).size
+            keys.remove()
+        }
+    }
 
     actual fun pathFor(key: String): String? = null
     actual fun sink(key: String): CacheSink? = null

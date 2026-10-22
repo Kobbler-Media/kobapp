@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,7 +96,7 @@ fun LiveOnNowScreen(
 
         val entryKey = groups.firstOrNull()?.let { g -> g.items.firstOrNull()?.let { cardKey(g, it) } }
 
-        Column(Modifier.fillMaxSize().background(colors.bg).safeTopPadding()) {
+        Column(Modifier.fillMaxSize().safeTopPadding()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(dimens.s4),

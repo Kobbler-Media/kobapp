@@ -41,6 +41,9 @@ adb_tv shell am force-stop "$PKG"; sleep 2
 adb_tv shell am start -n "$ACT" >/dev/null 2>&1
 sleep 7
 
+# "Show picker on launch" puts the profile picker first; entry focus is its first profile.
+if ! at_home && dump_ui | grep -q 'Add profile'; then key 23; sleep 8; fi
+
 # A PIN-locked profile sits between cold start and the library. Never hardcode the PIN.
 if ! at_home; then
   [ -n "${KOB_PIN:-}" ] || { echo "!! not at library and KOB_PIN unset — cannot continue"; exit 1; }

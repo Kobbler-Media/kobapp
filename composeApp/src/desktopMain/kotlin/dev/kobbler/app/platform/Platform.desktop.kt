@@ -15,15 +15,21 @@ actual val supportsVideoPlayback: Boolean = true
 
 actual val deviceRegion: String? get() = java.util.Locale.getDefault().country.takeIf { it.isNotEmpty() }
 
-actual val deviceLabel: String
-    get() {
-        val host = runCatching { java.net.InetAddress.getLocalHost().hostName }
-            .getOrNull()
-            ?.substringBefore('.')
-            ?.takeIf { it.isNotBlank() }
-        val os = System.getProperty("os.name")?.takeIf { it.isNotBlank() } ?: "Desktop"
-        return if (host != null) "$host ($os)" else os
-    }
+private val resolvedDeviceLabel = lazy {
+    val host = runCatching { java.net.InetAddress.getLocalHost().hostName }
+        .getOrNull()
+        ?.substringBefore('.')
+        ?.takeIf { it.isNotBlank() }
+    val os = System.getProperty("os.name")?.takeIf { it.isNotBlank() } ?: "Desktop"
+    if (host != null) "$host ($os)" else os
+}
+
+// The hostname lookup can block for seconds on a host with broken name resolution, and
+// the first reader is a request built on the UI thread; resolve it off-thread at startup.
+@Suppress("unused")
+private val deviceLabelWarmup = thread(isDaemon = true, name = "device-label") { resolvedDeviceLabel.value }
+
+actual val deviceLabel: String get() = resolvedDeviceLabel.value
 
 actual val clientKind: String = "desktop"
 

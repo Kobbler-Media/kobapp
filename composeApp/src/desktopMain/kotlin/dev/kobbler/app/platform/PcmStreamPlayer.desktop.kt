@@ -1,6 +1,8 @@
 package dev.kobbler.app.platform
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.LinkedBlockingQueue
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
@@ -10,7 +12,7 @@ import javax.sound.sampled.SourceDataLine
 actual class PcmStreamPlayer actual constructor() {
     private var line: SourceDataLine? = null
     private var sampleRateHz: Int = 0
-    @Volatile private var paused: Boolean = false
+    private val paused = MutableStateFlow(false)
     @Volatile private var stopped: Boolean = false
     private val queue = LinkedBlockingQueue<ByteArray>()
     private var writer: Thread? = null
@@ -22,7 +24,7 @@ actual class PcmStreamPlayer actual constructor() {
         if (line != null && sampleRateHz == sampleRate) return
         stop()
         stopped = false
-        paused = false
+        paused.value = false
         sampleRateHz = sampleRate
         val format = AudioFormat(sampleRate.toFloat(), 16, 1, true, false) // signed, little-endian
         val info = DataLine.Info(SourceDataLine::class.java, format)
@@ -68,32 +70,40 @@ actual class PcmStreamPlayer actual constructor() {
     }
 
     actual fun pause() {
-        if (stopped || paused) return
-        paused = true
+        if (stopped || paused.value) return
+        paused.value = true
         line?.stop()
     }
 
     actual fun resume() {
-        if (stopped || !paused) return
-        paused = false
+        if (stopped || !paused.value) return
+        paused.value = false
         line?.start()
     }
 
     actual suspend fun awaitDrain() {
         // Wait for queue to empty AND for line buffer to drain.
         while (!stopped && queue.isNotEmpty()) {
+            awaitUnpaused()
             delay(20)
         }
         val l = line ?: return
         // line.drain() blocks; offload via a poll loop to keep this suspending.
         while (!stopped && l.available() < l.bufferSize) {
+            awaitUnpaused()
             delay(20)
         }
+    }
+
+    // A paused line drains nothing, so polling it only burns wakeups until resume() or stop().
+    private suspend fun awaitUnpaused() {
+        paused.first { !it }
     }
 
     actual fun stop() {
         if (stopped) return
         stopped = true
+        paused.value = false
         queue.clear()
         queue.offer(drainMarker)
         try { writer?.interrupt() } catch (_: Exception) {}

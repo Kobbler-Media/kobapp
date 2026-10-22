@@ -395,12 +395,13 @@ fun PersistentVideoSurface(
 
 @Composable
 private fun MiniProgress(player: Player, timeline: PlayerTimeline, modifier: Modifier) {
-    val playerMs by player.currentMs.collectAsState()
-    val playerDurationMs by player.durationMs.collectAsState()
-    val currentMs = timeline.toAbsoluteMs(playerMs)
-    val durationMs = timeline.absoluteDurationMs(playerDurationMs)
+    val playerMs = player.currentMs.collectAsState()
+    val playerDurationMs = player.durationMs.collectAsState()
     LinearProgressIndicator(
-        progress = { if (durationMs > 0) currentMs.toFloat() / durationMs.toFloat() else 0f },
+        progress = {
+            val durationMs = timeline.absoluteDurationMs(playerDurationMs.value)
+            if (durationMs > 0) timeline.toAbsoluteMs(playerMs.value).toFloat() / durationMs.toFloat() else 0f
+        },
         modifier = modifier,
         color = Color.White,
         trackColor = Color.White.copy(alpha = 0.2f),

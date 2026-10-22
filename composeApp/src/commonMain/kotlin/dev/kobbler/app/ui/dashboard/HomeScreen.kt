@@ -17,6 +17,8 @@ import dev.kobbler.app.ui.components.rememberCached
 import dev.kobbler.app.ui.dashboard.home.HomePhone
 import dev.kobbler.app.ui.dashboard.home.HomeWide
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +44,7 @@ fun HomeScreen(
         RefreshOnEvents(
             api = api,
             key = Unit,
-            matches = { it.kind in HomeEventKinds },
+            matches = ::refreshesHome,
             onRefresh = homeRetry,
             coalesceMs = HomeRefreshCoalesceMs,
         )
@@ -110,3 +112,12 @@ private val HomeEventKinds = setOf(
 )
 
 private const val HomeRefreshCoalesceMs = 10_000L
+
+// This device's own playback saves every few seconds and the server echoes each one back;
+// refetching the page for them redrew Home under a mini player all through a film. Only
+// finishing the title changes what Home shows, and leaving the player refreshes it anyway.
+internal fun refreshesHome(frame: LibraryEventFrame): Boolean {
+    if (frame.kind !in HomeEventKinds) return false
+    if (frame.kind != "watch_progress" || frame.idField("client_id") != PlaybackClient.id) return true
+    return (frame.data["watched"] as? JsonPrimitive)?.booleanOrNull == true
+}

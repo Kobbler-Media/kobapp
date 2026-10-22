@@ -3,6 +3,7 @@ package dev.kobbler.app.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -62,5 +63,6 @@ data class KobappShapes(
     val small: Shape = RoundedCornerShape(6.dp),
 )
 
+// Dynamic, unlike the rest of the theme: the scaffold re-provides it on every window resize.
 val LocalKobappDimens = compositionLocalOf { KobappDimens() }
-val LocalKobappShapes = compositionLocalOf { KobappShapes() }
+val LocalKobappShapes = staticCompositionLocalOf { KobappShapes() }

@@ -17,6 +17,7 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.kobfocus.FocusScopeHost
 import dev.kobbler.kobfocus.FocusScopeStore
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -62,7 +63,8 @@ class StartShellTest {
         )
     }
 
-    private fun starting(progress: String? = null) = GlobalPlayerState().apply {
+    private fun starting(progress: String? = null, debrid: Boolean = true) = GlobalPlayerState().apply {
+        isDebrid = debrid
         mediaType = "episode"
         mediaId = "ep-1"
         sessionId = "s1"
@@ -71,6 +73,68 @@ class StartShellTest {
         isFullscreen = true
         isStarting = true
         startProgress = progress
+    }
+
+    private fun loadEpisode(state: GlobalPlayerState) = runBlocking {
+        state.load(
+            player = FakePlayer(), api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"),
+            type = "episode", id = "ep-1",
+            streamUrl = "http://127.0.0.1:1/stream", newSessionId = "s1",
+            newTitle = "Slow Horses", newSubtitle = null,
+            newPosterUrl = "http://127.0.0.1:1/poster.jpg", newLogoUrl = null,
+            destination = null,
+        )
+    }
+
+    @Test
+    fun `a library file loaded after a stream sheds the stream shell`() {
+        val state = finding().also { loadEpisode(it) }
+        runBlocking {
+            state.load(
+                player = FakePlayer(), api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"),
+                type = "episode", id = "ep-2",
+                streamUrl = "http://127.0.0.1:1/stream2", newSessionId = "s2",
+                newTitle = "Slow Horses", newSubtitle = null,
+                newPosterUrl = "http://127.0.0.1:1/poster.jpg", newLogoUrl = null,
+                destination = null,
+            )
+        }
+        shell(state) {
+            onNodeWithTag(START_BACKDROP_TAG).assertDoesNotExist()
+            onNodeWithText("Starting…").assertDoesNotExist()
+        }
+    }
+
+    private fun continuingLocal() = GlobalPlayerState().apply {
+        beginPreparing(
+            id = "/movies/m1",
+            newTitle = "Arrival",
+            newSubtitle = null,
+            newPosterUrl = "http://127.0.0.1:1/poster.jpg",
+            stream = false,
+        )
+    }
+
+    @Test
+    fun `a library file opens on its title alone, not the stream shell`() = shell(starting(debrid = false)) {
+        onNodeWithTag(START_BACKDROP_TAG).assertDoesNotExist()
+        onNodeWithText("Starting…").assertDoesNotExist()
+        onNodeWithText("Slow Horses").assertExists()
+    }
+
+    @Test
+    fun `resuming a library file raises no stream shell while it resolves`() = shell(continuingLocal()) {
+        onNodeWithTag(START_BACKDROP_TAG).assertDoesNotExist()
+        onNodeWithText("Cancel").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a stream keeps its shell through the load that opens it`() {
+        val state = finding().also { loadEpisode(it) }
+        shell(state) {
+            onNodeWithTag(START_BACKDROP_TAG).assertExists()
+            onNodeWithText("Starting…").assertIsDisplayed()
+        }
     }
 
     @Test

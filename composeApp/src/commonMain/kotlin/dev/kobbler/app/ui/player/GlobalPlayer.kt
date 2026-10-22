@@ -163,6 +163,12 @@ class GlobalPlayerState {
 
     // Debrid streaming
     var isDebrid by mutableStateOf(false)
+
+    // Raised with the shell for a stream that is still being found, and carried through the
+    // load that opens it: isDebrid only lands once that load returns.
+    private var streamStart by mutableStateOf(false)
+
+    val isStreamStart: Boolean get() = isDebrid || streamStart
     var onSwitchStream: (() -> Unit)? = null
 
     // Cast — when non-null, PersistentVideoSurface renders CastMiniController
@@ -402,7 +408,10 @@ class GlobalPlayerState {
             recoveryMarks.clear()
             debridPlayback = null
             // Art raised by beginPreparing belongs to this load; anything older is another title's.
-            if (preparingFor == null) backdropUrl = null
+            if (preparingFor == null) {
+                backdropUrl = null
+                streamStart = false
+            }
             // Answered by switching titles, or overtaken by the viewer picking another.
             handoff = null
         }
@@ -610,6 +619,7 @@ class GlobalPlayerState {
         selectedServerSubtitleTrackId = null
         selectedServerSubtitleStreamIndex = null
         isDebrid = false
+        streamStart = false
         debridPlayback = null
         onSwitchStream = null
         castSession = null
@@ -771,8 +781,13 @@ class GlobalPlayerState {
         note: String? = null,
         newBackdropUrl: String? = null,
         onCancel: (() -> Unit)? = null,
+        stream: Boolean = true,
     ) {
-        if (isActive) return
+        if (isActive) {
+            if (stream && preparingFor != null) streamStart = true
+            return
+        }
+        streamStart = stream
         preparingFor = id
         title = newTitle
         subtitle = newSubtitle
@@ -789,6 +804,7 @@ class GlobalPlayerState {
     fun cancelPreparing() {
         if (preparingFor == null) return
         preparingFor = null
+        streamStart = false
         isPreparing = false
         isStarting = false
         isFullscreen = false

@@ -35,7 +35,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -60,6 +61,10 @@ import coil3.compose.AsyncImagePainter
 import dev.kobbler.kobplayer.AspectRatio
 import dev.kobbler.kobplayer.TrackInfo
 import kotlinx.coroutines.delay
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Color scheme for the video player overlay. Parameterized so apps can brand it.
@@ -261,6 +266,13 @@ fun VideoPlayerOverlay(
         interactionTick++
     }
 
+    // A mouse reports a move per frame; bumping the tick on each one recomposed the overlay
+    // and restarted its timers at display rate for as long as the pointer moved.
+    val pointerThrottle = remember { Throttle(500.milliseconds) }
+    fun onPointerActivity() {
+        if (!controlsVisible || pointerThrottle.pass()) onInteraction()
+    }
+
     // A stream that never finishes opening keeps every control away, and with them the
     // only way out on a touch screen: a tap brings back the bar with the back arrow alone.
     var loadingExitVisible by remember { mutableStateOf(false) }
@@ -437,7 +449,7 @@ fun VideoPlayerOverlay(
                         if (event.type == PointerEventType.Move &&
                             event.changes.any { it.type == PointerType.Mouse }
                         ) {
-                            onInteraction()
+                            onPointerActivity()
                         }
                     }
                 }
@@ -730,7 +742,7 @@ fun VideoPlayerOverlay(
                             },
                             onHover = { fraction ->
                                 hoverFraction = fraction
-                                if (fraction != null) onInteraction()
+                                if (fraction != null) onPointerActivity()
                             },
                             chapterMarkers = chapterMarkers,
                             regions = regions,
@@ -894,49 +906,13 @@ fun VideoPlayerOverlay(
         // fact, so it seeds the state; the flag then latches on the live signal.
         var hasStartedPlaying by remember { mutableStateOf(playbackHasBegun(isPlaying, currentMs())) }
         if (isPlaying) hasStartedPlaying = true
-        val brandingAlpha by animateFloatAsState(
-            targetValue = if (hasStartedPlaying) 0f else 1f,
-            animationSpec = tween(durationMillis = 800),
+        BrandingOverlay(
+            visible = !hasStartedPlaying,
+            breathing = loading && !hasStartedPlaying,
+            logoUrl = logoUrl,
+            title = title,
+            colors = colors,
         )
-        val breath = brandingBreath(loading && !hasStartedPlaying)
-        if (brandingAlpha > 0f) {
-            Box(
-                modifier = Modifier.fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f * brandingAlpha))
-                    .alpha(brandingAlpha * breath),
-                contentAlignment = Alignment.Center,
-            ) {
-                // The logo is fetched like any other image, so "has one" is not the same
-                // as "has one on screen" — and while it is in flight this is the only
-                // thing being shown. The title holds the space until the artwork lands,
-                // and stands in for good if it never does.
-                // Crossfaded in place: swapping them on the frame the image decodes read
-                // as a glitch rather than the artwork arriving.
-                var logoShown by remember(logoUrl) { mutableStateOf(false) }
-                val logoAlpha by animateFloatAsState(
-                    targetValue = if (logoShown) 1f else 0f,
-                    animationSpec = tween(durationMillis = 500),
-                )
-                if (logoUrl != null) {
-                    AsyncImage(
-                        model = logoUrl, contentDescription = title,
-                        contentScale = ContentScale.Fit,
-                        onState = { logoShown = it is AsyncImagePainter.State.Success },
-                        modifier = Modifier.widthIn(max = 320.dp).heightIn(max = 120.dp).alpha(logoAlpha),
-                    )
-                }
-                if (logoAlpha < 1f) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
-                        ),
-                        color = colors.primary, textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 48.dp).alpha(1f - logoAlpha),
-                    )
-                }
-            }
-        }
 
         AnimatedVisibility(
             visible = loading && loadingExitVisible,
@@ -966,10 +942,10 @@ internal fun playbackHasBegun(isPlaying: Boolean, positionMs: Long): Boolean =
  * never idle past.
  */
 @Composable
-private fun brandingBreath(active: Boolean): Float {
-    if (!active) return 1f
+private fun brandingBreath(active: Boolean): State<Float> {
+    if (!active) return remember { mutableFloatStateOf(1f) }
     val transition = rememberInfiniteTransition(label = "branding")
-    val breath by transition.animateFloat(
+    return transition.animateFloat(
         initialValue = 1f,
         targetValue = 0.45f,
         animationSpec = infiniteRepeatable(
@@ -978,7 +954,63 @@ private fun brandingBreath(active: Boolean): Float {
         ),
         label = "brandingBreath",
     )
-    return breath
+}
+
+// Every animated value here is read in the draw phase: the breath runs at display rate for
+// the whole time a stream opens, and a read in composition re-ran the overlay each frame.
+@Composable
+private fun BrandingOverlay(
+    visible: Boolean,
+    breathing: Boolean,
+    logoUrl: String?,
+    title: String,
+    colors: PlayerColors,
+) {
+    val brandingAlpha = animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 800),
+    )
+    val breath = brandingBreath(breathing)
+    val shown by remember { derivedStateOf { brandingAlpha.value > 0f } }
+    if (!shown) return
+    Box(
+        modifier = Modifier.fillMaxSize()
+            .drawBehind { drawRect(Color.Black.copy(alpha = 0.6f * brandingAlpha.value)) }
+            .graphicsLayer { alpha = brandingAlpha.value * breath.value },
+        contentAlignment = Alignment.Center,
+    ) {
+        // The logo is fetched like any other image, so "has one" is not the same
+        // as "has one on screen" — and while it is in flight this is the only
+        // thing being shown. The title holds the space until the artwork lands,
+        // and stands in for good if it never does.
+        // Crossfaded in place: swapping them on the frame the image decodes read
+        // as a glitch rather than the artwork arriving.
+        var logoShown by remember(logoUrl) { mutableStateOf(false) }
+        val logoAlpha = animateFloatAsState(
+            targetValue = if (logoShown) 1f else 0f,
+            animationSpec = tween(durationMillis = 500),
+        )
+        if (logoUrl != null) {
+            AsyncImage(
+                model = logoUrl, contentDescription = title,
+                contentScale = ContentScale.Fit,
+                onState = { logoShown = it is AsyncImagePainter.State.Success },
+                modifier = Modifier.widthIn(max = 320.dp).heightIn(max = 120.dp)
+                    .graphicsLayer { alpha = logoAlpha.value },
+            )
+        }
+        val titleShown by remember { derivedStateOf { logoAlpha.value < 1f } }
+        if (titleShown) {
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+                ),
+                color = colors.primary, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 48.dp).graphicsLayer { alpha = 1f - logoAlpha.value },
+            )
+        }
+    }
 }
 
 // -- Helper composables --
@@ -1001,7 +1033,7 @@ private fun PositionSeekBar(
     onActivate: (() -> Unit)?,
 ) {
     MediaSeekBar(
-        progress = progress(),
+        progress = progress,
         onSeek = onSeek,
         onSeeking = onSeeking,
         onHover = onHover,
@@ -1486,5 +1518,16 @@ private fun SideIndicator(
             )
         }
         Text(label, style = MaterialTheme.typography.labelSmall, color = colors.primary)
+    }
+}
+
+private class Throttle(private val window: Duration) {
+    private var last: TimeMark? = null
+
+    fun pass(): Boolean {
+        val previous = last
+        if (previous != null && previous.elapsedNow() < window) return false
+        last = TimeSource.Monotonic.markNow()
+        return true
     }
 }

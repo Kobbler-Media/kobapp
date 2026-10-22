@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TestTimeSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateOf
@@ -195,12 +197,14 @@ class WatchHistorySyncTest {
     @Test
     fun regainingFocusRefetchesWatchState() = runComposeUiTest {
         val focused = mutableStateOf(true)
-        setContent { RefreshWatchStateOnFocus(focused.value) }
+        val clock = TestTimeSource()
+        setContent { RefreshWatchStateOnFocus(focused.value, timeSource = clock) }
         waitForIdle()
         val before = listOf("home", "movie-m1", "show-s1").associateWith { DataCache.versionOf(it) }
         runOnIdle { focused.value = false }
         waitForIdle()
         assertEquals(before, before.keys.associateWith { DataCache.versionOf(it) }, "losing focus refetched")
+        clock += 2.minutes
         runOnIdle { focused.value = true }
         waitForIdle()
         before.forEach { (key, v) -> assertTrue(DataCache.versionOf(key) > v, "$key was not refetched") }

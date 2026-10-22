@@ -155,15 +155,6 @@ internal class AndroidPlayer(
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
-    override val progress: StateFlow<Float> = MutableStateFlow(0f).also { sf ->
-        scope.launch {
-            _currentMs.collect { pos ->
-                val dur = _durationMs.value
-                sf.value = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
-            }
-        }
-    }
-
     private val _error = MutableStateFlow<Throwable?>(null)
     override val error: StateFlow<Throwable?> = _error.asStateFlow()
 
@@ -369,17 +360,13 @@ internal class AndroidPlayer(
     }
 
     // Matroska without a default duration declares no rate, so it is counted instead: the
-    // pictures shown over a stretch of uninterrupted 1x playback. Retried until one is clean.
+    // pictures shown over a stretch of uninterrupted 1x playback.
     private fun armFrameRateProbe() {
         frameRateProbe?.cancel()
+        if (config.audioOnly) return
         frameRateProbe = scope.launch {
-            while (isActive && _contentFrameRate.value == 0f) {
-                delay(FrameRateProbeSettleMs)
-                val start = cleanPlaybackSample() ?: continue
-                delay(FrameRateProbeWindowMs)
-                val end = cleanPlaybackSample() ?: continue
-                _contentFrameRate.value = measuredFrameRate(end.first - start.first, end.second - start.second)
-            }
+            val rate = probeFrameRate(_state, FrameRateProbeSettleMs, FrameRateProbeWindowMs, ::cleanPlaybackSample)
+            if (_contentFrameRate.value == 0f) _contentFrameRate.value = rate
         }
     }
 
@@ -558,6 +545,7 @@ internal class AndroidPlayer(
             // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
             // verifies none over a network: every seek decoded the title from its first frame.
             addOption(":demux=mkv_trusted,any")
+            if (config.audioOnly) addOption(":no-video")
             headers["referer"]?.let { addOption(":http-referrer=$it") }
             if (!config.hardwareAcceleration) {
                 addOption(":avcodec-hw=none")

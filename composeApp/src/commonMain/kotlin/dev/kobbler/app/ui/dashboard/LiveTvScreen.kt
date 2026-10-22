@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -94,6 +93,8 @@ private const val FavouriteFacet = "favourite"
 private enum class LiveTvTab(val label: String) {
     Guide("Guide"), Channels("Channels"), Recordings("Recordings"),
 }
+
+private val LiveTvTabLabels = LiveTvTab.entries.map { it.label }
 
 internal data class LiveTvHeader(
     val tuners: List<LiveTuner>,
@@ -282,10 +283,15 @@ fun LiveTvScreen(
             searchExpanded = false
             wantEntryFocus = true
         }
-        val searchOpen = searchExpanded || when (tabIdx) {
-            LiveTvTab.Guide.ordinal -> guideQuery.isNotBlank()
-            LiveTvTab.Channels.ordinal -> searchQuery.isNotBlank()
-            else -> false
+        // Derived so typing recomposes the field, not the whole page around it.
+        val searchOpen by remember {
+            derivedStateOf {
+                searchExpanded || when (tabIdx) {
+                    LiveTvTab.Guide.ordinal -> guideQuery.isNotBlank()
+                    LiveTvTab.Channels.ordinal -> searchQuery.isNotBlank()
+                    else -> false
+                }
+            }
         }
         InterceptBack(enabled = searchOpen, onBack = clearSearch)
 
@@ -350,7 +356,7 @@ fun LiveTvScreen(
             )
         }
 
-        Column(Modifier.fillMaxSize().background(colors.bg).imePaddingUnlessTv()) {
+        Column(Modifier.fillMaxSize().imePaddingUnlessTv()) {
             // Above the content: a focus ring is drawn outside the control it belongs to,
             // and the preview pane is the next sibling — it painted over the top half of
             // the ring on every chip in this row.
@@ -395,7 +401,7 @@ fun LiveTvScreen(
                                 TunerMeter(tunerInUse, tunerSlots, accent)
                             }
                             SegmentedFilter(
-                                options = LiveTvTab.entries.map { it.label },
+                                options = LiveTvTabLabels,
                                 selectedIndex = tabIdx,
                                 accent = accent,
                                 onSelected = { tabIdx = it },
@@ -408,7 +414,7 @@ fun LiveTvScreen(
                         LiveTvTab.Guide -> {
                             Spacer(Modifier.height(dimens.s3))
                             LiveSearchField(
-                                query = guideQuery,
+                                query = { guideQuery },
                                 placeholder = "Search the guide…",
                                 accent = accent,
                                 autoFocus = collapsibleSearch,
@@ -419,7 +425,7 @@ fun LiveTvScreen(
                         LiveTvTab.Channels -> {
                             Spacer(Modifier.height(dimens.s3))
                             LiveSearchField(
-                                query = searchQuery,
+                                query = { searchQuery },
                                 placeholder = "Search channels…",
                                 accent = accent,
                                 autoFocus = collapsibleSearch,
@@ -531,7 +537,7 @@ private fun filterGuide(guide: List<LiveGuideChannel>, filter: String?): List<Li
 
 @Composable
 private fun LiveSearchField(
-    query: String,
+    query: () -> String,
     placeholder: String,
     accent: Color,
     onQueryChange: (String) -> Unit,
@@ -544,12 +550,13 @@ private fun LiveSearchField(
     // The chip that revealed this field is gone from the traversal order by the time the
     // field lands, so nothing else would hand it focus.
     LaunchedEffect(autoFocus) { if (autoFocus) runCatching { fieldFocus.requestFocus() } }
+    val text = query()
     OutlinedTextField(
-        value = query,
+        value = text,
         onValueChange = onQueryChange,
         placeholder = { Text(placeholder, color = colors.textLo, style = KobappTheme.type.body) },
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = colors.textLo) },
-        trailingIcon = if (query.isEmpty()) {
+        trailingIcon = if (text.isEmpty()) {
             null
         } else {
             {

@@ -50,8 +50,7 @@ fun ChapterListPanel(
     transcriptSegments: List<TranscriptSegmentDto>,
     bookmarks: List<Bookmark>,
     currentChapter: UnifiedChapterDto?,
-    globalPositionMs: Long,
-    activeSegmentIndex: Int,
+    activeSegmentIndex: () -> Int,
     activeTab: PanelTab,
     onTabChange: (PanelTab) -> Unit,
     onChapterClick: (UnifiedChapterDto) -> Unit,
@@ -126,12 +125,11 @@ fun ChapterListPanel(
             PanelTab.Chapters -> ChaptersList(
                 chapters = chapters,
                 currentChapter = currentChapter,
-                globalPositionMs = globalPositionMs,
                 onChapterClick = onChapterClick,
             )
             PanelTab.Transcript -> TranscriptList(
                 segments = transcriptSegments,
-                activeIndex = activeSegmentIndex,
+                activeIndexProvider = activeSegmentIndex,
                 onSegmentClick = onSegmentClick,
             )
             PanelTab.Bookmarks -> BookmarksList(
@@ -147,7 +145,6 @@ fun ChapterListPanel(
 private fun ChaptersList(
     chapters: List<UnifiedChapterDto>,
     currentChapter: UnifiedChapterDto?,
-    globalPositionMs: Long,
     onChapterClick: (UnifiedChapterDto) -> Unit,
 ) {
     val colors = KobappTheme.colors
@@ -170,7 +167,7 @@ private fun ChaptersList(
     ) {
         itemsIndexed(chapters, key = { _, chapter -> chapter.id }) { index, chapter ->
             val active = chapter == currentChapter
-            val completed = (chapter.globalEndSeconds * 1000).toLong() < globalPositionMs
+            val completed = activeIdx != null && index < activeIdx
             val dur = chapter.globalEndSeconds - chapter.globalStartSeconds
             Row(
                 modifier = Modifier
@@ -227,9 +224,10 @@ private fun ChaptersList(
 @Composable
 private fun TranscriptList(
     segments: List<TranscriptSegmentDto>,
-    activeIndex: Int,
+    activeIndexProvider: () -> Int,
     onSegmentClick: (TranscriptSegmentDto) -> Unit,
 ) {
+    val activeIndex = activeIndexProvider()
     val colors = KobappTheme.colors
     val type = KobappTheme.type
     val accent = colors.accAudio

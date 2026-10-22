@@ -2099,12 +2099,6 @@ class KobblerApi(
         minted
     }
 
-    /**
-     * Bulk transfers (books, comics) only. The shared client installs HttpCache, which calls
-     * SavedCall.save() to make a response re-readable — that materialises the entire body in
-     * memory, so a 100MB book is one array on the heap no matter how the caller streams it.
-     * Nothing here is worth caching in memory; it goes straight to the on-disk FileCache.
-     */
     internal val fileClient: HttpClient by lazy {
         HttpClient {
             install(HttpTimeout) {
@@ -2114,12 +2108,8 @@ class KobblerApi(
             }
         }
     }
-    /**
-     * The event stream only. Same reason as [fileClient] — HttpCache makes a response
-     * re-readable by draining it first, which for a stream that never ends means the
-     * body is never handed over at all. Timeouts are infinite by construction: an idle
-     * SSE connection is the normal state, not a hung one.
-     */
+    // Timeouts are infinite by construction: an idle SSE connection is the normal state,
+    // not a hung one.
     internal val eventClient: HttpClient by lazy {
         HttpClient {
             install(HttpTimeout) {
@@ -4156,14 +4146,23 @@ class KobblerApi(
         json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(SkipSegment.serializer()), element)
 
     /**
-     * The server's live event stream. Cold — collecting connects, and the connection
-     * closes with the collector's scope. See [libraryEventStream].
+     * The server's live event stream, one connection shared by every collector; it closes
+     * a few seconds after the last one leaves, or as soon as the app is backgrounded. See
+     * [SharedEventStream].
      */
-    fun libraryEvents(): kotlinx.coroutines.flow.Flow<LibraryEventFrame> =
-        libraryEventStream(eventClient, apiUrl, token, json)
+    fun libraryEvents(): kotlinx.coroutines.flow.Flow<LibraryEventFrame> = sharedLibraryEvents.events
+
+    private val sharedLibraryEvents by lazy {
+        SharedEventStream(
+            upstream = libraryEventStream(eventClient, apiUrl, token, json),
+            foreground = AppForeground.state,
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Default),
+        )
+    }
 
     /**
-     * Events for one debrid playback session. Cold, like [libraryEvents].
+     * Events for one debrid playback session. Cold: collecting connects, and the connection
+     * closes with the collector's scope.
      *
      * Separate from the library stream because a debrid stream has no library file for
      * events to be addressed to — the session is the only handle there is.

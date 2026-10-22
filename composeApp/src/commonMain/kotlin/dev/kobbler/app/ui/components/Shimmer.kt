@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
@@ -16,11 +15,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,7 +62,6 @@ fun ShimmerBox(
 ) {
     val offset = LocalShimmerOffset.current ?: rememberShimmerOffset()
     val colors = KobappTheme.colors
-    val shape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
     val stops = remember(colors.elev2, colors.elev3) {
         listOf(colors.elev2, colors.elev3, colors.elev2)
     }
@@ -73,14 +69,12 @@ fun ShimmerBox(
         // Sweeping the canvas rather than the gradient keeps one Brush instance alive, so
         // its shader survives; a per-frame Brush would be rebuilt on every draw.
         modifier.drawWithCache {
-            val clip = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+            val radius = cornerRadius.toPx().let { CornerRadius(it, it) }
             val brush = Brush.linearGradient(stops, Offset(-BandPx, -BandPx), Offset.Zero)
             onDrawBehind {
                 val sweep = offset.value
-                clipPath(clip) {
-                    translate(sweep, sweep) {
-                        drawRect(brush, topLeft = Offset(-sweep, -sweep), size = size)
-                    }
+                translate(sweep, sweep) {
+                    drawRoundRect(brush, topLeft = Offset(-sweep, -sweep), size = size, cornerRadius = radius)
                 }
             }
         },

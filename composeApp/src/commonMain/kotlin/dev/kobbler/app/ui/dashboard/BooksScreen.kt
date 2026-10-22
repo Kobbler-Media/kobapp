@@ -182,9 +182,11 @@ private fun AllBooksGrid(
     // Read next from cached dashboard data
     val (dashState, _) = rememberCached("dashboard") { api.getDashboard() }
     val dash = (dashState as? Async.Ready)?.value
-    val readNext = dash?.readNextItems?.filter {
-        it.mediaType == if (audiobooksOnly) MediaType.Audiobook else MediaType.Book
-    } ?: emptyList()
+    val readNext = remember(dash, audiobooksOnly) {
+        dash?.readNextItems?.filter {
+            it.mediaType == if (audiobooksOnly) MediaType.Audiobook else MediaType.Book
+        } ?: emptyList()
+    }
 
     // Recently added books
     val recentBooks = (if (audiobooksOnly) dash?.audiobooks else dash?.books) ?: emptyList()
@@ -405,11 +407,7 @@ private fun AllBooksGrid(
                 )
             }
 
-            if (isLoadingMore) {
-                Box(Modifier.fillMaxWidth().padding(16.dp).align(Alignment.BottomCenter), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = accentColor, modifier = Modifier.size(24.dp))
-                }
-            }
+            LoadingMoreIndicator({ isLoadingMore }, accentColor)
 
             val popoverBook = progressBook
             if (popoverBook != null) {

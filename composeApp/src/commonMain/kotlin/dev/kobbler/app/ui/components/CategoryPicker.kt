@@ -22,11 +22,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
@@ -184,18 +188,31 @@ private fun CategoryTile(
     val shape = RoundedCornerShape(12.dp)
     val focus = rememberTvFocusState()
     val compact = LocalFormFactor.current == FormFactor.Phone
+    val placeholder = remember(accent, colors.elev2) {
+        Brush.linearGradient(listOf(accent.copy(alpha = 0.35f), colors.elev2))
+    }
+    var artShown by remember(art) { mutableStateOf(false) }
     Box(
         modifier = modifier
             .aspectRatio(if (compact) 16f / 10f else 16f / 7f)
             .tvFocusGlow(focus, cornerRadiusDp = 12f)
             .clip(shape)
-            .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.35f), colors.elev2)))
+            .drawBehind { if (!artShown) drawRect(placeholder) }
             .then(if (selected) Modifier.border(2.dp, accent, shape) else Modifier)
             .tvClickable(focus, onClick),
         contentAlignment = Alignment.Center,
     ) {
-        if (art != null) FadeInImage(model = art, contentDescription = null, modifier = Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (focus.isFocused) 0.35f else 0.6f)))
+        if (art != null) {
+            FadeInImage(
+                model = art,
+                contentDescription = null,
+                onShown = { artShown = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Box(Modifier.fillMaxSize().drawBehind {
+            drawRect(Color.Black.copy(alpha = if (focus.isFocused) 0.35f else 0.6f))
+        })
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 16.dp)) {
             Text(
                 name,

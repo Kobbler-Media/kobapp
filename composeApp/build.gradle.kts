@@ -96,6 +96,7 @@ kotlin {
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(libs.coil.compose)
+            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coil.network.ktor)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
@@ -163,13 +164,15 @@ tasks.withType<JavaExec>().matching { it.name.startsWith("hotRun") }.configureEa
     systemProperty("kobplayer.libvlc.dir", appResources.get().dir("linux-x64/libvlc/lib").asFile.path)
 }
 
-// Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. The first launch writes a
-// class-data archive of everything it loaded and later launches map it instead of parsing
-// and verifying those classes again; the JVM regenerates it itself if the runtime changes.
+// Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. install-desktop.sh trains
+// this AOT cache (preloaded, linked classes plus method profiles); the jlinked runtime has no
+// base CDS archive, so without the cache the app starts with no class-data sharing at all.
+// A missing or stale cache only costs that speed-up. install-desktop.sh rewrites this exact
+// line for its training runs.
 // afterEvaluate because the Compose plugin `set`s launcherJvmArgs from its own afterEvaluate.
 afterEvaluate {
     tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>().configureEach {
-        launcherJvmArgs.addAll("-XX:+AutoCreateSharedArchive", "-XX:SharedArchiveFile=\$APPDIR/kobapp.jsa")
+        launcherJvmArgs.add("-XX:AOTCache=\$APPDIR/kobapp.aot")
     }
 }
 

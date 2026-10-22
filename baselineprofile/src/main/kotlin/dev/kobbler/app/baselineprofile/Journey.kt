@@ -26,18 +26,18 @@ private const val MAX_SIDEBAR_ROWS = 14
 // Under the debounce, so the return leg re-commits nothing on its way past.
 private const val RAIL_RETURN_MS = 100L
 
-private const val HOME_TAB = "Home"
+internal const val HOME_TAB = "Home"
 private const val TV_SHOWS_TAB = "TV Shows"
 private const val ADD_PROFILE = "Add profile"
 private const val PIN_PROMPT = "Enter your PIN"
 // Detail-only: the grid and carousels never render an overflow affordance.
-private const val DETAIL_MARKER = "More actions"
-private const val DETAIL_TIMEOUT_MS = 5_000L
+internal const val DETAIL_MARKER = "More actions"
+internal const val DETAIL_TIMEOUT_MS = 5_000L
 // Player-only: no browse screen draws a subtitle selector.
-private const val TRANSPORT_MARKER = "Subtitles"
-private const val PLAYBACK_TIMEOUT_MS = 20_000L
+internal const val TRANSPORT_MARKER = "Subtitles"
+internal const val PLAYBACK_TIMEOUT_MS = 20_000L
 // A session mint, a VLC open and the first frames — the stretch the profile is for.
-private const val PLAYBACK_SETTLE_MS = 6_000L
+internal const val PLAYBACK_SETTLE_MS = 6_000L
 
 /** Injected by the baseline profile plugin; the synthetic variants do not reuse the app's own id. */
 internal val targetPackage: String
@@ -46,10 +46,10 @@ internal val targetPackage: String
 
 // The collapsed rail renders tabs as icons, so tab labels reach the tree as content-desc
 // while screen copy reaches it as text. Match either.
-private fun UiDevice.hasLabel(label: String) =
+internal fun UiDevice.hasLabel(label: String) =
     hasObject(By.text(label)) || hasObject(By.desc(label))
 
-private fun UiDevice.awaitLabel(label: String, timeoutMs: Long = UI_TIMEOUT_MS): Boolean {
+internal fun UiDevice.awaitLabel(label: String, timeoutMs: Long = UI_TIMEOUT_MS): Boolean {
     val deadline = SystemClock.uptimeMillis() + timeoutMs
     while (SystemClock.uptimeMillis() < deadline) {
         if (hasLabel(label)) return true
@@ -58,7 +58,7 @@ private fun UiDevice.awaitLabel(label: String, timeoutMs: Long = UI_TIMEOUT_MS):
     return hasLabel(label)
 }
 
-private fun UiDevice.awaitGone(label: String, timeoutMs: Long): Boolean {
+internal fun UiDevice.awaitGone(label: String, timeoutMs: Long): Boolean {
     val deadline = SystemClock.uptimeMillis() + timeoutMs
     while (SystemClock.uptimeMillis() < deadline) {
         if (!hasLabel(label)) return true
@@ -122,7 +122,7 @@ internal fun MacrobenchmarkScope.reachedLibrary(): Boolean {
 }
 
 /** A silent degrade to cold-start-only is indistinguishable from a crash in the output. */
-private fun skipped(why: String) {
+internal fun skipped(why: String) {
     Log.w(LOG_TAG, "Browse journey skipped — $why Profile covers cold start only.")
 }
 

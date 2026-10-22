@@ -1,7 +1,7 @@
 package dev.kobbler.app.theme
 
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -199,4 +199,4 @@ val KobappTextStylesTv = KobappTextStyles(
     ),
 )
 
-val LocalKobappType = compositionLocalOf { KobappTextStylesDefault }
+val LocalKobappType = staticCompositionLocalOf { KobappTextStylesDefault }

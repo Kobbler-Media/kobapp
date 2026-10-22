@@ -4,6 +4,11 @@
 -dontoptimize
 -dontwarn **
 
+# The shrinker drops an interface a class lists redundantly (JobSupport: Job, ChildJob), but
+# Kotlin's `super<Job>.cancel()` compiles to invokespecial on it, which the verifier rejects
+# unless it is a direct superinterface.
+-keep interface **
+
 # JNA/vlcj bind native structs and callbacks by reflection.
 -keep class com.sun.jna.** { *; }
 -keep class * implements com.sun.jna.** { *; }

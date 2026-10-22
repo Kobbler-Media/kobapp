@@ -49,7 +49,6 @@ class FakePlayer : Player {
     override val isPlaying = MutableStateFlow(false)
     override val currentMs = MutableStateFlow(0L)
     override val durationMs = MutableStateFlow(0L)
-    override val progress = MutableStateFlow(0f)
     override val error = MutableStateFlow<Throwable?>(null)
     override val isBuffering = MutableStateFlow(false)
     override val bufferPercent = MutableStateFlow(0f)

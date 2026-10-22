@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -62,22 +63,18 @@ fun PosterCard(
     val acc = accentColor ?: KobappTheme.accent
     val shape = KobappTheme.shapes.poster
     var showMenu by remember { mutableStateOf(false) }
-    var systemFocused by remember { mutableStateOf(false) }
-    val isFocused = systemFocused
-
-    val focusProgress = tvFocusProgress(isFocused)
+    val focus = rememberTvFocusState()
     val placeholder = remember(colors.elev2, acc) {
         Brush.linearGradient(listOf(lerp(colors.elev2, acc, 0.30f), colors.elev2))
     }
 
     Column(
-        // Scale below the focusable, never above it: LayoutCoordinates carry
-        // graphicsLayer transforms, so a focusable nested inside the scale reports
-        // bounds 4% larger than its slot and the lazy grid scrolls to reveal the
-        // overhang -- a few px of vertical drift on every left/right press.
+        // The focus scale is drawn, never a graphicsLayer: LayoutCoordinates carry layer
+        // transforms, so a scaled focusable reports bounds 4% larger than its slot and the
+        // lazy grid scrolls to reveal the overhang on every left/right press.
         modifier = modifier
             .width(width ?: dimens.posterWidth)
-            .onFocusChanged { systemFocused = it.isFocused }
+            .onFocusChanged { focus.isFocused = it.isFocused }
             .pointerHoverIcon(PointerIcon.Hand)
             .combinedClickable(
                 onClick = onClick,
@@ -90,8 +87,7 @@ fun PosterCard(
                     onClick(); true
                 } else false
             }
-            .tvFocusScale(focusProgress, TvFocusScale.Standard)
-            .kobFocusRing(focusProgress, 8.dp.value, acc),
+            .tvFocusGlow(focus, 8.dp.value, TvFocusScale.Standard, acc),
     ) {
         // Every layer here is paid on every card of every rail and grid, each frame the
         // row moves: the placeholder goes once the art covers it, and the scrim is drawn
@@ -171,25 +167,11 @@ fun PosterCard(
             }
         }
         Spacer(Modifier.height(dimens.s2))
-        Text(
-            text = title,
-            style = KobappTheme.type.bodySm,
-            color = colors.textHi,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp).tvMarquee(isFocused),
-        )
+        MarqueeLine(title, KobappTheme.type.bodySm, colors.textHi, focus, Modifier.padding(horizontal = 2.dp))
         // Reserved even when absent: a card without a subtitle is shorter, which makes grid
         // rows ragged and shifts the row's centre as focus moves along it.
         Spacer(Modifier.height(2.dp))
-        Text(
-            subtitle.orEmpty(),
-            style = KobappTheme.type.caption,
-            color = colors.textLo,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp).tvMarquee(isFocused),
-        )
+        MarqueeLine(subtitle.orEmpty(), KobappTheme.type.caption, colors.textLo, focus, Modifier.padding(horizontal = 2.dp))
         Spacer(Modifier.height(dimens.s1))
     }
 }
@@ -210,10 +192,7 @@ fun WideCard(
     val colors = KobappTheme.colors
     val acc = accentColor ?: KobappTheme.accent
     val shape = KobappTheme.shapes.card
-    var systemFocused by remember { mutableStateOf(false) }
-    val isFocused = systemFocused
-
-    val focusProgress = tvFocusProgress(isFocused)
+    val focus = rememberTvFocusState()
     val displayUrl = backdropUrl ?: imageUrl
     val placeholder = remember(colors.elev2, acc) {
         Brush.linearGradient(listOf(lerp(colors.elev2, acc, 0.35f), colors.elev2))
@@ -222,7 +201,7 @@ fun WideCard(
     Column(
         modifier = modifier
             .width(dimens.wideCardWidth)
-            .onFocusChanged { systemFocused = it.isFocused }
+            .onFocusChanged { focus.isFocused = it.isFocused }
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onClick)
             .onKeyEvent { event ->
@@ -232,8 +211,7 @@ fun WideCard(
                     onClick(); true
                 } else false
             }
-            .tvFocusScale(focusProgress, TvFocusScale.Standard)
-            .kobFocusRing(focusProgress, 10.dp.value, acc),
+            .tvFocusGlow(focus, 10.dp.value, TvFocusScale.Standard, acc),
     ) {
         Box(
             modifier = Modifier
@@ -262,9 +240,9 @@ fun WideCard(
                     .background(BottomScrim),
             )
             Column(Modifier.align(Alignment.BottomStart).padding(dimens.s3)) {
-                Text(title, style = KobappTheme.type.bodySm, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.tvMarquee(isFocused))
+                MarqueeLine(title, KobappTheme.type.bodySm, Color.White, focus)
                 if (subtitle != null) {
-                    Text(subtitle, style = KobappTheme.type.caption, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.tvMarquee(isFocused))
+                    MarqueeLine(subtitle, KobappTheme.type.caption, Color.White.copy(alpha = 0.7f), focus)
                 }
             }
             LinearProgressIndicator(
@@ -290,9 +268,7 @@ fun BookCover(
 ) {
     val colors = KobappTheme.colors
     val acc = accentColor ?: colors.accBooks
-    var systemFocused by remember { mutableStateOf(false) }
-    val isFocused = systemFocused
-    val focusProgress = tvFocusProgress(isFocused)
+    val focus = rememberTvFocusState()
     val cover = remember(colors.elev3, colors.elev1, acc) {
         Brush.linearGradient(
             listOf(lerp(colors.elev3, acc, 0.30f), lerp(colors.elev1, acc, 0.18f)),
@@ -300,11 +276,10 @@ fun BookCover(
     }
     Column(
         modifier = modifier
-            .onFocusChanged { systemFocused = it.isFocused }
+            .onFocusChanged { focus.isFocused = it.isFocused }
             .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onClick)
-            .tvFocusScale(focusProgress, TvFocusScale.Standard)
-            .kobFocusRing(focusProgress, 6.dp.value, acc),
+            .tvFocusGlow(focus, 6.dp.value, TvFocusScale.Standard, acc),
     ) {
         Box(
             Modifier
@@ -346,14 +321,28 @@ fun BookCover(
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             if (author != null) {
-                Text(
-                    author.uppercase(), color = colors.textLo,
-                    style = KobappTheme.type.label,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.tvMarquee(isFocused),
-                )
+                MarqueeLine(author.uppercase(), KobappTheme.type.label, colors.textLo, focus)
             }
         }
     }
 }
 
+// Its own restart scope, so focus moving on or off a card recomposes the line that
+// scrolls rather than the whole card.
+@Composable
+private fun MarqueeLine(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    focus: TvFocusState,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text,
+        style = style,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.tvMarquee(focus.isFocused),
+    )
+}

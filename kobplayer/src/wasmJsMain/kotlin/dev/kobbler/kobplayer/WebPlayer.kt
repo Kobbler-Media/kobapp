@@ -56,15 +56,6 @@ internal class WebPlayer(
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
-    override val progress: StateFlow<Float> = MutableStateFlow(0f).also { sf ->
-        scope.launch {
-            _currentMs.collect { pos ->
-                val dur = _durationMs.value
-                sf.value = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
-            }
-        }
-    }
-
     private val _error = MutableStateFlow<Throwable?>(null)
     override val error: StateFlow<Throwable?> = _error.asStateFlow()
 

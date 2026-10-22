@@ -43,7 +43,8 @@ private val LiveTypes = setOf("livetv", "iptv")
 @Composable
 internal fun StartBackdrop(state: GlobalPlayerState) {
     val art = state.backdropUrl ?: state.posterUrl
-    val showing = art != null && state.mediaType !in LiveTypes && (state.isPreparing || state.isStarting)
+    val showing = art != null && state.isStreamStart && state.mediaType !in LiveTypes &&
+        (state.isPreparing || state.isStarting)
     AnimatedVisibility(showing, enter = fadeIn(tween(200)), exit = fadeOut(tween(400))) {
         Box(Modifier.fillMaxSize().testTag(START_BACKDROP_TAG)) {
             FadeInImage(model = art, contentDescription = null, modifier = Modifier.fillMaxSize())
@@ -55,7 +56,7 @@ internal fun StartBackdrop(state: GlobalPlayerState) {
 /** The quiet line under an opening stream: what it is doing, and once it is slow, how the feed is. */
 @Composable
 internal fun StartingNote(state: GlobalPlayerState, modifier: Modifier = Modifier) {
-    if (!state.isStarting || state.isPreparing || state.mediaType in LiveTypes) return
+    if (!state.isStreamStart || !state.isStarting || state.isPreparing || state.mediaType in LiveTypes) return
     Text(
         text = state.startProgress ?: STARTING_NOTE,
         style = KobappTheme.type.bodySm,

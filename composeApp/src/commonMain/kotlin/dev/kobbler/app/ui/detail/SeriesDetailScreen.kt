@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,9 +68,9 @@ fun SeriesDetailScreen(
     val accent = colors.accBooks
     val gutter = gutterFor(formFactor)
     val isPhone = formFactor == FormFactor.Phone
-    val sortedBooks = books.sortedBy { it.seriesIndex ?: Double.MAX_VALUE }
-    val authorRefs = books.flatMap { it.authors }.distinctBy { it.id }
-    val heroCovers = sortedBooks.mapNotNull { it.coverUrl.takeIf(String::isNotBlank) }.take(4)
+    val sortedBooks = remember(books) { books.sortedBy { it.seriesIndex ?: Double.MAX_VALUE } }
+    val authorRefs = remember(books) { books.flatMap { it.authors }.distinctBy { it.id } }
+    val heroCovers = remember(sortedBooks) { sortedBooks.mapNotNull { it.coverUrl.takeIf(String::isNotBlank) }.take(4) }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize()) {

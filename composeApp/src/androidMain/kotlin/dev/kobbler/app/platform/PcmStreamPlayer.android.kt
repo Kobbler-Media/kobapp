@@ -4,12 +4,14 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.LinkedBlockingQueue
 
 actual class PcmStreamPlayer actual constructor() {
     private var track: AudioTrack? = null
     private var sampleRateHz: Int = 0
-    @Volatile private var paused: Boolean = false
+    private val paused = MutableStateFlow(false)
     @Volatile private var stopped: Boolean = false
     private val queue = LinkedBlockingQueue<ByteArray>()
     private var writer: Thread? = null
@@ -19,7 +21,7 @@ actual class PcmStreamPlayer actual constructor() {
         if (track != null && sampleRateHz == sampleRate) return
         stop()
         stopped = false
-        paused = false
+        paused.value = false
         sampleRateHz = sampleRate
 
         val minBuffer = AudioTrack.getMinBufferSize(
@@ -81,32 +83,46 @@ actual class PcmStreamPlayer actual constructor() {
     }
 
     actual fun pause() {
-        if (stopped || paused) return
-        paused = true
+        if (stopped || paused.value) return
+        paused.value = true
         try { track?.pause() } catch (_: Exception) {}
     }
 
     actual fun resume() {
-        if (stopped || !paused) return
-        paused = false
+        if (stopped || !paused.value) return
+        paused.value = false
         try { track?.play() } catch (_: Exception) {}
     }
 
     actual suspend fun awaitDrain() {
-        while (!stopped && queue.isNotEmpty()) delay(20)
+        while (!stopped && queue.isNotEmpty()) {
+            awaitUnpaused()
+            delay(20)
+        }
         // No reliable "is buffer drained" signal on AudioTrack; poll position changes.
         var lastPos = currentPositionMs()
         var stable = 0
         while (!stopped && stable < 4) {
+            // A paused track's position stands still too, which read as drained.
+            if (paused.value) {
+                awaitUnpaused()
+                stable = 0
+                lastPos = currentPositionMs()
+            }
             delay(40)
             val p = currentPositionMs()
             if (p == lastPos) stable++ else { stable = 0; lastPos = p }
         }
     }
 
+    private suspend fun awaitUnpaused() {
+        paused.first { !it }
+    }
+
     actual fun stop() {
         if (stopped) return
         stopped = true
+        paused.value = false
         queue.clear()
         queue.offer(drainMarker)
         try { writer?.interrupt() } catch (_: Exception) {}

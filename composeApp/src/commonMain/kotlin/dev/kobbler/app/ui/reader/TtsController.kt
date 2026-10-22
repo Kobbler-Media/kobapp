@@ -11,6 +11,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlin.concurrent.Volatile
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -456,7 +457,7 @@ class TtsController(
     }
 
     /**
-     * Polls the PCM player's playback position at ~30 Hz, finds which paragraph
+     * Polls the PCM player's playback position at ~30 Hz while playing, finds which paragraph
      * we're inside (by audio_offset_ms), and the word inside that paragraph.
      * Pushes the global word index into [_currentWordIndex].
      */
@@ -464,6 +465,7 @@ class TtsController(
         wordTickerJob?.cancel()
         wordTickerJob = scope.launch {
             while (isActive) {
+                if (_state.value == TtsState.PAUSED) _state.first { it != TtsState.PAUSED }
                 val posMs = pcmPlayer.currentPositionMs()
                 if (posMs >= 0) {
                     val wi = stickyWordIndex(_currentWordIndex.value, paragraphs.values, posMs)

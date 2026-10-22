@@ -328,8 +328,10 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         } else {
             // Composed but unpainted under the player: anything it repaints holds an
             // adaptive-refresh panel at 60Hz, and 24fps film judders there.
+            // Derived: a cast session is replaced with a fresh copy on every position update.
+            val casting by remember(gps) { derivedStateOf { gps.castSession != null } }
             val coveredByPlayer = rememberPlayerCoversScreen(
-                gps.isFullscreen && player != null && gps.isActive && gps.castSession == null,
+                gps.isFullscreen && player != null && gps.isActive && !casting,
             )
             Box(Modifier.focusInert(scaffoldCovered).hiddenWhenCovered(coveredByPlayer)) {
                 CompositionLocalProvider(LocalCoveredByPlayer provides coveredByPlayer) {
@@ -974,6 +976,7 @@ private fun navigateContinueItem(
             newTitle = item.title,
             newSubtitle = item.subtitle,
             newPosterUrl = item.imageUrl,
+            stream = false,
         )
     }
     when {

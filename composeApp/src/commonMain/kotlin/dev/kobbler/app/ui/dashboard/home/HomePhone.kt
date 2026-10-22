@@ -118,7 +118,10 @@ fun HomePhone(
         }
         // Turned sideways the page is twice as wide and half as tall: a 16:10 hero across
         // the full width would be taller than the screen.
-        val heroHeight = minOf((maxWidth - gutter * 2) * (10f / 16f), maxHeight * 0.55f)
+        // Every rail sits inside the list's gutters; measured once here rather than by a
+        // subcomposition per rail as each scrolls into view.
+        val railWidth = maxWidth - gutter * 2
+        val heroHeight = minOf(railWidth * (10f / 16f), maxHeight * 0.55f)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -147,12 +150,12 @@ fun HomePhone(
                         // One horizontal axis, bounded height: a vertical list grew with the
                         // queue, and a second axis inside a vertically scrolling page makes the
                         // swipe ambiguous. The trailing peek is what advertises the rest.
-                        BoxWithConstraints {
+                        Box {
                             // Continue watching earns the loudest treatment after the hero, so
                             // these are backdrop cards rather than the compact list rows. Just
                             // under two fit, which puts the next card's edge permanently on
                             // screen — that peek is what says "swipe".
-                            val cardWidth = minOf((maxWidth - UpNextCardGap) * 0.62f, UpNextCardMaxWidth)
+                            val cardWidth = minOf((railWidth - UpNextCardGap) * 0.62f, UpNextCardMaxWidth)
                             val stackState = rememberLazyListState()
                             SpotlightOnRowScroll(spotlight, stackState) { stack.getOrNull(it)?.spotlight() }
                             LazyRow(
@@ -184,6 +187,7 @@ fun HomePhone(
                     PhoneRail(
                         title = "Recently Added",
                         items = homeData.recentlyAdded,
+                        width = railWidth,
                         spotlight = spotlight,
                         spotlightOf = { it.spotlight() },
                     ) { item, cardWidth ->
@@ -205,6 +209,7 @@ fun HomePhone(
                     PhoneRail(
                         title = StremioContinueTitle,
                         items = homeData.stremioContinue,
+                        width = railWidth,
                         spotlight = spotlight,
                         spotlightOf = { it.item.spotlight() },
                     ) { entry, cardWidth ->
@@ -223,6 +228,7 @@ fun HomePhone(
                     PhoneRail(
                         title = ForYouTitle,
                         items = homeData.forYou,
+                        width = railWidth,
                         spotlight = spotlight,
                         spotlightOf = { it.item.spotlight() },
                     ) { entry, cardWidth ->
@@ -244,6 +250,7 @@ fun HomePhone(
                     PhoneRail(
                         title = section.title,
                         items = section.items,
+                        width = railWidth,
                         spotlight = spotlight,
                         spotlightOf = { it.spotlight() },
                     ) { item, cardWidth ->
@@ -333,6 +340,7 @@ private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit, modifie
 private fun <T> PhoneRail(
     title: String,
     items: List<T>,
+    width: Dp,
     spotlight: SpotlightState,
     spotlightOf: (T) -> Spotlight,
     card: @Composable (T, Dp) -> Unit,
@@ -341,18 +349,16 @@ private fun <T> PhoneRail(
     Column {
         SectionHeading(title = title, accent = null)
         Spacer(Modifier.height(10.dp))
-        BoxWithConstraints {
-            val cardWidth = railPosterWidth(maxWidth)
-            val rowState = rememberLazyListState()
-            SpotlightOnRowScroll(spotlight, rowState) { items.getOrNull(it)?.let(spotlightOf) }
-            LazyRow(
-                state = rowState,
-                modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = gutter),
-                horizontalArrangement = Arrangement.spacedBy(PhoneRailGap),
-            ) {
-                items(items) { card(it, cardWidth) }
-            }
+        val cardWidth = railPosterWidth(width)
+        val rowState = rememberLazyListState()
+        SpotlightOnRowScroll(spotlight, rowState) { items.getOrNull(it)?.let(spotlightOf) }
+        LazyRow(
+            state = rowState,
+            modifier = Modifier.bleedHorizontally(gutter).fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = gutter),
+            horizontalArrangement = Arrangement.spacedBy(PhoneRailGap),
+        ) {
+            items(items) { card(it, cardWidth) }
         }
     }
 }

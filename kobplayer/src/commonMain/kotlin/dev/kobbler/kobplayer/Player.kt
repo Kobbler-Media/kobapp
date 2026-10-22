@@ -165,8 +165,6 @@ interface Player {
     val isPlaying: StateFlow<Boolean>
     val currentMs: StateFlow<Long>
     val durationMs: StateFlow<Long>
-    /** Playback progress 0.0..1.0, derived from currentMs/durationMs. */
-    val progress: StateFlow<Float>
     val error: StateFlow<Throwable?>
 
     // -- Buffering --

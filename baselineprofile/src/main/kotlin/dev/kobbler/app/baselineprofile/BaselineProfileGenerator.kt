@@ -12,14 +12,29 @@ class BaselineProfileGenerator {
     @get:Rule
     val rule = BaselineProfileRule()
 
+    // dexLayoutOptimization packs every startup-profile class into the primary dex, so this
+    // stays to launch → first Home frame; the browse journey below would dilute that ordering.
     @Test
-    fun generate() = rule.collect(
+    fun startup() = rule.collect(
         packageName = targetPackage,
         includeInStartupProfile = true,
     ) {
         coldStartToFirstFrame()
+        reachedLibrary()
+    }
+
+    @Test
+    fun journey() = rule.collect(
+        packageName = targetPackage,
+        includeInStartupProfile = false,
+    ) {
+        coldStartToFirstFrame()
 
         if (!reachedLibrary()) return@collect
+        if (!isTv) {
+            phoneJourney()
+            return@collect
+        }
 
         walkEverySidebarTab()
 

@@ -29,6 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +47,7 @@ import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.PlaybackLifecycle
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.theme.Section
 import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.components.tvAutoGlow
@@ -57,6 +61,7 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.kobplayer.ui.MediaSeekBar
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobplayer.ui.formatTime
 
@@ -91,19 +96,19 @@ fun AudiobookPlayerScreen(
         }
     }
     LaunchedEffect(state.player) {
-        while (true) {
-            val curMs = state.player.currentMs.value
-            val curGlobal = (state.fileTimeOffsetsMs.getOrNull(state.currentFileIndex) ?: 0L) + curMs
-            PlaybackLifecycle.updateNowPlaying(
-                title = book.title,
-                subtitle = book.author,
-                coverUrl = book.coverUrl,
-                isPlaying = state.player.isPlaying.value,
-                currentMs = curGlobal,
-                durationMs = state.totalBookDurationMs,
-                isAudioOnly = true,
-            )
-            delay(1000)
+        state.player.isPlaying.collectLatest { playing ->
+            do {
+                PlaybackLifecycle.updateNowPlaying(
+                    title = book.title,
+                    subtitle = book.author,
+                    coverUrl = book.coverUrl,
+                    isPlaying = playing,
+                    currentMs = state.globalPositionMs,
+                    durationMs = state.totalBookDurationMs,
+                    isAudioOnly = true,
+                )
+                if (playing) delay(1000)
+            } while (playing)
         }
     }
     LaunchedEffect(state.player) {
@@ -133,7 +138,7 @@ internal fun AudiobookPlayerContent(
     onBack: () -> Unit,
     onOpenReader: (() -> Unit)?,
 ) {
-    KobappTheme(section = Section.Audio) {
+    KobappTheme(formFactor = LocalFormFactor.current, section = Section.Audio) {
         val colors = KobappTheme.colors
         val dimens = KobappTheme.dimens
         val accent = colors.accAudio
@@ -156,7 +161,7 @@ internal fun AudiobookPlayerContent(
                     book = book,
                     chapterTitle = state.currentChapter?.title,
                     sleepMode = state.sleepMode,
-                    sleepRemainingMs = state.sleepRemainingMs,
+                    sleepRemainingMs = { state.sleepRemainingMs },
                     onBack = onBack,
                     onAddBookmark = state::addBookmarkHere,
                     onSleepSelect = { state.sleepMode = it },
@@ -193,7 +198,7 @@ private fun TopBar(
     book: Book,
     chapterTitle: String?,
     sleepMode: SleepMode,
-    sleepRemainingMs: Long,
+    sleepRemainingMs: () -> Long,
     onBack: () -> Unit,
     onAddBookmark: () -> Unit,
     onSleepSelect: (SleepMode) -> Unit,
@@ -295,8 +300,7 @@ private fun PhoneLayout(
                     transcriptSegments = state.transcriptSegments,
                     bookmarks = state.bookmarks,
                     currentChapter = state.currentChapter,
-                    globalPositionMs = state.globalPositionMs,
-                    activeSegmentIndex = state.activeSegmentIndex,
+                    activeSegmentIndex = { state.activeSegmentIndex },
                     activeTab = state.activeTab,
                     onTabChange = { state.activeTab = it },
                     onChapterClick = state::jumpToChapter,
@@ -366,8 +370,7 @@ private fun WideLayout(
                     transcriptSegments = state.transcriptSegments,
                     bookmarks = state.bookmarks,
                     currentChapter = state.currentChapter,
-                    globalPositionMs = state.globalPositionMs,
-                    activeSegmentIndex = state.activeSegmentIndex,
+                    activeSegmentIndex = { state.activeSegmentIndex },
                     activeTab = state.activeTab,
                     onTabChange = { state.activeTab = it },
                     onChapterClick = state::jumpToChapter,
@@ -458,14 +461,12 @@ private fun BookTitleBlock(
 
 @Composable
 private fun ProgressBlock(state: AudiobookPlayerState, modifier: Modifier = Modifier) {
-    val colors = KobappTheme.colors
-    val type = KobappTheme.type
-    val accent = colors.accAudio
+    val accent = KobappTheme.colors.accAudio
     Column(modifier = modifier.focusKeyGroup("progress").fillMaxWidth()) {
         MediaSeekBar(
-            progress = if (state.totalBookDurationMs > 0)
-                state.globalPositionMs.toFloat() / state.totalBookDurationMs
-            else 0f,
+            progress = {
+                if (state.totalBookDurationMs > 0) state.globalPositionMs.toFloat() / state.totalBookDurationMs else 0f
+            },
             onSeek = { frac -> state.seekToGlobal((frac * state.totalBookDurationMs).toLong()) },
             activeColor = accent,
             modifier = Modifier.fillMaxWidth(),
@@ -476,28 +477,38 @@ private fun ProgressBlock(state: AudiobookPlayerState, modifier: Modifier = Modi
             // rather than leaving the press unanswered.
             onActivate = { state.player.togglePlayPause() },
         )
-        Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(formatTime(state.globalPositionMs), style = type.bodySm, color = colors.textHi)
-            Text(
-                "-${formatTime((state.totalBookDurationMs - state.globalPositionMs).coerceAtLeast(0))}",
-                style = type.bodySm,
-                color = colors.textLo,
-            )
-        }
-        val remaining = state.chapterRemainingMs
-        if (remaining != null && state.currentChapter?.title != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "${formatTime(remaining)} left in chapter",
-                style = type.caption,
-                color = colors.textLo.copy(alpha = 0.7f),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-        }
+        ProgressLabels(state)
+    }
+}
+
+@Composable
+private fun ProgressLabels(state: AudiobookPlayerState) {
+    val colors = KobappTheme.colors
+    val type = KobappTheme.type
+    val positionSec by remember(state) { derivedStateOf { state.globalPositionMs / 1000 } }
+    val totalSec = state.totalBookDurationMs / 1000
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(formatTime(positionSec * 1000), style = type.bodySm, color = colors.textHi)
+        Text(
+            "-${formatTime((totalSec - positionSec).coerceAtLeast(0) * 1000)}",
+            style = type.bodySm,
+            color = colors.textLo,
+        )
+    }
+    val chapterRemainingSec by remember(state) { derivedStateOf { state.chapterRemainingMs?.div(1000) } }
+    val remaining = chapterRemainingSec
+    if (remaining != null && state.currentChapter?.title != null) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "${formatTime(remaining * 1000)} left in chapter",
+            style = type.caption,
+            color = colors.textLo.copy(alpha = 0.7f),
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

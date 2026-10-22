@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,9 +106,7 @@ fun CalendarScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.bg),
+        modifier = modifier.fillMaxSize(),
     ) {
         Spacer(Modifier.height(dimens.s4))
         Box(Modifier.padding(horizontal = gutter)) {

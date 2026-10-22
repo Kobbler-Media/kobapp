@@ -191,7 +191,7 @@ fun LiveSeriesRuleScreen(
             }
         }
 
-        Column(Modifier.fillMaxSize().background(colors.bg).safeTopPadding()) {
+        Column(Modifier.fillMaxSize().safeTopPadding()) {
             Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
                 BrowseHeader(
                     title = "Series rules",

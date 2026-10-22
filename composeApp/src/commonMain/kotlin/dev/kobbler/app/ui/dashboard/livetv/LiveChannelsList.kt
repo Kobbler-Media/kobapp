@@ -74,7 +74,7 @@ fun LiveChannelsList(
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onLoadMore() }
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = gutter, vertical = dimens.s3)) { facetStrip() }
 
         if (channels.isEmpty() && !loading) {

@@ -1,7 +1,7 @@
 package dev.kobbler.app.theme
 
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 @Immutable
@@ -79,4 +79,4 @@ val KobappColorsDefault = KobappColors(
     err = Color(0xFFE26B57),
 )
 
-val LocalKobappColors = compositionLocalOf { KobappColorsDefault }
+val LocalKobappColors = staticCompositionLocalOf { KobappColorsDefault }

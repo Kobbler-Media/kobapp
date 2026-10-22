@@ -107,7 +107,6 @@ fun ProfileScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.bg)
             .imePaddingUnlessTv()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = gutter),

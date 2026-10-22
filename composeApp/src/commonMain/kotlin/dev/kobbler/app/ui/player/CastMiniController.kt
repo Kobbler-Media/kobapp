@@ -167,7 +167,7 @@ fun CastMiniController(
             // The player's own bar, so a scrub reads and behaves the same whether the
             // picture is here or across the room — including a step per D-pad press.
             MediaSeekBar(
-                progress = scrubFraction ?: progress,
+                progress = { scrubFraction ?: progress },
                 onSeek = { fraction ->
                     scrubFraction = fraction
                     onSeekTo((fraction * durationMs).toLong())

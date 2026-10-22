@@ -16,6 +16,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +71,7 @@ fun LivePhoneGuide(
     val focus = remember { GuideFocus() }
     CenterFocusedRow(listState, focus, topRow = 0)
 
-    Column(modifier.fillMaxSize().background(colors.bg)) {
+    Column(modifier.fillMaxSize()) {
         Box(Modifier.padding(horizontal = gutter, vertical = dimens.s3)) { facetStrip() }
 
         GuideWindowStepper(
@@ -101,11 +103,6 @@ fun LivePhoneGuide(
             }
             return@Column
         }
-
-        // One clock for every row: the window is aligned to the half hour, so it reaches
-        // back before now and the feed answers with programmes that have already ended.
-        // Read per row they could disagree about which one is on air.
-        val now = clock.now
 
         LazyColumn(
             state = listState,
@@ -150,7 +147,12 @@ fun LivePhoneGuide(
                         )
                         if (row.channel.hd) LiveBadge("HD", accent)
                     }
-                    val upcoming = row.entries.stillRunning(now).take(6)
+                    // The window is aligned to the half hour, so it reaches back before now and
+                    // the feed answers with programmes that have already ended. Derived so a
+                    // tick only recomposes the row whose lineup it actually changes.
+                    val upcoming by remember(row.entries, clock) {
+                        derivedStateOf { row.entries.stillRunning(clock.now).take(6) }
+                    }
                     if (upcoming.isEmpty()) {
                         // Dropping what has already finished can empty a sparse channel's
                         // row. Say so rather than leaving a blank strip under its header.
@@ -169,7 +171,7 @@ fun LivePhoneGuide(
                                 val key = "pe.${entry.id}"
                                 PhoneGuideCard(
                                     entry = entry,
-                                    now = now,
+                                    clock = clock,
                                     accent = accent,
                                     key = key,
                                     preferredEntry = key == entryKey,
@@ -177,7 +179,7 @@ fun LivePhoneGuide(
                                         onSelect(LiveGuideSelection(row.channel, entry))
                                         // What is on air plays; what is not opens where
                                         // it can be recorded.
-                                        if (entry.isAiringAt(now)) onWatch(row.channel)
+                                        if (entry.isAiringAt(clock.now)) onWatch(row.channel)
                                     },
                                 )
                             }
@@ -192,7 +194,7 @@ fun LivePhoneGuide(
 @Composable
 private fun PhoneGuideCard(
     entry: LiveGuideEntry,
-    now: Instant,
+    clock: GuideClock,
     accent: Color,
     key: String,
     preferredEntry: Boolean,
@@ -200,7 +202,7 @@ private fun PhoneGuideCard(
 ) {
     val colors = KobappTheme.colors
     val focusState = rememberTvFocusState()
-    val onAir = entry.isAiringAt(now)
+    val onAir by remember(entry, clock) { derivedStateOf { entry.isAiringAt(clock.now) } }
     Box(
         modifier = Modifier
             .width(CardWidth)

@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -94,15 +95,6 @@ internal class DesktopPlayer(
 
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
-
-    override val progress: StateFlow<Float> = MutableStateFlow(0f).also { sf ->
-        scope.launch {
-            _currentMs.collect { pos ->
-                val dur = _durationMs.value
-                sf.value = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
-            }
-        }
-    }
 
     private val _error = MutableStateFlow<Throwable?>(null)
     override val error: StateFlow<Throwable?> = _error.asStateFlow()
@@ -209,10 +201,11 @@ internal class DesktopPlayer(
 
         // Fallback buffering detection: position not advancing for 1.5s while "playing"
         scope.launch {
-            var lastPosition = 0L
-            while (true) {
-                delay(1500)
-                if (_state.value == PlayerState.PLAYING) {
+            _state.collectLatest { playerState ->
+                if (playerState != PlayerState.PLAYING) return@collectLatest
+                var lastPosition = _currentMs.value
+                while (true) {
+                    delay(1500)
                     val pos = _currentMs.value
                     if (pos == lastPosition && pos > 0) {
                         _isBuffering.value = true
@@ -630,6 +623,7 @@ internal fun vlcMediaOptions(source: MediaSource.Url, config: PlayerConfig): Lis
         // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
         // verifies none over a network: every seek decoded the title from its first frame.
         add("demux=mkv_trusted,any")
+        if (config.audioOnly) add("no-video")
         headers["referer"]?.let { add("http-referrer=$it") }
         source.audioLanguage?.let { add("audio-language=$it") }
         if (source.subtitlesOff) add("sub-language=none")

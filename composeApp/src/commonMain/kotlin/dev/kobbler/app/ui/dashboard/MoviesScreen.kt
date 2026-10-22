@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -84,8 +83,10 @@ fun MoviesScreen(
 
     val (homeState, _) = rememberCached("home") { api.getDiscover() }
     // A category is a narrower question than the rails above the grid answer.
-    val watchNext = if (genre != null) emptyList()
-    else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == MediaType.Movie } ?: emptyList()
+    val watchNext = remember(homeState, genre) {
+        if (genre != null) emptyList()
+        else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == MediaType.Movie } ?: emptyList()
+    }
 
     // Recently added from cached dashboard data
     val (dashState, _) = rememberCached("dashboard") { api.getDashboard() }
@@ -99,8 +100,10 @@ fun MoviesScreen(
     var letters by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(Unit) { try { letters = api.getMovieLetters() } catch (_: Exception) {} }
 
-    // Entry focus goes to the first row that actually exists, in reading order.
-    var entryFocusPending by remember { mutableStateOf(true) }
+    // Entry focus goes to the first row that actually exists, in reading order. A new
+    // category re-arms it: the picker's dialog closes onto a selector that has just been
+    // replaced and a grid still loading, which leaves the D-pad focused on nothing.
+    var entryFocusPending by remember(genre) { mutableStateOf(true) }
     val continueIsEntry = watchNext.isNotEmpty()
     val recentIsEntry = !continueIsEntry && recentMovies.isNotEmpty()
     val gridIsEntry = !continueIsEntry && !recentIsEntry && movies.isNotEmpty()
@@ -386,14 +389,7 @@ fun MoviesScreen(
                 )
             }
 
-            if (isLoadingMore) {
-                Box(
-                    Modifier.fillMaxWidth().padding(16.dp).align(Alignment.BottomCenter),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = accent, modifier = Modifier.size(24.dp))
-                }
-            }
+            LoadingMoreIndicator({ isLoadingMore }, accent)
         }
     }
 }

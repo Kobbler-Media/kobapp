@@ -18,17 +18,21 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.Profile
 import dev.kobbler.app.theme.KobappTheme
@@ -86,13 +90,17 @@ fun KobSidebar(
     val dimens = KobappTheme.dimens
     val collapsedWidth = if (tvMode) dimens.sidebarTv else dimens.sidebarCollapsed
     val expandedWidth = dimens.sidebarExpanded
-    val width by animateDpAsState(
+    val width = animateDpAsState(
         if (expanded) expandedWidth else collapsedWidth,
         animationSpec = tween(260),
     )
     // How far open the rail is, measured rather than re-animated so the labels fade
-    // exactly in step with the edge that is uncovering them.
-    val reveal = ((width - collapsedWidth) / (expandedWidth - collapsedWidth)).coerceIn(0f, 1f)
+    // exactly in step with the edge that is uncovering them. Read only in layout and
+    // draw: the width moves every frame of the slide.
+    val reveal = remember(width, collapsedWidth, expandedWidth) {
+        { ((width.value - collapsedWidth) / (expandedWidth - collapsedWidth)).coerceIn(0f, 1f) }
+    }
+    val revealed by remember(reveal) { derivedStateOf { reveal() > 0f } }
 
     Box(
         modifier = modifier
@@ -102,7 +110,11 @@ fun KobSidebar(
             // Insets are consumed inside the surface but outside the width, so an edge
             // cutout widens the rail instead of squeezing its rows.
             .windowInsetsPadding(windowInsets)
-            .width(width)
+            .layout { measurable, constraints ->
+                val w = constraints.constrainWidth(width.value.roundToPx())
+                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                layout(w, placeable.height) { placeable.place(0, 0) }
+            }
             .clipToBounds(),
     ) {
         Column(
@@ -133,7 +145,7 @@ fun KobSidebar(
                     style = KobappTheme.type.reader.copy(fontSize = KobappTheme.type.h3.fontSize),
                     maxLines = 1,
                     softWrap = false,
-                    modifier = Modifier.padding(start = 12.dp).alpha(reveal),
+                    modifier = Modifier.padding(start = 12.dp).graphicsLayer { alpha = reveal() },
                 )
             }
 
@@ -221,7 +233,7 @@ fun KobSidebar(
                         }
                     }
                 }
-                Column(modifier = Modifier.weight(1f).padding(start = 10.dp).alpha(reveal)) {
+                Column(modifier = Modifier.weight(1f).padding(start = 10.dp).graphicsLayer { alpha = reveal() }) {
                     Text(
                         profile?.displayName ?: "—",
                         color = colors.textHi,
@@ -242,10 +254,10 @@ fun KobSidebar(
                 }
                 // Only while the rail is open — collapsed there is no room beside the
                 // avatar, and the row itself already carries the same action.
-                if (onSettingsClick != null && reveal > 0f) {
+                if (onSettingsClick != null && revealed) {
                     Box(
                         modifier = Modifier
-                            .alpha(reveal)
+                            .graphicsLayer { alpha = reveal() }
                             .clip(CircleShape)
                             .clickable(onClick = onSettingsClick)
                             .padding(8.dp),
@@ -271,7 +283,7 @@ private fun SidebarRow(
     icon: ImageVector,
     accent: Color,
     isActive: Boolean,
-    reveal: Float,
+    reveal: () -> Float,
     collapsedWidth: Dp,
     tvMode: Boolean,
     onClick: () -> Unit,
@@ -305,7 +317,7 @@ private fun SidebarRow(
                 )
             }
             Row(
-                modifier = Modifier.weight(1f).padding(start = 12.dp, end = 12.dp).alpha(reveal),
+                modifier = Modifier.weight(1f).padding(start = 12.dp, end = 12.dp).graphicsLayer { alpha = reveal() },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
