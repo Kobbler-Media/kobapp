@@ -18,8 +18,8 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.*
 
 enum class WantedTab(val label: String) {
-    Wanted("Wanted"),
     Downloads("Downloads"),
+    Wanted("Wanted"),
 }
 
 private enum class WantedFilter(val label: String, val mediaType: String?) {
@@ -38,7 +38,7 @@ fun WantedScreen(
     api: KobblerApi,
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
-    initialTab: WantedTab = WantedTab.Wanted,
+    initialTab: WantedTab = WantedTab.Downloads,
     onItemClick: (WantedItem) -> Unit = {},
     onDownloadClick: (DownloadTarget) -> Unit = {},
 ) {

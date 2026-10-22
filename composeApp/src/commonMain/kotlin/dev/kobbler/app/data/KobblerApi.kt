@@ -1508,6 +1508,7 @@ data class LiveBufferDto(
     @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
     @SerialName("retained_seconds") val retainedSeconds: Double = 0.0,
     @SerialName("cap_seconds") val capSeconds: Double = 0.0,
+    @SerialName("tune_error") val tuneError: String? = null,
 )
 
 @Serializable
@@ -1628,6 +1629,29 @@ data class StremioContinueExtrasDto(
 @Serializable
 data class ForYouExtrasDto(
     val because: List<String> = emptyList(),
+    @SerialName("because_items") val becauseItems: List<ForYouSeedDto> = emptyList(),
+)
+
+@Serializable
+data class WatchHistoryItemDto(
+    @SerialName("media_type") val mediaType: String,
+    @SerialName("tmdb_id") val tmdbId: Long? = null,
+    val title: String = "",
+    val year: Int? = null,
+    @SerialName("poster_url") val posterUrl: String? = null,
+    @SerialName("last_watched_at") val lastWatchedAt: String? = null,
+    val sources: List<String> = emptyList(),
+    val excluded: Boolean = false,
+)
+
+@Serializable
+data class WatchHistoryResponseDto(val items: List<WatchHistoryItemDto> = emptyList(), val total: Int = 0)
+
+@Serializable
+data class ForYouSeedDto(
+    @SerialName("media_type") val mediaType: String,
+    @SerialName("tmdb_id") val tmdbId: Long? = null,
+    val title: String = "",
 )
 
 @Serializable
@@ -1819,6 +1843,7 @@ internal fun ShowDetailDto.toTvShow(base: String): TvShow {
         autoWantMode = autoWantMode,
         inWatchlist = inWatchlist,
         nextAiring = nextAiring,
+        isSport = contentCategory == "sport",
     )
 }
 
@@ -1948,10 +1973,14 @@ private fun kotlinx.serialization.json.JsonObject.toStremioContinueItem(base: St
     )
 }
 
-private fun kotlinx.serialization.json.JsonObject.toForYouItem(base: String): ForYouItem = ForYouItem(
-    item = json.decodeFromJsonElement(DiscoverItemDto.serializer(), this).toDiscoverItem(base),
-    because = json.decodeFromJsonElement(ForYouExtrasDto.serializer(), this).because,
-)
+private fun kotlinx.serialization.json.JsonObject.toForYouItem(base: String): ForYouItem {
+    val extras = json.decodeFromJsonElement(ForYouExtrasDto.serializer(), this)
+    return ForYouItem(
+        item = json.decodeFromJsonElement(DiscoverItemDto.serializer(), this).toDiscoverItem(base),
+        because = extras.because,
+        seeds = extras.becauseItems.mapNotNull { seed -> seed.tmdbId?.let { ForYouSeed(seed.mediaType, it, seed.title) } },
+    )
+}
 
 private fun InProgressItem.toContinueItem(base: String): ContinueItem = ContinueItem(
     id = mediaId,
@@ -2109,8 +2138,8 @@ class KobblerApi(
     private val originLatency = OriginLatency()
 
     /** Buffer depth for a player source. See [networkCacheMsFor]. */
-    fun networkCacheMsFor(url: String): Int =
-        networkCacheMsFor(url, apiUrl, originLatency.roundTripMs(), originProfiles.get(hostOf(url).orEmpty()))
+    fun networkCacheMsFor(url: String, liveTuner: Boolean = false): Int =
+        networkCacheMsFor(url, apiUrl, originLatency.roundTripMs(), originProfiles.get(hostOf(url).orEmpty()), liveTuner)
 
     /**
      * Time the network to the server rather than a request to it: on a Chromecast an HTTP
@@ -3068,7 +3097,9 @@ class KobblerApi(
         offset: Int = 0,
     ): LiveChannelPage {
         val path = buildString {
-            append("/api/v1/admin/livetv/channels?limit=$limit&offset=$offset")
+            // Stacked: one row per programme feed, the server picking the best copy and
+            // falling back to the others when it will not tune.
+            append("/api/v1/admin/livetv/channels?limit=$limit&offset=$offset&stacked=true")
             if (search != null) append("&search=${search.encodeURLParameter()}")
             if (network != null) append("&network=${network.encodeURLParameter()}")
             if (region != null) append("&region=${region.encodeURLParameter()}")
@@ -3111,6 +3142,7 @@ class KobblerApi(
             if (from != null) parts += "from=${from.encodeURLParameter()}"
             if (to != null) parts += "to=${to.encodeURLParameter()}"
             if (!channelIds.isNullOrEmpty()) parts += "channel_ids=${channelIds.joinToString(",").encodeURLParameter()}"
+            else parts += "stacked=true"
             if (search != null) parts += "search=${search.encodeURLParameter()}"
             if (genre != null) parts += "genre=${genre.encodeURLParameter()}"
             append(parts.joinToString("&"))
@@ -3125,6 +3157,7 @@ class KobblerApi(
             append("/api/v1/admin/livetv/guide/now?")
             val parts = mutableListOf<String>()
             if (!channelIds.isNullOrEmpty()) parts += "channel_ids=${channelIds.joinToString(",").encodeURLParameter()}"
+            else parts += "stacked=true"
             if (limit != null) parts += "limit=$limit"
             append(parts.joinToString("&"))
         }
@@ -3137,7 +3170,7 @@ class KobblerApi(
         decodeMap<LiveGuideEntryDto, LiveGuideEntry>(get("/api/v1/admin/livetv/guide/$id")) { it.toModel(apiUrl) }
 
     suspend fun getLiveOnNow(): LiveOnNow =
-        decodeMap<LiveOnNowResponse, LiveOnNow>(get("/api/v1/admin/livetv/on-now")) { resp ->
+        decodeMap<LiveOnNowResponse, LiveOnNow>(get("/api/v1/admin/livetv/on-now?stacked=true")) { resp ->
             LiveOnNow(
                 generatedAt = resp.generatedAt,
                 tunerNotice = resp.tunerNotice?.let {
@@ -3353,6 +3386,7 @@ class KobblerApi(
                 durationSeconds = it.durationSeconds,
                 retainedSeconds = it.retainedSeconds,
                 capSeconds = it.capSeconds,
+                tuneError = it.tuneError,
             )
         }
 
@@ -3632,6 +3666,28 @@ class KobblerApi(
     }
 
     // -- Discover --
+
+    suspend fun dismissRecommendation(item: DiscoverItem) {
+        val tmdbId = item.providerId.toLongOrNull()?.takeIf { item.provider == "tmdb" } ?: return
+        post("/api/v1/admin/discover/for-you/dismiss", recommendationBody(item.mediaType, tmdbId))
+        DataCache.invalidate("home")
+    }
+
+    suspend fun excludeFromRecommendations(seeds: List<ForYouSeed>, excluded: Boolean = true) {
+        val body = buildJsonObject {
+            putJsonArray("items") {
+                seeds.forEach { seed ->
+                    add(buildJsonObject { put("media_type", seed.mediaType); put("tmdb_id", seed.tmdbId) })
+                }
+            }
+            put("excluded", excluded)
+        }
+        post("/api/v1/admin/watch-history/exclude", body.toString())
+        DataCache.invalidate("home")
+    }
+
+    private fun recommendationBody(mediaType: String, tmdbId: Long) =
+        buildJsonObject { put("media_type", mediaType); put("tmdb_id", tmdbId) }.toString()
 
     suspend fun getDiscover(): HomeData = coroutineScope {
         val probe = async { quiet(Unit) { checkStreamingAvailability() } }
@@ -4287,6 +4343,49 @@ class KobblerApi(
     }
 
     // -- Notifications --
+
+    suspend fun getWatchHistory(source: String? = null, limit: Int = 100, offset: Int = 0): WatchHistoryPage {
+        val path = buildString {
+            append("/api/v1/admin/watch-history?limit=$limit&offset=$offset")
+            if (source != null) append("&source=${source.encodeURLParameter()}")
+        }
+        return decodeMap<WatchHistoryResponseDto, WatchHistoryPage>(get(path)) { resp ->
+            WatchHistoryPage(
+                items = resp.items.map {
+                    WatchHistoryEntry(
+                        mediaType = it.mediaType,
+                        tmdbId = it.tmdbId,
+                        title = it.title,
+                        year = it.year,
+                        posterUrl = resolveUrlOrNull(apiUrl, it.posterUrl),
+                        lastWatchedAt = it.lastWatchedAt,
+                        sources = it.sources,
+                        excluded = it.excluded,
+                    )
+                },
+                total = resp.total,
+            )
+        }
+    }
+
+    suspend fun setWatchHistoryExcluded(entries: List<WatchHistoryEntry>, excluded: Boolean) {
+        post("/api/v1/admin/watch-history/exclude", watchHistoryBody(entries) { put("excluded", excluded) })
+        DataCache.invalidate("home")
+    }
+
+    suspend fun removeWatchHistory(entries: List<WatchHistoryEntry>) {
+        post("/api/v1/admin/watch-history/remove", watchHistoryBody(entries) {})
+        DataCache.invalidateWatchProgress()
+    }
+
+    private fun watchHistoryBody(entries: List<WatchHistoryEntry>, extra: JsonObjectBuilder.() -> Unit) = buildJsonObject {
+        putJsonArray("items") {
+            entries.filter { it.tmdbId != null }.forEach { e ->
+                add(buildJsonObject { put("media_type", e.mediaType); put("tmdb_id", e.tmdbId) })
+            }
+        }
+        extra()
+    }.toString()
 
     suspend fun getNotifications(limit: Int = 20, offset: Int = 0, unreadOnly: Boolean = false): NotificationListResponse =
         decode<NotificationListResponse>(

@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.LiveRecording
@@ -173,6 +174,7 @@ internal suspend fun GlobalPlayerState.applyLiveSession(
     // entered deliberately, so a channel change stays at tuner speed.
     liveTimeshift = false
     liveBuffer = null
+    liveTuneError = null
     livePausedAtSeconds = null
     isLive = true
     videoWidth = session.width
@@ -463,16 +465,46 @@ fun LiveNowPoll(gps: GlobalPlayerState, api: KobblerApi) {
 }
 
 @Composable
-fun LiveBufferPoll(gps: GlobalPlayerState, api: KobblerApi) {
+fun LiveBufferPoll(gps: GlobalPlayerState, api: KobblerApi, player: Player?) {
     val sid = gps.liveSessionId
     LaunchedEffect(sid) {
         if (sid == null) {
             gps.liveBuffer = null
+            gps.liveTuneError = null
             return@LaunchedEffect
         }
+        val stall = BufferStallWatch(BufferStallMs)
         while (true) {
-            runCatching { api.getLiveSessionBuffer(sid) }.getOrNull()?.let { gps.liveBuffer = it }
+            val polled = runCatching { api.getLiveSessionBuffer(sid) }
+            (polled.exceptionOrNull() as? ApiException)?.serverMessage?.let { gps.liveTuneError = it }
+            polled.getOrNull()?.let { buffer ->
+                gps.liveBuffer = buffer
+                gps.liveTuneError = buffer.tuneError
+                // A buffer that has stopped growing is one whose recorder died: playing on
+                // from it leaves the viewer on frozen, grey frames that never catch up.
+                val dead = stall.observe(buffer.liveEdgeSeconds, monotonicNowMs())
+                if (dead && gps.liveTimeshift && player != null && !gps.isRecovering) {
+                    gps.teardownScope.launch { gps.recoverPlayback(player, api) }
+                }
+            }
             delay(BufferPollIntervalMs)
         }
     }
 }
+
+internal class BufferStallWatch(private val stallMs: Long) {
+    private var edge = Double.NaN
+    private var grewAt = 0L
+
+    fun observe(liveEdgeSeconds: Double, nowMs: Long): Boolean {
+        if (edge.isNaN() || liveEdgeSeconds > edge) {
+            edge = liveEdgeSeconds
+            grewAt = nowMs
+        }
+        return nowMs - grewAt >= stallMs
+    }
+}
+
+private val bufferClock = kotlin.time.TimeSource.Monotonic.markNow()
+private fun monotonicNowMs() = bufferClock.elapsedNow().inWholeMilliseconds
+private const val BufferStallMs = 20_000L

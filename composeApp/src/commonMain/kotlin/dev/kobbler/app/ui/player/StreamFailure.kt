@@ -27,3 +27,11 @@ private fun reasonSentence(e: ApiException): String? = when (e.reason) {
     "unavailable" -> "Your debrid service couldn't be reached."
     else -> e.serverMessage
 }
+
+internal fun liveFailureSummary(channel: String, cause: Throwable?, serverReason: String? = null): String {
+    val what = "Couldn't tune ${channel.ifBlank { "this channel" }}."
+    val why = (cause as? ApiException)?.serverMessage?.takeIf { it.isNotBlank() }
+        ?: serverReason?.takeIf { it.isNotBlank() }
+        ?: "The tuner may not have a strong enough signal on it right now. Try again, or pick another channel."
+    return "$what $why"
+}

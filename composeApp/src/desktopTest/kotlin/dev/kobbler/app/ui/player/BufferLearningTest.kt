@@ -24,13 +24,16 @@ class BufferLearningTest {
 
     private class Setup(val profiles: OriginProfiles, val api: KobblerApi, val player: FakePlayer)
 
-    private fun TestScope.watching(start: OriginProfile = OriginProfile()): Setup {
+    private fun TestScope.watching(start: OriginProfile = OriginProfile(), mediaType: String = "movie"): Setup {
         val backing = mutableMapOf<String, String>()
         val profiles = OriginProfiles(read = { backing[it] }, write = { k, v -> backing[k] = v })
         profiles.update(host) { start }
         val api = KobblerApi(HttpClient(), "https://$host", "token", originProfiles = profiles)
         val player = FakePlayer()
-        val gps = GlobalPlayerState().apply { lastStreamUrl = stream }
+        val gps = GlobalPlayerState().apply {
+            lastStreamUrl = stream
+            this.mediaType = mediaType
+        }
         backgroundScope.launch { gps.learnBuffering(player, api, now = { testScheduler.currentTime }) }
         runCurrent()
         return Setup(profiles, api, player)
@@ -78,5 +81,17 @@ class BufferLearningTest {
         play(s.player, fromMs = 0, forMs = 11 * 60_000)
 
         assertEquals(2 * StallStepMs - StallStepMs / 2, s.profiles.get(host).stallAllowanceMs)
+    }
+
+    /** A tuner's picture breaks up with the weather, not with the network to the server. */
+    @Test
+    fun `live tv buffering is not held against the server`() = runTest {
+        val s = watching(mediaType = "livetv")
+        play(s.player, fromMs = 600_000, forMs = 30_000)
+
+        s.player.state.value = PlayerState.BUFFERING
+        runCurrent()
+
+        assertEquals(0, s.profiles.get(host).stallAllowanceMs)
     }
 }

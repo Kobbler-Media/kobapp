@@ -68,12 +68,8 @@ internal fun ReaderBottomBar(
                 .padding(vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
-            val (currentPage, totalPages) = pages()
-            val overallPercent = if (totalChapters > 0) {
-                ((currentChapter.toFloat() + currentPage.toFloat() / totalPages.coerceAtLeast(1)) / totalChapters * 100).toInt()
-            } else 0
             Text(
-                "Ch ${currentChapter + 1}/$totalChapters  •  ${currentPage + 1}/$totalPages  •  $overallPercent%",
+                readerProgressLabel(pages(), currentChapter, totalChapters),
                 style = KobappTheme.type.caption.copy(color = theme.textColor.copy(alpha = 0.5f)),
             )
         }

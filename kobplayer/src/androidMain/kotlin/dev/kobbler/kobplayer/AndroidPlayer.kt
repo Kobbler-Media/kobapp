@@ -23,6 +23,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -54,6 +55,7 @@ private const val FrameRateProbeWindowMs = 4_000L
 
 // A remux opens with an ESAdded per stream, dozens in one burst: one refresh answers them all.
 private const val TrackRefreshSettleMs = 50L
+private const val AudioClockPollMs = 250L
 
 /**
  * Android VLC player implementation using libvlc-android.
@@ -154,6 +156,20 @@ internal class AndroidPlayer(
 
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    // TimeChanged rides on pictures, so with :no-video libVLC reports the clock only every
+    // several seconds and an audiobook's elapsed time visibly lurched.
+    init {
+        if (config.audioOnly) scope.launch {
+            _state.collectLatest { state ->
+                while (state == PlayerState.PLAYING) {
+                    delay(AudioClockPollMs)
+                    val time = onVlc { time } ?: break
+                    if (time >= 0) _currentMs.value = publishedPosition(_currentMs.value, time)
+                }
+            }
+        }
+    }
 
     private val _error = MutableStateFlow<Throwable?>(null)
     override val error: StateFlow<Throwable?> = _error.asStateFlow()

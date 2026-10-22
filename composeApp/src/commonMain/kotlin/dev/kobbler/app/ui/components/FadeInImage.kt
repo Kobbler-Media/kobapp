@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
@@ -43,10 +42,7 @@ fun FadeInImage(
                 onShown()
             }
         },
-        modifier = modifier.graphicsLayer {
-            compositingStrategy = CompositingStrategy.ModulateAlpha
-            this.alpha = fade.value * alpha
-        },
+        modifier = modifier.graphicsLayer { this.alpha = fade.value * alpha },
     )
 }
 

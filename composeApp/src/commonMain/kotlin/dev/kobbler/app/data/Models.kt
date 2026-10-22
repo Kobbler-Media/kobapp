@@ -102,6 +102,7 @@ data class TvShow(
     val autoWantMode: String = "none",
     val inWatchlist: Boolean = false,
     val nextAiring: String? = null,
+    val isSport: Boolean = false,
 )
 
 @Immutable
@@ -521,6 +522,7 @@ data class LiveBuffer(
     val durationSeconds: Double,
     val retainedSeconds: Double,
     val capSeconds: Double,
+    val tuneError: String? = null,
 )
 
 @Immutable
@@ -605,7 +607,11 @@ data class HomeData(
 data class ForYouItem(
     val item: DiscoverItem,
     val because: List<String>,
+    val seeds: List<ForYouSeed> = emptyList(),
 )
+
+@Immutable
+data class ForYouSeed(val mediaType: String, val tmdbId: Long, val title: String)
 
 @Immutable
 data class StremioContinueItem(
@@ -743,3 +749,17 @@ data class StreamCachingStatus(
     val progress: Double?,
     val message: String?,
 )
+
+@Immutable
+data class WatchHistoryEntry(
+    val mediaType: String,
+    val tmdbId: Long?,
+    val title: String,
+    val year: Int?,
+    val posterUrl: String?,
+    val lastWatchedAt: String?,
+    val sources: List<String>,
+    val excluded: Boolean,
+)
+
+data class WatchHistoryPage(val items: List<WatchHistoryEntry>, val total: Int)

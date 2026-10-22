@@ -59,6 +59,7 @@ fun ActivityScreen(
     api: KobblerApi,
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
+    tabSwitch: (@Composable () -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     val dimens = KobappTheme.dimens
@@ -120,6 +121,7 @@ fun ActivityScreen(
                     else -> "no recent activity"
                 },
                 compact = compact,
+                trailing = tabSwitch,
             )
         }
 

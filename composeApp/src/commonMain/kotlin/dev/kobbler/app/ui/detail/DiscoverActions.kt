@@ -3,6 +3,8 @@ package dev.kobbler.app.ui.detail
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.HistoryToggleOff
+import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
@@ -27,6 +29,7 @@ internal fun DiscoverActions(
     wide: Boolean,
     modifier: Modifier = Modifier,
     exitDown: FocusRequester? = null,
+    refusals: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val colors = KobappTheme.colors
     val wantable = showWant && detail.libraryStatus == LibraryStatus.NotInLibrary
@@ -75,6 +78,15 @@ internal fun DiscoverActions(
                     modifier = Modifier.focusKey("want"),
                 )
             }
+        }
+        refusals.forEachIndexed { i, (label, refuse) ->
+            IconAction(
+                icon = if (i == 0) Icons.Outlined.ThumbDown else Icons.Outlined.HistoryToggleOff,
+                label = label,
+                accent = accent,
+                onClick = refuse,
+                modifier = Modifier.focusKey("refuse.$i"),
+            )
         }
         if (showWant && detail.libraryStatus == LibraryStatus.Wanted) {
             IconAction(

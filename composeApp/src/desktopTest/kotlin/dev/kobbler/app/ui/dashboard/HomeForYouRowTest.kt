@@ -44,7 +44,8 @@ class HomeForYouRowTest {
                     waitUntil(timeoutMillis = 10_000) {
                         onAllNodesWithText("Picked Film").fetchSemanticsNodes().isNotEmpty()
                     }
-                    onNodeWithText("Because you watched Show A +1").assertExists()
+                    // A phone card is too narrow for the sentence, so it names only the title.
+                    onNodeWithText(if (formFactor == FormFactor.Phone) "Like Show A" else "Because you watched Show A +1").assertExists()
                     val stremioTop = onNodeWithText("Continue Watching on Stremio").getUnclippedBoundsInRoot().top
                     val forYouTop = onNodeWithText("For You").getUnclippedBoundsInRoot().top
                     assertTrue(forYouTop > stremioTop, "$formFactor: For You at $forYouTop, Stremio at $stremioTop")

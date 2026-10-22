@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -331,13 +331,17 @@ private fun WideLayout(
             .padding(horizontal = gutter, vertical = dimens.s4),
         horizontalArrangement = Arrangement.spacedBy(dimens.s6),
     ) {
+        // The cover takes whatever height the transport leaves: a remote cannot scroll a
+        // column, so on a 540dp TV a fixed-size cover pushed the controls off the screen.
         Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.width(360.dp)) {
-                CoverHero(book = book, modifier = Modifier.fillMaxWidth())
-            }
+            CoverHero(
+                book = book,
+                modifier = Modifier.weight(1f, fill = false).widthIn(max = 360.dp),
+                matchHeight = true,
+            )
             Spacer(Modifier.height(dimens.s5))
             BookTitleBlock(
                 book = book,
@@ -384,11 +388,11 @@ private fun WideLayout(
 }
 
 @Composable
-private fun CoverHero(book: Book, modifier: Modifier = Modifier) {
+private fun CoverHero(book: Book, modifier: Modifier = Modifier, matchHeight: Boolean = false) {
     val colors = KobappTheme.colors
     Box(
         modifier = modifier
-            .aspectRatio(1f)
+            .aspectRatio(1f, matchHeightConstraintsFirst = matchHeight)
             .clip(KobappTheme.shapes.hero)
             .background(
                 Brush.linearGradient(

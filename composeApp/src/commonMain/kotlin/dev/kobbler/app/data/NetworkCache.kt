@@ -21,6 +21,7 @@ internal fun networkCacheMsFor(
     apiUrl: String,
     roundTripMs: Long?,
     profile: OriginProfile,
+    liveTuner: Boolean = false,
 ): Int {
     val roundTrip = roundTripMs ?: profile.roundTripMs
     val base = when {
@@ -31,7 +32,10 @@ internal fun networkCacheMsFor(
         roundTrip != null && sameOrigin(streamUrl, apiUrl) -> bufferForRoundTrip(roundTrip)
         else -> RemoteNetworkCacheMs
     }
-    return (base + profile.stallAllowanceMs).coerceAtMost(MaxNetworkCacheMs)
+    // A tuner delivers at broadcast rate, so the buffer fills no faster than it plays and
+    // every extra ms holds the first picture frozen; what films taught the server stays theirs.
+    val allowance = if (liveTuner) 0 else profile.stallAllowanceMs
+    return (base + allowance).coerceAtMost(MaxNetworkCacheMs)
 }
 
 // Ten round trips of margin on top of the LAN floor: generous, because a buffer a little

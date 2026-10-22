@@ -45,7 +45,8 @@ internal suspend fun GlobalPlayerState.learnBuffering(
     }
     player.state.collect { state ->
         if (state == PlayerState.PLAYING && cleanSince == null) cleanSince = now()
-        if (previousState == PlayerState.PLAYING && state == PlayerState.BUFFERING &&
+        // A tuner's picture breaks up with reception, not with the network to the server.
+        if (previousState == PlayerState.PLAYING && state == PlayerState.BUFFERING && mediaType != "livetv" &&
             isStall(lastSeekAt?.let { now() - it })
         ) {
             lastStreamUrl?.let(api::recordStall)

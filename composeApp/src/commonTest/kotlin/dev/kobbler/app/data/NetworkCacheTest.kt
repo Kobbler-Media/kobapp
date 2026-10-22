@@ -15,7 +15,8 @@ class NetworkCacheTest {
         streamUrl: String,
         roundTripMs: Long? = null,
         profile: OriginProfile = OriginProfile(),
-    ) = networkCacheMsFor(streamUrl, api, roundTripMs, profile)
+        liveTuner: Boolean = false,
+    ) = networkCacheMsFor(streamUrl, api, roundTripMs, profile, liveTuner)
 
     @Test
     fun `a host that can only be local needs no measurement`() {
@@ -155,5 +156,16 @@ class NetworkCacheTest {
         repeat(4) { latency.record(2) }
         repeat(4) { latency.record(120) }
         assertEquals(120, latency.roundTripMs(), "the ring still holds a stale LAN sample")
+    }
+
+    /**
+     * A tuner hands its bytes over at broadcast rate, so every ms of buffer is a ms the first
+     * picture sits frozen on screen; an allowance learned from films never fits it.
+     */
+    @Test
+    fun `a live tune does not pay the allowance a server earned on films`() {
+        val stalled = OriginProfile(stallAllowanceMs = MaxStallAllowanceMs)
+        assertEquals(340, cache(ownStream, roundTripMs = 4, profile = stalled, liveTuner = true))
+        assertEquals(340 + MaxStallAllowanceMs, cache(ownStream, roundTripMs = 4, profile = stalled))
     }
 }

@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
@@ -69,6 +70,10 @@ fun CalendarScreen(
     val today = remember { localToday() }
 
     var rangeStart by remember { mutableStateOf(today.minus(45, DateTimeUnit.DAY)) }
+    // A library's past runs back for years, and while the list can keep paging it in a
+    // remote never reaches the filters above it: every UP near the top fetched another month.
+    val earliest = remember { today.minus(AgendaPastDays, DateTimeUnit.DAY) }
+    var earlierExhausted by remember { mutableStateOf(false) }
     var rangeEnd by remember { mutableStateOf(today.plus(60, DateTimeUnit.DAY)) }
     var items by remember { mutableStateOf<List<CalendarItemDto>>(emptyList()) }
     var initialLoaded by remember { mutableStateOf(false) }
@@ -105,6 +110,7 @@ fun CalendarScreen(
         }
     }
 
+    val filtersFocus = remember { FocusRequester() }
     Column(
         modifier = modifier.fillMaxSize(),
     ) {
@@ -131,6 +137,7 @@ fun CalendarScreen(
                 } else null,
                 secondaryRow = {
                     FilterChipRow(
+                        firstChip = filtersFocus,
                         activeFilters = activeFilters,
                         onToggle = { key ->
                             activeFilters = if (key in activeFilters) activeFilters - key
@@ -171,20 +178,25 @@ fun CalendarScreen(
             view == CalendarView.Agenda || compact -> {
                 AgendaList(
                     items = filteredItems,
+                    filterKey = activeFilters,
+                    onRight = { runCatching { filtersFocus.requestFocus() }.isSuccess },
                     today = today,
                     apiUrl = api.apiUrl,
                     formFactor = formFactor,
                     onItemClick = onItemClick,
+                    canLoadEarlier = !earlierExhausted && rangeStart > earliest,
                     onLoadEarlier = {
-                        val newStart = rangeStart.minus(30, DateTimeUnit.DAY)
+                        val newStart = maxOf(rangeStart.minus(30, DateTimeUnit.DAY), earliest)
                         try {
                             val earlier = api.getCalendar(
                                 newStart.toString(),
                                 rangeStart.minus(1, DateTimeUnit.DAY).toString(),
                             )
-                            if (earlier.isNotEmpty()) items = earlier + items
+                            if (earlier.isNotEmpty()) items = earlier + items else earlierExhausted = true
                             rangeStart = newStart
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                            earlierExhausted = true
+                        }
                     },
                     onLoadLater = {
                         val newEnd = rangeEnd.plus(30, DateTimeUnit.DAY)
@@ -241,6 +253,7 @@ fun CalendarScreen(
 
 @Composable
 private fun FilterChipRow(
+    firstChip: FocusRequester,
     activeFilters: Set<String>,
     onToggle: (String) -> Unit,
 ) {
@@ -249,7 +262,7 @@ private fun FilterChipRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.focusKeyGroup("filters"),
     ) {
-        MEDIA_KINDS.forEach { kind ->
+        MEDIA_KINDS.forEachIndexed { i, kind ->
             val selected = kind.key in activeFilters
             val accent = kind.color(colors)
             KobChip(
@@ -257,7 +270,7 @@ private fun FilterChipRow(
                 style = if (selected) KobChipStyle.AccentTint else KobChipStyle.Ghost,
                 accent = accent,
                 onClick = { onToggle(kind.key) },
-                modifier = Modifier.focusKey(kind.key),
+                modifier = if (i == 0) Modifier.focusKey(kind.key, focusRequester = firstChip) else Modifier.focusKey(kind.key),
             )
         }
     }
@@ -267,3 +280,5 @@ private fun monthName(month: Int): String = listOf(
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
 )[month - 1]
+
+private const val AgendaPastDays = 180

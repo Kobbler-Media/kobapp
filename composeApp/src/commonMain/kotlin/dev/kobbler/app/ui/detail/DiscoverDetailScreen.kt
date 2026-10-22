@@ -66,6 +66,7 @@ fun DiscoverDetailScreen(
     onBack: () -> Unit,
     onViewInLibrary: (mediaType: String, libraryId: String) -> Unit,
     modifier: Modifier = Modifier,
+    refusals: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     val colors = KobappTheme.colors
     val accent = when (detail.mediaType) {
@@ -139,6 +140,7 @@ fun DiscoverDetailScreen(
             wide = wide,
             exitDown = exitDown,
             modifier = anchor,
+            refusals = refusals,
         )
     }
 

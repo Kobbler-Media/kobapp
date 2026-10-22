@@ -303,7 +303,7 @@ fun MoviesScreen(
                                     onClick = { onMovieClick(movie) },
                                     modifier = Modifier
                                         .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
-                                        .focusKey("recent.movie.${movie.id}", preferredEntry = recentIsEntry && idx == 0)
+                                        .focusKey("movie.${movie.id}", preferredEntry = recentIsEntry && idx == 0)
                                         .onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } },
                                 )
                             }

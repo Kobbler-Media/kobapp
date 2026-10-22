@@ -55,6 +55,8 @@ import dev.kobbler.app.ui.components.bleedHorizontally
 import dev.kobbler.app.ui.components.gridCount
 import dev.kobbler.app.ui.components.BrowseGridHeading
 import dev.kobbler.app.ui.components.tvAutoGlow
+import dev.kobbler.app.ui.components.LocalPageBackdrop
+import dev.kobbler.app.ui.components.PageBackdropHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,7 +91,7 @@ fun BooksScreen(
         else -> dimens.pageGutter
     }
 
-    Column(modifier.fillMaxSize()) {
+    val page: @Composable (Modifier) -> Unit = { pageModifier -> Column(pageModifier.fillMaxSize()) {
         if (onAuthorClick != null && onSeriesClick != null) {
             Row(
                 modifier = Modifier
@@ -128,7 +130,10 @@ fun BooksScreen(
                 BooksTab.Series -> SeriesGrid(api, headerGutter, onSeriesClick ?: {})
             }
         }
-    }
+    } }
+    // The grid owns the spotlight but sits below the header, so on its own its picture
+    // would start under the All/Authors/Series strip rather than at the top of the page.
+    if (LocalPageBackdrop.current == null) PageBackdropHost(modifier) { page(Modifier) } else page(modifier)
 }
 
 @Composable

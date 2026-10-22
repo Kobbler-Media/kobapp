@@ -48,8 +48,8 @@ class KidsProfileTest {
     }
 
     @Test
-    fun `kids navigation has no live tv, iptv, sports or activity anywhere`() {
-        val hidden = setOf(Destination.Tab.LiveTv, Destination.Tab.Iptv, Destination.Tab.Activity, Destination.Tab.Sports)
+    fun `kids navigation has no live tv, iptv or sports anywhere`() {
+        val hidden = setOf(Destination.Tab.LiveTv, Destination.Tab.Iptv, Destination.Tab.Sports)
         val kids = navConfigFor(isKids = true)
         for (tabs in listOf(kids.bottomBarTabs, kids.drawerTabs, kids.sidebarTabs)) {
             assertTrue(tabs.none { it in hidden }, "$tabs")

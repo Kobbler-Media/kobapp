@@ -19,9 +19,15 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKeyGroup
@@ -38,13 +44,27 @@ internal fun AgendaList(
     apiUrl: String,
     formFactor: FormFactor,
     onItemClick: (CalendarItemDto) -> Unit,
+    filterKey: Any?,
+    onRight: () -> Boolean,
+    canLoadEarlier: Boolean,
     onLoadEarlier: suspend () -> Unit,
     onLoadLater: suspend () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val bleed = KobappTheme.dimens.focusBleed
     val listState = rememberLazyListState()
+    // A filter can remove the row the list was anchored on, which left it wherever the
+    // lazy column happened to land; a new filter starts from today again. Focus is only
+    // claimed the first time, so toggling a chip does not pull the remote off it.
     var hasScrolled by remember { mutableStateOf(false) }
+    var anchoredFilter by remember { mutableStateOf(filterKey) }
+    LaunchedEffect(filterKey) {
+        if (filterKey == anchoredFilter) return@LaunchedEffect
+        anchoredFilter = filterKey
+        hasScrolled = false
+    }
+    var focusClaimed by remember { mutableStateOf(false) }
+    val mayLoadEarlier by rememberUpdatedState(canLoadEarlier)
     var isLoadingMore by remember { mutableStateOf(false) }
     val focusScope = LocalFocusScope.current
 
@@ -64,14 +84,15 @@ internal fun AgendaList(
         // The entry-focus race is unwinnable by preferredEntry alone: FocusScopeHost
         // gives up after a handful of frames, long before the calendar fetch returns,
         // so the header chips win by default. Claim it back once the row exists.
-        if (formFactor == FormFactor.TV && anchorItem != null) {
+        if (formFactor == FormFactor.TV && anchorItem != null && !focusClaimed) {
+            focusClaimed = true
             focusScope.restore("$AGENDA_GROUP.${rowKey(anchorItem, anchor.date)}")
         }
     }
 
     val shouldLoadEarlier by remember {
         derivedStateOf {
-            listState.firstVisibleItemIndex <= 5 && !isLoadingMore && hasScrolled
+            mayLoadEarlier && listState.firstVisibleItemIndex <= 5 && !isLoadingMore && hasScrolled
         }
     }
     val shouldLoadLater by remember {
@@ -84,14 +105,9 @@ internal fun AgendaList(
 
     LaunchedEffect(shouldLoadEarlier) {
         if (!shouldLoadEarlier) return@LaunchedEffect
+        // Rows are keyed, so the list holds its place across the prepend on its own.
         isLoadingMore = true
-        val before = listState.firstVisibleItemIndex
-        val offset = listState.firstVisibleItemScrollOffset
-        val totalBefore = listState.layoutInfo.totalItemsCount
         onLoadEarlier()
-        val totalAfter = listState.layoutInfo.totalItemsCount
-        val prepended = totalAfter - totalBefore
-        if (prepended > 0) listState.scrollToItem(before + prepended, offset)
         isLoadingMore = false
     }
 
@@ -104,7 +120,11 @@ internal fun AgendaList(
 
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize().focusKeyGroup(AGENDA_GROUP),
+        // The filters sit above every past day the list can page in, so UP is a long way
+        // round on a remote; a row has nothing to its right, which makes RIGHT the shortcut.
+        modifier = modifier.fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
+            event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight && onRight()
+        },
         // A row's focus ring paints outside its bounds and the list clips at its own
         // edge; CalendarScreen pulls its gutter in by the same amount so the rows stay
         // on the page gutter while the ring gets room on both sides.

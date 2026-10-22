@@ -585,7 +585,7 @@ fun FullscreenVideoPlayer(
 
     var recordRequested by remember(state.liveSessionId) { mutableStateOf(false) }
     if (isLiveTv) {
-        LiveBufferPoll(state, api)
+        LiveBufferPoll(state, api, player)
         LiveNowPoll(state, api)
     }
 

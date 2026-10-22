@@ -43,6 +43,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import dev.kobbler.app.ui.components.TvFocusScale
+import dev.kobbler.app.ui.components.tvAutoGlow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.key
@@ -376,7 +381,7 @@ private fun AuthorAndSeries(
                         ref.name,
                         style = KobappTheme.type.body.copy(fontWeight = FontWeight.Medium),
                         color = accent,
-                        modifier = Modifier.clickable { onAuthorClick(ref.id) },
+                        modifier = Modifier.detailLink { onAuthorClick(ref.id) },
                     )
                 }
             }
@@ -394,13 +399,20 @@ private fun AuthorAndSeries(
                 Text(
                     label.uppercase(),
                     style = KobappTheme.type.bodySm.copy(letterSpacing = 0.12.em),
-                    color = colors.textLo,
-                    modifier = Modifier.clickable { onSeriesClick(sId) },
+                    color = colors.textMd,
+                    modifier = Modifier.detailLink { onSeriesClick(sId) },
                 )
             }
         }
     }
 }
+
+private fun Modifier.detailLink(onClick: () -> Unit): Modifier = this
+    .tvAutoGlow(cornerRadiusDp = 6f, scale = TvFocusScale.Subtle)
+    .clip(RoundedCornerShape(6.dp))
+    .pointerHoverIcon(PointerIcon.Hand)
+    .clickable(onClick = onClick)
+    .padding(horizontal = 4.dp, vertical = 2.dp)
 
 @Composable
 private fun StatRow(book: Book) {

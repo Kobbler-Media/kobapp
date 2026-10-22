@@ -46,6 +46,7 @@ import dev.kobbler.app.theme.KobappDimens
 import dev.kobbler.app.theme.KobappDimensDefault
 import dev.kobbler.kobfocus.FocusScopeHost
 import dev.kobbler.kobfocus.focusInert
+import dev.kobbler.kobfocus.LocalFocusScopeStore
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalKobappDimens
 import dev.kobbler.app.theme.LocalSection
@@ -54,6 +55,8 @@ import dev.kobbler.app.theme.Section
 import dev.kobbler.app.ui.components.PageBackdropHost
 import dev.kobbler.app.ui.components.LocalTvFocusDecor
 import dev.kobbler.app.ui.components.LocalCoveredByPlayer
+import dev.kobbler.app.ui.components.DataCache
+import dev.kobbler.app.ui.dashboard.home.forYouRefusals
 import dev.kobbler.app.ui.components.hiddenWhenCovered
 import dev.kobbler.app.ui.player.rememberPlayerCoversScreen
 import dev.kobbler.app.ui.components.AsyncContent
@@ -92,15 +95,14 @@ sealed interface Destination {
         data object Audiobooks : Tab("Audiobooks", Icons.Outlined.Headphones, KobappColorsDefault.accAudio)
         data object LiveTv : Tab("Live TV", Icons.Outlined.Tv, KobappColorsDefault.accLive)
         data object Iptv : Tab("IPTV", Icons.Outlined.LiveTv, KobappColorsDefault.accIptv)
-        data object Wanted : Tab("Wanted", Icons.Outlined.Bookmark, KobappColorsDefault.accCal)
         data object Downloads : Tab("Downloads", Icons.Outlined.Download, KobappColorsDefault.accMovies)
-        data object Notifications : Tab("Notifications", Icons.Outlined.Notifications, KobappColorsDefault.accHome)
         data object Calendar : Tab("Calendar", Icons.Outlined.CalendarMonth, KobappColorsDefault.accCal)
         data object Settings : Tab("Settings", Icons.Outlined.Settings, KobappColorsDefault.accSet)
         data object Activity : Tab("Activity", Icons.Outlined.History, KobappColorsDefault.accNotif)
     }
 
     data object Profile : Destination
+    data object WatchHistory : Destination
 
     data class MovieDetail(val movieId: String, val autoPlay: Boolean = false) : Destination
     data class TvShowDetail(val showId: String, val autoPlay: Boolean = false, val isEpisodeId: Boolean = false) : Destination
@@ -148,28 +150,24 @@ val defaultNavConfig = NavConfig(
         Destination.Tab.Iptv,
         Destination.Tab.Audiobooks,
         Destination.Tab.Books,
-        Destination.Tab.Wanted,
         Destination.Tab.Downloads,
-        Destination.Tab.Notifications,
         Destination.Tab.Calendar,
         Destination.Tab.Activity,
     ),
     // Desktop/TV sidebar: full set (Settings is appended at the scaffold).
-    // Downloads has no rail entry — it is the Wanted page's second tab.
     sidebarTabs = listOf(
         Destination.Tab.Home,
         Destination.Tab.Movies, Destination.Tab.TvShows,
         Destination.Tab.Sports, Destination.Tab.LiveTv, Destination.Tab.Iptv,
         Destination.Tab.Audiobooks, Destination.Tab.Books,
-        Destination.Tab.Wanted, Destination.Tab.Notifications, Destination.Tab.Calendar,
-        Destination.Tab.Activity,
+        Destination.Tab.Downloads, Destination.Tab.Calendar, Destination.Tab.Activity,
     ),
 )
 
-// The server refuses live, IPTV, sports and activity routes for a Kids profile, so their tabs would only
-// ever show an error.
+// The server refuses live, IPTV and sports routes for a Kids profile, so their tabs would only ever
+// show an error. Activity stays: it is where a Kids profile reads its notifications.
 private val kidsHiddenTabs =
-    setOf(Destination.Tab.LiveTv, Destination.Tab.Iptv, Destination.Tab.Sports, Destination.Tab.Activity)
+    setOf(Destination.Tab.LiveTv, Destination.Tab.Iptv, Destination.Tab.Sports)
 
 fun navConfigFor(isKids: Boolean): NavConfig =
     if (!isKids) defaultNavConfig
@@ -428,9 +426,7 @@ internal val Destination.Tab.section: Section get() = when (this) {
     Destination.Tab.Audiobooks -> Section.Audio
     Destination.Tab.LiveTv -> Section.LiveTv
     Destination.Tab.Iptv -> Section.Iptv
-    Destination.Tab.Wanted -> Section.Wanted
     Destination.Tab.Downloads -> Section.Downloads
-    Destination.Tab.Notifications -> Section.Notifications
     Destination.Tab.Calendar -> Section.Calendar
     Destination.Tab.Settings -> Section.Settings
     Destination.Tab.Activity -> Section.Activity
@@ -445,9 +441,7 @@ internal fun tabForSection(section: Section): Destination.Tab = when (section) {
     Section.Audio -> Destination.Tab.Audiobooks
     Section.LiveTv -> Destination.Tab.LiveTv
     Section.Iptv -> Destination.Tab.Iptv
-    Section.Wanted -> Destination.Tab.Wanted
     Section.Downloads -> Destination.Tab.Downloads
-    Section.Notifications -> Destination.Tab.Notifications
     Section.Calendar -> Destination.Tab.Calendar
     Section.Settings -> Destination.Tab.Settings
     Section.Activity -> Destination.Tab.Activity
@@ -615,7 +609,8 @@ internal fun DesktopScaffold(
 ) {
     var zone by remember { mutableStateOf(Zone.Content) }
     val backInterceptors = LocalBackInterceptors.current
-    var sidebarIdx by remember { mutableStateOf(0) }
+    val allSidebarTabs = remember(navConfig) { navConfig.sidebarTabs + Destination.Tab.Settings }
+    var sidebarIdx by remember { mutableStateOf(allSidebarTabs.indexOf(nav.currentTab).coerceAtLeast(0)) }
     val rootFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var showSearch by nav::searchOpen
@@ -624,11 +619,10 @@ internal fun DesktopScaffold(
     val isDetailScreen = remember(current) {
         current is Destination.MovieDetail || current is Destination.TvShowDetail || current is Destination.BookDetail ||
             current is Destination.AuthorDetail || current is Destination.SeriesDetail || current is Destination.DiscoverItemDetail ||
-            current is Destination.PersonDetail || current is Destination.IptvChannelDetail || current is Destination.Profile ||
+            current is Destination.PersonDetail || current is Destination.IptvChannelDetail || current is Destination.Profile || current is Destination.WatchHistory ||
             current is Destination.LiveChannelDetail || current is Destination.LiveRecordingDetail ||
             current is Destination.LiveSeriesRuleDetail || current is Destination.LiveOnNow
     }
-    val allSidebarTabs = remember(navConfig) { navConfig.sidebarTabs + Destination.Tab.Settings }
     val tvMode = formFactor == FormFactor.TV
     // The TV sidebar pins a Search row above the tabs. It is not a Destination.Tab, so
     // it sits at index -1 rather than in allSidebarTabs — every sidebarIdx → tab lookup
@@ -722,13 +716,21 @@ internal fun DesktopScaffold(
     // Navigating a Tab clears the stack, so every rail step tears the current screen down
     // and refetches the next one from scratch. Holding the D-pad across the rail did that
     // once per row; settle first, then navigate. The highlight itself stays immediate.
+    // A tab entered from the rail starts on its top row. What it remembered is where the
+    // viewer was last time, which in a browse tab is usually a row below Continue Watching.
+    val focusStore = LocalFocusScopeStore.current
     val commitSidebarIdx = {
         val tab = allSidebarTabs.getOrNull(sidebarIdx)
-        if (tab != null && tab != nav.currentTab) nav.navigate(tab)
+        if (tab != null && tab != nav.currentTab) {
+            focusStore.forget(tab.title)
+            nav.navigate(tab)
+        }
     }
-    // The `tab != currentTab` guard is what keeps this from re-navigating on first
-    // composition and on the Zone.Content → Zone.Sidebar handoffs, which assign
-    // sidebarIdx purely to sync the highlight to where the viewer already is.
+    // The `tab != currentTab` guard is what keeps this from re-navigating on the
+    // Zone.Content → Zone.Sidebar handoffs, which assign sidebarIdx purely to sync the
+    // highlight to where the viewer already is. First composition is covered by seeding
+    // sidebarIdx from the stack: the reader and audiobook player replace this scaffold,
+    // so leaving one composes it afresh deep inside a tab.
     LaunchedEffect(sidebarIdx) {
         delay(SidebarNavDebounceMs)
         commitSidebarIdx()
@@ -737,6 +739,7 @@ internal fun DesktopScaffold(
     val tabTopBar: (@Composable (Boolean) -> Unit)? = if (tvMode) null else { transparent ->
         KobTopBar(
             notificationCount = 0,
+            onNotificationsClick = { nav.navigate(Destination.Tab.Activity) },
             dense = true,
             showCast = true,
             transparent = transparent,
@@ -1171,20 +1174,12 @@ private fun SingleTabContent(
                 )
             }
         }
-        is Destination.Tab.Wanted, is Destination.Tab.Downloads -> {
+        is Destination.Tab.Downloads -> {
             TabScreenWithTopBar(onMenuClick, onSearchClick, formFactor) {
                 dev.kobbler.app.ui.dashboard.WantedScreen(
                     api = api,
                     modifier = modifier,
                     formFactor = formFactor,
-                    // Phone keeps both rail entries, so each opens its own half. Wide form
-                    // factors fold Downloads into this screen and only list "Wanted" in the
-                    // rail, where downloads are the half worth landing on.
-                    initialTab = when {
-                        tab is Destination.Tab.Downloads -> dev.kobbler.app.ui.dashboard.WantedTab.Downloads
-                        formFactor != FormFactor.Phone -> dev.kobbler.app.ui.dashboard.WantedTab.Downloads
-                        else -> dev.kobbler.app.ui.dashboard.WantedTab.Wanted
-                    },
                     onItemClick = { item ->
                         when (item.mediaType) {
                             "movie" -> nav.navigate(Destination.MovieDetail(item.id))
@@ -1199,15 +1194,6 @@ private fun SingleTabContent(
                             else -> nav.navigate(Destination.BookDetail(target.id))
                         }
                     },
-                )
-            }
-        }
-        is Destination.Tab.Notifications -> {
-            TabScreenWithTopBar(onMenuClick, onSearchClick, formFactor) {
-                dev.kobbler.app.ui.dashboard.NotificationsScreen(
-                    api = api,
-                    modifier = modifier,
-                    formFactor = formFactor,
                 )
             }
         }
@@ -1236,12 +1222,13 @@ private fun SingleTabContent(
                     modifier = modifier,
                     formFactor = formFactor,
                     onOpenProfile = { nav.navigate(Destination.Profile) },
+                    onOpenWatchHistory = { nav.navigate(Destination.WatchHistory) },
                 )
             }
         }
         is Destination.Tab.Activity -> {
             TabScreenWithTopBar(onMenuClick, onSearchClick, formFactor) {
-                dev.kobbler.app.ui.dashboard.ActivityScreen(
+                dev.kobbler.app.ui.dashboard.ActivityPage(
                     api = api,
                     modifier = modifier,
                     formFactor = formFactor,
@@ -1387,8 +1374,22 @@ private fun DetailContent(
             ) {
                 api.getDiscoverDetail(dest.mediaType, dest.provider, dest.providerId)
             }
+            // A For You pick can be refused from its page, where a remote can reach it; the
+            // rail's long-press menu is touch-only.
+            val forYou = remember(dest) {
+                DataCache.get<HomeData>("home")?.forYou?.firstOrNull {
+                    it.item.provider == dest.provider && it.item.providerId == dest.providerId
+                }
+            }
+            val refuseScope = rememberCoroutineScope()
+            val refusals = remember(forYou) {
+                forYou?.let { entry ->
+                    forYouRefusals(entry, api, refuseScope).map { (label, refuse) -> label to { refuse(); nav.goBack(); Unit } }
+                }.orEmpty()
+            }
             AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { detail ->
                 DiscoverDetailScreen(
+                    refusals = refusals,
                     detail = detail,
                     api = api,
                     formFactor = formFactor,
@@ -1482,6 +1483,9 @@ private fun DetailContent(
                 onBack = { nav.goBack() },
                 modifier = modifier,
             )
+        }
+        is Destination.WatchHistory -> {
+            dev.kobbler.app.ui.dashboard.WatchHistoryScreen(api = api, modifier = modifier, formFactor = formFactor)
         }
         is Destination.Profile -> {
             dev.kobbler.app.ui.dashboard.ProfileScreen(

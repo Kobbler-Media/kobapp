@@ -825,10 +825,24 @@ private fun ReaderLoaded(
             ) { topBar() }
             AnimatedVisibility(
                 visible = nav.chromeVisible,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter).focusInert(panelOpen),
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) { bottomBar() }
+            AnimatedVisibility(
+                visible = !nav.chromeVisible && !panelOpen,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                ReaderTvStatus(
+                    pages = pages,
+                    currentChapter = currentChapter,
+                    totalChapters = epub.chapters.size,
+                    cursorActive = cursorBlock.value != null,
+                    theme = theme,
+                )
+            }
         }
     }
 }

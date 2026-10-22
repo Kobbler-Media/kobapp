@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.ContinueEpisode
+import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Season
 import dev.kobbler.app.data.TvShow
@@ -51,8 +52,11 @@ internal fun ShowActions(
     keep: KeepAction? = null,
 ) {
     val resume = show.continueEpisode
-    val firstUnwatchedIdx = selectedSeason?.episodes?.indexOfFirst {
-        it.filePath != null && !it.isWatchedNow(watchedOverrides)
+    // A sport is followed for what is newest: its first unwatched event is a test session
+    // from months ago, not where the viewer wants to start.
+    val unwatched: (Episode) -> Boolean = { it.filePath != null && !it.isWatchedNow(watchedOverrides) }
+    val firstUnwatchedIdx = selectedSeason?.episodes?.let { eps ->
+        if (show.isSport) eps.indexOfLast(unwatched) else eps.indexOfFirst(unwatched)
     }?.takeIf { it >= 0 }
     // Owned out here, not inside the menu: an item closes the menu before its request
     // finishes, and menu content is disposed on close -- a scope remembered in there

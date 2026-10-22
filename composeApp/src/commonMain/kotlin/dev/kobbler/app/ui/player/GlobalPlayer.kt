@@ -122,6 +122,9 @@ class GlobalPlayerState {
     // this is scoped to the codec that breaks rather than to live TV as a whole.
     var liveFieldCoded by mutableStateOf(false)
     var liveBuffer by mutableStateOf<dev.kobbler.app.data.LiveBuffer?>(null)
+    // Why the server says the tune is failing. The player itself only ever learns that the
+    // stream stopped, so this is what the failure dialog names.
+    var liveTuneError by mutableStateOf<String?>(null)
     // Where the live edge sat when playback was paused on the raw TS, in buffer
     // coordinates — the raw stream has no timeline to resume against, so the position is
     // taken from the server before the source is swapped.
@@ -497,7 +500,7 @@ class GlobalPlayerState {
                 // reports, and a credential does not belong in one.
                 api.playerUrl(streamUrl),
                 fieldCoded = liveFieldCoded,
-                networkCacheMs = api.networkCacheMsFor(streamUrl),
+                networkCacheMs = api.networkCacheMsFor(streamUrl, liveTuner = type == "livetv"),
                 audioLanguage = intent.audioLanguage,
                 subtitleOrdinal = intent.subtitleOrdinal,
                 subtitlesOff = intent.subtitlesOff,
@@ -604,6 +607,7 @@ class GlobalPlayerState {
         livePlaylistUrl = null
         liveTimeshift = false
         liveBuffer = null
+        liveTuneError = null
         livePausedAtSeconds = null
         liveSeekingLabel = null
         chapters = emptyList()
@@ -753,7 +757,7 @@ class GlobalPlayerState {
             appendLine()
             append(throwable.stackTraceToString())
         }
-        failureHelp = help
+        failureHelp = help ?: if (mediaType == "livetv") PlaybackFailureHelp(liveFailureSummary(title, throwable, liveTuneError)) else null
         preparingFor = null
         isPreparing = false
         preparingNote = null

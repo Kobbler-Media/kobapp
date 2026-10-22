@@ -5,6 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +31,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +40,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.TtsVoiceDto
@@ -64,12 +78,13 @@ internal fun ReaderSettingsPanel(
     onDismiss: () -> Unit,
     theme: ReaderTheme,
 ) {
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(theme.backgroundColor.copy(alpha = 0.9f))
             .clickable(onClick = onDismiss)
     ) {
+        val maxSheetHeight = maxHeight
         Column(
             Modifier
                 .focusKeyGroup("settings")
@@ -77,10 +92,20 @@ internal fun ReaderSettingsPanel(
                 .align(Alignment.BottomCenter)
                 .background(theme.backgroundColor, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                 .clickable(enabled = false) {}
+                .heightIn(max = maxSheetHeight)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp)
                 .safeBottomPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // A remote has no pointer to reach into the sheet with, so it opens holding focus.
+            val entry = remember { FocusRequester() }
+            LaunchedEffect(Unit) {
+                repeat(EntryFocusFrames) {
+                    if (runCatching { entry.requestFocus() }.isSuccess) return@LaunchedEffect
+                    withFrameNanos {}
+                }
+            }
             Text("Reader Settings", style = KobappTheme.type.h3.copy(color = theme.textColor))
             Spacer(Modifier.height(20.dp))
 
@@ -91,6 +116,8 @@ internal fun ReaderSettingsPanel(
                 valueRange = 12f..28f,
                 steps = 7,
                 theme = theme,
+                key = "fontsize",
+                focusRequester = entry,
             )
             Spacer(Modifier.height(12.dp))
 
@@ -120,6 +147,7 @@ internal fun ReaderSettingsPanel(
                 valueRange = 1.2f..2.2f,
                 steps = 9,
                 theme = theme,
+                key = "lineheight",
             )
             Spacer(Modifier.height(12.dp))
 
@@ -130,6 +158,7 @@ internal fun ReaderSettingsPanel(
                 valueRange = 8f..40f,
                 steps = 7,
                 theme = theme,
+                key = "margins",
             )
             Spacer(Modifier.height(12.dp))
 
@@ -139,7 +168,8 @@ internal fun ReaderSettingsPanel(
                     value = brightness,
                     onValueChange = onBrightnessChange,
                     valueRange = 0.15f..1f,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp).focusKey("brightness")
+                        .verticalKeysMoveFocus().tvAutoGlow(cornerRadiusDp = 999f, scale = 1f),
                     colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),
                 )
                 Icon(Icons.Outlined.BrightnessHigh, null, tint = theme.textColor.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
@@ -244,6 +274,7 @@ internal fun ReaderSettingsPanel(
                     valueRange = 0.5f..2.5f,
                     steps = 7,
                     theme = theme,
+                    key = "ttsspeed",
                 )
             }
         }
@@ -262,12 +293,34 @@ private fun ThemedSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
     theme: ReaderTheme,
+    key: String,
+    focusRequester: FocusRequester = remember { FocusRequester() },
 ) {
     Slider(
         value = value,
         onValueChange = onValueChange,
         valueRange = valueRange,
         steps = steps,
+        modifier = Modifier.focusKey(key, focusRequester = focusRequester).verticalKeysMoveFocus()
+            .tvAutoGlow(cornerRadiusDp = 999f, scale = 1f),
         colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),
     )
+}
+
+private const val EntryFocusFrames = 8
+
+// A Material slider steps its value on UP and DOWN as well as LEFT and RIGHT, so on a remote
+// the sheet's rows could be adjusted but never left.
+@Composable
+private fun Modifier.verticalKeysMoveFocus(): Modifier {
+    val focusManager = LocalFocusManager.current
+    return onPreviewKeyEvent { event ->
+        val direction = when (event.key) {
+            Key.DirectionUp -> FocusDirection.Up
+            Key.DirectionDown -> FocusDirection.Down
+            else -> return@onPreviewKeyEvent false
+        }
+        if (event.type == KeyEventType.KeyDown) focusManager.moveFocus(direction)
+        true
+    }
 }

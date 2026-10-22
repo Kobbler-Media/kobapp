@@ -46,6 +46,7 @@ import dev.kobbler.app.ui.dashboard.livetv.hhmmRange
 import dev.kobbler.app.ui.dashboard.livetv.parseLiveInstant
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
+import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.app.ui.components.Async
 
 private val PanelWidth = 420.dp
@@ -78,15 +79,17 @@ fun LiveChannelRail(
     val colors = KobappTheme.colors
     val dimens = KobappTheme.dimens
     val phone = formFactor == FormFactor.Phone
-    var favouritesOnly by remember { mutableStateOf(true) }
+    var chosenFavouritesOnly by remember { mutableStateOf<Boolean?>(null) }
 
     val (state, _) = rememberCached("livetv-rail") { api.getLiveGuideNow(limit = 200) }
     val all = (state as? Async.Ready)?.value ?: emptyList()
     val loading = state is Async.Loading
     val favouriteCount = all.count { it.favourite }
     // Favourites is the useful default, but only when there are any — an empty rail
-    // reads as a broken tuner.
-    LaunchedEffect(favouriteCount) { if (favouriteCount == 0) favouritesOnly = false }
+    // reads as a broken tuner — and only when it holds what is on screen, which the rail
+    // has to open on.
+    val watchingFavourite = currentChannelId == null || all.any { it.id == currentChannelId && it.favourite }
+    val favouritesOnly = chosenFavouritesOnly ?: (favouriteCount > 0 && watchingFavourite)
     val channels = remember(all, favouritesOnly) {
         if (favouritesOnly) all.filter { it.favourite } else all
     }
@@ -125,7 +128,7 @@ fun LiveChannelRail(
                 text = if (favouritesOnly) "Favourites $favouriteCount" else "All ${all.size}",
                 style = KobChipStyle.AccentTint,
                 accent = accent,
-                onClick = { favouritesOnly = !favouritesOnly },
+                onClick = { chosenFavouritesOnly = !favouritesOnly },
                 modifier = Modifier.focusKey("rail.filter", entryEligible = false),
             )
             Spacer(Modifier.weight(1f))
@@ -190,8 +193,13 @@ fun LiveChannelRail(
                 )
             }
         }
+        // The player's entry pass only sees rows already composed, and a lazy column far
+        // from the top has not composed the current one yet, so it fell to the first row.
+        val focusScope = LocalFocusScope.current
         LaunchedEffect(currentIndex) {
-            currentIndex?.let { listState.scrollToItem(it) }
+            val index = currentIndex ?: return@LaunchedEffect
+            listState.scrollToItem(index)
+            focusScope.restore("channelrail.ch.${channels[index].id}")
         }
     }
 }

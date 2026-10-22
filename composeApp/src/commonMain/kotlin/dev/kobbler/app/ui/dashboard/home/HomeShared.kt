@@ -22,6 +22,10 @@ import dev.kobbler.app.data.StremioContinueItem
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.theme.KobappColors
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.LocalFormFactor
+import dev.kobbler.app.platform.FormFactor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 fun KobappColors.accentForMediaType(mediaType: MediaType): Color = when (mediaType) {
     MediaType.Movie -> accMovies
@@ -96,6 +100,20 @@ fun becauseLabel(because: List<String>): String = when (because.size) {
     else -> "Because you watched ${because[0]} +${because.size - 1}"
 }
 
+// A phone card is ~120dp and its caption never scrolls on touch, so the full sentence
+// only ever showed as "Because you wat…".
+fun shortBecauseLabel(because: List<String>): String = because.firstOrNull()?.let { "Like $it" }.orEmpty()
+
+/** The two ways to say no to a pick: to the title itself, or to the watch it came from. */
+fun forYouRefusals(entry: ForYouItem, api: KobblerApi, scope: CoroutineScope): List<Pair<String, () -> Unit>> = buildList {
+    if (entry.item.provider == "tmdb") {
+        add("Not interested" to { scope.launch { runCatching { api.dismissRecommendation(entry.item) } } })
+    }
+    entry.seeds.firstOrNull()?.let { seed ->
+        add("Not based on ${seed.title}" to { scope.launch { runCatching { api.excludeFromRecommendations(listOf(seed)) } } })
+    }
+}
+
 @Composable
 fun ForYouCard(
     entry: ForYouItem,
@@ -106,11 +124,11 @@ fun ForYouCard(
 ) {
     val item = entry.item
     val wantScope = rememberCoroutineScope()
-    val menu = remember(item, api) { discoverContextMenu(item, api, wantScope, onClick) }
+    val menu = remember(entry, api) { discoverContextMenu(item, api, wantScope, onClick) + forYouRefusals(entry, api, wantScope) }
     PosterCard(
         title = item.title,
         imageUrl = item.posterUrl,
-        subtitle = becauseLabel(entry.because),
+        subtitle = if (LocalFormFactor.current == FormFactor.Phone) shortBecauseLabel(entry.because) else becauseLabel(entry.because),
         accentColor = KobappTheme.colors.accentForRecentlyAdded(item.mediaType),
         statusBadge = item.libraryStatus,
         contextMenuItems = menu,

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.GroupWork
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -43,7 +44,6 @@ import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.outlined.SwitchAccount
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -98,6 +98,7 @@ import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.TvFocusScale
 import dev.kobbler.app.ui.components.tvAutoGlow
+import dev.kobbler.app.ui.components.ConfirmDialog
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.imePaddingUnlessTv
 
@@ -167,6 +168,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
     onOpenProfile: (() -> Unit)? = null,
+    onOpenWatchHistory: (() -> Unit)? = null,
 ) {
     val auth = LocalAuthState.current
     val scope = rememberCoroutineScope()
@@ -225,6 +227,19 @@ fun SettingsScreen(
                 meta = active.email ?: displayServer,
                 onClick = { onOpenProfile?.invoke() ?: auth.showPicker() },
             )
+            Spacer(Modifier.height(dimens.s5))
+        }
+
+        if (onOpenWatchHistory != null) {
+            SettingsGroup(label = "Recommendations") {
+                SettingsRow(
+                    icon = Icons.Outlined.History,
+                    title = "Watch history",
+                    key = "history",
+                    value = "What For You learns from",
+                    onClick = onOpenWatchHistory,
+                )
+            }
             Spacer(Modifier.height(dimens.s5))
         }
 
@@ -892,37 +907,4 @@ private fun SettingsTextInputRow(
             )
         }
     }
-}
-
-@Composable
-private fun ConfirmDialog(
-    title: String,
-    body: String,
-    confirmLabel: String,
-    danger: Boolean,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, color = colors.textHi, style = KobappTheme.type.h3) },
-        text = { Text(body, color = colors.textMd, style = KobappTheme.type.body) },
-        confirmButton = {
-            KobButton(
-                onClick = onConfirm,
-                style = KobButtonStyle.Accent,
-                accent = if (danger) colors.err else colors.accSet,
-            ) { Text(confirmLabel, color = colors.bg, style = KobappTheme.type.body) }
-        },
-        dismissButton = {
-            KobButton(
-                onClick = onDismiss,
-                style = KobButtonStyle.Ghost,
-            ) { Text("Cancel", color = colors.textHi, style = KobappTheme.type.body) }
-        },
-        containerColor = colors.elev1,
-        titleContentColor = colors.textHi,
-        textContentColor = colors.textMd,
-    )
 }

@@ -172,7 +172,7 @@ fun LiveTvScreen(
         val clock = rememberGuideClock(active = isActive && tabIdx == LiveTvTab.Guide.ordinal)
         var guideFilter by remember { mutableStateOf<String?>(null) }
         val selection = remember { LiveGuideSelectionHolder() }
-        val lastChannelId = remember { UserSettings.getString(LastLiveChannelKey) }
+        var lastChannelId by remember { mutableStateOf(UserSettings.getString(LastLiveChannelKey)) }
         var windowStart by remember { mutableStateOf(nowInstant()) }
         // Coming back to the tab is coming back to what is on: a window left behind by
         // however long the viewer was away opens on programmes that have finished.
@@ -209,6 +209,10 @@ fun LiveTvScreen(
         val guideAll = (guideState as? Async.Ready)?.value ?: emptyList()
         val guideLoading = guideState is Async.Loading
         val guide = remember(guideAll, guideFilter) { filterGuide(guideAll, guideFilter) }
+        // Seeded while composing, not from an effect: the grid's cells exist from this same
+        // frame and the Watch button that entry focus wants only once something is selected,
+        // so on a TV the first cell took focus first and selected its channel instead.
+        if (selection.value == null) initialGuideSelection(guide, lastChannelId)?.let { selection.value = it }
 
         var searchQuery by remember { mutableStateOf("") }
         var channelFacet by remember { mutableStateOf<String?>(null) }
@@ -305,7 +309,7 @@ fun LiveTvScreen(
                 initialGuideSelection(guide, lastChannelId)
                     ?.let { seed -> "pe.${seed.entry.id}".takeIf { compact } ?: "watch" }
             }
-            LiveTvTab.Channels.ordinal -> channels.firstOrNull()?.let { "lch.${it.id}" }
+            LiveTvTab.Channels.ordinal -> (channels.firstOrNull { it.id == lastChannelId } ?: channels.firstOrNull())?.let { "lch.${it.id}" }
             else -> null
         }
         LaunchedEffect(entryKey, wantEntryFocus) {
@@ -314,6 +318,18 @@ fun LiveTvScreen(
             focusScope.focusFirst()
             // After the call: clearing it first re-keys this effect and cancels it.
             wantEntryFocus = false
+        }
+
+        // The player covers this tab rather than replacing it, and channel switches inside
+        // it only reach the setting, so closing it is the moment to catch up with them.
+        val playerUp = gps?.isFullscreen == true
+        LaunchedEffect(playerUp) {
+            if (playerUp) return@LaunchedEffect
+            val last = UserSettings.getString(LastLiveChannelKey)
+            if (last == lastChannelId) return@LaunchedEffect
+            lastChannelId = last
+            initialGuideSelection(guide, last)?.let { selection.value = it }
+            wantEntryFocus = true
         }
 
         LaunchedEffect(guide) {

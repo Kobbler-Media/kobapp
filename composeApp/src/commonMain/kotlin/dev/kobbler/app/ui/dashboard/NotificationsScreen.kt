@@ -33,6 +33,7 @@ fun NotificationsScreen(
     api: KobblerApi,
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
+    tabSwitch: (@Composable () -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val (state, retry) = rememberCached("notifications") { api.getNotifications() }
@@ -40,31 +41,26 @@ fun NotificationsScreen(
     val dimens = KobappTheme.dimens
     val compact = formFactor == FormFactor.Phone
     val accent = colors.accNotif
+    val gutter = when (formFactor) {
+        FormFactor.TV -> dimens.pageGutterTv
+        FormFactor.Phone -> dimens.pageGutterPhone
+        else -> dimens.pageGutter
+    }
 
     AsyncContent(state, skeleton = { ListSkeleton() }, onRetry = retry, modifier = modifier) { data ->
-        if (data.notifications.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.NotificationsNone,
-                title = "No notifications",
-                subtitle = "You're all caught up",
-            )
-        } else {
-            var notifications by remember(data) { mutableStateOf(data.notifications) }
-            val unreadCount = notifications.count { !it.read }
-            val gutter = when (formFactor) {
-                FormFactor.TV -> dimens.pageGutterTv
-                FormFactor.Phone -> dimens.pageGutterPhone
-                else -> dimens.pageGutter
-            }
+        var notifications by remember(data) { mutableStateOf(data.notifications) }
+        val unreadCount = notifications.count { !it.read }
 
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-                    BrowseHeader(
-                        title = "Notifications",
-                        accent = accent,
-                        countLine = if (unreadCount > 0) "$unreadCount unread" else "all caught up",
-                        compact = compact,
-                        trailing = {
+        // The header stays when the inbox is empty: it carries the switch back to Activity.
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                BrowseHeader(
+                    title = "Notifications",
+                    accent = accent,
+                    countLine = if (unreadCount > 0) "$unreadCount unread" else "all caught up",
+                    compact = compact,
+                    trailing = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(dimens.s3), verticalAlignment = Alignment.CenterVertically) {
                             if (unreadCount > 0) {
                                 KobButton(
                                     onClick = {
@@ -82,10 +78,19 @@ fun NotificationsScreen(
                                     Text("Mark all read", style = KobappTheme.type.caption)
                                 }
                             }
-                        },
-                    )
-                }
+                            tabSwitch?.invoke()
+                        }
+                    },
+                )
+            }
 
+            if (notifications.isEmpty()) {
+                EmptyState(
+                    icon = Icons.Outlined.NotificationsNone,
+                    title = "No notifications",
+                    subtitle = "You're all caught up",
+                )
+            } else {
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = gutter, vertical = dimens.s2),
                     verticalArrangement = Arrangement.spacedBy(dimens.s1),
