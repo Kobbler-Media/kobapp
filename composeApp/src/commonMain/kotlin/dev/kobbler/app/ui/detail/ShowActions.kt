@@ -89,7 +89,6 @@ internal fun ShowActions(
                 detail = resumeTag,
                 progress = if (inProgress && total != null && total > 0) resumePosition.toFloat() / total else null,
                 remaining = if (inProgress && total != null) remainingLabel(total - resumePosition) else null,
-                emphasised = !resumeIsStream,
                 onClick = { onPlayEpisode(resume.seasonIdx, resume.episodeIdx, false) },
                 modifier = Modifier.focusKey("action.resume", preferredEntry = true).then(playFill),
             )

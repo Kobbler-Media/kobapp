@@ -66,13 +66,12 @@ internal fun PrimaryAction(
     detail: String? = null,
     progress: Float? = null,
     remaining: String? = null,
-    emphasised: Boolean = true,
 ) {
     val colors = KobappTheme.colors
-    val fg = if (emphasised) colors.bg else colors.textHi
+    val fg = colors.bg
     KobButton(
         onClick = onClick,
-        style = if (emphasised) KobButtonStyle.Accent else KobButtonStyle.Default,
+        style = KobButtonStyle.Accent,
         accent = colors.action,
         enabled = enabled,
         cornerRadiusDp = PillRadius,

@@ -6,7 +6,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.data.DiscoverDetail
@@ -234,12 +233,13 @@ internal fun rememberDiscoverStreams(
     player: Player?,
     onViewInLibrary: (mediaType: String, libraryId: String) -> Unit,
 ): DiscoverStreams {
-    val scope = rememberCoroutineScope()
     val currentDetail by rememberUpdatedState(detail)
     val currentPlayer by rememberUpdatedState(player)
     val currentOnView by rememberUpdatedState(onViewInLibrary)
     val streams = remember(api, gps) {
-        DiscoverStreams(api, gps, scope, { currentDetail }, { currentPlayer }, { t, id -> currentOnView(t, id) })
+        // Not the page's scope: a resolve that adds the title to the library turns this page
+        // into the library one, which would cancel the play it is in the middle of.
+        DiscoverStreams(api, gps, gps.teardownScope, { currentDetail }, { currentPlayer }, { t, id -> currentOnView(t, id) })
     }
     LaunchedEffect(streams.caching) { streams.pollCaching() }
     // Only while the picker is open: this holds a connection.

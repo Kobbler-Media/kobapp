@@ -20,6 +20,7 @@ import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverSeason
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
+import dev.kobbler.app.ui.components.DataCache
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.navigation.BackInterceptors
 import dev.kobbler.app.ui.navigation.LocalBackInterceptors
@@ -89,15 +90,20 @@ class DiscoverStreamTest {
         var leftPage = false
     }
 
-    private fun ComposeUiTest.showPage(stub: StubServer, detail: DiscoverDetail): Page {
+    // [refetched] stands in for the navigation layer's cached fetch of the page, which a
+    // resolve that auto-creates the title invalidates.
+    private fun ComposeUiTest.showPage(stub: StubServer, detail: DiscoverDetail, refetched: DiscoverDetail? = null): Page {
         val api = KobblerApi(HttpClient(), stub.url, "token").apply { canStream = true }
         val page = Page(mutableListOf(), BackInterceptors(), GlobalPlayerState())
+        val cacheKey = "discover-${detail.mediaType}-${detail.provider}-${detail.providerId}"
+        val shownAt = DataCache.versionOf(cacheKey)
         setContent {
+            val current = if (refetched != null && DataCache.versionOf(cacheKey) != shownAt) refetched else detail
             CompositionLocalProvider(LocalBackInterceptors provides page.backs) {
                 Box(Modifier.size(1280.dp, 720.dp)) {
                     KobappTheme(formFactor = FormFactor.TV) {
                         DiscoverDetailScreen(
-                            detail = detail,
+                            detail = current,
                             api = api,
                             formFactor = FormFactor.TV,
                             player = null,
@@ -144,6 +150,37 @@ class DiscoverStreamTest {
             assertEquals("97951", autoCreate["provider_id"]?.jsonPrimitive?.content)
 
             assertEquals(listOf("tv" to "show-9"), page.viewed, "the episode did not open its show's library page")
+        }
+    }
+
+    @Test
+    fun `an episode still plays when the page turns into its library page under it`() = runComposeUiTest {
+        val entries = listOf<ComposeUiTest.() -> Unit>(
+            { onNodeWithText("The Mayor").performClick() },
+            { onNodeWithText("Stream").performClick() },
+            {
+                onAllNodesWithContentDescription("Stream options").onFirst().performClick()
+                waitUntil(timeoutMillis = 10_000) {
+                    onAllNodesWithText("Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP").fetchSemanticsNodes().isNotEmpty()
+                }
+                onNodeWithText("Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP").performClick()
+            },
+        )
+        // The show lookup after the resolve is a real round trip, long enough for the
+        // page's refetch to land first.
+        val slowLookup = routes + ("/api/v1/admin/tv/episodes/ep-1" to { e: HttpExchange ->
+            Thread.sleep(500)
+            routes.getValue("/api/v1/admin/tv/episodes/ep-1")(e)
+        })
+        entries.forEach { press ->
+            StubServer(slowLookup).use { stub ->
+                val page = showPage(stub, show, refetched = show.copy(libraryId = "show-9", isInLibrary = true))
+                expandFirstSeason()
+                press()
+                waitUntil(timeoutMillis = 10_000) { page.gps.debridPlayback != null }
+
+                assertEquals("tv" to "show-9", page.viewed.last())
+            }
         }
     }
 
