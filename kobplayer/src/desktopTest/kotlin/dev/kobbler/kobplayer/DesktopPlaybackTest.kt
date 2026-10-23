@@ -17,10 +17,13 @@ import kotlin.test.assertTrue
 
 class DesktopPlaybackTest {
 
-    private fun withPlayer(block: suspend (DesktopPlayer) -> Unit) {
+    private fun withPlayer(
+        config: PlayerConfig = PlayerConfig(hardwareAcceleration = false),
+        block: suspend (DesktopPlayer) -> Unit,
+    ) {
         DesktopPlayer.prepareLibraries()
         val scope = Dispatchers.Default + SupervisorJob()
-        val player = DesktopPlayer(scope, PlayerConfig(hardwareAcceleration = false))
+        val player = DesktopPlayer(scope, config)
         try {
             runBlocking { withTimeout(20_000) { block(player) } }
         } finally {
@@ -157,6 +160,22 @@ class DesktopPlaybackTest {
         servers += server
         return "http://127.0.0.1:${server.address.port}/$resource"
     }
+
+    @Test
+    fun `a network title is read in bursts with the source left idle in between`() =
+        withPlayer(PlayerConfig(hardwareAcceleration = false, readAhead = ReadAhead(bufferKb = 32))) { player ->
+            player.load(MediaSource.Url(served("noise_176x100_20s.mkv")))
+            player.currentMs.await("under way") { it > 1_000 }
+            val bytesRead = List(120) {
+                player.vlcPlayer.inputBytesRead().also { delay(50) }
+            }
+            val reading = bytesRead.zipWithNext { a, b -> b > a }
+            val bursts = reading.zipWithNext { was, now -> !was && now }.count { it }
+            val longestIdleMs = reading.fold(0 to 0) { (run, best), read ->
+                if (read) 0 to best else (run + 1).let { it to maxOf(best, it) }
+            }.second * 50
+            assertTrue(bursts >= 2 && longestIdleMs >= 1_000, "$bursts bursts, longest idle ${longestIdleMs}ms: $bytesRead")
+        }
 
     @Test
     fun `a pause while the title opens holds it rather than stopping it`() = withPlayer { player ->

@@ -58,12 +58,6 @@ private const val FrameRateProbeWindowMs = 4_000L
 private const val TrackRefreshSettleMs = 50L
 private const val AudioClockPollMs = 250L
 
-// Read ahead in bursts and leave the source alone in between, as ExoPlayer does: topped up
-// as it drained, the stream arrived every second and the radio never slept.
-private const val ReadAheadKb = 64 * 1024
-private const val LowRamReadAheadKb = 16 * 1024
-private const val ReadAheadRefillPercent = 25
-
 /**
  * Android VLC player implementation using libvlc-android.
  *
@@ -88,8 +82,7 @@ internal class AndroidPlayer(
     val libVLC = LibVLC(context, ArrayList<String>().apply {
         add("--network-caching=${config.networkCacheMs}")
         val lowRam = context.getSystemService(ActivityManager::class.java).isLowRamDevice
-        add("--prefetch-buffer-size=${if (lowRam) LowRamReadAheadKb else ReadAheadKb}")
-        add("--prefetch-refill-level=$ReadAheadRefillPercent")
+        addAll(if (lowRam) config.readAhead.forLowRam().vlcOptions else config.readAhead.vlcOptions)
         // `adb shell setprop log.tag.kobplayer VERBOSE` turns it on for any build.
         if (config.verboseLogging || android.util.Log.isLoggable("kobplayer", android.util.Log.VERBOSE)) {
             add("-vv")

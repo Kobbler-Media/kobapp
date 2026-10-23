@@ -92,6 +92,7 @@ data class PlayerConfig(
     val audioOnly: Boolean = false,
     /** Debug-level backend logging (libvlc `-vv`). Costs thousands of logcat lines/sec during playback. */
     val verboseLogging: Boolean = false,
+    val readAhead: ReadAhead = ReadAhead(),
 )
 
 enum class AspectRatio {

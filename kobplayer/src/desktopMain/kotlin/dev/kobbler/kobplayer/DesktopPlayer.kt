@@ -52,7 +52,7 @@ internal class DesktopPlayer(
     }
 
     private val factory = createPlayerLock.withLock {
-        MediaPlayerFactory(libVlcDiscovery, if (config.verboseLogging) listOf("-vv") else emptyList())
+        MediaPlayerFactory(libVlcDiscovery, config.readAhead.vlcOptions + if (config.verboseLogging) listOf("-vv") else emptyList())
     }
 
     private val logFile = vlcLogFile?.let { VlcLogFile(factory, it) }
