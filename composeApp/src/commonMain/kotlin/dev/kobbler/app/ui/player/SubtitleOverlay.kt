@@ -17,11 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +37,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
 data class SubtitleCue(
@@ -142,17 +141,15 @@ fun rememberSubtitleCues(
 @Composable
 fun SubtitleOverlay(
     cues: List<SubtitleCue>,
-    currentMs: () -> Long,
+    playerMs: StateFlow<Long>,
+    timeline: PlayerTimeline,
     formFactor: FormFactor,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
     if (cues.isEmpty()) return
-    // Plain IntArray, not snapshot state: findCueAt writes the cursor back while it runs,
-    // and a snapshot write during composition would invalidate this scope every advance.
     val cursor = remember(cues) { intArrayOf(0) }
-    val currentMsFn by rememberUpdatedState(currentMs)
-    val active by remember(cues) { derivedStateOf { findCueAt(cues, currentMsFn(), cursor) } }
+    val active by playerMs.collectAsPlayheadState(cues, timeline) { findCueAt(cues, timeline.toAbsoluteMs(it), cursor) }
 
     var displayed by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(active?.text) {

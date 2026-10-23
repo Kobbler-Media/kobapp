@@ -164,7 +164,6 @@ fun PersistentVideoSurface(
         authToken = api.authHeaders["Authorization"]?.removePrefix("Bearer ") ?: "",
     )
     val isInPip by PlaybackLifecycle.isInPipModeFlow.collectAsState()
-    val currentMsState = player.currentMs.collectAsState()
 
     val density = LocalDensity.current
     val miniWidthDp = 200.dp
@@ -314,7 +313,8 @@ fun PersistentVideoSurface(
             if (!isInPip) {
                 SubtitleOverlay(
                     cues = subtitleCues,
-                    currentMs = { state.timeline.toAbsoluteMs(currentMsState.value) },
+                    playerMs = player.currentMs,
+                    timeline = state.timeline,
                     formFactor = formFactor,
                     compact = isMini,
                 )

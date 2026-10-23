@@ -27,6 +27,7 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.kobplayer.TrackInfo
 import dev.kobbler.kobplayer.ui.OverlayChapter
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -60,7 +61,7 @@ class PlayerTvPickerTest {
                 PlayerOverlay(
                     title = "Film",
                     isPlaying = false,
-                    currentMs = { 0L },
+                    position = MutableStateFlow(0L),
                     durationMs = 600_000L,
                     onPlayPause = {},
                     onSeek = { rig.seeks += it },

@@ -61,6 +61,7 @@ import coil3.compose.AsyncImagePainter
 import dev.kobbler.kobplayer.AspectRatio
 import dev.kobbler.kobplayer.TrackInfo
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeMark
@@ -165,10 +166,11 @@ fun VideoPlayerOverlay(
     logoUrl: String? = null,
     isPlaying: Boolean,
     /**
-     * Read as late as possible: the position ticks ~4Hz, so anything that reads it during
-     * composition recomposes at that rate. Only the seek bar and the time label call it.
+     * Collected only while the controls are shown. A state read in composition even once
+     * wakes the recomposer on every later write, so one held above the chrome cost a vsync
+     * per tick for the rest of the title with nothing on screen reading it.
      */
-    currentMs: () -> Long,
+    position: StateFlow<Long>,
     durationMs: Long,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -240,7 +242,7 @@ fun VideoPlayerOverlay(
     var seekBarFocused by remember { mutableStateOf(false) }
 
     // rememberUpdatedState so pointerInput (keyed on Unit) always reads fresh values
-    val currentMsFn by rememberUpdatedState(currentMs)
+    val positionNow by rememberUpdatedState(position)
     val durationMsState by rememberUpdatedState(durationMs)
     val onSeekState by rememberUpdatedState(onSeek)
     val onPlayPauseState by rememberUpdatedState(onPlayPause)
@@ -341,7 +343,7 @@ fun VideoPlayerOverlay(
     // so reading the playhead on every tap landed a fast burst on the same spot.
     fun skipTaps(forward: Boolean, taps: Int) {
         val burst = skipBurst?.takeIf { it.forward == forward }
-            ?: SkipBurst(forward, anchorMs = currentMsFn(), taps = 0)
+            ?: SkipBurst(forward, anchorMs = positionNow.value, taps = 0)
         val next = burst.copy(taps = burst.taps + taps)
         skipBurst = next
         onSeekState(next.targetMs.coerceIn(0, durationMsState))
@@ -476,13 +478,13 @@ fun VideoPlayerOverlay(
                     }
                     !overlayFocused -> false
                     event.key == Key.Enter -> { onPlayPause(); true }
-                    event.key == Key.DirectionLeft -> { onSeekState((currentMsFn() - 10_000).coerceAtLeast(0)); true }
+                    event.key == Key.DirectionLeft -> { onSeekState((positionNow.value - 10_000).coerceAtLeast(0)); true }
                     event.key == Key.DirectionRight -> {
                         val past = onSeekPastEnd
                         // Same rule as the bar's: with nothing ahead of the playhead the
                         // press is spent on whatever the host put there instead.
-                        if (past != null && currentMsFn() >= durationMsState - PastEndSlackMs) past()
-                        else onSeekState((currentMsFn() + 10_000).coerceAtMost(durationMsState))
+                        if (past != null && positionNow.value >= durationMsState - PastEndSlackMs) past()
+                        else onSeekState((positionNow.value + 10_000).coerceAtMost(durationMsState))
                         true
                     }
                     else -> false
@@ -620,6 +622,8 @@ fun VideoPlayerOverlay(
             exit = fadeOut(tween(200)),
             modifier = Modifier.fillMaxSize(),
         ) {
+            val shownMs by position.collectAsState()
+            val currentMs = { shownMs }
             Box(Modifier.fillMaxSize()) {
                 // Center transport controls (YouTube-style). Composed ahead of the rest
                 // of the chrome, and play/pause ahead of its own row, because entry focus
@@ -904,7 +908,7 @@ fun VideoPlayerOverlay(
         // over the transport of something twenty minutes in, and the only way out was to
         // press the play button underneath it. A playhead that has moved is the durable
         // fact, so it seeds the state; the flag then latches on the live signal.
-        var hasStartedPlaying by remember { mutableStateOf(playbackHasBegun(isPlaying, currentMs())) }
+        var hasStartedPlaying by remember { mutableStateOf(playbackHasBegun(isPlaying, position.value)) }
         if (isPlaying) hasStartedPlaying = true
         BrandingOverlay(
             visible = !hasStartedPlaying,

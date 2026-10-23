@@ -14,10 +14,7 @@ import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +29,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlinx.coroutines.flow.StateFlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 
@@ -45,7 +43,7 @@ import dev.kobbler.kobfocus.focusKeyGroup
 fun LiveEdgeIndicator(
     state: GlobalPlayerState,
     accent: Color,
-    currentMsState: State<Long>,
+    playerMs: StateFlow<Long>,
     durationMs: Long,
     onJumpToLive: () -> Unit,
 ) {
@@ -53,9 +51,7 @@ fun LiveEdgeIndicator(
         LivePill(accent)
         return
     }
-    val behindSeconds by remember(durationMs) {
-        derivedStateOf { ((durationMs - currentMsState.value) / 1000).coerceAtLeast(0L) }
-    }
+    val behindSeconds by playerMs.collectAsPlayheadState(durationMs) { ((durationMs - it) / 1000).coerceAtLeast(0L) }
     if (behindSeconds < AtLiveEdgeSeconds) {
         LivePill(accent)
         return

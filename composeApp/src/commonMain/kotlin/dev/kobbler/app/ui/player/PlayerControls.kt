@@ -17,6 +17,7 @@ import dev.kobbler.kobplayer.ui.PlayerColors
 import dev.kobbler.kobplayer.ui.SeekBarRegion
 import dev.kobbler.kobplayer.ui.SideGestureConfig
 import dev.kobbler.kobplayer.ui.VideoPlayerOverlay
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 fun PlayerOverlay(
@@ -24,7 +25,7 @@ fun PlayerOverlay(
     subtitle: String? = null,
     logoUrl: String? = null,
     isPlaying: Boolean,
-    currentMs: () -> Long,
+    position: StateFlow<Long>,
     durationMs: Long,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -73,7 +74,7 @@ fun PlayerOverlay(
     )
     VideoPlayerOverlay(
         title = title, subtitle = subtitle, logoUrl = logoUrl,
-        isPlaying = isPlaying, currentMs = currentMs, durationMs = durationMs,
+        isPlaying = isPlaying, position = position, durationMs = durationMs,
         onPlayPause = onPlayPause, onSeek = onSeek, onBack = onBack,
         onToggleFullscreen = onToggleFullscreen, isFullscreen = isFullscreen,
         audioTracks = audioTracks, selectedAudioTrack = selectedAudioTrack,

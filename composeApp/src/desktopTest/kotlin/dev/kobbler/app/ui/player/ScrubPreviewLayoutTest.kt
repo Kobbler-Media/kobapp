@@ -17,6 +17,7 @@ import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.kobplayer.ui.VideoPlayerOverlay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -36,7 +37,7 @@ class ScrubPreviewLayoutTest {
             VideoPlayerOverlay(
                 title = "A Movie",
                 isPlaying = true,
-                currentMs = { 60_000L },
+                position = MutableStateFlow(60_000L),
                 durationMs = 7_680_000L,
                 onPlayPause = {},
                 onSeek = {},

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -34,7 +35,7 @@ class PlayerChromeTest {
                     PlayerOverlay(
                         title = "Film",
                         isPlaying = false,
-                        currentMs = { 0L },
+                        position = MutableStateFlow(0L),
                         durationMs = 60_000L,
                         onPlayPause = { rig.playPauses++ },
                         onSeek = {},

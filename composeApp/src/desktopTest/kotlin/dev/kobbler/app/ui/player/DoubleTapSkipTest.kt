@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.kobplayer.ui.PlayerChrome
 import dev.kobbler.kobplayer.ui.VideoPlayerOverlay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -27,7 +28,7 @@ class DoubleTapSkipTest {
             VideoPlayerOverlay(
                 title = "A Movie",
                 isPlaying = true,
-                currentMs = { 60_000L },
+                position = MutableStateFlow(60_000L),
                 durationMs = 7_680_000L,
                 onPlayPause = {},
                 onSeek = { seeks += it },

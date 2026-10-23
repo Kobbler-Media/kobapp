@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,12 +65,15 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.TrackInfo
 import dev.kobbler.kobplayer.VideoSurface
+import dev.kobbler.kobplayer.mapState
 import dev.kobbler.kobplayer.ui.OverlayChapter
 import dev.kobbler.kobplayer.ui.SeekBarRegion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -383,10 +385,7 @@ fun FullscreenVideoPlayer(
     // Everything below this line is in absolute media time; the player's own clock only
     // reappears at seekTo. See [PlayerTimeline].
     val timeline = state.timeline
-    // Deliberately not delegated: reading position here would recompose this whole
-    // composable at VLC's ~4Hz tick. Handed down as a lambda for leaves to read.
-    val currentMsState = player.currentMs.collectAsState()
-    val currentMs: () -> Long = { timeline.toAbsoluteMs(currentMsState.value) }
+    val position = remember(player, timeline) { player.currentMs.mapState(timeline::toAbsoluteMs) }
     val playerDurationMs by player.durationMs.collectAsState()
     val durationMs = timeline.absoluteDurationMs(playerDurationMs)
     val seekTo: (Long) -> Unit = { absoluteMs -> seekPlayerTo(timeline.toPlayerMs(absoluteMs)) }
@@ -507,12 +506,9 @@ fun FullscreenVideoPlayer(
     val skipSegments = state.skipSegments
     val chapters = state.chapters
 
-    // Whole seconds, so the recompute runs at 1Hz instead of the ~4Hz position tick.
-    val activeSkip by remember(skipSegments, timeline) {
-        derivedStateOf {
-            val posSeconds = timeline.toAbsoluteMs(currentMsState.value) / 1000
-            skipSegments.firstOrNull { seg -> posSeconds >= seg.startSeconds && posSeconds < seg.endSeconds }
-        }
+    val activeSkip by player.currentMs.collectAsPlayheadState(skipSegments, timeline) { ms ->
+        val posSeconds = timeline.toAbsoluteMs(ms) / 1000
+        skipSegments.firstOrNull { seg -> posSeconds >= seg.startSeconds && posSeconds < seg.endSeconds }
     }
 
     val chapterMarkers: List<Float> = remember(durationMs, chapters) {
@@ -620,7 +616,9 @@ fun FullscreenVideoPlayer(
     val liveEdgeBar = isLiveTv && !state.liveTimeshift && state.livePlaylistUrl != null
 
     val overlayDurationMs = if (liveEdgeBar) liveBufferMs else durationMs
-    val overlayCurrentMs: () -> Long = if (liveEdgeBar) ({ liveBufferMs }) else currentMs
+    val overlayPosition: StateFlow<Long> = remember(liveEdgeBar, liveBufferMs, position) {
+        if (liveEdgeBar) MutableStateFlow(liveBufferMs) else position
+    }
     val overlaySeek: (Long) -> Unit = if (liveEdgeBar) ({ ms ->
         timeshiftTargetSeconds(ms, liveBufferMs)?.let(enterTimeshiftAt)
     }) else seekTo
@@ -645,7 +643,7 @@ fun FullscreenVideoPlayer(
                 logoUrl = state.logoUrl,
                 subtitle = state.subtitle,
                 isPlaying = isPlaying,
-                currentMs = overlayCurrentMs,
+                position = overlayPosition,
                 durationMs = overlayDurationMs,
                 onPlayPause = {
                     if (isLiveTv) {
@@ -738,7 +736,7 @@ fun FullscreenVideoPlayer(
                         LiveEdgeIndicator(
                             state = state,
                             accent = sectionAccent,
-                            currentMsState = currentMsState,
+                            playerMs = player.currentMs,
                             durationMs = durationMs,
                             onJumpToLive = { seekPlayerTo(player.durationMs.value) },
                         )
