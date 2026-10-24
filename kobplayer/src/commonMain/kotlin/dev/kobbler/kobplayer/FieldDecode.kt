@@ -3,14 +3,16 @@ package dev.kobbler.kobplayer
 /**
  * What this device's hardware decoder has been observed to do with field pictures.
  *
- * DVB-T H.264 is PAFF — one coded picture per field — and some hardware AVC decoders
- * accept it and then emit nothing at all, forever, while the audio plays on. VLC does not
+ * DVB-T H.264 is interlaced-coded (MBAFF, `frame_mbs_only_flag` 0), and some hardware AVC
+ * decoders accept it and then emit nothing at all, forever, while the audio plays on. The
+ * Tensor VPU drops any such stream, even one with no field macroblock in it. VLC does not
  * consider that an error: no event, no error state, nothing to recover from. It is only
  * visible as a clock that runs against a picture that never arrives.
  *
  * A list of chip names cannot keep up with that — a wrong guess is either a black screen
- * or a working decoder made slow — so the device answers for itself, once, and the answer
- * is kept.
+ * or a working decoder made slow — so the device answers for itself, with a self-test when
+ * the system build or the app changes. Nothing seen during playback is recorded: a stream
+ * slow to its first keyframe looks the same as a decoder that will never emit.
  */
 enum class FieldDecodeVerdict {
     Unknown,
@@ -19,45 +21,78 @@ enum class FieldDecodeVerdict {
 }
 
 /**
- * How long a field-coded tune may run with sound and no picture before its decoder is
- * judged to be the silent kind.
+ * Media-clock time spent with a video track and no new picture.
  *
- * Sound ahead of picture is ordinary here: a tuner joining mid-GOP waits for the next IDR,
- * and a television's own tuner is visibly slower than that on a bad day. So this has to sit
- * well past any honest wait — a decoder that is going to emit has emitted long before. The
- * cost of being generous is ten seconds, once, on a device that turns out to be broken; the
- * cost of being tight is a healthy device stranded in software for good.
+ * Counted on the media clock, not wall time: a tune that is buffering or paused has not been
+ * given its chance yet. A clock that jumps further than a poll could account for is a seek,
+ * and counts for nothing.
  */
-const val FieldDecodeProbeMs = 10_000L
+class SilentDecoderWatch {
+    private var lastPictures = 0L
+
+    var lastClockMs = 0L
+        private set
+    private var sampled = false
+
+    private var silentMs = 0L
+
+    val silent: Boolean get() = silentMs >= SilentDecoderRescueMs
+
+    fun sample(clockMs: Long, displayedPictures: Long, hasVideoTrack: Boolean) {
+        val step = (clockMs - lastClockMs).takeIf { sampled && it in 0..MaxClockStepMs } ?: 0
+        lastClockMs = clockMs
+        sampled = true
+        when {
+            displayedPictures > lastPictures -> {
+                lastPictures = displayedPictures
+                silentMs = 0
+            }
+            hasVideoTrack -> silentMs += step
+        }
+    }
+
+    private companion object {
+        const val MaxClockStepMs = 2_000L
+    }
+}
 
 /**
- * Whether this tune has waited long enough to conclude the decoder will never emit.
+ * How long a tune may run with sound and no new picture before it is reopened in software.
  *
- * [playedMs] is the media clock's own progress, not wall time: a tune that is buffering or
- * paused has not been given its chance yet, and must not be judged on it.
+ * Only has to outlast the wait for a keyframe: a live join waits for the next one, and some
+ * IPTV providers and local files put one only every 6 s. Early costs one title's battery.
  */
-fun fieldDecodeProbeFailed(
-    fieldCoded: Boolean,
-    verdict: FieldDecodeVerdict,
-    presentedVideo: Boolean,
-    playedMs: Long,
-): Boolean =
-    fieldCoded &&
-        verdict == FieldDecodeVerdict.Unknown &&
-        !presentedVideo &&
-        playedMs >= FieldDecodeProbeMs
+const val SilentDecoderRescueMs = 6_000L
+
+/**
+ * Whether a tune is watched for a decoder that never emits.
+ *
+ * An untested decoder is watched on field-coded sources. One known to emit nothing is
+ * watched on everything else: a field-coded source already opens in software, and anything
+ * else reaching it interlaced is a source the server did not know was.
+ */
+fun watchesForSilentDecoder(fieldCoded: Boolean, verdict: FieldDecodeVerdict): Boolean = when (verdict) {
+    FieldDecodeVerdict.Unknown -> fieldCoded
+    FieldDecodeVerdict.HardwareEmitsNothing -> !fieldCoded
+    FieldDecodeVerdict.HardwareDecodes -> false
+}
 
 /** Whether to take MediaCodec away before this source is opened at all. */
 fun softwareDecodeRequired(fieldCoded: Boolean, verdict: FieldDecodeVerdict): Boolean =
     fieldCoded && verdict == FieldDecodeVerdict.HardwareEmitsNothing
 
-/**
- * What the fallback proved.
- *
- * Only a software reload that produced a picture is evidence about the hardware. One that
- * is black as well was never the decoder's fault — an aerial that has stopped delivering
- * looks identical from here — and recording it as such would strand the device on the slow
- * path over a passing fault.
- */
-fun verdictAfterFallback(softwarePresentedVideo: Boolean): FieldDecodeVerdict =
-    if (softwarePresentedVideo) FieldDecodeVerdict.HardwareEmitsNothing else FieldDecodeVerdict.Unknown
+data class DecodedClip(val frames: Int, val meanLuma: Int?) {
+    // The clips are white: 235 in limited range. A decoder that emits a frame of garbage or
+    // black has not decoded it.
+    val isWhite: Boolean get() = frames > 0 && (meanLuma ?: 0) >= 200
+}
+
+class SelfTestRun(val progressive: DecodedClip, val interlaced: DecodedClip)
+
+/** [run] is null when there is no hardware AVC decoder to test. */
+fun selfTestVerdict(run: SelfTestRun?): FieldDecodeVerdict = when {
+    run == null -> FieldDecodeVerdict.HardwareDecodes
+    !run.progressive.isWhite -> FieldDecodeVerdict.Unknown
+    run.interlaced.isWhite -> FieldDecodeVerdict.HardwareDecodes
+    else -> FieldDecodeVerdict.HardwareEmitsNothing
+}

@@ -278,40 +278,6 @@ class PlaybackRecoveryTest {
         }
     }
 
-    /**
-     * The server only sends the raw broadcast to a client whose decoder can show it.
-     * Tensor's hardware decoder cannot, and the alternative to telling the server is
-     * decoding every channel on the CPU.
-     */
-    @Test
-    fun `a tune says whether this player can decode field pictures`() = runTest {
-        val routes = mapOf(
-            "/api/v1/admin/livetv/sessions" to { _: HttpExchange ->
-                """{"session_id":"live-2","channel_id":"chan-1","method":"transcode","playlist_url":"http://127.0.0.1:1/live-2.m3u8"}"""
-            },
-        )
-        StubServer(routes).use { stub ->
-            val api = KobblerApi(HttpClient(), stub.url, "token")
-            for (decodes in listOf(true, false)) {
-                val gps = GlobalPlayerState().apply {
-                    mediaType = "livetv"
-                    mediaId = "chan-1"
-                    title = "ABC"
-                }
-                val player = stalledPlayer(atMs = 0).apply { decodesFieldPictures = decodes }
-                assertTrue(gps.recoverPlayback(player, api))
-                val sent = kotlinx.serialization.json.Json.parseToJsonElement(
-                    stub.requestBodies.getValue("/api/v1/admin/livetv/sessions"),
-                ).let { it as kotlinx.serialization.json.JsonObject }
-                assertEquals(
-                    kotlinx.serialization.json.JsonPrimitive(decodes),
-                    (sent["capabilities"] as kotlinx.serialization.json.JsonObject)["supports_interlaced"],
-                    "decodesFieldPictures=$decodes",
-                )
-            }
-        }
-    }
-
     @Test
     fun `a lease the server let go is retuned by the live heartbeat`() {
         val routes = mapOf(

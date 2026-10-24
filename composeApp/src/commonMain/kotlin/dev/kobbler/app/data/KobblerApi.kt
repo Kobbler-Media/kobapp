@@ -1,6 +1,7 @@
 package dev.kobbler.app.data
 
 import dev.kobbler.app.platform.connectRoundTripMs
+import dev.kobbler.kobplayer.deviceDecodesInterlaced
 import dev.kobbler.app.platform.AppVersion
 import dev.kobbler.app.platform.clientKind
 import dev.kobbler.app.platform.deviceLabel
@@ -375,6 +376,7 @@ data class ClientCapabilities(
     @SerialName("video_codecs") val videoCodecs: List<String>,
     @SerialName("audio_codecs") val audioCodecs: List<String>,
     val containers: List<String>,
+    @SerialName("supports_interlaced") val supportsInterlaced: Boolean? = null,
 )
 
 @Serializable
@@ -2029,6 +2031,7 @@ class KobblerApi(
     /** Admin only: whether a title is shown to Kids profiles regardless of its rating. */
     val canManageKids: Boolean = false,
     private val originProfiles: OriginProfiles = OriginProfiles.Persistent,
+    private val decodesInterlaced: () -> Boolean = ::deviceDecodesInterlaced,
 ) {
     /** True if kobload/debrid streaming is configured on the server. Set during initial load. */
     var canStream: Boolean = false
@@ -3027,11 +3030,7 @@ class KobblerApi(
     suspend fun playIptvChannel(channelId: String): IptvLiveSessionDto {
         val body = buildJsonObject {
             put("channel_id", channelId)
-            putJsonObject("capabilities") {
-                putJsonArray("video_codecs") { VLC_CAPABILITIES.videoCodecs.forEach { add(JsonPrimitive(it)) } }
-                putJsonArray("audio_codecs") { VLC_CAPABILITIES.audioCodecs.forEach { add(JsonPrimitive(it)) } }
-                putJsonArray("containers") { VLC_CAPABILITIES.containers.forEach { add(JsonPrimitive(it)) } }
-            }
+            put("capabilities", capabilitiesJson())
         }
         return decode<IptvLiveSessionDto>(post("/api/v1/admin/iptv/sessions", body.toString()))
     }
@@ -3322,17 +3321,14 @@ class KobblerApi(
         put("priority", priority)
     }.toString()
 
-    private fun liveCapabilitiesJson(supportsInterlaced: Boolean) = buildJsonObject {
-        putJsonArray("video_codecs") { VLC_CAPABILITIES.videoCodecs.forEach { add(JsonPrimitive(it)) } }
-        putJsonArray("audio_codecs") { VLC_CAPABILITIES.audioCodecs.forEach { add(JsonPrimitive(it)) } }
-        putJsonArray("containers") { VLC_CAPABILITIES.containers.forEach { add(JsonPrimitive(it)) } }
-        put("supports_interlaced", supportsInterlaced)
-    }
+    private fun capabilities() = VLC_CAPABILITIES.copy(supportsInterlaced = decodesInterlaced())
 
-    suspend fun openLiveSession(channelId: String, supportsInterlaced: Boolean): LiveSession {
+    private fun capabilitiesJson() = json.encodeToJsonElement(ClientCapabilities.serializer(), capabilities())
+
+    suspend fun openLiveSession(channelId: String): LiveSession {
         val body = buildJsonObject {
             put("channel_id", channelId)
-            put("capabilities", liveCapabilitiesJson(supportsInterlaced))
+            put("capabilities", capabilitiesJson())
         }
         return decodeMap<LiveSessionDto, LiveSession>(
             post("/api/v1/admin/livetv/sessions", body.toString()),
@@ -3344,11 +3340,10 @@ class KobblerApi(
     suspend fun switchLiveSessionChannel(
         sessionId: String,
         channelId: String,
-        supportsInterlaced: Boolean,
     ): LiveSession {
         val body = buildJsonObject {
             put("channel_id", channelId)
-            put("capabilities", liveCapabilitiesJson(supportsInterlaced))
+            put("capabilities", capabilitiesJson())
         }
         return decodeMap<LiveSessionDto, LiveSession>(
             post("/api/v1/admin/livetv/sessions/$sessionId/channel", body.toString()),
@@ -4014,11 +4009,7 @@ class KobblerApi(
         target.mediaId?.let { put("media_id", it) }
         startTime?.let { put("start_time", it) }
         TrackPrefs.current().putInto(this)
-        putJsonObject("capabilities") {
-            putJsonArray("video_codecs") { VLC_CAPABILITIES.videoCodecs.forEach { add(JsonPrimitive(it)) } }
-            putJsonArray("audio_codecs") { VLC_CAPABILITIES.audioCodecs.forEach { add(JsonPrimitive(it)) } }
-            putJsonArray("containers") { VLC_CAPABILITIES.containers.forEach { add(JsonPrimitive(it)) } }
-        }
+        put("capabilities", capabilitiesJson())
         target.discover?.let { ac ->
             putJsonObject("auto_create") {
                 put("title", ac.title)
@@ -4279,7 +4270,7 @@ class KobblerApi(
         val reqBody = json.encodeToString(CreateSessionRequest.serializer(), CreateSessionRequest(
             mediaType = mediaType,
             mediaId = mediaId,
-            capabilities = VLC_CAPABILITIES,
+            capabilities = capabilities(),
             forceTranscode = forceTranscode,
             maxBitrateKbps = maxBitrate,
             preferredAudioLanguage = prefs.audioLanguage,

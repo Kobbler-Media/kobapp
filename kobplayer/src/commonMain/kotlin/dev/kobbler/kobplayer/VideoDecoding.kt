@@ -28,3 +28,6 @@ data class VideoDecoderChoice(val decoding: VideoDecoding, val label: String)
 
 /** What this device can be told to decode on; empty where the platform decides for itself. */
 expect fun videoDecoderChoices(): List<VideoDecoderChoice>
+
+/** Whether a server may send this device interlace-coded video; see [FieldDecodeVerdict]. */
+expect fun deviceDecodesInterlaced(): Boolean

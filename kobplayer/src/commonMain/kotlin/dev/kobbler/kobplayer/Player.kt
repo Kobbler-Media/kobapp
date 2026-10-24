@@ -40,13 +40,11 @@ sealed class MediaSource {
          */
         val headers: Map<String, String> = emptyMap(),
         /**
-         * This source is field-coded — DVB-T broadcast is PAFF, one coded picture per
-         * field.
+         * This source is interlace-coded, as DVB-T broadcast H.264 is (MBAFF).
          *
          * A fact about the stream, not an instruction to the player: what to do about it
          * belongs to whichever decoder is about to be handed the stream, and the answer
-         * differs by silicon. See the Android player, which is where the one SoC that
-         * cannot decode field pictures is named.
+         * differs by silicon — see [FieldDecodeVerdict].
          */
         val fieldCoded: Boolean = false,
         /**
@@ -248,14 +246,6 @@ interface Player {
      * of their own are ready by definition.
      */
     val videoOutputReady: StateFlow<Boolean> get() = AlwaysReady
-
-    /**
-     * Whether this device's hardware decoder can show field-coded H.264.
-     *
-     * Told to the server so a decoder that cannot is sent a deinterlaced encode it can
-     * decode in hardware, rather than a raw broadcast it could only decode on the CPU.
-     */
-    val decodesFieldPictures: Boolean get() = true
 
     /** Release all resources. Called automatically by [rememberPlayer] on dispose. */
     fun release()

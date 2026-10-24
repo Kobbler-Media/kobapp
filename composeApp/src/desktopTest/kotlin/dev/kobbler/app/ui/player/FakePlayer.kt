@@ -34,8 +34,6 @@ class FakePlayer : Player {
     /** A source this answers true for errors on play, the way an unopenable stream does. */
     var failsToOpen: (String) -> Boolean = { false }
 
-    override var decodesFieldPictures: Boolean = true
-
     /** Accept this many seeks without performing them, the way a dropped seek reads. */
     var seeksDropped: Int = 0
 

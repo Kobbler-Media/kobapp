@@ -74,7 +74,7 @@ fun startLiveWatch(
 
     scope.launch {
         try {
-            val session = api.openLiveSession(channel.id, player.decodesFieldPictures)
+            val session = api.openLiveSession(channel.id)
             if (gps.mediaId != channel.id || !gps.isPreparing) return@launch
             gps.applyLiveSession(session, player, api, channel.id, channel.name, channel.logoUrl, channel.now?.title)
             gps.playUnmuted(player)
@@ -127,8 +127,8 @@ suspend fun switchLiveChannel(
     gps.subtitle = channel.now?.title
     gps.posterUrl = channel.logoUrl
     try {
-        val session = if (sid != null) api.switchLiveSessionChannel(sid, channel.id, player.decodesFieldPictures)
-        else api.openLiveSession(channel.id, player.decodesFieldPictures)
+        val session = if (sid != null) api.switchLiveSessionChannel(sid, channel.id)
+        else api.openLiveSession(channel.id)
         if (gps.mediaId != channel.id) return
         gps.applyLiveSession(session, player, api, channel.id, channel.name, channel.logoUrl, channel.now?.title)
         gps.playUnmuted(player)

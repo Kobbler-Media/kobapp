@@ -40,3 +40,5 @@ private fun vendorName(pciVendor: String?): String? = when (pciVendor?.lowercase
     "0x1002" -> "AMD"
     else -> null
 }
+
+actual fun deviceDecodesInterlaced(): Boolean = true

@@ -8,7 +8,6 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.net.Uri
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -37,9 +36,6 @@ import org.videolan.libvlc.interfaces.IVLCVout
 import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.CoroutineContext
-
-private const val FieldDecodePrefs = "kobplayer.decoder"
-private const val FieldDecodeKey = "field_picture_verdict"
 
 // Often enough to settle a good device quickly, rarely enough to cost nothing.
 private const val FieldDecodeProbePollMs = 500L
@@ -452,13 +448,14 @@ internal class AndroidPlayer(
     @Volatile private var stopRequested = false
     @Volatile private var sourceLive = false
 
-    private val presentedVideo = MutableStateFlow(false)
     private var fieldDecodeProbe: Job? = null
+    @Volatile private var hasVideoTrack = false
     private var forceSoftwareDecode = false
-    private var fieldDecodeVerdict: FieldDecodeVerdict = storedFieldDecodeVerdict()
+    private val fieldDecodeVerdict: FieldDecodeVerdict get() = DeviceFieldDecode.verdict(context)
 
-    override val decodesFieldPictures: Boolean
-        get() = fieldDecodeVerdict != FieldDecodeVerdict.HardwareEmitsNothing
+    init {
+        if (!config.audioOnly) DeviceFieldDecode.selfTestIfUnknown(context)
+    }
 
     private fun listenTo(player: MediaPlayer) {
         player.setEventListener { event ->
@@ -521,6 +518,7 @@ internal class AndroidPlayer(
                 }
                 MediaPlayer.Event.ESAdded -> {
                     if (event.esChangedType == IMedia.Track.Type.Audio) audioRoute.offer(Unit)
+                    if (event.esChangedType == IMedia.Track.Type.Video) hasVideoTrack = true
                     trackRefresh.offer(Unit)
                 }
                 MediaPlayer.Event.ESSelected -> {
@@ -532,13 +530,7 @@ internal class AndroidPlayer(
                         redrawPicture()
                     }
                 }
-                MediaPlayer.Event.Vout -> {
-                    // The only evidence that the decoder emitted anything. A video track
-                    // exists in the elementary stream either way, so its dimensions prove
-                    // nothing; a vout does not exist until there is a picture to put in it.
-                    if (event.voutCount > 0) presentedVideo.value = true
-                    trackRefresh.offer(Unit)
-                }
+                MediaPlayer.Event.Vout -> trackRefresh.offer(Unit)
             }
         }
     }
@@ -563,7 +555,7 @@ internal class AndroidPlayer(
     private fun open(source: MediaSource.Url) {
         deferredRedraw?.cancel()
         deferredRedraw = null
-        presentedVideo.value = false
+        hasVideoTrack = false
         _contentFrameRate.value = 0f
         armFrameRateProbe()
         _state.value = PlayerState.LOADING
@@ -633,82 +625,28 @@ internal class AndroidPlayer(
     }
 
     /**
-     * Watch a field-coded tune long enough to tell a slow channel from a silent decoder.
+     * Reopen a tune in software once its decoder has run long enough without a new picture.
      *
-     * Nothing else can tell them apart. VLC raises no error for a decoder that accepts
-     * field pictures and emits none, and sound ahead of picture is ordinary on DVB-T, so
-     * the only evidence is the media clock running against a vout that never appears.
-     * Judged on the clock rather than on wall time: a tune still buffering has not been
-     * given its chance yet.
+     * VLC raises no error for a decoder that accepts field pictures and emits none, so the
+     * only evidence is the media clock running against pictures that stopped coming.
      */
     private fun armFieldDecodeProbe(source: MediaSource.Url) {
         fieldDecodeProbe?.cancel()
-        if (!source.fieldCoded || fieldDecodeVerdict != FieldDecodeVerdict.Unknown) return
+        if (config.audioOnly || !watchesForSilentDecoder(source.fieldCoded, fieldDecodeVerdict)) return
         fieldDecodeProbe = scope.launch {
-            val openedAt = _currentMs.value
-            while (isActive) {
-                delay(FieldDecodeProbePollMs)
-                if (presentedVideo.value) {
-                    // Settled, and settled for good: this device is never probed again.
-                    rememberFieldDecodeVerdict(FieldDecodeVerdict.HardwareDecodes)
-                    return@launch
-                }
-                if (fieldDecodeProbeFailed(true, fieldDecodeVerdict, false, _currentMs.value - openedAt)) break
-            }
-            if (!isActive) return@launch
+            val watch = SilentDecoderWatch()
+            while (!watch.silent) sampleDecoder(watch)
             forceSoftwareDecode = true
-            open(source)
-            delay(FieldDecodeProbeMs)
-            rememberFieldDecodeVerdict(verdictAfterFallback(presentedVideo.value))
+            open(source.copy(startTimeSec = if (source.live) source.startTimeSec else (watch.lastClockMs / 1000).toInt()))
         }
     }
 
-    private fun rememberFieldDecodeVerdict(verdict: FieldDecodeVerdict) {
-        if (verdict == FieldDecodeVerdict.Unknown || verdict == fieldDecodeVerdict) return
-        fieldDecodeVerdict = verdict
-        // The one line that says why a device is on the slow path, or why it stopped being.
-        println("[FieldDecode] this device: $verdict")
-        context.getSharedPreferences(FieldDecodePrefs, Context.MODE_PRIVATE)
-            .edit()
-            .putString(FieldDecodeKey, verdict.name)
-            .apply()
+    // VLC's own clock: the published position rides on pictures, and here there are none.
+    private suspend fun sampleDecoder(watch: SilentDecoderWatch) {
+        delay(FieldDecodeProbePollMs)
+        val (clockMs, pictures) = onVlc { time to (currentMedia?.stats?.displayedPictures ?: 0L) } ?: return
+        watch.sample(clockMs, pictures, hasVideoTrack)
     }
-
-    /**
-     * The stored verdict, or what is known about the silicon before anything has been tried.
-     *
-     * Seeded rather than persisted: Tensor is the one decoder known to fail, and starting
-     * there spares those devices ten seconds of black on their first tune. Left unpersisted
-     * so a firmware that ever fixes it is not locked out by a note we wrote once.
-     */
-    private fun storedFieldDecodeVerdict(): FieldDecodeVerdict {
-        val stored = context.getSharedPreferences(FieldDecodePrefs, Context.MODE_PRIVATE)
-            .getString(FieldDecodeKey, null)
-            ?.let { name -> FieldDecodeVerdict.entries.firstOrNull { it.name == name } }
-        if (stored != null) return stored
-        return if (socCannotDecodeFieldPictures()) {
-            FieldDecodeVerdict.HardwareEmitsNothing
-        } else {
-            FieldDecodeVerdict.Unknown
-        }
-    }
-
-    /**
-     * Whether this device's hardware AVC decoder cannot decode field pictures.
-     *
-     * The Tensor VPU parses a field-coded sequence header and then reports an error on
-     * every field, ~50/s, forever, emitting no frame while the audio plays on. libVLC
-     * never recovers: mediacodec_ndk claims interlaced support unconditionally, so the
-     * reload-to-software guard behind it is dead code.
-     *
-     * It is the only decoder known to do this, and the guard used to be unconditional —
-     * which cost every other device the hardware path. The Amlogic S4 in a Chromecast HD
-     * holds 1080i50 at the panel's own cadence and a fifth of the CPU, where software
-     * managed a third of the frame rate at two and a half cores of four.
-     */
-    private fun socCannotDecodeFieldPictures(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            Build.SOC_MANUFACTURER.equals("Google", ignoreCase = true)
 
     override fun play() {
         focusResume.forget()

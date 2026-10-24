@@ -508,7 +508,7 @@ private suspend fun GlobalPlayerState.reopenLive(
     api: KobblerApi,
     id: String,
 ): Boolean {
-    val session = api.openLiveSession(id, player.decodesFieldPictures)
+    val session = api.openLiveSession(id)
     if (mediaId != id) {
         teardownScope.launch { api.closeLiveSession(session.sessionId) }
         return true
