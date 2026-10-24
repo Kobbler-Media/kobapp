@@ -1,11 +1,12 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
@@ -32,7 +33,7 @@ class KeepActionTest {
     )
 
     @Test
-    fun `the movie page keeps the stream it last played`() = runDesktopComposeUiTest(width = 1280, height = 800) {
+    fun `the movie page keeps the stream it last played`() = runUiTest(width = 1280, height = 800) {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             runBlocking { api.checkStreamingAvailability() }
@@ -47,12 +48,12 @@ class KeepActionTest {
                     )
                 }
             }
-            waitUntil(timeoutMillis = 5_000) { "/api/v1/admin/stream/recent" in stub.requestBodies }
+            waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/recent" in stub.requestBodies }
             waitForIdle()
             onAllNodes(hasContentDescription("More") or hasText("More"))[0].performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Keep in library").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Keep in library").fetchSemanticsNodes().isNotEmpty() }
             onAllNodesWithText("Keep in library")[0].performClick()
-            waitUntil(timeoutMillis = 5_000) { "/api/v1/admin/stream/s9/keep" in stub.requestBodies }
+            waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/s9/keep" in stub.requestBodies }
         }
     }
 }

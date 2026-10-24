@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.SkipSegment
@@ -50,7 +50,7 @@ class SkipToEndTest {
             this.timeline = timeline
             skipSegments = listOf(segment)
         }
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 Box(Modifier.size(960.dp, 540.dp)) {
                     FocusScopeHost(id = "test", store = FocusScopeStore()) {

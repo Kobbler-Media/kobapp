@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -24,7 +25,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -118,7 +118,7 @@ class TvTransportTest {
     }
 
     @Test
-    fun `a tv keeps the disc off the picture`() = runComposeUiTest {
+    fun `a tv keeps the disc off the picture`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -129,7 +129,7 @@ class TvTransportTest {
     }
 
     @Test
-    fun `subtitles open as a row the remote walks, not a popup`() = runComposeUiTest {
+    fun `subtitles open as a row the remote walks, not a popup`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -164,7 +164,7 @@ class TvTransportTest {
      * instead put a different button under the same press at every point in the film.
      */
     @Test
-    fun `down from the bar returns to the control last used`() = runComposeUiTest {
+    fun `down from the bar returns to the control last used`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -178,7 +178,7 @@ class TvTransportTest {
     }
 
     @Test
-    fun `speed is one stop on a tv`() = runComposeUiTest {
+    fun `speed is one stop on a tv`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -194,7 +194,7 @@ class TvTransportTest {
     }
 
     @Test
-    fun `the first back closes the row, the second leaves the player`() = runComposeUiTest {
+    fun `the first back closes the row, the second leaves the player`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -220,7 +220,7 @@ class TvTransportTest {
      * An open row holds the transport all the while it is open, well past the auto-hide.
      */
     @Test
-    fun `an open row holds the transport on a tv`() = runComposeUiTest {
+    fun `an open row holds the transport on a tv`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -240,7 +240,7 @@ class TvTransportTest {
      * on-screen and push the first out.
      */
     @Test
-    fun `a long subtitle row scrolls its last entry into view`() = runComposeUiTest {
+    fun `a long subtitle row scrolls its last entry into view`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player, subtitleTracks = List(30) { i -> TrackInfo(i.toString(), "Sub $i") })
@@ -264,7 +264,7 @@ class TvTransportTest {
      * every press restarts the clock, so a longer window only buys chrome over the picture.
      */
     @Test
-    fun `the tv chrome auto-hides after five idle seconds`() = runComposeUiTest {
+    fun `the tv chrome auto-hides after five idle seconds`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -279,7 +279,7 @@ class TvTransportTest {
     }
 
     @Test
-    fun `the tv chrome still auto-hides after cycling the aspect ratio`() = runComposeUiTest {
+    fun `the tv chrome still auto-hides after cycling the aspect ratio`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)

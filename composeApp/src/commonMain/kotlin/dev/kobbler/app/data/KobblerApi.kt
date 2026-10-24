@@ -1318,6 +1318,7 @@ data class LiveOnNowItemDto(
     val channel: LiveChannelDto,
     val guide: LiveGuideEntryDto,
     @SerialName("minutes_left") val minutesLeft: Int? = null,
+    @SerialName("starts_in_minutes") val startsInMinutes: Int? = null,
     val reason: String = "",
     val confidence: Float? = null,
 )
@@ -3190,6 +3191,7 @@ class KobblerApi(
                                 channel = item.channel.toModel(apiUrl),
                                 guide = item.guide.toModel(apiUrl),
                                 minutesLeft = item.minutesLeft,
+                                startsInMinutes = item.startsInMinutes,
                                 reason = item.reason,
                                 confidence = item.confidence,
                             )

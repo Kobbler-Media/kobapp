@@ -1,9 +1,9 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -19,7 +19,7 @@ class BookActionsTest {
     private val book = Book(id = "b1", title = "Thud!", author = "Pratchett", coverUrl = "", hasAudiobook = true, formats = listOf("epub"))
     private val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
 
-    private fun leadsWith(section: Section, lead: String, other: String) = runDesktopComposeUiTest(width = 1280, height = 900) {
+    private fun leadsWith(section: Section, lead: String, other: String) = runUiTest(width = 1280, height = 900) {
         setContent {
             KobappTheme(formFactor = FormFactor.Desktop, section = section) {
                 BookDetailScreen(book = book, api = api, formFactor = FormFactor.Desktop, onBack = {}, onRead = {}, onListen = {})

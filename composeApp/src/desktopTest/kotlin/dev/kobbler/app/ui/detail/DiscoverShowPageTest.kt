@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -10,7 +12,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
@@ -60,7 +61,7 @@ class DiscoverShowPageTest {
     )
 
     private fun discoverPage(test: DesktopComposeUiTest.(StubServer) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 720) {
+        runUiTest(width = 1280, height = 720) {
             DataCache.clear()
             StubServer(routes).use { stub ->
                 val nav = NavigationState()
@@ -85,7 +86,7 @@ class DiscoverShowPageTest {
                 }
                 mainClock.advanceTimeBy(1_000)
                 runOnIdle { nav.navigate(Destination.DiscoverItemDetail("tv", "tmdb", "97951")) }
-                waitUntil(timeoutMillis = 10_000) { focusedText() != null }
+                waitUntil(timeoutMillis = UiTimeoutMs) { focusedText() != null }
                 test(stub)
             }
         }
@@ -106,7 +107,7 @@ class DiscoverShowPageTest {
 
     @Test
     fun `the first season is open without asking`() = discoverPage {
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("The Mayor").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("The Mayor").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithText("The Mayor").assertIsDisplayed()
         onNodeWithText("Mike runs the town.").assertIsDisplayed()
     }
@@ -114,7 +115,7 @@ class DiscoverShowPageTest {
     @Test
     fun `the stream action searches for that episode`() = discoverPage { stub ->
         onNodeWithText("S01 E01").performClick()
-        waitUntil(timeoutMillis = 10_000) { "/api/v1/admin/stream/search" in stub.requestBodies }
+        waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/search" in stub.requestBodies }
         val search = Json.parseToJsonElement(stub.requestBodies.getValue("/api/v1/admin/stream/search")).jsonObject
         assertEquals(1, search["season"]?.jsonPrimitive?.int)
         assertEquals(1, search["episode"]?.jsonPrimitive?.int)

@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -140,9 +142,9 @@ fun IptvChannelsDirectoryScreen(
             // layout only windows top-level items, so a wrapping Column composes and
             // measures every channel in the frame its page arrives.
             else -> LazyColumn(
-                contentPadding = PaddingValues(horizontal = gutter, vertical = dimens.s2),
+                contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
                 verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
             ) {
                 grouped.forEach { (category, list) ->
                     item(key = "h-$category") {

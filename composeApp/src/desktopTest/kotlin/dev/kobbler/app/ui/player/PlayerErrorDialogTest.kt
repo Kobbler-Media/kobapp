@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -9,7 +11,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamQuality
@@ -33,7 +34,7 @@ class PlayerErrorDialogTest {
     )
 
     @Test
-    fun `the summary leads, the trace waits behind details, and Want asks for a download`() = runComposeUiTest {
+    fun `the summary leads, the trace waits behind details, and Want asks for a download`() = runUiTest {
         var wanted = 0
         var picked: StreamOption? = null
         setContent {
@@ -59,7 +60,7 @@ class PlayerErrorDialogTest {
         onNodeWithText("at Somewhere.kt", substring = true).assertIsDisplayed()
 
         onNodeWithText("Want").performClick()
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Wanted").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Wanted").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(1, wanted)
 
         onAllNodesWithText("720p").assertCountEquals(0)
@@ -71,7 +72,7 @@ class PlayerErrorDialogTest {
     }
 
     @Test
-    fun `a failure with nothing friendly to say still shows the whole report`() = runComposeUiTest {
+    fun `a failure with nothing friendly to say still shows the whole report`() = runUiTest {
         setContent {
             KobappTheme(formFactor = FormFactor.TV) {
                 PlayerErrorDialog(message = "Playback failed\n\nboom\n\tat Somewhere.kt:1", onDismiss = {})

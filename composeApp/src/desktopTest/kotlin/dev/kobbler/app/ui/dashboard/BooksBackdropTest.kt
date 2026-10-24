@@ -1,11 +1,12 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import coil3.SingletonImageLoader
 import dev.kobbler.app.data.KobblerApi
@@ -30,7 +31,7 @@ class BooksBackdropTest {
     @Test
     fun `the backdrop starts at the top of the page`() {
         for (formFactor in listOf(FormFactor.TV, FormFactor.Desktop)) for (audio in listOf(false, true)) {
-            runDesktopComposeUiTest(width = 960, height = 540) {
+            runUiTest(width = 960, height = 540) {
                 DataCache.clear()
                 SingletonImageLoader.setUnsafe(cachedArtLoader())
                 try {
@@ -51,7 +52,7 @@ class BooksBackdropTest {
                                 }
                             }
                         }
-                        waitUntil(timeoutMillis = 10_000) { onAllNodesWithTag(BackdropArtTag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+                        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithTag(BackdropArtTag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
                         val top = onAllNodesWithTag(BackdropArtTag, useUnmergedTree = true).onFirst().getUnclippedBoundsInRoot().top
                         assertEquals(0.dp, top, "$formFactor audio=$audio")
                     }

@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.auth
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import coil3.SingletonImageLoader
 import dev.kobbler.app.data.AuthScreen
 import dev.kobbler.app.data.AuthState
@@ -37,7 +38,7 @@ internal fun picker(
     width: Int = 1280,
     height: Int = 800,
     test: DesktopComposeUiTest.(tokens: List<String>, auth: AuthState) -> Unit,
-) = runDesktopComposeUiTest(width = width, height = height) {
+) = runUiTest(width = width, height = height) {
     val tokens = CopyOnWriteArrayList<String>()
     SingletonImageLoader.setUnsafe(cachedArtLoader())
     StubServer(
@@ -62,7 +63,7 @@ internal fun picker(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         try {
             val auth = AuthState(scope, formFactor, store)
-            waitUntil(timeoutMillis = 5_000) { auth.screen != AuthScreen.Loading }
+            waitUntil(timeoutMillis = UiTimeoutMs) { auth.screen != AuthScreen.Loading }
             setContent {
                 KobappTheme(formFactor = formFactor) {
                     ProfilePickerScreen(auth = auth, formFactor = formFactor)

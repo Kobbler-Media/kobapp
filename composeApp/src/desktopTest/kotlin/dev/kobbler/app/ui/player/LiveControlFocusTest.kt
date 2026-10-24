@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -23,7 +25,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LiveBuffer
 import dev.kobbler.app.platform.FormFactor
@@ -112,13 +113,13 @@ class LiveControlFocusTest {
     private val walkDown = List(3) { FocusDirection.Down } + List(8) { FocusDirection.Right }
 
     @Test
-    fun `the channels button is reachable on a timeshiftable tune`() = runComposeUiTest {
+    fun `the channels button is reachable on a timeshiftable tune`() = runUiTest {
         val keys = keysWhileWalking(walkDown, liveState(timeshiftable = true))
         assertTrue(keys.any { it?.endsWith("ctrl.channels") == true }, "walked $keys")
     }
 
     @Test
-    fun `the channels button is reachable on a raw live tune`() = runComposeUiTest {
+    fun `the channels button is reachable on a raw live tune`() = runUiTest {
         val keys = keysWhileWalking(walkDown, liveState(timeshiftable = false))
         assertTrue(keys.any { it?.endsWith("ctrl.channels") == true }, "walked $keys")
     }
@@ -134,7 +135,7 @@ class LiveControlFocusTest {
      * does not.
      */
     @Test
-    fun `the live transport is the same before and after the buffer poll lands`() = runComposeUiTest {
+    fun `the live transport is the same before and after the buffer poll lands`() = runUiTest {
         listOf(false, true).forEach { buffered ->
             showLivePlayer(
                 liveState(timeshiftable = true, buffered = buffered),
@@ -150,7 +151,7 @@ class LiveControlFocusTest {
      * there — so the first LEFT of every watch went nowhere instead of stepping back.
      */
     @Test
-    fun `the live transport opens on the seek bar`() = runComposeUiTest {
+    fun `the live transport opens on the seek bar`() = runUiTest {
         val (scope, _) = showLivePlayer(
             liveState(timeshiftable = true),
             KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"),
@@ -163,13 +164,13 @@ class LiveControlFocusTest {
      * the channel list. Behind the edge it is still a step forward.
      */
     @Test
-    fun `pressing right at the live edge opens the channel panel`() = runComposeUiTest {
+    fun `pressing right at the live edge opens the channel panel`() = runUiTest {
         StubServer(railRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val (scope, _) = showLivePlayer(liveState(timeshiftable = true), api)
 
             onNodeWithContentDescription("Seek").performKeyInput { pressKey(Key.DirectionRight) }
-            waitUntil(timeoutMillis = 10_000) { scope.save()?.contains("channelrail.ch.") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { scope.save()?.contains("channelrail.ch.") == true }
 
             assertTrue(scope.save()!!.endsWith("ch.chan-1"), "panel entry landed on ${scope.save()}")
         }
@@ -181,13 +182,13 @@ class LiveControlFocusTest {
      * fits three channels on a TV.
      */
     @Test
-    fun `the channel panel opens against the right edge`() = runComposeUiTest {
+    fun `the channel panel opens against the right edge`() = runUiTest {
         StubServer(railRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val (scope, _) = showLivePlayer(liveState(timeshiftable = true), api)
 
             onNodeWithContentDescription("Seek").performKeyInput { pressKey(Key.DirectionRight) }
-            waitUntil(timeoutMillis = 10_000) { scope.save()?.contains("channelrail.ch.") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { scope.save()?.contains("channelrail.ch.") == true }
 
             val screen = onNodeWithContentDescription("player").getBoundsInRoot()
             val panel = onNodeWithText("WATCHING").getBoundsInRoot()
@@ -203,13 +204,13 @@ class LiveControlFocusTest {
      * and inert, and focus left there is focus the viewer cannot see or move.
      */
     @Test
-    fun `opening the channel rail focuses a channel card`() = runComposeUiTest {
+    fun `opening the channel rail focuses a channel card`() = runUiTest {
         StubServer(railRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val (scope, _) = showLivePlayer(liveState(timeshiftable = true), api)
 
             onNodeWithContentDescription("Channels").performClick()
-            waitUntil(timeoutMillis = 10_000) { scope.save()?.contains("channelrail.ch.") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { scope.save()?.contains("channelrail.ch.") == true }
 
             assertTrue(scope.save()!!.endsWith("ch.chan-1"), "rail entry landed on ${scope.save()}")
         }
@@ -223,23 +224,23 @@ class LiveControlFocusTest {
      * From there no key reaches the overlay, so the controls can never be asked back.
      */
     @Test
-    fun `switching channel and leaving the rail gives the D-pad back`() = runComposeUiTest {
+    fun `switching channel and leaving the rail gives the D-pad back`() = runUiTest {
         StubServer(switchRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().apply { isPlaying.value = true }
             val (scope, _) = showLivePlayer(liveState(timeshiftable = true), api, player)
 
             onNodeWithContentDescription("Channels").performClick()
-            waitUntil(timeoutMillis = 10_000) { scope.save()?.contains("channelrail.ch.") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { scope.save()?.contains("channelrail.ch.") == true }
 
             onNodeWithText("Channel 7").performClick()
-            waitUntil(timeoutMillis = 10_000) { player.loadedUrl?.contains("chan-2") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { player.loadedUrl?.contains("chan-2") == true }
             mainClock.advanceTimeBy(6_000)
             waitForIdle()
 
             // LEFT walks out of the rail, back to the transport it was opened from.
             onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
-            waitUntil(timeoutMillis = 10_000) { scope.focused?.startsWith("player.") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { scope.focused?.startsWith("player.") == true }
         }
     }
 
@@ -250,7 +251,7 @@ class LiveControlFocusTest {
      * that found it first — the ±10 s buttons, the media keys and the bar all share it.
      */
     @Test
-    fun `stepping forward never lands on the end of a live playlist`() = runComposeUiTest {
+    fun `stepping forward never lands on the end of a live playlist`() = runUiTest {
         val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
         val player = FakePlayer().apply {
             durationMs.value = 1_800_000
@@ -282,14 +283,14 @@ class LiveControlFocusTest {
      * timer for exactly this reason.
      */
     @Test
-    fun `the transport does not time out under the rail`() = runComposeUiTest {
+    fun `the transport does not time out under the rail`() = runUiTest {
         StubServer(railRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().apply { isPlaying.value = true }
             val (scope, _) = showLivePlayer(liveState(timeshiftable = true), api, player)
 
             onNodeWithContentDescription("Channels").performClick()
-            waitUntil(timeoutMillis = 10_000) { scope.save()?.contains("channelrail.ch.") == true }
+            waitUntil(timeoutMillis = UiTimeoutMs) { scope.save()?.contains("channelrail.ch.") == true }
 
             mainClock.advanceTimeBy(6_000)
             waitForIdle()

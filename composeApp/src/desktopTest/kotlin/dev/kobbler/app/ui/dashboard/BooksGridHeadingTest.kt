@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -22,7 +23,7 @@ class BooksGridHeadingTest {
 
     @Test
     fun `the grid has a heading that carries the library size`() {
-        for (audio in listOf(false, true)) runDesktopComposeUiTest(width = 1280, height = 900) {
+        for (audio in listOf(false, true)) runUiTest(width = 1280, height = 900) {
             DataCache.clear()
             StubServer(
                 mapOf(
@@ -38,7 +39,7 @@ class BooksGridHeadingTest {
                         }
                     }
                 }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Thud!").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Thud!").fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithText(if (audio) "All audiobooks" else "All books").assertExists()
                 onNodeWithText("412").assertExists()
             }

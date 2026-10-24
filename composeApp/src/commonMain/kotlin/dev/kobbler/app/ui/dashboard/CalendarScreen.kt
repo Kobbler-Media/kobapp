@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import dev.kobbler.kobfocus.focusKey
+import dev.kobbler.app.ui.PinnedHeader
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.CalendarItemDto
 import dev.kobbler.app.data.KobblerApi
@@ -111,45 +112,48 @@ fun CalendarScreen(
     }
 
     val filtersFocus = remember { FocusRequester() }
-    Column(
-        modifier = modifier.fillMaxSize(),
-    ) {
-        Spacer(Modifier.height(dimens.s4))
-        Box(Modifier.padding(horizontal = gutter)) {
-            BrowseHeader(
-                title = "Calendar",
-                accent = accent,
-                countLine = if (initialLoaded) {
-                    "${monthName(selectedDate.month.number)} ${selectedDate.year} · $monthCount release${if (monthCount == 1) "" else "s"}"
-                } else null,
-                compact = compact,
-                trailing = if (!compact) {
-                    {
-                        SegmentedFilter(
-                            options = listOf("Month", "List"),
-                            selectedIndex = if (view == CalendarView.Month) 0 else 1,
-                            accent = accent,
-                            onSelected = { idx ->
-                                view = if (idx == 0) CalendarView.Month else CalendarView.Agenda
-                            },
-                        )
-                    }
-                } else null,
-                secondaryRow = {
-                    FilterChipRow(
-                        firstChip = filtersFocus,
-                        activeFilters = activeFilters,
-                        onToggle = { key ->
-                            activeFilters = if (key in activeFilters) activeFilters - key
-                            else activeFilters + key
+    PinnedHeader(
+        header = {
+            Column {
+                Spacer(Modifier.height(dimens.s4))
+                Box(Modifier.padding(horizontal = gutter)) {
+                    BrowseHeader(
+                        title = "Calendar",
+                        accent = accent,
+                        countLine = if (initialLoaded) {
+                            "${monthName(selectedDate.month.number)} ${selectedDate.year} · $monthCount release${if (monthCount == 1) "" else "s"}"
+                        } else null,
+                        compact = compact,
+                        trailing = if (!compact) {
+                            {
+                                SegmentedFilter(
+                                    options = listOf("Month", "List"),
+                                    selectedIndex = if (view == CalendarView.Month) 0 else 1,
+                                    accent = accent,
+                                    onSelected = { idx ->
+                                        view = if (idx == 0) CalendarView.Month else CalendarView.Agenda
+                                    },
+                                )
+                            }
+                        } else null,
+                        secondaryRow = {
+                            FilterChipRow(
+                                firstChip = filtersFocus,
+                                activeFilters = activeFilters,
+                                onToggle = { key ->
+                                    activeFilters = if (key in activeFilters) activeFilters - key
+                                    else activeFilters + key
+                                },
+                            )
                         },
                     )
-                },
-            )
-        }
+                }
 
-        Spacer(Modifier.height(if (compact) dimens.s3 else dimens.s4))
-
+                Spacer(Modifier.height(if (compact) dimens.s3 else dimens.s4))
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
         if (!initialLoaded) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
@@ -157,7 +161,7 @@ fun CalendarScreen(
                     modifier = Modifier.size(32.dp),
                 )
             }
-            return@Column
+            return@PinnedHeader
         }
 
         if (filteredItems.isEmpty() && view == CalendarView.Agenda) {
@@ -171,7 +175,7 @@ fun CalendarScreen(
                     "Releases will appear here as they're scheduled"
                 },
             )
-            return@Column
+            return@PinnedHeader
         }
 
         when {

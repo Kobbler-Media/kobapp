@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TestTimeSource
 import androidx.compose.foundation.layout.Box
@@ -8,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.WatchProgress
@@ -76,18 +77,18 @@ class WatchHistorySyncTest {
         Regex("\"position_seconds\":(\\d+)").find(requestBodies[POSITION].orEmpty())?.groupValues?.get(1)?.toInt()
 
     @Test
-    fun pausingSavesThePosition() = runComposeUiTest {
+    fun pausingSavesThePosition() = runUiTest {
         StubServer(mapOf(POSITION to { _ -> "{}" })).use { stub ->
             val player = playing()
             surface(stub, player)
             runOnIdle { player.pause() }
-            waitUntil(timeoutMillis = 3_000) { stub.savedSeconds() != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { stub.savedSeconds() != null }
             assertEquals(120, stub.savedSeconds())
         }
     }
 
     @Test
-    fun reachingTheEndIsNotSavedAsAPause() = runComposeUiTest {
+    fun reachingTheEndIsNotSavedAsAPause() = runUiTest {
         StubServer(mapOf(POSITION to { _ -> "{}" })).use { stub ->
             val player = playing()
             surface(stub, player)
@@ -102,12 +103,12 @@ class WatchHistorySyncTest {
     }
 
     @Test
-    fun closingTheAppSavesWhereItWasLeft() = runComposeUiTest {
+    fun closingTheAppSavesWhereItWasLeft() = runUiTest {
         StubServer(mapOf(POSITION to { _ -> "{}" })).use { stub ->
             val player = playing()
             surface(stub, player)
             runOnIdle { player.pause() }
-            waitUntil(timeoutMillis = 3_000) { stub.savedSeconds() != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { stub.savedSeconds() != null }
             runOnIdle { player.currentMs.value = 900_000 }
             runBlocking { PlaybackExit.flush() }
             assertEquals(900, stub.savedSeconds(), "a seek made while paused was lost on close")
@@ -121,7 +122,7 @@ class WatchHistorySyncTest {
      * never resolved — and the device stopped saving for the rest of the title.
      */
     @Test
-    fun playingPastAnOfferOutsideTheExpandedPlayerResumesSaving() = runComposeUiTest {
+    fun playingPastAnOfferOutsideTheExpandedPlayerResumesSaving() = runUiTest {
         StubServer(mapOf(POSITION to { _ -> "{}" })).use { stub ->
             val player = playing()
             val state = GlobalPlayerState().apply {
@@ -135,7 +136,7 @@ class WatchHistorySyncTest {
             waitForIdle()
             assertEquals(null, state.handoff, "the offer was never resolved")
             runOnIdle { player.pause() }
-            waitUntil(timeoutMillis = 3_000) { stub.savedSeconds() != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { stub.savedSeconds() != null }
             assertEquals(120, stub.savedSeconds())
         }
     }
@@ -146,7 +147,7 @@ class WatchHistorySyncTest {
      * because a player that was not listening when the other device saved never got one.
      */
     @Test
-    fun aPlayerThatNeverMovedDoesNotOverwriteTheServer() = runComposeUiTest {
+    fun aPlayerThatNeverMovedDoesNotOverwriteTheServer() = runUiTest {
         StubServer(mapOf(POSITION to { _ -> "{}" })).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().apply { durationMs.value = 6_000_000 }
@@ -195,7 +196,7 @@ class WatchHistorySyncTest {
 
     /** Coming back to an app left open elsewhere is when its watch history is most likely stale. */
     @Test
-    fun regainingFocusRefetchesWatchState() = runComposeUiTest {
+    fun regainingFocusRefetchesWatchState() = runUiTest {
         val focused = mutableStateOf(true)
         val clock = TestTimeSource()
         setContent { RefreshWatchStateOnFocus(focused.value, timeSource = clock) }

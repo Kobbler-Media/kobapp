@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,7 +11,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -30,7 +30,7 @@ class EdgeBleedTest {
 
     private fun measure(bleed: Dp, gutter: Dp = 20.dp, parent: Dp = 300.dp): Probe {
         val probe = Probe()
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 probe.bleedPx = with(LocalDensity.current) { bleed.toPx() }.roundToInt()
                 Box(Modifier.width(parent).padding(horizontal = gutter)) {

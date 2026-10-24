@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -9,7 +10,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class StartShellTest {
 
-    private fun shell(state: GlobalPlayerState, assertions: ComposeUiTest.() -> Unit) = runComposeUiTest {
+    private fun shell(state: GlobalPlayerState, assertions: ComposeUiTest.() -> Unit) = runUiTest {
         mainClock.autoAdvance = false
         setContent {
             Box(Modifier.size(960.dp, 540.dp)) {

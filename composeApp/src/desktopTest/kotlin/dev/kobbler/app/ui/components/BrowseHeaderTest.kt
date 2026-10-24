@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -36,7 +36,7 @@ class BrowseHeaderTest {
         content: @Composable (onHeight: (Int) -> Unit) -> Unit,
     ): Int {
         var height = 0
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 KobappTheme {
                     Box(Modifier.width(width)) {

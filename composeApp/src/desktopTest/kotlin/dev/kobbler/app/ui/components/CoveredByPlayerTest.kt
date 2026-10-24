@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
@@ -10,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.player.MORPH_SIZE_MS
@@ -29,7 +29,7 @@ class CoveredByPlayerTest {
 
     private fun shimmerDraws(covered: Boolean): Int {
         var draws = 0
-        runComposeUiTest {
+        runUiTest {
             mainClock.autoAdvance = false
             setContent {
                 KobappTheme {
@@ -59,7 +59,7 @@ class CoveredByPlayerTest {
     }
 
     @Test
-    fun `covered content is not drawn, and is drawn again the moment it is uncovered`() = runComposeUiTest {
+    fun `covered content is not drawn, and is drawn again the moment it is uncovered`() = runUiTest {
         var covered by mutableStateOf(false)
         var tick by mutableStateOf(0)
         var draws = 0
@@ -84,7 +84,7 @@ class CoveredByPlayerTest {
     }
 
     @Test
-    fun `the player covers the screen only once it has finished arriving`() = runComposeUiTest {
+    fun `the player covers the screen only once it has finished arriving`() = runUiTest {
         mainClock.autoAdvance = false
         var fills by mutableStateOf(false)
         var covers = false

@@ -1,12 +1,13 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
@@ -40,7 +41,7 @@ class DiscoverBackRedirectTest {
     private val library = Destination.MovieDetail("m1")
 
     private fun page(test: DesktopComposeUiTest.(NavigationState, KobblerApi) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 720) {
+        runUiTest(width = 1280, height = 720) {
             DataCache.clear()
             val inLibrary = AtomicBoolean(false)
             val routes = mapOf<String, (HttpExchange) -> String>(
@@ -80,7 +81,7 @@ class DiscoverBackRedirectTest {
                     }
                 }
                 runOnIdle { nav.navigate(discover) }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
                 test(nav, api)
             }
         }
@@ -95,7 +96,7 @@ class DiscoverBackRedirectTest {
     @Test
     fun `streaming from the page swaps it for the library page`() = page { nav, _ ->
         onAllNodesWithText("Play")[0].performClick()
-        waitUntil(timeoutMillis = 10_000) { nav.current == library }
+        waitUntil(timeoutMillis = UiTimeoutMs) { nav.current == library }
         backLandsHomeAndStays(nav)
     }
 
@@ -108,7 +109,7 @@ class DiscoverBackRedirectTest {
             api.streamResolve(option, "movie", autoCreate = detail)
         }
         runOnIdle { nav.goBack() }
-        waitUntil(timeoutMillis = 10_000) { nav.current == library }
+        waitUntil(timeoutMillis = UiTimeoutMs) { nav.current == library }
         backLandsHomeAndStays(nav)
     }
 }

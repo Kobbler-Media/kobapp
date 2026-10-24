@@ -1,11 +1,11 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class TvMarqueeTest {
 
     @Test
-    fun `a focused title scrolls, then settles`() = runComposeUiTest {
+    fun `a focused title scrolls, then settles`() = runUiTest {
         mainClock.autoAdvance = false
         var draws = 0
         setContent {

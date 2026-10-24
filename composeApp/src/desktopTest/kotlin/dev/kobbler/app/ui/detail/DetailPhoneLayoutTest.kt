@@ -1,11 +1,11 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.Author
@@ -93,7 +93,7 @@ class DetailPhoneLayoutTest {
 
     private fun proseWidth(screen: @Composable () -> Unit, width: Int, height: Int): Dp {
         var measured = 0.dp
-        runDesktopComposeUiTest(width = width, height = height) {
+        runUiTest(width = width, height = height) {
             setContent { KobappTheme(formFactor = FormFactor.Phone) { screen() } }
             waitForIdle()
             measured = onAllNodesWithText(prose.take(40), substring = true).onFirst().getUnclippedBoundsInRoot().let { it.right - it.left }

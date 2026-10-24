@@ -51,6 +51,7 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalKobappDimens
 import dev.kobbler.app.theme.LocalSection
 import dev.kobbler.app.ui.kobChromeInsets
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.theme.Section
 import dev.kobbler.app.ui.components.PageBackdropHost
 import dev.kobbler.app.ui.components.LocalTvFocusDecor
@@ -62,6 +63,7 @@ import dev.kobbler.app.ui.player.rememberPlayerCoversScreen
 import dev.kobbler.app.ui.components.AsyncContent
 import dev.kobbler.app.ui.components.RefreshOnEvents
 import dev.kobbler.app.ui.components.rememberCached
+import dev.kobbler.app.ui.dashboard.SearchScope
 import dev.kobbler.app.ui.dashboard.HomeScreen
 import dev.kobbler.app.ui.player.AudiobookPlayerScreen
 import dev.kobbler.app.ui.player.GlobalPlayerState
@@ -118,7 +120,6 @@ sealed interface Destination {
     data class LiveChannelDetail(val channelId: String) : Destination
     data class LiveRecordingDetail(val recordingId: String) : Destination
     data class LiveSeriesRuleDetail(val ruleId: String?, val seedGuideId: String? = null) : Destination
-    data object LiveOnNow : Destination
 }
 
 // -- Data-driven navigation config --
@@ -177,6 +178,17 @@ fun navConfigFor(isKids: Boolean): NavConfig =
         sidebarTabs = defaultNavConfig.sidebarTabs - kidsHiddenTabs,
     )
 
+fun searchScopesFor(config: NavConfig): List<SearchScope> {
+    val tabs = config.drawerTabs + config.sidebarTabs
+    return SearchScope.entries.filter {
+        when (it) {
+            SearchScope.LiveTv -> Destination.Tab.LiveTv in tabs
+            SearchScope.Iptv -> Destination.Tab.Iptv in tabs
+            else -> true
+        }
+    }
+}
+
 // -- Navigation state --
 
 class NavigationState {
@@ -188,7 +200,13 @@ class NavigationState {
     // result on whatever tab was underneath. The depth of the page it opened is kept instead.
     var searchOpen by mutableStateOf(false)
     var searchQuery by mutableStateOf("")
+    var searchScope by mutableStateOf(SearchScope.All)
     private var searchResultDepth = -1
+
+    fun openSearch(from: Destination.Tab = currentTab) {
+        searchScope = SearchScope.forTab(from)
+        searchOpen = true
+    }
 
     fun navigate(dest: Destination) {
         if (dest is Destination.Tab) {
@@ -524,7 +542,9 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
     if (showSearch) {
         dev.kobbler.app.ui.dashboard.SearchOverlay(
             api = api,
-            currentTab = nav.currentTab,
+            scope = nav.searchScope,
+            onScopeChange = { nav.searchScope = it },
+            scopes = searchScopesFor(navConfig),
             query = nav.searchQuery,
             onQueryChange = { nav.searchQuery = it },
             onDismiss = { showSearch = false },
@@ -569,7 +589,7 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
                         ScreenContent(
                             nav, api, formFactor, player, gps,
                             onMenuClick = { scope.launch { drawerState.open() } },
-                            onSearchClick = { showSearch = true },
+                            onSearchClick = { nav.openSearch() },
                             serverUrl = serverUrl, onLogout = onLogout,
                         )
                     }
@@ -611,6 +631,10 @@ internal fun DesktopScaffold(
     val backInterceptors = LocalBackInterceptors.current
     val allSidebarTabs = remember(navConfig) { navConfig.sidebarTabs + Destination.Tab.Settings }
     var sidebarIdx by remember { mutableStateOf(allSidebarTabs.indexOf(nav.currentTab).coerceAtLeast(0)) }
+    // Walking up the rail to Search previews every tab on the way, and a pause on one
+    // commits it; search is scoped to the page the viewer actually left.
+    var railOrigin by remember { mutableStateOf(nav.currentTab) }
+    LaunchedEffect(zone) { if (zone == Zone.Sidebar) railOrigin = nav.currentTab }
     val rootFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var showSearch by nav::searchOpen
@@ -621,7 +645,7 @@ internal fun DesktopScaffold(
             current is Destination.AuthorDetail || current is Destination.SeriesDetail || current is Destination.DiscoverItemDetail ||
             current is Destination.PersonDetail || current is Destination.IptvChannelDetail || current is Destination.Profile || current is Destination.WatchHistory ||
             current is Destination.LiveChannelDetail || current is Destination.LiveRecordingDetail ||
-            current is Destination.LiveSeriesRuleDetail || current is Destination.LiveOnNow
+            current is Destination.LiveSeriesRuleDetail
     }
     val tvMode = formFactor == FormFactor.TV
     // The TV sidebar pins a Search row above the tabs. It is not a Destination.Tab, so
@@ -637,7 +661,7 @@ internal fun DesktopScaffold(
         showSearch = false
         sidebarIdx = allSidebarTabs.indexOf(nav.currentTab).coerceAtLeast(0)
     }
-    val openSearch = {
+    val showSearchPage = {
         showSearch = true
         if (tvMode) {
             sidebarIdx = SIDEBAR_SEARCH_IDX
@@ -646,10 +670,16 @@ internal fun DesktopScaffold(
             zone = Zone.Content
         }
     }
+    val openSearch = {
+        nav.openSearch()
+        showSearchPage()
+    }
     val searchUi: @Composable () -> Unit = {
         dev.kobbler.app.ui.dashboard.SearchOverlay(
             api = api,
-            currentTab = nav.currentTab,
+            scope = nav.searchScope,
+            onScopeChange = { nav.searchScope = it },
+            scopes = searchScopesFor(navConfig),
             query = nav.searchQuery,
             onQueryChange = { nav.searchQuery = it },
             onDismiss = closeSearch,
@@ -695,7 +725,7 @@ internal fun DesktopScaffold(
             }
             isDetailScreen -> {
                 nav.goBack()
-                if (nav.searchOpen) openSearch()
+                if (nav.searchOpen) showSearchPage()
                 true
             }
             else -> {
@@ -793,7 +823,7 @@ internal fun DesktopScaffold(
                                 Key.DirectionUp -> {
                                     if (sidebarIdx > minSidebarIdx) {
                                         sidebarIdx--
-                                        showSearch = sidebarIdx < 0
+                                        if (sidebarIdx < 0) nav.openSearch(from = railOrigin) else showSearch = false
                                     }
                                     true
                                 }
@@ -1011,6 +1041,8 @@ private fun navigateToSearchResult(nav: NavigationState, result: dev.kobbler.app
         "author" -> nav.navigateFromSearch(Destination.AuthorDetail(result.id))
         "series" -> nav.navigateFromSearch(Destination.SeriesDetail(result.id))
         "person" -> nav.navigateFromSearch(Destination.PersonDetail(result.id))
+        dev.kobbler.app.ui.dashboard.LiveChannelResultType -> nav.navigateFromSearch(Destination.LiveChannelDetail(result.id))
+        dev.kobbler.app.ui.dashboard.IptvChannelResultType -> nav.navigateFromSearch(Destination.IptvChannelDetail(result.id))
         else -> {}
     }
 }
@@ -1083,6 +1115,7 @@ private fun SingleTabContent(
     homeTopBar: (@Composable (transparent: Boolean) -> Unit)?,
     isActive: Boolean = true,
 ) {
+    val playerScope = rememberCoroutineScope()
     when (tab) {
         is Destination.Tab.Home -> TabScreenWithTopBar(onMenuClick, onSearchClick, formFactor) {
             HomeScreen(
@@ -1154,6 +1187,7 @@ private fun SingleTabContent(
                     modifier = modifier,
                     formFactor = formFactor,
                     onChannelClick = { channel -> nav.navigate(Destination.IptvChannelDetail(channel.id)) },
+                    onWatch = { channel -> dev.kobbler.app.ui.player.startIptvWatch(channel, player, gps, api, playerScope) },
                 )
             }
         }
@@ -1164,13 +1198,11 @@ private fun SingleTabContent(
                     modifier = modifier,
                     formFactor = formFactor,
                     isActive = isActive,
-                    player = player,
                     gps = gps,
                     onChannelClick = { channelId -> nav.navigate(Destination.LiveChannelDetail(channelId)) },
+                    onWatch = { ch -> dev.kobbler.app.ui.player.startLiveWatch(ch, player, gps, api, playerScope) },
                     onRecordingClick = { recordingId -> nav.navigate(Destination.LiveRecordingDetail(recordingId)) },
                     onSeriesRulesClick = { nav.navigate(Destination.LiveSeriesRuleDetail(null)) },
-                    onSeedSeriesRule = { guideId -> nav.navigate(Destination.LiveSeriesRuleDetail(null, guideId)) },
-                    onOnNowClick = { nav.navigate(Destination.LiveOnNow) },
                 )
             }
         }
@@ -1448,6 +1480,7 @@ private fun DetailContent(
                     formFactor = formFactor,
                     onBack = { nav.goBack() },
                     onWatch = { ch -> dev.kobbler.app.ui.player.startLiveWatch(ch, player, gps, api, playerScope) },
+                    onSeriesRule = if (api.canWant) { entry -> nav.navigate(Destination.LiveSeriesRuleDetail(null, entry.id)) } else null,
                 )
             }
         }
@@ -1464,15 +1497,6 @@ private fun DetailContent(
                     onPlay = { rec -> dev.kobbler.app.ui.player.startRecordingPlayback(rec, player, gps, api, playerScope) },
                 )
             }
-        }
-        is Destination.LiveOnNow -> {
-            dev.kobbler.app.ui.dashboard.LiveOnNowScreen(
-                api = api,
-                modifier = modifier,
-                formFactor = formFactor,
-                onBack = { nav.goBack() },
-                onWatch = { ch -> dev.kobbler.app.ui.player.startLiveWatch(ch, player, gps, api, playerScope) },
-            )
         }
         is Destination.LiveSeriesRuleDetail -> {
             dev.kobbler.app.ui.dashboard.LiveSeriesRuleScreen(
@@ -1538,16 +1562,15 @@ internal fun TabScreenWithTopBar(
         return
     }
     PageBackdropHost {
-        Column(Modifier.fillMaxSize()) {
-            KobPhoneTopBar(
-                onSearchClick = { onSearchClick?.invoke() },
-                onCastClick = {},
-                onMenuClick = onMenuClick,
-            )
-            Box(Modifier.weight(1f)) {
-                content()
-            }
+        val overlap = phoneTopBarOverlap
+        Box(Modifier.fillMaxSize().padding(top = overlap)) {
+            CompositionLocalProvider(LocalTopChromeOverlap provides overlap) { content() }
         }
+        KobPhoneTopBar(
+            onSearchClick = { onSearchClick?.invoke() },
+            onCastClick = {},
+            onMenuClick = onMenuClick,
+        )
     }
 }
 

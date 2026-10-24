@@ -1,7 +1,10 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.ListSkeleton
+import dev.kobbler.app.ui.PinnedHeader
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.onFocusChanged
@@ -109,22 +112,25 @@ fun ActivityScreen(
         }
     }
 
-    Column(modifier.fillMaxSize()) {
-        Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-            BrowseHeader(
-                title = "Activity",
-                accent = accent,
-                countLine = when {
-                    loading -> null
-                    totalCount != null -> "${totalCount} events"
-                    events.isNotEmpty() -> "${events.size}+ events"
-                    else -> "no recent activity"
-                },
-                compact = compact,
-                trailing = tabSwitch,
-            )
-        }
-
+    PinnedHeader(
+        header = {
+            Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                BrowseHeader(
+                    title = "Activity",
+                    accent = accent,
+                    countLine = when {
+                        loading -> null
+                        totalCount != null -> "${totalCount} events"
+                        events.isNotEmpty() -> "${events.size}+ events"
+                        else -> "no recent activity"
+                    },
+                    compact = compact,
+                    trailing = tabSwitch,
+                )
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
         when {
             loading -> LoadingScreen({ ListSkeleton(title = false) })
             errorMessage != null && events.isEmpty() -> ErrorScreen(
@@ -141,10 +147,10 @@ fun ActivityScreen(
                 LazyColumn(
                     contentPadding = PaddingValues(
                         start = gutter, end = gutter,
-                        top = dimens.s2, bottom = dimens.s6,
+                        top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6,
                     ),
                     verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
                 ) {
                     grouped.forEach { (day, dayEvents) ->
                         item(key = "h-$day") {

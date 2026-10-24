@@ -65,6 +65,7 @@ import coil3.compose.AsyncImage
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
+import dev.kobbler.app.ui.rememberTopChromeShade
 import dev.kobbler.app.theme.ratingColor
 import dev.kobbler.app.ui.components.FocusEdgeMargin
 import dev.kobbler.app.ui.components.KobButton
@@ -378,12 +379,16 @@ fun Modifier.pageTopOverlay(hold: PageTopHold): Modifier =
  * Fade behind a detail screen's fixed top bar. The bar is painted over scrolling
  * content, so without this the synopsis runs straight through the breadcrumb. It comes in
  * only as content slides under the bar: at rest it greyed out the top of the backdrop.
+ * A phone's bar is a lone back button with no breadcrumb to protect, so it takes the tab
+ * bar's light shade and the poster stays visible until it leaves the screen.
  */
 @Composable
 fun Modifier.detailTopScrim(scroll: ScrollState): Modifier {
     val bg = KobappTheme.colors.bg
     val fadeIn = with(LocalDensity.current) { 96.dp.toPx() }
-    val brush = remember(bg) { Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to Color.Transparent) }
+    val phoneShade = rememberTopChromeShade()
+    val brush = if (LocalFormFactor.current == FormFactor.Phone) phoneShade
+    else remember(bg) { Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to Color.Transparent) }
     return drawBehind {
         drawRect(brush, alpha = (scroll.value / fadeIn).coerceIn(0f, 1f))
     }

@@ -1,7 +1,10 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.*
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.GridSkeleton
+import dev.kobbler.app.ui.PinnedHeader
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -80,25 +83,28 @@ private fun WantedList(
     }
     val loaded = (state as? Async.Ready)?.value.orEmpty()
 
-    Column(modifier.fillMaxSize()) {
-        Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-            BrowseHeader(
-                title = "Wanted",
-                accent = colors.accWanted,
-                countLine = "${loaded.size} pending",
-                compact = compact,
-                trailing = tabSwitch,
-                secondaryRow = {
-                    SegmentedFilter(
-                        options = WantedFilter.entries.map { it.label },
-                        selectedIndex = selectedFilterIdx,
-                        accent = colors.accWanted,
-                        onSelected = { selectedFilterIdx = it },
-                    )
-                },
-            )
-        }
-
+    PinnedHeader(
+        header = {
+            Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                BrowseHeader(
+                    title = "Wanted",
+                    accent = colors.accWanted,
+                    countLine = "${loaded.size} pending",
+                    compact = compact,
+                    trailing = tabSwitch,
+                    secondaryRow = {
+                        SegmentedFilter(
+                            options = WantedFilter.entries.map { it.label },
+                            selectedIndex = selectedFilterIdx,
+                            accent = colors.accWanted,
+                            onSelected = { selectedFilterIdx = it },
+                        )
+                    },
+                )
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
         AsyncContent(state, skeleton = { GridSkeleton() }, onRetry = retry) { items ->
             if (items.isEmpty()) {
                 EmptyState(
@@ -114,10 +120,10 @@ private fun WantedList(
                 }
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = dimens.posterWidth),
-                    contentPadding = PaddingValues(horizontal = gutter, vertical = dimens.s4),
+                    contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s4 + LocalTopChromeOverlap.current, bottom = dimens.s4),
                     horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                     verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
                 ) {
                     items(filtered, key = { "${it.mediaType}-${it.id}" }) { item ->
                         val accent = when (item.mediaType) {

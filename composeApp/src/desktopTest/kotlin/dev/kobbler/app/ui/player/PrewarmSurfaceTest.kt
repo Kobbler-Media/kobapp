@@ -1,7 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.platform.FormFactor
@@ -40,7 +40,7 @@ class PrewarmSurfaceTest {
     )
 
     @Test
-    fun `opening a detail page does not open the stream`() = runComposeUiTest {
+    fun `opening a detail page does not open the stream`() = runUiTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 3_600_000 }

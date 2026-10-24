@@ -30,6 +30,9 @@ class SearchSectionsTest {
         when (it) {
             is SearchSection.Library -> "lib:${it.type}"
             is SearchSection.Discover -> "disc:${it.mediaType}"
+            is SearchSection.LiveChannels -> "live:channels"
+            is SearchSection.LiveAirings -> "live:airings"
+            is SearchSection.IptvChannels -> "iptv:channels"
         }
     }
 

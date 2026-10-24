@@ -48,17 +48,18 @@ private val OnNowCompactCard = 262.dp
 private val WideCardHeight = 252.dp
 private val CompactCardHeight = 186.dp
 
-/** The group whose ranking is a time-of-day slot rather than "this is on and you watch it". */
-private const val SlotGroupKey = "timeofday"
+/** The groups whose ranking is a time of day rather than "this is on and you watch it". */
+private val SlotGroupKeys = setOf("timeofday", "usual")
 
 internal fun onNowGroupReason(groupKey: String): UpNextReason =
-    if (groupKey == SlotGroupKey) UpNextReason.Schedule else UpNextReason.Live
+    if (groupKey in SlotGroupKeys) UpNextReason.Schedule else UpNextReason.Live
 
 internal fun onNowGroupTag(groupKey: String): String =
-    if (groupKey == SlotGroupKey) "Usual slot" else "On now"
+    if (groupKey in SlotGroupKeys) "Usual slot" else "On now"
 
 internal fun onNowTiming(item: LiveOnNowItem): String = listOfNotNull(
     hhmmRange(item.guide.startTime, item.guide.endTime).takeIf { it.isNotEmpty() },
+    item.startsInMinutes?.let { if (it <= 0) "starting now" else "in $it min" },
     item.minutesLeft?.takeIf { it > 0 }?.let { "$it min left" },
     item.guide.episodeNumber,
     item.guide.genres.firstOrNull(),

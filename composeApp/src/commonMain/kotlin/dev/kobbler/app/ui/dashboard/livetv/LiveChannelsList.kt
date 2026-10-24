@@ -1,6 +1,9 @@
 package dev.kobbler.app.ui.dashboard.livetv
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.PinnedHeader
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -74,23 +77,24 @@ fun LiveChannelsList(
     }
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) onLoadMore() }
 
-    Column(modifier.fillMaxSize()) {
-        Box(Modifier.padding(horizontal = gutter, vertical = dimens.s3)) { facetStrip() }
-
+    PinnedHeader(
+        header = { Box(Modifier.padding(horizontal = gutter, vertical = dimens.s3)) { facetStrip() } },
+        modifier = modifier.fillMaxSize(),
+    ) {
         if (channels.isEmpty() && !loading) {
             EmptyState(
                 icon = Icons.Outlined.Tv,
                 title = "No channels",
                 subtitle = "Run a channel scan on the tuner to populate the lineup.",
             )
-            return@Column
+            return@PinnedHeader
         }
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = gutter, end = gutter, bottom = dimens.s6),
+            contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, start = gutter, end = gutter, bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(dimens.s1),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
         ) {
             itemsIndexed(channels, key = { _, it -> it.id }) { index, channel ->
                 val key = "lch.${channel.id}"

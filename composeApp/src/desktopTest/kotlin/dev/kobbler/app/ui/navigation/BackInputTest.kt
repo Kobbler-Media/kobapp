@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +18,6 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.withKeyDown
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +27,7 @@ class BackInputTest {
 
     private fun backsFrom(input: DesktopComposeUiTest.() -> Unit): Int {
         var backs = 0
-        runDesktopComposeUiTest {
+        runUiTest {
             val focus = FocusRequester()
             setContent {
                 Box(Modifier.fillMaxSize().backInput { backs++; true }.focusRequester(focus).focusable())

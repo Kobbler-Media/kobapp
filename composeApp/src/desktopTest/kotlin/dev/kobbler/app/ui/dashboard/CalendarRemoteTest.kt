@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -9,7 +11,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -52,7 +53,7 @@ class CalendarRemoteTest {
         waitForIdle()
     }
 
-    private fun calendarOnTv(test: DesktopComposeUiTest.() -> Unit) = runDesktopComposeUiTest(width = 960, height = 540) {
+    private fun calendarOnTv(test: DesktopComposeUiTest.() -> Unit) = runUiTest(width = 960, height = 540) {
         StubServer(mapOf("/api/v1/admin/calendar" to { ex -> calendar(ex.requestURI.query) })).use { stub ->
             val nav = NavigationState()
             setContent {
@@ -72,7 +73,7 @@ class CalendarRemoteTest {
             }
             mainClock.advanceTimeBy(1_000)
             runOnIdle { nav.navigate(Destination.Tab.Calendar) }
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Show", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Show", substring = true).fetchSemanticsNodes().isNotEmpty() }
             mainClock.advanceTimeBy(1_000)
             test()
         }

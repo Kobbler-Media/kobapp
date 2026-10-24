@@ -1,11 +1,12 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
@@ -36,7 +37,7 @@ class HomePhoneLayoutTest {
     }
 
     private fun phoneHome(width: Int, height: Int, test: DesktopComposeUiTest.() -> Unit) =
-        runDesktopComposeUiTest(width = width, height = height) {
+        runUiTest(width = width, height = height) {
             StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 val homeData = kotlinx.coroutines.runBlocking { api.getDiscover() }
@@ -45,7 +46,7 @@ class HomePhoneLayoutTest {
                         HomePhone(homeData, api, onContinueClick = {}, onRecentClick = {}, onDiscoverItemClick = {})
                     }
                 }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Queued 1").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Queued 1").fetchSemanticsNodes().isNotEmpty() }
                 test()
             }
         }

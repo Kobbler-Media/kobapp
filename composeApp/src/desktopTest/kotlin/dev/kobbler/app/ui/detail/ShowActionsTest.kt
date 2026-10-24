@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
@@ -7,7 +9,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -25,7 +26,7 @@ private const val SHOW_STATE = "$SHOW_PATH/watch-state"
 class ShowActionsTest {
 
     private fun showPage(test: DesktopComposeUiTest.(StubServer) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 900) {
+        runUiTest(width = 1280, height = 900) {
             StubServer(mapOf(SHOW_PATH to { _ -> showJson() }, SHOW_STATE to { _ -> """{"updated_count":6}""" })).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 val show = runBlocking { api.getShow("show-1") }
@@ -45,9 +46,9 @@ class ShowActionsTest {
         onNodeWithContentDescription("More").performClick()
         onNodeWithText("Rewatch from the start").performClick()
         onNodeWithText("Start over").performClick()
-        waitUntil(timeoutMillis = 5_000) { stub.requestBodies[SHOW_STATE] != null }
+        waitUntil(timeoutMillis = UiTimeoutMs) { stub.requestBodies[SHOW_STATE] != null }
         assertTrue(stub.requestBodies.getValue(SHOW_STATE).contains("\"watched\":false"), stub.requestBodies.getValue(SHOW_STATE))
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("S01 E01").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("S01 E01").fetchSemanticsNodes().isNotEmpty() }
         onAllNodesWithText("Resume").assertCountEquals(0)
         onAllNodesWithText("0 / 12 watched", ignoreCase = true).assertCountEquals(1)
     }

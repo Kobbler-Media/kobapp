@@ -79,6 +79,8 @@ import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.DiscoverSearchResults
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.IptvChannel
+import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.SearchHitDto
 import dev.kobbler.app.data.SearchResponse
 import dev.kobbler.app.data.SearchResult
@@ -94,20 +96,20 @@ import dev.kobbler.app.ui.components.SectionHeading
 import dev.kobbler.app.ui.components.StatusPill
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.detail.RatingBadge
-import dev.kobbler.app.ui.navigation.Destination
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.app.ui.imePaddingUnlessTv
 
-private const val SECTION_TOP_N = 5
+internal const val SearchSectionTopN = 5
 private const val RECENT_MAX = 8
 private const val RECENT_KEY = "search_recents"
 
 @Composable
 fun SearchOverlay(
     api: KobblerApi,
-    currentTab: Destination.Tab,
+    scope: SearchScope,
+    onScopeChange: (SearchScope) -> Unit,
     query: String,
     onQueryChange: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -120,22 +122,24 @@ fun SearchOverlay(
      * on-screen keyboard, which then eats the D-pad keys the rail needs.
      */
     autoFocusQuery: Boolean = true,
+    scopes: List<SearchScope> = SearchScope.entries,
 ) {
     val colors = KobappTheme.colors
     val tv = formFactor == FormFactor.TV
-    val discoverMediaTypes = remember(currentTab) {
-        when (currentTab) {
-            Destination.Tab.Movies -> setOf("movie")
-            Destination.Tab.TvShows -> setOf("tv")
-            Destination.Tab.Books, Destination.Tab.Audiobooks -> setOf("book")
-            else -> setOf("movie", "tv")
-        }
-    }
+    val searchesLive = scope == SearchScope.LiveTv || (scope == SearchScope.All && SearchScope.LiveTv in scopes)
+    val searchesIptv = scope == SearchScope.Iptv || (scope == SearchScope.All && SearchScope.Iptv in scopes)
 
     var libraryResults by remember { mutableStateOf<SearchResponse?>(null) }
     var libraryLoading by remember { mutableStateOf(false) }
     var discoverResults by remember { mutableStateOf<DiscoverSearchResults?>(null) }
     var discoverLoading by remember { mutableStateOf(false) }
+    var liveResults by remember { mutableStateOf<LiveSearchResults?>(null) }
+    var liveLoading by remember { mutableStateOf(false) }
+    var iptvResults by remember { mutableStateOf<List<IptvChannel>?>(null) }
+    var iptvLoading by remember { mutableStateOf(false) }
+    val libraryHits = remember(libraryResults, scope) {
+        libraryResults?.let { it.topHits + it.remaining }.orEmpty().filter { scope.includes(it.type) }
+    }
     val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
     val focusRequester = remember { FocusRequester() }
     var recents by remember { mutableStateOf(loadRecents()) }
@@ -144,32 +148,50 @@ fun SearchOverlay(
     // there is one; typing does not arm it, or every keystroke would yank focus out of
     // the field and into the list.
     var focusResults by remember { mutableStateOf(false) }
-    val firstResultKey = remember(libraryResults, discoverResults) {
-        val hits = libraryResults?.let { it.topHits + it.remaining } ?: emptyList()
-        searchSections(hits, discoverResults).firstOrNull()?.firstRowKey
+    val sections = remember(libraryHits, discoverResults, liveResults, iptvResults) {
+        searchSections(libraryHits, discoverResults, liveResults, iptvResults)
     }
+    val firstResultKey = sections.firstOrNull()?.firstRowKey
 
-    LaunchedEffect(query, discoverMediaTypes) {
-        if (query.isBlank()) {
-            libraryResults = null
-            discoverResults = null
-            libraryLoading = false
-            discoverLoading = false
-            return@LaunchedEffect
-        }
-        delay(250)
+    LaunchedEffect(query, scope, searchesLive, searchesIptv) {
         libraryResults = null
         discoverResults = null
-        libraryLoading = true
-        discoverLoading = true
+        liveResults = null
+        iptvResults = null
+        libraryLoading = false
+        discoverLoading = false
+        liveLoading = false
+        iptvLoading = false
+        if (query.isBlank()) return@LaunchedEffect
+        delay(250)
         expandedSections.clear()
-        launch {
-            try { libraryResults = api.search(query, limit = 50) } catch (_: Exception) {}
-            libraryLoading = false
+        if (scope.searchesLibrary) {
+            libraryLoading = true
+            launch {
+                try { libraryResults = api.search(query, limit = 50) } catch (_: Exception) {}
+                libraryLoading = false
+            }
         }
-        launch {
-            try { discoverResults = api.searchDiscover(query, discoverMediaTypes) } catch (_: Exception) {}
-            discoverLoading = false
+        if (scope.discoverMediaTypes.isNotEmpty()) {
+            discoverLoading = true
+            launch {
+                try { discoverResults = api.searchDiscover(query, scope.discoverMediaTypes) } catch (_: Exception) {}
+                discoverLoading = false
+            }
+        }
+        if (searchesLive) {
+            liveLoading = true
+            launch {
+                liveResults = searchLive(api, query)
+                liveLoading = false
+            }
+        }
+        if (searchesIptv) {
+            iptvLoading = true
+            launch {
+                iptvResults = searchIptv(api, query)
+                iptvLoading = false
+            }
         }
     }
 
@@ -194,6 +216,16 @@ fun SearchOverlay(
         onDiscoverItemClick(item)
         onDismiss()
     }
+    val handleLiveClick: (LiveChannel) -> Unit = { channel ->
+        commitRecent(query)
+        onResultClick(SearchResult(type = LiveChannelResultType, id = channel.id, title = channel.name))
+        onDismiss()
+    }
+    val handleIptvClick: (IptvChannel) -> Unit = { channel ->
+        commitRecent(query)
+        onResultClick(SearchResult(type = IptvChannelResultType, id = channel.id, title = channel.name))
+        onDismiss()
+    }
 
     val content: @Composable () -> Unit = {
         SearchContent(
@@ -203,14 +235,21 @@ fun SearchOverlay(
             onClear = { onQueryChange("") },
             onDismiss = onDismiss,
             focusRequester = focusRequester,
-            libraryResults = libraryResults,
+            scope = scope,
+            scopes = scopes,
+            onScopeChange = onScopeChange,
+            sections = sections,
+            loading = libraryLoading || discoverLoading || liveLoading || iptvLoading,
             libraryLoading = libraryLoading,
-            discoverResults = discoverResults,
             discoverLoading = discoverLoading,
+            liveLoading = liveLoading,
+            iptvLoading = iptvLoading,
             expandedSections = expandedSections,
             apiUrl = api.apiUrl,
             onResultClick = handleResultClick,
             onDiscoverClick = handleDiscoverClick,
+            onLiveClick = handleLiveClick,
+            onIptvClick = handleIptvClick,
             recents = recents,
             onPickRecent = { onQueryChange(it); focusResults = formFactor != FormFactor.Phone },
             onClearRecents = {
@@ -294,14 +333,21 @@ private fun SearchContent(
     onClear: () -> Unit,
     onDismiss: () -> Unit,
     focusRequester: FocusRequester,
-    libraryResults: SearchResponse?,
+    scope: SearchScope,
+    scopes: List<SearchScope>,
+    onScopeChange: (SearchScope) -> Unit,
+    sections: List<SearchSection>,
+    loading: Boolean,
     libraryLoading: Boolean,
-    discoverResults: DiscoverSearchResults?,
     discoverLoading: Boolean,
+    liveLoading: Boolean,
+    iptvLoading: Boolean,
     expandedSections: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     apiUrl: String,
     onResultClick: (SearchHitDto) -> Unit,
     onDiscoverClick: (DiscoverItem) -> Unit,
+    onLiveClick: (LiveChannel) -> Unit,
+    onIptvClick: (IptvChannel) -> Unit,
     recents: List<String>,
     onPickRecent: (String) -> Unit,
     onClearRecents: () -> Unit,
@@ -311,13 +357,7 @@ private fun SearchContent(
     val phone = formFactor == FormFactor.Phone
     val tv = formFactor == FormFactor.TV
 
-    val allLibHits = libraryResults?.let { it.topHits + it.remaining } ?: emptyList()
-
-    val sections = remember(allLibHits, discoverResults) {
-        searchSections(allLibHits, discoverResults)
-    }
-    val bothDone = !libraryLoading && !discoverLoading
-    val nothing = bothDone && sections.isEmpty() && query.isNotBlank()
+    val nothing = !loading && sections.isEmpty() && query.isNotBlank()
 
     Column(Modifier.fillMaxSize().imePaddingUnlessTv()) {
         SearchBar(
@@ -329,8 +369,12 @@ private fun SearchContent(
             focusRequester = focusRequester,
             phone = phone,
             tv = tv,
-            loading = libraryLoading || discoverLoading,
+            loading = loading,
+            placeholder = scope.placeholder,
         )
+        if (scopes.size > 1) {
+            SearchScopeChips(scope = scope, scopes = scopes, onSelect = onScopeChange, phone = phone)
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -387,6 +431,22 @@ private fun SearchContent(
                             onItemClick = onDiscoverClick,
                             colors = colors,
                         )
+                        is SearchSection.LiveChannels -> liveChannelsSubsection(section.channels, onLiveClick)
+                        is SearchSection.LiveAirings -> liveAiringsSubsection(
+                            airings = section.airings,
+                            expanded = expandedSections["live:airings"] == true,
+                            moreRow = {
+                                MoreRow(
+                                    expanded = expandedSections["live:airings"] == true,
+                                    remaining = section.airings.size - SearchSectionTopN,
+                                    accent = colors.accLive,
+                                    key = "live-more.airings",
+                                    onClick = { expandedSections["live:airings"] = expandedSections["live:airings"] != true },
+                                )
+                            },
+                            onClick = { onLiveClick(it.channel) },
+                        )
+                        is SearchSection.IptvChannels -> iptvChannelsSubsection(section.channels, onIptvClick)
                     }
                 }
                 if (libraryLoading) {
@@ -397,6 +457,12 @@ private fun SearchContent(
                 // spinner; this only says which half is still out.
                 if (discoverLoading) {
                     item(key = "disc-loading") { SectionLoadingRow("Searching Discover…") }
+                }
+                if (liveLoading) {
+                    item(key = "live-loading") { SectionLoadingRow("Searching the TV guide…") }
+                }
+                if (iptvLoading) {
+                    item(key = "iptv-loading") { SectionLoadingRow("Searching IPTV…") }
                 }
 
                 if (phone) {
@@ -432,6 +498,7 @@ private fun SearchBar(
     phone: Boolean,
     tv: Boolean,
     loading: Boolean,
+    placeholder: String,
 ) {
     val colors = KobappTheme.colors
     val focusManager = LocalFocusManager.current
@@ -477,7 +544,7 @@ private fun SearchBar(
                     Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (query.isEmpty()) {
                             Text(
-                                "Search movies, TV, books, authors…",
+                                placeholder,
                                 style = KobappTheme.type.body,
                                 color = colors.textLo,
                             )
@@ -676,15 +743,15 @@ private fun LazyListScope.librarySubsection(
         )
         Spacer(Modifier.height(6.dp))
     }
-    val visible = if (expanded) hits else hits.take(SECTION_TOP_N)
+    val visible = if (expanded) hits else hits.take(SearchSectionTopN)
     items(visible, key = { "lib-${it.type}-${it.id}" }) { hit ->
         SearchResultRow(hit = hit, apiUrl = apiUrl, accent = typeAccent(hit.type, colors), key = "lib.${hit.type}.${hit.id}", onClick = { onResultClick(hit) })
     }
-    if (hits.size > SECTION_TOP_N) {
+    if (hits.size > SearchSectionTopN) {
         item(key = "lib-more-$type") {
             MoreRow(
                 expanded = expanded,
-                remaining = hits.size - SECTION_TOP_N,
+                remaining = hits.size - SearchSectionTopN,
                 accent = typeAccent(type, colors),
                 key = "lib-more.$type",
                 onClick = onToggleExpand,
@@ -728,15 +795,15 @@ private fun LazyListScope.discoverSubsection(
         )
         Spacer(Modifier.height(4.dp))
     }
-    val visible = if (expanded) items else items.take(SECTION_TOP_N)
+    val visible = if (expanded) items else items.take(SearchSectionTopN)
     items(visible, key = { "disc-${it.provider}-${it.providerId}" }) { item ->
         DiscoverOverlayCard(item = item, accent = accent, key = "disc.${item.provider}.${item.providerId}", onClick = { onItemClick(item) })
     }
-    if (items.size > SECTION_TOP_N) {
+    if (items.size > SearchSectionTopN) {
         item(key = "disc-more-$mediaType") {
             MoreRow(
                 expanded = expanded,
-                remaining = items.size - SECTION_TOP_N,
+                remaining = items.size - SearchSectionTopN,
                 accent = accent,
                 key = "disc-more.$mediaType",
                 onClick = onToggleExpand,

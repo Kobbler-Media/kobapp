@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -10,7 +11,6 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performMouseInput
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -28,7 +28,7 @@ class PlayerChromeTest {
     }
 
     private fun player(formFactor: FormFactor, loading: Boolean = false, test: DesktopComposeUiTest.(Rig) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 720) {
+        runUiTest(width = 1280, height = 720) {
             val rig = Rig()
             setContent {
                 KobappTheme(formFactor = formFactor) {

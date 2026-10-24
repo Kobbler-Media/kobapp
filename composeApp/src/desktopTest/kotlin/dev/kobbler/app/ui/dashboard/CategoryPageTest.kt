@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -14,7 +16,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
@@ -46,7 +47,7 @@ class CategoryPageTest {
         {"name":"Drama","count":7,"backdrop_url":"/api/v1/admin/movies/d1/backdrop"}]}"""
 
     private fun moviesPage(test: DesktopComposeUiTest.(movieQueries: List<String>) -> Unit) =
-        runDesktopComposeUiTest(width = 960, height = 540) {
+        runUiTest(width = 960, height = 540) {
             DataCache.clear()
             val queries = CopyOnWriteArrayList<String>()
             StubServer(
@@ -79,7 +80,7 @@ class CategoryPageTest {
                 }
                 mainClock.advanceTimeBy(1_000)
                 runOnIdle { nav.navigate(Destination.Tab.Movies) }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Categories").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Categories").fetchSemanticsNodes().isNotEmpty() }
                 test(queries)
             }
         }
@@ -99,7 +100,7 @@ class CategoryPageTest {
     @Test
     fun `the remote walks the category tiles and picks one`() = moviesPage { queries ->
         onNodeWithText("Categories").performClick()
-        waitUntil(timeoutMillis = 5_000) { focusedText()?.startsWith("All categories") == true }
+        waitUntil(timeoutMillis = UiTimeoutMs) { focusedText()?.startsWith("All categories") == true }
         press(Key.DirectionRight)
         assertEquals("Action 4 titles", focusedText())
         press(Key.DirectionRight)
@@ -107,7 +108,7 @@ class CategoryPageTest {
         press(Key.DirectionDown)
         assertEquals("Drama 7 titles", focusedText())
         press(Key.DirectionCenter)
-        waitUntil(timeoutMillis = 5_000) { queries.any { "genre=Drama" in it } }
+        waitUntil(timeoutMillis = UiTimeoutMs) { queries.any { "genre=Drama" in it } }
         assertTrue(onAllNodesWithText("Action").fetchSemanticsNodes().isEmpty(), "the page stayed open")
         assertTrue(onAllNodesWithText("Drama").fetchSemanticsNodes().isNotEmpty(), "the picked category is not shown")
     }
@@ -115,7 +116,7 @@ class CategoryPageTest {
     @Test
     fun `back closes the page and keeps the category`() = moviesPage {
         onNodeWithText("Categories").performClick()
-        waitUntil(timeoutMillis = 5_000) { focusedText()?.startsWith("All categories") == true }
+        waitUntil(timeoutMillis = UiTimeoutMs) { focusedText()?.startsWith("All categories") == true }
         press(Key.Back)
         assertTrue(onAllNodesWithText("All categories").fetchSemanticsNodes().isEmpty(), "back left the page open")
         onNodeWithText("Categories").assertExists()

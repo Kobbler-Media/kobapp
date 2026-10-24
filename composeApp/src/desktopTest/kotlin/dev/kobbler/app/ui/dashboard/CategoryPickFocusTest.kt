@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -12,7 +14,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
@@ -49,7 +50,7 @@ class CategoryPickFocusTest {
     private val genres = """{"genres":[{"name":"Family","count":2},{"name":"Horror","count":1}]}"""
 
     private fun browse(tab: Destination.Tab, test: DesktopComposeUiTest.() -> Unit) =
-        runDesktopComposeUiTest(width = 960, height = 540) {
+        runUiTest(width = 960, height = 540) {
             DataCache.clear()
             StubServer(
                 mapOf(
@@ -79,8 +80,8 @@ class CategoryPickFocusTest {
                 }
                 mainClock.advanceTimeBy(1_000)
                 runOnIdle { nav.navigate(tab) }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
-                waitUntil(timeoutMillis = 5_000) { focusedText().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { focusedText().isNotEmpty() }
                 test()
             }
         }
@@ -114,11 +115,11 @@ class CategoryPickFocusTest {
         stepUntilFocused(Key.DirectionUp, "All library")
         stepUntilFocused(Key.DirectionRight, "Categories")
         press(Key.Enter)
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
         waitForIdle()
         stepUntilFocused(Key.DirectionRight, "Family")
         press(Key.Enter)
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
         mainClock.advanceTimeBy(1_000)
         waitForIdle()
         repeat(3) {

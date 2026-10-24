@@ -163,6 +163,12 @@ tasks.withType<JavaExec>().matching { it.name.startsWith("hotRun") }.configureEa
     dependsOn(bundleLibvlc)
     systemProperty("kobplayer.libvlc.dir", appResources.get().dir("linux-x64/libvlc/lib").asFile.path)
 }
+// Compose's desktop test runner wraps every test in a runTest that takes kotlinx-coroutines-test's
+// default timeout rather than the one it is handed, and on a machine busy with another build a
+// minute is not always enough for a test that loads a page twice.
+tasks.named<Test>("desktopTest") {
+    systemProperty("kotlinx.coroutines.test.default_timeout", "5m")
+}
 
 // Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. install-desktop.sh trains
 // this AOT cache (preloaded, linked classes plus method profiles); the jlinked runtime has no

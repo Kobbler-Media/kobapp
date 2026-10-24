@@ -1,10 +1,10 @@
 package dev.kobbler.app.ui.reader
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -17,7 +17,7 @@ class ReaderTvStatusTest {
     private val theme = ReaderTheme.Dark
 
     @Test
-    fun `the status line shows progress and the remote's keys, then only progress`() = runComposeUiTest {
+    fun `the status line shows progress and the remote's keys, then only progress`() = runUiTest {
         val cursor = mutableStateOf(false)
         setContent {
             KobappTheme(formFactor = FormFactor.TV) {

@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -13,7 +15,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -39,7 +40,7 @@ class LiveChannelRailFocusTest {
         append("]}")
     }
 
-    private fun opensOn(current: Int, favourites: Set<Int>) = runDesktopComposeUiTest(width = 960, height = 540) {
+    private fun opensOn(current: Int, favourites: Set<Int>) = runUiTest(width = 960, height = 540) {
         DataCache.clear()
         StubServer(mapOf("/api/v1/admin/livetv/guide/now" to { _ -> guideNow(favourites) })).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
@@ -71,7 +72,7 @@ class LiveChannelRailFocusTest {
             waitForIdle()
             railOpen = true
             mainClock.advanceTimeBy(2_000)
-            waitUntil(timeoutMillis = 10_000) {
+            waitUntil(timeoutMillis = UiTimeoutMs) {
                 onAllNodes(isFocused() and hasText("Channel $current", substring = true)).fetchSemanticsNodes().isNotEmpty()
             }
             assertTrue(onAllNodes(isFocused() and hasText("Channel $current", substring = true)).fetchSemanticsNodes().isNotEmpty())

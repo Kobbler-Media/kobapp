@@ -1,9 +1,9 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.AudioFileDto
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
@@ -19,7 +19,7 @@ class AudiobookProgressTest {
     private val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
 
     @Test
-    fun `the screen follows the player`() = runDesktopComposeUiTest(width = 420, height = 900) {
+    fun `the screen follows the player`() = runUiTest(width = 420, height = 900) {
         val player = FakePlayer()
         setContent {
             val state = rememberAudiobookState(book, api, player)

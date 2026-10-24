@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
@@ -8,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,7 +19,7 @@ class TvFocusDecorTest {
     private fun progressWhenFocused(decorate: Boolean): Float {
         val target = FocusRequester()
         var progress: State<Float>? = null
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 CompositionLocalProvider(LocalTvFocusDecor provides decorate) {
                     val state = rememberTvFocusState()

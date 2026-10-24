@@ -1,8 +1,9 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.FormFactor
@@ -17,6 +18,8 @@ import kotlin.test.Test
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -51,7 +54,7 @@ class LiveGuideReturnTest {
     }
 
     private fun guideScreen(last: String, test: androidx.compose.ui.test.DesktopComposeUiTest.(GlobalPlayerState) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 720) {
+        runUiTest(width = 1280, height = 720) {
             DataCache.clear()
             UserSettings.putString(LastLiveChannelKey, last)
             StubServer(
@@ -75,7 +78,7 @@ class LiveGuideReturnTest {
 
     /** Entered from the TV rail, which is how the remote gets there: the first cell must not win. */
     @Test
-    fun `the guide opens on the channel watched last`() = runDesktopComposeUiTest(width = 1280, height = 720) {
+    fun `the guide opens on the channel watched last`() = runUiTest(width = 1280, height = 720) {
         DataCache.clear()
         StubServer(
             mapOf(
@@ -102,7 +105,7 @@ class LiveGuideReturnTest {
                     }
                 }
             }
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Watching").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Watching").fetchSemanticsNodes().isNotEmpty() }
             mainClock.advanceTimeBy(1_000)
             UserSettings.putString(LastLiveChannelKey, "c4")
             val steps = defaultNavConfig.sidebarTabs.indexOf(Destination.Tab.LiveTv)
@@ -111,22 +114,25 @@ class LiveGuideReturnTest {
                 mainClock.advanceTimeBy(400)
                 waitForIdle()
             }
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Programme 1").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Programme 1").fetchSemanticsNodes().isNotEmpty() }
             mainClock.advanceTimeBy(1_000)
             waitForIdle()
-            assertTrue(onAllNodesWithText("Channel 4 · 4").fetchSemanticsNodes().isNotEmpty(), "the preview is not on channel 4")
+            assertTrue(focusedOn("Channel 4"), "focus is not on channel 4")
         }
     }
 
     @Test
     fun `the guide reselects the channel watched last`() = guideScreen(last = "c1") { gps ->
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Channel 1 · 1").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { focusedOn("Channel 1") }
 
         gps.isFullscreen = true
         waitForIdle()
         UserSettings.putString(LastLiveChannelKey, "c4")
         gps.isFullscreen = false
 
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Channel 4 · 4").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { focusedOn("Channel 4") }
     }
+
+    private fun androidx.compose.ui.test.DesktopComposeUiTest.focusedOn(name: String) =
+        onAllNodes(isFocused() and hasText(name, substring = true)).fetchSemanticsNodes().isNotEmpty()
 }

@@ -389,6 +389,7 @@ data class LiveOnNowItem(
     val channel: LiveChannel,
     val guide: LiveGuideEntry,
     val minutesLeft: Int?,
+    val startsInMinutes: Int? = null,
     val reason: String,
     /** Null when the server has too little history — the UI hides the dots rather than inventing a level. */
     val confidence: Float?,

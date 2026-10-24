@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.State
@@ -12,7 +14,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.KobblerApi
@@ -59,7 +60,7 @@ class DiscoverWantTest {
     private fun ComposeUiTest.wantShow(stub: StubServer, pick: String): List<Pair<String, String>> {
         val viewed = openWantPicker(stub)
         onNodeWithText(pick).performClick()
-        waitUntil(timeoutMillis = 10_000) { viewed.isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { viewed.isNotEmpty() }
         return viewed
     }
 
@@ -90,7 +91,7 @@ class DiscoverWantTest {
 
     /** One word, as kobbler's discover page has it — not a per-type phrase for each. */
     @Test
-    fun `the want button reads Want for shows and movies alike`() = runComposeUiTest {
+    fun `the want button reads Want for shows and movies alike`() = runUiTest {
         StubServer(routes).use { stub ->
             val detail = mutableStateOf(show)
             showDiscoverPage(stub, detail)
@@ -103,7 +104,7 @@ class DiscoverWantTest {
     }
 
     @Test
-    fun `wanting a whole show asks for every episode and opens its library page`() = runComposeUiTest {
+    fun `wanting a whole show asks for every episode and opens its library page`() = runUiTest {
         StubServer(routes).use { stub ->
             val viewed = wantShow(stub, pick = "All episodes")
 
@@ -122,7 +123,7 @@ class DiscoverWantTest {
      * so those are the only answers offered here.
      */
     @Test
-    fun `a show that is not here yet is not offered a one-shot want`() = runComposeUiTest {
+    fun `a show that is not here yet is not offered a one-shot want`() = runUiTest {
         StubServer(routes).use { stub ->
             openWantPicker(stub)
 

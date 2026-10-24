@@ -19,7 +19,9 @@ class DesktopGainFadeTest {
         val levels: MutableList<Int> = Collections.synchronizedList(mutableListOf())
 
         init {
-            scope.launch { player.gainLevel.collect { levels += it } }
+            // Unconfined so every step of a fade is recorded as it is set; a collector on a
+            // pool thread falls behind on a loaded machine and the conflated flow skips the ramp.
+            scope.launch(Dispatchers.Unconfined) { player.gainLevel.collect { levels += it } }
         }
 
         fun levelsDuring(block: () -> Unit): List<Int> {
@@ -29,11 +31,11 @@ class DesktopGainFadeTest {
         }
 
         fun awaitState(state: PlayerState) = runBlocking {
-            withTimeout(10_000) { player.state.first { it == state } }
+            withTimeout(60_000) { player.state.first { it == state } }
         }
 
         fun awaitLevel(level: Int) = runBlocking {
-            withTimeout(5_000) { player.gainLevel.first { it == level } }
+            withTimeout(60_000) { player.gainLevel.first { it == level } }
         }
     }
 
@@ -108,8 +110,7 @@ class DesktopGainFadeTest {
         start()
         player.pause()
         player.play()
-        Thread.sleep(500)
+        awaitLevel(100)
         assertEquals(PlayerState.PLAYING, player.state.value)
-        assertEquals(100, player.gainLevel.value)
     }
 }

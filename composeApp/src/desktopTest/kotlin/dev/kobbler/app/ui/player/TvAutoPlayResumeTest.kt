@@ -1,7 +1,8 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.data.ContinueEpisode
 import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.KobblerApi
@@ -39,7 +40,7 @@ private val routes = mapOf(
 class TvAutoPlayResumeTest {
 
     @Test
-    fun continueWatchingADebridEpisodeResumesAndClosesCleanly() = runComposeUiTest {
+    fun continueWatchingADebridEpisodeResumesAndClosesCleanly() = runUiTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token").apply { canStream = true }
             val player = FakePlayer().also { it.durationMs.value = 3_600_000 }
@@ -53,7 +54,7 @@ class TvAutoPlayResumeTest {
                 )
             }
 
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "ep-1" && gps.isFullscreen }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" && gps.isFullscreen }
             assertEquals(1_200_000L, gps.pendingSeekMs)
 
             runOnIdle { gps.stop(player, api, scope) }
@@ -78,7 +79,7 @@ class TvAutoPlayResumeTest {
             )))),
             "debrid" to show,
         )
-        for ((name, cachedShow) in cases) runComposeUiTest {
+        for ((name, cachedShow) in cases) runUiTest {
             val session = "/api/v1/admin/playback/sessions" to { _: com.sun.net.httpserver.HttpExchange ->
                 """{"session_id":"s1","direct_url":"/api/v1/admin/stream/s1/play","method":"direct"}"""
             }
@@ -97,7 +98,7 @@ class TvAutoPlayResumeTest {
                         gps = gps, autoPlay = true, onBack = {},
                     )
                 }
-                waitUntil(timeoutMillis = 20_000) { gps.mediaId == "ep-1" && gps.isFullscreen }
+                waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" && gps.isFullscreen }
                 assertEquals(2_500_000L, gps.timeline.toAbsoluteMs(gps.pendingSeekMs), "$name resumed from the cached show")
             }
         }

@@ -1,12 +1,13 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.data.TvShow
@@ -23,7 +24,7 @@ import kotlin.test.assertTrue
 class DetailKidsAccessTest {
 
     private fun page(kind: String, admin: Boolean, test: androidx.compose.ui.test.DesktopComposeUiTest.(patches: List<String>) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 900) {
+        runUiTest(width = 1280, height = 900) {
             val path = if (kind == "movie") "/api/v1/admin/movies/t1" else "/api/v1/admin/tv/shows/t1"
             val patches = CopyOnWriteArrayList<String>()
             lateinit var stub: StubServer
@@ -72,9 +73,9 @@ class DetailKidsAccessTest {
             openMore()
             onAllNodesWithText("Kids: hidden").onFirst().performClick()
             onAllNodesWithText("Always show").onFirst().performClick()
-            waitUntil(timeoutMillis = 5_000) { patches.isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { patches.isNotEmpty() }
             openMore()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Kids: shown").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Kids: shown").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(patches.any { it.contains("\"kids_override\":true") }, "$kind: $patches")
         }
     }

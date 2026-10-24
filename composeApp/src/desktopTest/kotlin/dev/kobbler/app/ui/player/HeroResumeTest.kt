@@ -1,7 +1,8 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.ContinueEpisode
 import dev.kobbler.app.data.Episode
@@ -67,7 +68,7 @@ class HeroResumeTest {
      * amount — a drag back to anywhere before the resume point restarting the episode.
      */
     @Test
-    fun `an echoed resume on a direct-played file is not a rebase`() = runComposeUiTest {
+    fun `an echoed resume on a direct-played file is not a rebase`() = runUiTest {
         StubServer(echoedResumeRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 3_600_000 }
@@ -80,7 +81,7 @@ class HeroResumeTest {
                 )
             }
 
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "ep-1" }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" }
 
             assertEquals(
                 PlayerTimeline.Direct, gps.timeline,
@@ -94,7 +95,7 @@ class HeroResumeTest {
     }
 
     @Test
-    fun `the hero resumes a local episode where it was left`() = runComposeUiTest {
+    fun `the hero resumes a local episode where it was left`() = runUiTest {
         StubServer(directPlayRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 3_600_000 }
@@ -107,7 +108,7 @@ class HeroResumeTest {
                 )
             }
 
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "ep-1" }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" }
 
             assertEquals(
                 1_380_000L, gps.pendingSeekMs,
@@ -140,7 +141,7 @@ class HeroResumeTest {
      * whole and the seek lands.
      */
     @Test
-    fun `the resume position is part of creating the session`() = runComposeUiTest {
+    fun `the resume position is part of creating the session`() = runUiTest {
         StubServer(directPlayRoutes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 3_600_000 }
@@ -153,7 +154,7 @@ class HeroResumeTest {
                 )
             }
 
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "ep-1" }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" }
 
             val body = stub.requestBodies["/api/v1/admin/playback/sessions"]
             assertTrue(

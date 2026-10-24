@@ -1,9 +1,9 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
@@ -24,7 +24,7 @@ class ReleaseAvailabilityStripTest {
 
     private fun shows(formFactor: FormFactor, vararg texts: String, content: @Composable () -> Unit) =
         listOf(1280 to 800, 400 to 860).forEach { (w, h) ->
-            runDesktopComposeUiTest(width = w, height = h) {
+            runUiTest(width = w, height = h) {
                 setContent { KobappTheme(formFactor = formFactor) { content() } }
                 waitForIdle()
                 texts.forEach { text ->
@@ -58,7 +58,7 @@ class ReleaseAvailabilityStripTest {
         }
 
     @Test
-    fun `a movie already on disk has no strip`() = runDesktopComposeUiTest {
+    fun `a movie already on disk has no strip`() = runUiTest {
         setContent {
             KobappTheme(formFactor = FormFactor.Desktop) {
                 MovieDetailScreen(

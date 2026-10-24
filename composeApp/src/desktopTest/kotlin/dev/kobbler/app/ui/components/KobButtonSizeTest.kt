@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -19,7 +19,7 @@ class KobButtonSizeTest {
     private fun buttonHeightDp(size: KobButtonSize): Float {
         var px = 0
         var density = 1f
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 KobappTheme {
                     density = LocalDensity.current.density

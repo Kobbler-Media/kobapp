@@ -1,10 +1,9 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.runComposeUiTest
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.kobbler.app.data.AudioFileDto
@@ -43,7 +42,7 @@ class AudiobookFormFactorTest {
     }
 
     @Test
-    fun `the audiobook player keeps the TV type scale`() = runComposeUiTest {
+    fun `the audiobook player keeps the TV type scale`() = runUiTest {
         val state = state()
         setContent {
             KobappTheme(formFactor = FormFactor.TV) {
@@ -56,7 +55,7 @@ class AudiobookFormFactorTest {
 
     /** A remote cannot scroll a column it has no focus target in, so the transport has to fit. */
     @Test
-    fun `on a TV screen the cover leaves room for the transport`() = runDesktopComposeUiTest(width = 960, height = 540) {
+    fun `on a TV screen the cover leaves room for the transport`() = runUiTest(width = 960, height = 540) {
         val state = state()
         setContent {
             KobappTheme(formFactor = FormFactor.TV) {

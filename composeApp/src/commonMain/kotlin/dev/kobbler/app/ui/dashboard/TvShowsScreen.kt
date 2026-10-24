@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.*
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -266,11 +268,11 @@ fun TvShowsScreen(
                 columns = GridCells.FixedSize(spacing.posterWidth),
                 contentPadding = PaddingValues(
                     start = gutter, end = railEnd,
-                    top = spacing.s4, bottom = spacing.s6,
+                    top = spacing.s4 + LocalTopChromeOverlap.current, bottom = spacing.s6,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(spacing.s3),
                 verticalArrangement = Arrangement.spacedBy(spacing.s4),
-                modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.scrollsUnderTopChrome().onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
                     // Fixed-size columns leave the grid's slack past the last one, and a

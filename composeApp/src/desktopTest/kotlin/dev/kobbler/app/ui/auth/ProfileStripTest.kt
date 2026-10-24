@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.auth
 
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -31,7 +32,7 @@ class ProfileStripTest {
             width = screen.width,
             height = screen.height,
         ) { _, _ ->
-            waitUntil(timeoutMillis = 10_000) { shows("Alice") }
+            waitUntil(timeoutMillis = UiTimeoutMs) { shows("Alice") }
             assertFalse(shows("Choose your profile"), screen.name)
             assertFalse(shows("Who’s watching tonight?"), screen.name)
 

@@ -1,7 +1,10 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.ListSkeleton
+import dev.kobbler.app.ui.PinnedHeader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,38 +55,41 @@ fun NotificationsScreen(
         val unreadCount = notifications.count { !it.read }
 
         // The header stays when the inbox is empty: it carries the switch back to Activity.
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-                BrowseHeader(
-                    title = "Notifications",
-                    accent = accent,
-                    countLine = if (unreadCount > 0) "$unreadCount unread" else "all caught up",
-                    compact = compact,
-                    trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(dimens.s3), verticalAlignment = Alignment.CenterVertically) {
-                            if (unreadCount > 0) {
-                                KobButton(
-                                    onClick = {
-                                        scope.launch {
-                                            try {
-                                                api.markAllNotificationsRead()
-                                                notifications = notifications.map { it.copy(read = true) }
-                                            } catch (_: Exception) {}
-                                        }
-                                    },
-                                    style = KobButtonStyle.Ghost,
-                                    modifier = Modifier.focusKey("mark-all-read"),
-                                ) {
-                                    Icon(Icons.Outlined.DoneAll, null, modifier = Modifier.size(16.dp))
-                                    Text("Mark all read", style = KobappTheme.type.caption)
+        PinnedHeader(
+            header = {
+                Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                    BrowseHeader(
+                        title = "Notifications",
+                        accent = accent,
+                        countLine = if (unreadCount > 0) "$unreadCount unread" else "all caught up",
+                        compact = compact,
+                        trailing = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(dimens.s3), verticalAlignment = Alignment.CenterVertically) {
+                                if (unreadCount > 0) {
+                                    KobButton(
+                                        onClick = {
+                                            scope.launch {
+                                                try {
+                                                    api.markAllNotificationsRead()
+                                                    notifications = notifications.map { it.copy(read = true) }
+                                                } catch (_: Exception) {}
+                                            }
+                                        },
+                                        style = KobButtonStyle.Ghost,
+                                        modifier = Modifier.focusKey("mark-all-read"),
+                                    ) {
+                                        Icon(Icons.Outlined.DoneAll, null, modifier = Modifier.size(16.dp))
+                                        Text("Mark all read", style = KobappTheme.type.caption)
+                                    }
                                 }
+                                tabSwitch?.invoke()
                             }
-                            tabSwitch?.invoke()
-                        }
-                    },
-                )
-            }
-
+                        },
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
             if (notifications.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.NotificationsNone,
@@ -92,9 +98,9 @@ fun NotificationsScreen(
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(horizontal = gutter, vertical = dimens.s2),
+                    contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
                     verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
                 ) {
                     items(notifications, key = { it.id }) { notification ->
                         var isRead by remember(notification.id) { mutableStateOf(notification.read) }

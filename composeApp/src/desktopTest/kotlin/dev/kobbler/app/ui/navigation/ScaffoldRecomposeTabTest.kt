@@ -1,9 +1,9 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LocalAuthState
@@ -33,7 +33,7 @@ class ScaffoldRecomposeTabTest {
         )
         for (formFactor in listOf(FormFactor.TV, FormFactor.Desktop)) {
             for (stack in stacks) {
-                runDesktopComposeUiTest(width = 960, height = 540) {
+                runUiTest(width = 960, height = 540) {
                     StubServer(emptyMap()).use { stub ->
                         val nav = NavigationState()
                         stack.forEach(nav::navigate)

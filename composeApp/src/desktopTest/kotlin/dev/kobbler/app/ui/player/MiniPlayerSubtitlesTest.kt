@@ -1,12 +1,13 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.PlaybackSubtitleTrackDto
@@ -31,7 +32,7 @@ class MiniPlayerSubtitlesTest {
     """.trimIndent()
 
     private fun showsCue(mini: Boolean) = StubServer(mapOf("/subs/en.vtt" to { _ -> vtt })).use { server ->
-        runComposeUiTest {
+        runUiTest {
             val player = FakePlayer().apply {
                 durationMs.value = 60_000
                 currentMs.value = 1_500
@@ -67,7 +68,7 @@ class MiniPlayerSubtitlesTest {
                     }
                 }
             }
-            waitUntil(timeoutMillis = 5_000) {
+            waitUntil(timeoutMillis = UiTimeoutMs) {
                 onAllNodesWithText("Hello there").fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithText("Hello there").assertExists()

@@ -1,10 +1,10 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -32,7 +32,7 @@ class LiveAspectSourceTest {
     private val playlist = "http://127.0.0.1:1/live/sessions/s-1/stream.m3u8"
 
     @Test
-    fun `the buffer does not inherit the broadcast's shape`() = runComposeUiTest {
+    fun `the buffer does not inherit the broadcast's shape`() = runUiTest {
         withSavedAspect(bucket = "4:3", ratio = AspectRatio.CROP) {
             val player = FakePlayer()
             val gps = GlobalPlayerState()

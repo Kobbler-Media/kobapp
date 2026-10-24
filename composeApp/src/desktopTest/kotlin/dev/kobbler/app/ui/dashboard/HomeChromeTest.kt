@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -33,12 +34,12 @@ class HomeChromeTest {
     @Test
     fun `home spells out nothing the art and progress already say`() {
         for (formFactor in listOf(FormFactor.TV, FormFactor.Desktop)) {
-            runDesktopComposeUiTest(width = 1280, height = 2000) {
+            runUiTest(width = 1280, height = 2000) {
                 StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
                     DataCache.clear()
                     val api = KobblerApi(HttpClient(), stub.url, "token")
                     setContent { KobappTheme(formFactor = formFactor) { HomeScreen(api = api, formFactor = formFactor) } }
-                    waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Asked For").fetchSemanticsNodes().isNotEmpty() }
+                    waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Asked For").fetchSemanticsNodes().isNotEmpty() }
                     for (text in listOf("RESUME", "NEXT EPISODE", "WATCHLIST", "WANTED")) {
                         check(onAllNodesWithText(text).fetchSemanticsNodes().isEmpty()) { "$formFactor: '$text' is spelled out" }
                     }

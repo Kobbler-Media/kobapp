@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.reader
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -13,7 +14,6 @@ import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TtsVoiceDto
 import dev.kobbler.app.platform.FormFactor
@@ -29,7 +29,7 @@ class ReaderSettingsRemoteTest {
     private val slider = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
 
     @Test
-    fun `opening settings focuses text size, and right makes it bigger`() = runDesktopComposeUiTest(width = 960, height = 540) {
+    fun `opening settings focuses text size, and right makes it bigger`() = runUiTest(width = 960, height = 540) {
         var fontSize by mutableFloatStateOf(18f)
         setContent {
             val scope = rememberCoroutineScope()

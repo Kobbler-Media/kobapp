@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
@@ -21,7 +22,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -53,7 +53,7 @@ class PlayerTvPickerTest {
         var audio by mutableStateOf<TrackInfo?>(null)
     }
 
-    private fun tvPlayer(test: ComposeUiTest.(Rig) -> Unit) = runDesktopComposeUiTest(width = 1920, height = 1080) {
+    private fun tvPlayer(test: ComposeUiTest.(Rig) -> Unit) = runUiTest(width = 1920, height = 1080) {
         val rig = Rig().apply { audio = english }
         setContent {
             rig.focus = LocalFocusManager.current

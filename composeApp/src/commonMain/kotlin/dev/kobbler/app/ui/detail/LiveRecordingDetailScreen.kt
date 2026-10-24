@@ -36,7 +36,10 @@ import dev.kobbler.app.ui.dashboard.livetv.minutesLabel
 import dev.kobbler.app.ui.dashboard.livetv.sizeLabel
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
-import dev.kobbler.app.ui.safeTopPadding
+import dev.kobbler.app.ui.LocalTopChromeOverlap
+import dev.kobbler.app.ui.safeHorizontalPadding
+import dev.kobbler.app.ui.UnderStatusBar
+import dev.kobbler.app.ui.scrollsUnderTopChrome
 import kotlinx.coroutines.launch
 
 /**
@@ -65,148 +68,152 @@ fun LiveRecordingDetailScreen(
     var current by remember(recording.id) { mutableStateOf(recording) }
     var busy by remember { mutableStateOf(false) }
 
-    Column(
-        modifier
-            .fillMaxSize()
-            .background(colors.bg)
-            .safeTopPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = gutter, vertical = dimens.s4),
-        verticalArrangement = Arrangement.spacedBy(dimens.s4),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.s3),
-            modifier = Modifier.fillMaxWidth().focusKeyGroup("rechead"),
+    UnderStatusBar {
+        Column(
+            modifier
+                .scrollsUnderTopChrome()
+                .fillMaxSize()
+                .background(colors.bg)
+                .safeHorizontalPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(top = LocalTopChromeOverlap.current)
+                .padding(horizontal = gutter, vertical = dimens.s4),
+            verticalArrangement = Arrangement.spacedBy(dimens.s4),
         ) {
-            KobButton(
-                onClick = onBack,
-                style = KobButtonStyle.Ghost,
-                modifier = Modifier.focusKey("back", entryEligible = false),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.s3),
+                modifier = Modifier.fillMaxWidth().focusKeyGroup("rechead"),
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", modifier = Modifier.size(20.dp))
-            }
-            LiveThumb(current.imageUrl, width = 112.dp, height = 64.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (current.isInProgress) {
-                        RecordingDot(colors.err, 8.dp)
-                        Text("REC", style = KobappTheme.type.labelSm, color = colors.err)
+                KobButton(
+                    onClick = onBack,
+                    style = KobButtonStyle.Ghost,
+                    modifier = Modifier.focusKey("back", entryEligible = false),
+                ) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", modifier = Modifier.size(20.dp))
+                }
+                LiveThumb(current.imageUrl, width = 112.dp, height = 64.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (current.isInProgress) {
+                            RecordingDot(colors.err, 8.dp)
+                            Text("REC", style = KobappTheme.type.labelSm, color = colors.err)
+                        }
+                        Text(
+                            current.title,
+                            style = KobappTheme.type.h1,
+                            color = colors.textHi,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        LiveBadge(current.status.uppercase(), if (current.status == "failed") colors.err else accent)
                     }
                     Text(
-                        current.title,
-                        style = KobappTheme.type.h1,
-                        color = colors.textHi,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+                        listOfNotNull(
+                            current.episodeNumber,
+                            current.episodeTitle,
+                            current.channelName,
+                            hhmmRange(current.scheduledStart, current.scheduledEnd).takeIf { it.isNotEmpty() },
+                        ).joinToString(" · "),
+                        style = KobappTheme.type.bodySm,
+                        color = colors.textMd,
                     )
-                    LiveBadge(current.status.uppercase(), if (current.status == "failed") colors.err else accent)
+                    current.provenance?.let {
+                        Text(it, style = KobappTheme.type.caption, color = colors.textLo)
+                    }
                 }
-                Text(
-                    listOfNotNull(
-                        current.episodeNumber,
-                        current.episodeTitle,
-                        current.channelName,
-                        hhmmRange(current.scheduledStart, current.scheduledEnd).takeIf { it.isNotEmpty() },
-                    ).joinToString(" · "),
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textMd,
+                PrimaryAction(
+                    icon = Icons.Outlined.PlayArrow,
+                    label = if (current.isInProgress) "Watch from start" else "Play",
+                    onClick = { onPlay(current) },
+                    enabled = current.playableFromStart || current.status == "completed",
+                    modifier = Modifier.focusKey("play", preferredEntry = true),
                 )
-                current.provenance?.let {
-                    Text(it, style = KobappTheme.type.caption, color = colors.textLo)
+                if (current.isInProgress) {
+                    IconAction(
+                        icon = Icons.Outlined.Stop,
+                        label = "Stop recording",
+                        accent = accent,
+                        enabled = !busy,
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                runCatching { api.stopLiveRecording(current.id) }.onSuccess { current = it }
+                                busy = false
+                            }
+                        },
+                        modifier = Modifier.focusKey("stop", entryEligible = false),
+                    )
                 }
-            }
-            PrimaryAction(
-                icon = Icons.Outlined.PlayArrow,
-                label = if (current.isInProgress) "Watch from start" else "Play",
-                onClick = { onPlay(current) },
-                enabled = current.playableFromStart || current.status == "completed",
-                modifier = Modifier.focusKey("play", preferredEntry = true),
-            )
-            if (current.isInProgress) {
                 IconAction(
-                    icon = Icons.Outlined.Stop,
-                    label = "Stop recording",
+                    icon = Icons.Outlined.Delete,
+                    label = "Delete recording",
                     accent = accent,
+                    tint = colors.err,
                     enabled = !busy,
                     onClick = {
                         scope.launch {
                             busy = true
-                            runCatching { api.stopLiveRecording(current.id) }.onSuccess { current = it }
+                            runCatching { api.deleteLiveRecording(current.id) }
                             busy = false
+                            onBack()
                         }
                     },
-                    modifier = Modifier.focusKey("stop", entryEligible = false),
+                    modifier = Modifier.focusKey("delete", entryEligible = false),
                 )
             }
-            IconAction(
-                icon = Icons.Outlined.Delete,
-                label = "Delete recording",
-                accent = accent,
-                tint = colors.err,
-                enabled = !busy,
-                onClick = {
-                    scope.launch {
-                        busy = true
-                        runCatching { api.deleteLiveRecording(current.id) }
-                        busy = false
-                        onBack()
+
+            current.error?.let {
+                Text(it, style = KobappTheme.type.bodySm, color = colors.err)
+            }
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(dimens.s3), verticalArrangement = Arrangement.spacedBy(dimens.s2)) {
+                StatTile("Duration", minutesLabel(current.durationSeconds).ifEmpty { "—" })
+                StatTile("On disk", minutesLabel(current.secondsOnDisk).ifEmpty { "—" })
+                StatTile("Size", sizeLabel(current.sizeBytes).ifEmpty { "—" })
+                StatTile("Tuner", current.tunerIndex?.let { "tuner$it" } ?: "—")
+                StatTile("Codecs", listOfNotNull(current.videoCodec, current.audioCodec).joinToString("/").ifEmpty { "—" })
+            }
+
+            current.synopsis?.let {
+                Text(it, style = KobappTheme.type.body, color = colors.textMd)
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.s2)) {
+                Text(
+                    if (current.adBreaks.isEmpty()) "No ad breaks detected" else "${current.adBreaks.size} ad breaks",
+                    style = KobappTheme.type.h3,
+                    color = colors.textHi,
+                )
+                current.adBreaks.forEach { br ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(dimens.s3),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(colors.elev1)
+                            .border(1.dp, colors.lineSoft, RoundedCornerShape(9.dp))
+                            .padding(horizontal = dimens.s3, vertical = dimens.s2),
+                    ) {
+                        Text(
+                            "${secondsClock(br.startSeconds)} – ${secondsClock(br.endSeconds)}",
+                            style = KobappTheme.type.bodySm,
+                            color = colors.textHi,
+                        )
+                        Text(
+                            listOfNotNull(
+                                br.method,
+                                br.confidence?.let { "${(it * 100).toInt()}% confidence" },
+                                if (br.adsTotal > 0) "${br.adsKnown}/${br.adsTotal} ads known" else null,
+                            ).joinToString(" · "),
+                            style = KobappTheme.type.caption,
+                            color = colors.textMd,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (br.correctedAt != null) LiveBadge("CORRECTED", accent)
                     }
-                },
-                modifier = Modifier.focusKey("delete", entryEligible = false),
-            )
-        }
-
-        current.error?.let {
-            Text(it, style = KobappTheme.type.bodySm, color = colors.err)
-        }
-
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(dimens.s3), verticalArrangement = Arrangement.spacedBy(dimens.s2)) {
-            StatTile("Duration", minutesLabel(current.durationSeconds).ifEmpty { "—" })
-            StatTile("On disk", minutesLabel(current.secondsOnDisk).ifEmpty { "—" })
-            StatTile("Size", sizeLabel(current.sizeBytes).ifEmpty { "—" })
-            StatTile("Tuner", current.tunerIndex?.let { "tuner$it" } ?: "—")
-            StatTile("Codecs", listOfNotNull(current.videoCodec, current.audioCodec).joinToString("/").ifEmpty { "—" })
-        }
-
-        current.synopsis?.let {
-            Text(it, style = KobappTheme.type.body, color = colors.textMd)
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(dimens.s2)) {
-            Text(
-                if (current.adBreaks.isEmpty()) "No ad breaks detected" else "${current.adBreaks.size} ad breaks",
-                style = KobappTheme.type.h3,
-                color = colors.textHi,
-            )
-            current.adBreaks.forEach { br ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(dimens.s3),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(colors.elev1)
-                        .border(1.dp, colors.lineSoft, RoundedCornerShape(9.dp))
-                        .padding(horizontal = dimens.s3, vertical = dimens.s2),
-                ) {
-                    Text(
-                        "${secondsClock(br.startSeconds)} – ${secondsClock(br.endSeconds)}",
-                        style = KobappTheme.type.bodySm,
-                        color = colors.textHi,
-                    )
-                    Text(
-                        listOfNotNull(
-                            br.method,
-                            br.confidence?.let { "${(it * 100).toInt()}% confidence" },
-                            if (br.adsTotal > 0) "${br.adsKnown}/${br.adsTotal} ads known" else null,
-                        ).joinToString(" · "),
-                        style = KobappTheme.type.caption,
-                        color = colors.textMd,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (br.correctedAt != null) LiveBadge("CORRECTED", accent)
                 }
             }
         }

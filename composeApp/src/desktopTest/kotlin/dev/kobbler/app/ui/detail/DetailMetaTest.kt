@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 class DetailMetaTest {
 
     @Test
-    fun `a wrapped fact starts its own line flush left`() = runDesktopComposeUiTest(width = 400, height = 300) {
+    fun `a wrapped fact starts its own line flush left`() = runUiTest(width = 400, height = 300) {
         setContent {
             KobappTheme {
                 Box(Modifier.width(180.dp)) {

@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -7,7 +8,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
@@ -37,7 +37,7 @@ class MovieTransportLayoutTest {
         subtitle = "2026 • 2h 37m"
     }
 
-    private fun assertTransportOnBottomEdge(width: Dp, height: Dp) = runComposeUiTest {
+    private fun assertTransportOnBottomEdge(width: Dp, height: Dp) = runUiTest {
         val player = FakePlayer().apply { durationMs.value = 9_444_000 }
         setContent {
             Box(Modifier.size(width, height).semantics { contentDescription = "screen" }) {

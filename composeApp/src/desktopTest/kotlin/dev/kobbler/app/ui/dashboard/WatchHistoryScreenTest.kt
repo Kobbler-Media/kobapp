@@ -1,10 +1,11 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -24,7 +25,7 @@ class WatchHistoryScreenTest {
     private val both = """{"items":[{"media_type":"tv","tmdb_id":1},{"media_type":"movie","tmdb_id":2}]"""
 
     private fun screen(test: androidx.compose.ui.test.DesktopComposeUiTest.(StubServer) -> Unit) =
-        runDesktopComposeUiTest(width = 1280, height = 800) {
+        runUiTest(width = 1280, height = 800) {
             StubServer(
                 mapOf(
                     "/api/v1/admin/watch-history" to { _ -> history },
@@ -37,7 +38,7 @@ class WatchHistoryScreenTest {
                         WatchHistoryScreen(api = KobblerApi(HttpClient(), stub.url, "token"))
                     }
                 }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Bluey", substring = true).fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Bluey", substring = true).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithText("Select all").performClick()
                 waitForIdle()
                 test(stub)
@@ -47,7 +48,7 @@ class WatchHistoryScreenTest {
     @Test
     fun `selected titles are hidden from recommendations`() = screen { stub ->
         onNodeWithText("Hide from recommendations").performClick()
-        waitUntil(timeoutMillis = 5_000) { stub.requestBodies.containsKey("/api/v1/admin/watch-history/exclude") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { stub.requestBodies.containsKey("/api/v1/admin/watch-history/exclude") }
         assertEquals("$both,\"excluded\":true}", stub.requestBodies["/api/v1/admin/watch-history/exclude"])
     }
 
@@ -57,7 +58,7 @@ class WatchHistoryScreenTest {
         waitForIdle()
         assertEquals(null, stub.requestBodies["/api/v1/admin/watch-history/remove"])
         onNodeWithText("Remove").performClick()
-        waitUntil(timeoutMillis = 5_000) { stub.requestBodies.containsKey("/api/v1/admin/watch-history/remove") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { stub.requestBodies.containsKey("/api/v1/admin/watch-history/remove") }
         assertEquals("$both}", stub.requestBodies["/api/v1/admin/watch-history/remove"])
     }
 }

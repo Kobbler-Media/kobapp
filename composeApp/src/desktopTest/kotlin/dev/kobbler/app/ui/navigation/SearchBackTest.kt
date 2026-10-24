@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.ui.dashboard.SearchScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -38,6 +39,29 @@ class SearchBackTest {
         assertEquals(movie to false, nav.current to nav.searchOpen)
         nav.goBack()
         assertEquals(true, nav.searchOpen)
+    }
+
+    @Test
+    fun `search opens scoped to the section it was opened from`() {
+        val nav = NavigationState().apply { navigate(Destination.Tab.LiveTv) }
+        nav.openSearch()
+        assertEquals(SearchScope.LiveTv, nav.searchScope)
+
+        nav.searchScope = SearchScope.All
+        nav.navigateFromSearch(movie)
+        nav.goBack()
+        assertEquals(SearchScope.All, nav.searchScope)
+
+        nav.searchOpen = false
+        nav.navigate(Destination.Tab.Movies)
+        nav.openSearch()
+        assertEquals(SearchScope.Movies, nav.searchScope)
+
+        nav.openSearch(from = Destination.Tab.Audiobooks)
+        assertEquals(SearchScope.Books, nav.searchScope)
+
+        nav.openSearch(from = Destination.Tab.Iptv)
+        assertEquals(SearchScope.Iptv, nav.searchScope)
     }
 
     @Test

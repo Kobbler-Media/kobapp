@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.layout.Box
@@ -11,7 +12,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -85,7 +85,7 @@ class SurfaceMorphTest {
 
     /** The mini/fullscreen morph is the reason any of this animates; it has to survive. */
     @Test
-    fun `the morph still animates between modes`() = runComposeUiTest {
+    fun `the morph still animates between modes`() = runUiTest {
         mainClock.autoAdvance = false
         var mini by mutableStateOf(false)
         val seen = mutableListOf<IntSize>()

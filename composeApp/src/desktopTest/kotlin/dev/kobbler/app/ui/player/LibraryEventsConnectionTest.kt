@@ -1,10 +1,10 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -45,7 +45,7 @@ class LibraryEventsConnectionTest {
                 "/api/v1/admin/playback/handoff" to { _ -> handoffAsks.incrementAndGet(); "{}" },
             ),
         ).use { server ->
-            runComposeUiTest {
+            runUiTest {
                 val player = FakePlayer().apply { durationMs.value = 9_444_000 }
                 setContent {
                     Box(Modifier.size(960.dp, 540.dp)) {

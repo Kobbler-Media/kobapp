@@ -2,6 +2,11 @@ package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
 import dev.kobbler.app.ui.components.ListSkeleton
+import dev.kobbler.app.ui.safeHorizontalPadding
+import dev.kobbler.app.ui.UnderStatusBar
+import dev.kobbler.app.ui.PinnedHeader
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,7 +56,6 @@ import dev.kobbler.app.ui.dashboard.livetv.parseLiveInstant
 import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
-import dev.kobbler.app.ui.safeTopPadding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
@@ -191,67 +195,73 @@ fun LiveSeriesRuleScreen(
             }
         }
 
-        Column(Modifier.fillMaxSize().safeTopPadding()) {
-            Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-                BrowseHeader(
-                    title = "Series rules",
-                    accent = accent,
-                    countLine = listOf(
-                        "${data.rules.size} rules",
-                        "${data.rules.sumOf { it.queuedCount }} recordings queued",
-                    ).joinToString(" · "),
-                    compact = compact,
-                    trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(dimens.s2), verticalAlignment = Alignment.CenterVertically) {
-                            if (draft.id.isNotBlank()) {
-                                KobButton(
-                                    text = "Delete",
-                                    onClick = {
-                                        scope.launch {
-                                            runCatching { api.deleteLiveSeriesRule(draft.id) }
-                                            selectedId = null
-                                            draft = blankSeriesRule()
-                                            retry()
-                                        }
-                                    },
-                                    style = KobButtonStyle.Ghost,
-                                    leading = { Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(16.dp)) },
-                                    modifier = Modifier.focusKey("rule.delete", entryEligible = false),
-                                )
-                            }
-                            KobButton(
-                                text = if (saving) "Saving…" else "Save rule",
-                                onClick = save,
-                                style = KobButtonStyle.Accent,
-                                accent = accent,
-                                enabled = !saving && draft.title.isNotBlank(),
-                                modifier = Modifier.focusKey("rule.save", entryEligible = false),
-                            )
-                        }
-                    },
-                )
-            }
-
-            if (compact) {
-                Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = gutter),
-                    verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                ) {
-                    RuleList(data.rules, draft, accent) { draft = it; selectedId = it.id.takeIf { id -> id.isNotBlank() } }
-                    RuleEditor(draft, data.channels, accent) { draft = it }
-                    RulePreviewPane(preview, previewing, accent, Modifier.height(420.dp))
-                    Spacer(Modifier.height(dimens.s6))
-                }
-            } else {
-                Row(
-                    Modifier.fillMaxSize().padding(horizontal = gutter, vertical = dimens.s2),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.s4),
-                ) {
-                    RuleList(data.rules, draft, accent, Modifier.width(210.dp).fillMaxHeight()) { draft = it; selectedId = it.id.takeIf { id -> id.isNotBlank() } }
-                    Box(Modifier.width(392.dp).fillMaxHeight()) {
-                        RuleEditor(draft, data.channels, accent, Modifier.verticalScroll(rememberScrollState())) { draft = it }
+        UnderStatusBar {
+            PinnedHeader(
+                header = {
+                    Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                        BrowseHeader(
+                            title = "Series rules",
+                            accent = accent,
+                            countLine = listOf(
+                                "${data.rules.size} rules",
+                                "${data.rules.sumOf { it.queuedCount }} recordings queued",
+                            ).joinToString(" · "),
+                            compact = compact,
+                            trailing = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(dimens.s2), verticalAlignment = Alignment.CenterVertically) {
+                                    if (draft.id.isNotBlank()) {
+                                        KobButton(
+                                            text = "Delete",
+                                            onClick = {
+                                                scope.launch {
+                                                    runCatching { api.deleteLiveSeriesRule(draft.id) }
+                                                    selectedId = null
+                                                    draft = blankSeriesRule()
+                                                    retry()
+                                                }
+                                            },
+                                            style = KobButtonStyle.Ghost,
+                                            leading = { Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(16.dp)) },
+                                            modifier = Modifier.focusKey("rule.delete", entryEligible = false),
+                                        )
+                                    }
+                                    KobButton(
+                                        text = if (saving) "Saving…" else "Save rule",
+                                        onClick = save,
+                                        style = KobButtonStyle.Accent,
+                                        accent = accent,
+                                        enabled = !saving && draft.title.isNotBlank(),
+                                        modifier = Modifier.focusKey("rule.save", entryEligible = false),
+                                    )
+                                }
+                            },
+                        )
                     }
-                    RulePreviewPane(preview, previewing, accent, Modifier.weight(1f).fillMaxHeight())
+                },
+                modifier = Modifier.fillMaxSize().safeHorizontalPadding(),
+            ) {
+                if (compact) {
+                    Column(
+                        Modifier.scrollsUnderTopChrome().fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(horizontal = gutter).padding(top = LocalTopChromeOverlap.current),
+                        verticalArrangement = Arrangement.spacedBy(dimens.s4),
+                    ) {
+                        RuleList(data.rules, draft, accent) { draft = it; selectedId = it.id.takeIf { id -> id.isNotBlank() } }
+                        RuleEditor(draft, data.channels, accent) { draft = it }
+                        RulePreviewPane(preview, previewing, accent, Modifier.height(420.dp))
+                        Spacer(Modifier.height(dimens.s6))
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxSize().padding(horizontal = gutter, vertical = dimens.s2),
+                        horizontalArrangement = Arrangement.spacedBy(dimens.s4),
+                    ) {
+                        RuleList(data.rules, draft, accent, Modifier.width(210.dp).fillMaxHeight()) { draft = it; selectedId = it.id.takeIf { id -> id.isNotBlank() } }
+                        Box(Modifier.width(392.dp).fillMaxHeight()) {
+                            RuleEditor(draft, data.channels, accent, Modifier.verticalScroll(rememberScrollState())) { draft = it }
+                        }
+                        RulePreviewPane(preview, previewing, accent, Modifier.weight(1f).fillMaxHeight())
+                    }
                 }
             }
         }

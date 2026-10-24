@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -14,7 +15,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.kobplayer.ui.VideoPlayerOverlay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +32,7 @@ import kotlin.test.assertEquals
 class ScrubPreviewLayoutTest {
 
     @Test
-    fun `the scrub preview does not displace the transport`() = runComposeUiTest {
+    fun `the scrub preview does not displace the transport`() = runUiTest {
         setContent {
             VideoPlayerOverlay(
                 title = "A Movie",

@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.PlaybackClient
 import dev.kobbler.app.data.SkipSegment
@@ -59,7 +60,7 @@ class RebasedPlayerConsumersTest {
                 it.currentMs.value = playerPositionMs
             }
             val gps = state(offsetSeconds)
-            runComposeUiTest {
+            runUiTest {
                 setContent {
                     KobappTheme {
                         FullscreenVideoPlayer(
@@ -100,7 +101,7 @@ class RebasedPlayerConsumersTest {
         run(OFFSET_SECONDS, playerPositionMs = 700_000) { player, _, stub ->
             player.state.value = PlayerState.FINISHED
             waitForIdle()
-            waitUntil(timeoutMillis = 10_000) { stub.requestBodies.containsKey(POSITION) }
+            waitUntil(timeoutMillis = UiTimeoutMs) { stub.requestBodies.containsKey(POSITION) }
             assertEquals(3600, stub.reportedPosition())
         }
     }
@@ -115,7 +116,7 @@ class RebasedPlayerConsumersTest {
 
             player.state.value = PlayerState.FINISHED
             waitForIdle()
-            waitUntil(timeoutMillis = 10_000) { stub.requestBodies.containsKey(POSITION) }
+            waitUntil(timeoutMillis = UiTimeoutMs) { stub.requestBodies.containsKey(POSITION) }
             assertEquals(2400, stub.reportedPosition())
             assertTrue(player.calls.none { it == "seek:780000" })
         }

@@ -1,8 +1,8 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -14,7 +14,7 @@ class CardTitleSizeTest {
     @Test
     fun `continue cards title at the size of the poster rails beside them`() {
         for (formFactor in listOf(FormFactor.Phone, FormFactor.Desktop, FormFactor.TV)) {
-            runDesktopComposeUiTest(width = 1200, height = 800) {
+            runUiTest(width = 1200, height = 800) {
                 setContent {
                     KobappTheme(formFactor = formFactor) {
                         Row {

@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail.tvshow
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -11,7 +13,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LocalAuthState
@@ -54,7 +55,7 @@ internal fun showJson(continueSeasonIdx: Int = 2, continueEpisodeIdx: Int = 1, p
 class ShowDetailRemoteTest {
 
     private fun showPage(test: DesktopComposeUiTest.() -> Unit) =
-        runDesktopComposeUiTest(width = 960, height = 540) {
+        runUiTest(width = 960, height = 540) {
             DataCache.clear()
             StubServer(mapOf(SHOW_PATH to { _ -> showJson() })).use { stub ->
                 val nav = NavigationState()
@@ -77,7 +78,7 @@ class ShowDetailRemoteTest {
                 }
                 mainClock.advanceTimeBy(1_000)
                 runOnIdle { nav.navigate(Destination.TvShowDetail("show-1")) }
-                waitUntil(timeoutMillis = 10_000) { focusedText() != null }
+                waitUntil(timeoutMillis = UiTimeoutMs) { focusedText() != null }
                 test()
             }
         }

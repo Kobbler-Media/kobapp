@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.layout.*
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -219,12 +221,12 @@ fun MoviesScreen(
             }
             val gridFocus = remember { FocusRequester() }
             LazyVerticalGrid(
-                modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.scrollsUnderTopChrome().onSizeChanged { gridWidthPx = it.width }.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
                 state = gridState,
                 columns = GridCells.FixedSize(dimens.posterWidth),
                 contentPadding = PaddingValues(
                     start = gutter, end = railEnd,
-                    top = dimens.s4, bottom = dimens.s6,
+                    top = dimens.s4 + LocalTopChromeOverlap.current, bottom = dimens.s6,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                 verticalArrangement = Arrangement.spacedBy(dimens.s4),

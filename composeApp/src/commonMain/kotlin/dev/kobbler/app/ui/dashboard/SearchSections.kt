@@ -2,7 +2,10 @@ package dev.kobbler.app.ui.dashboard
 
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.DiscoverSearchResults
+import dev.kobbler.app.data.IptvChannel
+import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.SearchHitDto
+import dev.kobbler.app.ui.dashboard.livetv.LiveGuideSelection
 
 /** One block of results, whichever side of the house it came from. */
 sealed interface SearchSection {
@@ -20,6 +23,21 @@ sealed interface SearchSection {
         override val order get() = discoverOrder(mediaType)
         override val firstRowKey get() = items.firstOrNull()?.let { "disc.${it.provider}.${it.providerId}" }
     }
+
+    data class LiveChannels(val channels: List<LiveChannel>) : SearchSection {
+        override val order get() = 90
+        override val firstRowKey get() = channels.firstOrNull()?.let { "live.ch.${it.id}" }
+    }
+
+    data class LiveAirings(val airings: List<LiveGuideSelection>) : SearchSection {
+        override val order get() = 91
+        override val firstRowKey get() = airings.firstOrNull()?.let { "live.air.${it.entry.id}" }
+    }
+
+    data class IptvChannels(val channels: List<IptvChannel>) : SearchSection {
+        override val order get() = 92
+        override val firstRowKey get() = channels.firstOrNull()?.let { "iptv.ch.${it.id}" }
+    }
 }
 
 /**
@@ -36,6 +54,8 @@ sealed interface SearchSection {
 fun searchSections(
     libraryHits: List<SearchHitDto>,
     discover: DiscoverSearchResults?,
+    live: LiveSearchResults? = null,
+    iptv: List<IptvChannel>? = null,
 ): List<SearchSection> {
     val library = libraryHits.groupBy { it.type }
         .map { (type, hits) -> SearchSection.Library(type, hits) }
@@ -54,11 +74,16 @@ fun searchSections(
             SearchSection.Discover("book", it.books),
         )
     } ?: emptyList()
-    return (library + discovered)
+    val onAir = live?.let { listOf(SearchSection.LiveChannels(it.channels), SearchSection.LiveAirings(it.airings)) } ?: emptyList()
+    val streams = iptv?.let { listOf(SearchSection.IptvChannels(it)) } ?: emptyList()
+    return (library + discovered + onAir + streams)
         .filter { section ->
             when (section) {
                 is SearchSection.Library -> section.hits.isNotEmpty()
                 is SearchSection.Discover -> section.items.isNotEmpty()
+                is SearchSection.LiveChannels -> section.channels.isNotEmpty()
+                is SearchSection.LiveAirings -> section.airings.isNotEmpty()
+                is SearchSection.IptvChannels -> section.channels.isNotEmpty()
             }
         }
         .sortedBy { it.order }

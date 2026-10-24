@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import coil3.SingletonImageLoader
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -22,7 +22,7 @@ class SpotlightCrossfadeTest {
     private val poster = Spotlight(posterUrl = "http://kobbler.test/p.jpg", title = "P")
 
     private fun backdrop(test: DesktopComposeUiTest.(spot: MutableState<Spotlight?>) -> Unit) =
-        runDesktopComposeUiTest(width = 800, height = 450) {
+        runUiTest(width = 800, height = 450) {
             SingletonImageLoader.setUnsafe(cachedArtLoader())
             try {
                 val spot = mutableStateOf<Spotlight?>(a)

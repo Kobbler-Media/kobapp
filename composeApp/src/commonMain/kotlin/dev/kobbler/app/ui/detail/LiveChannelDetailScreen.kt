@@ -1,6 +1,11 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.safeHorizontalPadding
+import dev.kobbler.app.ui.UnderStatusBar
+import dev.kobbler.app.ui.PinnedHeader
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -27,6 +32,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.foundation.layout.RowScope
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.LiveGuideEntry
@@ -51,7 +58,6 @@ import dev.kobbler.app.ui.dashboard.livetv.minutesLabel
 import dev.kobbler.app.ui.dashboard.livetv.tierLabel
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
-import dev.kobbler.app.ui.safeTopPadding
 import kotlinx.coroutines.launch
 
 /**
@@ -67,11 +73,13 @@ fun LiveChannelDetailScreen(
     formFactor: FormFactor = FormFactor.Desktop,
     onBack: () -> Unit = {},
     onWatch: (LiveChannel) -> Unit = {},
+    onSeriesRule: ((LiveGuideEntry) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val colors = KobappTheme.colors
     val dimens = KobappTheme.dimens
     val accent = colors.accLive
+    val compact = formFactor == FormFactor.Phone
     val gutter = when (formFactor) {
         FormFactor.TV -> dimens.pageGutterTv
         FormFactor.Phone -> dimens.pageGutterPhone
@@ -89,114 +97,136 @@ fun LiveChannelDetailScreen(
     val clock = rememberGuideClock(active = true)
     CenterFocusedRow(listState, focus, topRow = 0)
 
-    Column(modifier.fillMaxSize().safeTopPadding()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.s4),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = gutter, vertical = dimens.s2)
-                .focusKeyGroup("channelhead"),
-        ) {
-            KobButton(
-                onClick = onBack,
-                style = KobButtonStyle.Ghost,
-                modifier = Modifier.focusKey("back", entryEligible = false),
-            ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", modifier = Modifier.size(20.dp))
-            }
-            ChannelLogo(channel, accent, 64.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        channel.name,
-                        style = KobappTheme.type.h1,
-                        color = colors.textHi,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    channel.tierLabel()?.let { LiveBadge(it, accent) }
+    UnderStatusBar {
+        PinnedHeader(
+            header = {
+                val identity: @Composable RowScope.() -> Unit = {
+                    KobButton(
+                        onClick = onBack,
+                        style = KobButtonStyle.Ghost,
+                        modifier = Modifier.focusKey("back", entryEligible = false),
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", modifier = Modifier.size(20.dp))
+                    }
+                    ChannelLogo(channel, accent, if (compact) 48.dp else 64.dp)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                channel.name,
+                                style = if (compact) KobappTheme.type.h2 else KobappTheme.type.h1,
+                                color = colors.textHi,
+                                maxLines = if (compact) 2 else 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            channel.tierLabel()?.let { LiveBadge(it, accent) }
+                        }
+                        // Mux frequency, codec pair and signal percentage are tuner diagnostics,
+                        // not a description of the channel — the Settings tuner page is where they
+                        // belong. What is left says which channel this is and what it looks like.
+                        Text(
+                            listOfNotNull(
+                                channel.lcn?.let { "ch$it" },
+                                channel.network,
+                                channel.region,
+                            ).joinToString(" · "),
+                            style = KobappTheme.type.bodySm,
+                            color = colors.textMd,
+                        )
+                    }
                 }
-                // Mux frequency, codec pair and signal percentage are tuner diagnostics,
-                // not a description of the channel — the Settings tuner page is where they
-                // belong. What is left says which channel this is and what it looks like.
-                Text(
-                    listOfNotNull(
-                        channel.lcn?.let { "ch$it" },
-                        channel.network,
-                        channel.region,
-                    ).joinToString(" · "),
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textMd,
-                )
-            }
-            PrimaryAction(
-                icon = Icons.Outlined.PlayArrow,
-                label = "Watch",
-                onClick = { onWatch(channel) },
-                modifier = Modifier.focusKey("watch", preferredEntry = true),
-            )
-            IconAction(
-                icon = if (favourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                label = if (favourite) "Remove favourite" else "Add favourite",
-                tint = if (favourite) accent else colors.textHi,
-                accent = accent,
-                onClick = {
-                    val next = !favourite
-                    favourite = next
-                    scope.launch { runCatching { api.setLiveChannelFavourite(channel.id, next) } }
-                },
-                modifier = Modifier.focusKey("favourite", entryEligible = false),
-            )
-        }
-
-        if (entries.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.FiberManualRecord,
-                title = "No guide for this channel",
-                subtitle = "The tuner has not carried an EPG for ${channel.name} yet.",
-            )
-            return@Column
-        }
-
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(start = gutter, end = gutter, bottom = dimens.s6),
-            verticalArrangement = Arrangement.spacedBy(dimens.s1),
-            modifier = Modifier.fillMaxSize(),
+                val actions: @Composable RowScope.() -> Unit = {
+                    PrimaryAction(
+                        icon = Icons.Outlined.PlayArrow,
+                        label = "Watch",
+                        onClick = { onWatch(channel) },
+                        modifier = Modifier.focusKey("watch", preferredEntry = true),
+                    )
+                    IconAction(
+                        icon = if (favourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                        label = if (favourite) "Remove favourite" else "Add favourite",
+                        tint = if (favourite) accent else colors.textHi,
+                        accent = accent,
+                        onClick = {
+                            val next = !favourite
+                            favourite = next
+                            scope.launch { runCatching { api.setLiveChannelFavourite(channel.id, next) } }
+                        },
+                        modifier = Modifier.focusKey("favourite", entryEligible = false),
+                    )
+                }
+                // Beside the actions a phone left the name a column a word wide.
+                if (compact) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(dimens.s3),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = gutter, vertical = dimens.s2).focusKeyGroup("channelhead"),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimens.s3), content = identity)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimens.s3), content = actions)
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(dimens.s4),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = gutter, vertical = dimens.s2).focusKeyGroup("channelhead"),
+                    ) {
+                        identity()
+                        actions()
+                    }
+                }
+            },
+            modifier = modifier.fillMaxSize().safeHorizontalPadding(),
         ) {
-            itemsIndexed(entries, key = { _, it -> it.id }) { index, entry ->
-                GuideEntryRow(
-                    clock = clock,
-                    entry = entry,
-                    accent = accent,
-                    recordingId = recordings[entry.id],
-                    busy = busy == entry.id,
-                    onFocused = { focus.lazyIndex = index },
-                    onWatch = { onWatch(channel) },
-                    onRecord = {
-                        busy = entry.id
-                        scope.launch {
-                            runCatching { api.recordLiveGuideEntry(entry.id) }
-                                .onSuccess { recordings = recordings + (entry.id to it.id) }
-                            busy = null
-                        }
-                    },
-                    onCancel = {
-                        val recordingId = recordings[entry.id] ?: return@GuideEntryRow
-                        busy = entry.id
-                        scope.launch {
-                            // A capture already running has to be stopped; one that has
-                            // not started yet is simply dropped.
-                            val stopped = if (entry.recordingStatus == "recording") {
-                                runCatching { api.stopLiveRecording(recordingId) }.isSuccess
-                            } else {
-                                runCatching { api.deleteLiveRecording(recordingId) }.isSuccess
-                            }
-                            if (stopped) recordings = recordings - entry.id
-                            busy = null
-                        }
-                    },
+            if (entries.isEmpty()) {
+                EmptyState(
+                    icon = Icons.Outlined.FiberManualRecord,
+                    title = "No guide for this channel",
+                    subtitle = "The tuner has not carried an EPG for ${channel.name} yet.",
                 )
+                return@PinnedHeader
+            }
+
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, start = gutter, end = gutter, bottom = dimens.s6),
+                verticalArrangement = Arrangement.spacedBy(dimens.s1),
+                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            ) {
+                itemsIndexed(entries, key = { _, it -> it.id }) { index, entry ->
+                    GuideEntryRow(
+                        clock = clock,
+                        entry = entry,
+                        accent = accent,
+                        recordingId = recordings[entry.id],
+                        busy = busy == entry.id,
+                        onFocused = { focus.lazyIndex = index },
+                        onWatch = { onWatch(channel) },
+                        onSeriesRule = onSeriesRule?.let { seed -> { seed(entry) } },
+                        onRecord = {
+                            busy = entry.id
+                            scope.launch {
+                                runCatching { api.recordLiveGuideEntry(entry.id) }
+                                    .onSuccess { recordings = recordings + (entry.id to it.id) }
+                                busy = null
+                            }
+                        },
+                        onCancel = {
+                            val recordingId = recordings[entry.id] ?: return@GuideEntryRow
+                            busy = entry.id
+                            scope.launch {
+                                // A capture already running has to be stopped; one that has
+                                // not started yet is simply dropped.
+                                val stopped = if (entry.recordingStatus == "recording") {
+                                    runCatching { api.stopLiveRecording(recordingId) }.isSuccess
+                                } else {
+                                    runCatching { api.deleteLiveRecording(recordingId) }.isSuccess
+                                }
+                                if (stopped) recordings = recordings - entry.id
+                                busy = null
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -211,6 +241,7 @@ private fun GuideEntryRow(
     busy: Boolean,
     onFocused: () -> Unit,
     onWatch: () -> Unit,
+    onSeriesRule: (() -> Unit)?,
     onRecord: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -291,5 +322,17 @@ private fun GuideEntryRow(
             },
             modifier = Modifier.focusKey("record"),
         )
+        if (onSeriesRule != null) {
+            Spacer(Modifier.width(dimens.s2))
+            IconAction(
+                icon = Icons.Outlined.BookmarkAdd,
+                label = "Record every episode of ${entry.title}",
+                tint = colors.textHi,
+                accent = accent,
+                onClick = onSeriesRule,
+                captioned = false,
+                modifier = Modifier.focusKey("series", entryEligible = false),
+            )
+        }
     }
 }

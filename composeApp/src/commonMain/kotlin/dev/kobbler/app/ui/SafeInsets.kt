@@ -35,6 +35,10 @@ fun Modifier.safeTopPadding(): Modifier =
     windowInsetsPadding(kobChromeInsets.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
 
 @Composable
+fun Modifier.safeHorizontalPadding(): Modifier =
+    windowInsetsPadding(kobChromeInsets.only(WindowInsetsSides.Horizontal))
+
+@Composable
 fun Modifier.safeBottomPadding(): Modifier =
     windowInsetsPadding(kobChromeInsets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
 

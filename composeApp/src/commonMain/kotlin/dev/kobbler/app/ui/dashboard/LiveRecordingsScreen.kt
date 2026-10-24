@@ -1,6 +1,9 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.PinnedHeader
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.ListSkeleton
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -120,60 +123,65 @@ fun LiveRecordingsScreen(
             sizeLabel(bytes).takeIf { it.isNotEmpty() }?.let { "$it used" },
         ).joinToString(" · ")
 
-        Column(Modifier.fillMaxSize()) {
-            if (showHeader) {
-                Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-                    BrowseHeader(
-                        title = "Recordings",
-                        accent = accent,
-                        countLine = counts,
-                        compact = compact,
-                        trailing = {
+        PinnedHeader(
+            header = {
+                Column {
+                    if (showHeader) {
+                        Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                            BrowseHeader(
+                                title = "Recordings",
+                                accent = accent,
+                                countLine = counts,
+                                compact = compact,
+                                trailing = {
+                                    KobButton(
+                                        text = "Series rules",
+                                        onClick = onSeriesRulesClick,
+                                        style = KobButtonStyle.Default,
+                                        modifier = Modifier.focusKey("seriesrules", entryEligible = false),
+                                    )
+                                },
+                            )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = gutter).padding(top = dimens.s3),
+                        ) {
+                            Text(counts, style = KobappTheme.type.bodySm, color = colors.textMd, modifier = Modifier.weight(1f))
                             KobButton(
                                 text = "Series rules",
                                 onClick = onSeriesRulesClick,
                                 style = KobButtonStyle.Default,
                                 modifier = Modifier.focusKey("seriesrules", entryEligible = false),
                             )
-                        },
+                        }
+                    }
+
+                    TunerLeaseTimeline(
+                        recordings = data.recordings,
+                        leases = data.leases,
+                        accent = accent,
+                        modifier = Modifier.padding(horizontal = gutter).padding(top = dimens.s3),
                     )
                 }
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = gutter).padding(top = dimens.s3),
-                ) {
-                    Text(counts, style = KobappTheme.type.bodySm, color = colors.textMd, modifier = Modifier.weight(1f))
-                    KobButton(
-                        text = "Series rules",
-                        onClick = onSeriesRulesClick,
-                        style = KobButtonStyle.Default,
-                        modifier = Modifier.focusKey("seriesrules", entryEligible = false),
-                    )
-                }
-            }
-
-            TunerLeaseTimeline(
-                recordings = data.recordings,
-                leases = data.leases,
-                accent = accent,
-                modifier = Modifier.padding(horizontal = gutter).padding(top = dimens.s3),
-            )
-
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
             if (data.recordings.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.FiberManualRecord,
                     title = "No recordings",
                     subtitle = "Record a programme from the guide, or set up a series rule.",
                 )
-                return@Column
+                return@PinnedHeader
             }
 
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s3, bottom = dimens.s6),
+                contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s3 + LocalTopChromeOverlap.current, bottom = dimens.s6),
                 verticalArrangement = Arrangement.spacedBy(dimens.s2),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
             ) {
                 itemsIndexed(data.recordings, key = { _, it -> it.id }) { index, rec ->
                     RecordingRow(

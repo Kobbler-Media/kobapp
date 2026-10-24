@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -10,7 +12,6 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -68,18 +69,18 @@ class PlayerLayerFocusTest {
     }
 
     @Test
-    fun `closing subtitle search gives the D-pad back to the player`() = runComposeUiTest {
+    fun `closing subtitle search gives the D-pad back to the player`() = runUiTest {
         val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
         val scope = showPlayer(playing(), api)
 
         onNodeWithContentDescription("Subtitles").performClick()
         waitForIdle()
         onNodeWithText("Find subtitles…").performClick()
-        waitUntil(timeoutMillis = 10_000) { scope.focused?.startsWith("player.") != true }
+        waitUntil(timeoutMillis = UiTimeoutMs) { scope.focused?.startsWith("player.") != true }
 
         // The player has a Back arrow of its own underneath; this is the panel's.
         onAllNodesWithContentDescription("Back").onLast().performClick()
 
-        waitUntil(timeoutMillis = 10_000) { scope.focused?.startsWith("player.") == true }
+        waitUntil(timeoutMillis = UiTimeoutMs) { scope.focused?.startsWith("player.") == true }
     }
 }

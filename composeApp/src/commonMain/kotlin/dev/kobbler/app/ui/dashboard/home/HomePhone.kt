@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard.home
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -124,8 +126,8 @@ fun HomePhone(
         val heroHeight = minOf(railWidth * (10f / 16f), maxHeight * 0.55f)
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = gutter, end = gutter, top = 0.dp, bottom = 8.dp),
+            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = LocalTopChromeOverlap.current, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (hero != null) {

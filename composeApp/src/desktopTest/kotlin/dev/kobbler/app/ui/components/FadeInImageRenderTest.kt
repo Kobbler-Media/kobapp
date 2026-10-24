@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -40,7 +40,7 @@ class FadeInImageRenderTest {
     @Test
     fun `loaded art is drawn`() {
         for (source in listOf(DataSource.NETWORK, DataSource.DISK, DataSource.MEMORY_CACHE)) {
-            runDesktopComposeUiTest(width = 100, height = 150) {
+            runUiTest(width = 100, height = 150) {
                 SingletonImageLoader.setUnsafe(loader(source))
                 try {
                     setContent {

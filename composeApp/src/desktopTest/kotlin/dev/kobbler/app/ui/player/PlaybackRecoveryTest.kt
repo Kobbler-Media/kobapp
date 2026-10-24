@@ -1,7 +1,8 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import io.ktor.client.HttpClient
@@ -260,9 +261,9 @@ class PlaybackRecoveryTest {
         gps: GlobalPlayerState,
         player: FakePlayer,
         heartbeat: @androidx.compose.runtime.Composable () -> Unit,
-    ) = runComposeUiTest {
+    ) = runUiTest {
         setContent { heartbeat() }
-        waitUntil(timeoutMillis = 10_000) { player.calls.contains("stop") && !gps.isRecovering }
+        waitUntil(timeoutMillis = UiTimeoutMs) { player.calls.contains("stop") && !gps.isRecovering }
         assertTrue(player.calls.contains("load"), "stopped the player and never reopened it: ${player.calls}")
     }
 

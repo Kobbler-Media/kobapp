@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
@@ -13,7 +15,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.DiscoverDetail
@@ -121,19 +122,19 @@ class DiscoverStreamTest {
 
     private fun ComposeUiTest.expandFirstSeason() {
         onNodeWithText("Season 1").performClick()
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("The Mayor").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("The Mayor").fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun StubServer.body(path: String): JsonObject =
         Json.parseToJsonElement(requestBodies.getValue(path)).jsonObject
 
     @Test
-    fun `an episode plays straight away, searched for as that episode`() = runComposeUiTest {
+    fun `an episode plays straight away, searched for as that episode`() = runUiTest {
         StubServer(routes).use { stub ->
             val page = showPage(stub, show)
             expandFirstSeason()
             onNodeWithText("The Mayor").performClick()
-            waitUntil(timeoutMillis = 10_000) { page.viewed.isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { page.viewed.isNotEmpty() }
 
             onAllNodesWithText("Stream options").assertCountEquals(0)
             val search = stub.body("/api/v1/admin/stream/search")
@@ -154,13 +155,13 @@ class DiscoverStreamTest {
     }
 
     @Test
-    fun `an episode still plays when the page turns into its library page under it`() = runComposeUiTest {
+    fun `an episode still plays when the page turns into its library page under it`() = runUiTest {
         val entries = listOf<ComposeUiTest.() -> Unit>(
             { onNodeWithText("The Mayor").performClick() },
             { onNodeWithText("Stream").performClick() },
             {
                 onAllNodesWithContentDescription("Stream options").onFirst().performClick()
-                waitUntil(timeoutMillis = 10_000) {
+                waitUntil(timeoutMillis = UiTimeoutMs) {
                     onAllNodesWithText("Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP").fetchSemanticsNodes().isNotEmpty()
                 }
                 onNodeWithText("Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP").performClick()
@@ -177,7 +178,7 @@ class DiscoverStreamTest {
                 val page = showPage(stub, show, refetched = show.copy(libraryId = "show-9", isInLibrary = true))
                 expandFirstSeason()
                 press()
-                waitUntil(timeoutMillis = 10_000) { page.gps.debridPlayback != null }
+                waitUntil(timeoutMillis = UiTimeoutMs) { page.gps.debridPlayback != null }
 
                 assertEquals("tv" to "show-9", page.viewed.last())
             }
@@ -185,12 +186,12 @@ class DiscoverStreamTest {
     }
 
     @Test
-    fun `the option list is one button away from an episode`() = runComposeUiTest {
+    fun `the option list is one button away from an episode`() = runUiTest {
         StubServer(routes).use { stub ->
             showPage(stub, show)
             expandFirstSeason()
             onAllNodesWithContentDescription("Stream options").onFirst().performClick()
-            waitUntil(timeoutMillis = 10_000) {
+            waitUntil(timeoutMillis = UiTimeoutMs) {
                 onAllNodesWithText("Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP").fetchSemanticsNodes().isNotEmpty()
             }
 
@@ -200,23 +201,23 @@ class DiscoverStreamTest {
     }
 
     @Test
-    fun `a movie plays straight away and keeps its options behind a button`() = runComposeUiTest {
+    fun `a movie plays straight away and keeps its options behind a button`() = runUiTest {
         StubServer(routes).use { stub ->
             val page = showPage(stub, movie)
-            waitUntil(timeoutMillis = 10_000) { "/api/v1/admin/stream/search" in stub.requestBodies }
+            waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/search" in stub.requestBodies }
             val search = stub.body("/api/v1/admin/stream/search")
             assertEquals(97951, search["tmdb_id"]?.jsonPrimitive?.int)
             assertEquals("tt4489382", search["imdb_id"]?.jsonPrimitive?.content)
 
             onNodeWithText("Play").performClick()
-            waitUntil(timeoutMillis = 10_000) { page.viewed.isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { page.viewed.isNotEmpty() }
             onAllNodesWithText("Stream options").assertCountEquals(0)
             assertTrue(stub.body("/api/v1/admin/stream/resolve")["auto_create"] != null)
         }
     }
 
     @Test
-    fun `back from the option list returns to the page, not past it`() = runComposeUiTest {
+    fun `back from the option list returns to the page, not past it`() = runUiTest {
         StubServer(routes).use { stub ->
             val page = showPage(stub, movie)
             onAllNodesWithContentDescription("Stream options").onFirst().performClick()
@@ -231,12 +232,12 @@ class DiscoverStreamTest {
     }
 
     @Test
-    fun `an option names its release, the file it plays, and where it was found`() = runComposeUiTest {
+    fun `an option names its release, the file it plays, and where it was found`() = runUiTest {
         StubServer(routes).use { stub ->
             showPage(stub, show)
             expandFirstSeason()
             onAllNodesWithContentDescription("Stream options").onFirst().performClick()
-            waitUntil(timeoutMillis = 10_000) {
+            waitUntil(timeoutMillis = UiTimeoutMs) {
                 onAllNodesWithText("Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP").fetchSemanticsNodes().isNotEmpty()
             }
 
@@ -247,7 +248,7 @@ class DiscoverStreamTest {
     }
 
     @Test
-    fun `an episode nothing will stream for offers to want just that episode`() = runComposeUiTest {
+    fun `an episode nothing will stream for offers to want just that episode`() = runUiTest {
         val refused = """{"error":"Real-Debrid refused this release. Try a different source.","reason":"blocked"}"""
         val failing = routes + mapOf(
             "/api/v1/admin/stream/resolve" to { _: HttpExchange -> refused },
@@ -257,7 +258,7 @@ class DiscoverStreamTest {
             val page = showPage(stub, show)
             expandFirstSeason()
             onNodeWithText("The Mayor").performClick()
-            waitUntil(timeoutMillis = 10_000) { page.gps.failureHelp != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { page.gps.failureHelp != null }
 
             val help = page.gps.failureHelp!!
             assertTrue(help.summary.contains("refused"), help.summary)

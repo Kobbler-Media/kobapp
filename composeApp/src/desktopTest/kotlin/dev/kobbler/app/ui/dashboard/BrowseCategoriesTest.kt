@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
@@ -8,7 +10,6 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -44,7 +45,7 @@ class BrowseCategoriesTest {
         width: Int = 1280,
         test: DesktopComposeUiTest.() -> Unit,
     ) =
-        runDesktopComposeUiTest(width = width, height = 900) {
+        runUiTest(width = width, height = 900) {
             DataCache.clear()
             StubServer(
                 mapOf(
@@ -65,7 +66,7 @@ class BrowseCategoriesTest {
                         }
                     }
                 }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
                 test()
             }
         }
@@ -74,23 +75,23 @@ class BrowseCategoriesTest {
     fun `picking a category shows only that category`() {
         for (tv in listOf(false, true)) browse(tv) {
             onAllNodesWithText("Categories").onFirst().performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
             onAllNodesWithText("Family").onFirst().performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
             assertTrue(onAllNodesWithText("Toybox").fetchSemanticsNodes().isNotEmpty(), "tv=$tv")
 
             onAllNodesWithText("Family").onFirst().performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("All categories").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("All categories").fetchSemanticsNodes().isNotEmpty() }
             onAllNodesWithText("All categories").onFirst().performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
         }
     }
 
     private fun DesktopComposeUiTest.pickFamily() {
         onAllNodesWithText("Categories").onFirst().performClick()
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Horror").fetchSemanticsNodes().isNotEmpty() }
         onAllNodesWithText("Family").onFirst().performClick()
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isEmpty() }
     }
 
     @Test
@@ -99,7 +100,7 @@ class BrowseCategoriesTest {
             pickFamily()
             onAllNodesWithText("Categories").assertCountEquals(0)
             onNodeWithText("All library").performClick()
-            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Gorefest").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("Categories").assertExists()
         }
     }
@@ -108,7 +109,7 @@ class BrowseCategoriesTest {
     fun `continuing replaces a picked category`() = browse(tv = true) {
         pickFamily()
         onNodeWithText("Continuing").performClick()
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Categories").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Categories").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test

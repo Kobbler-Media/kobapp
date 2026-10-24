@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -13,7 +14,6 @@ import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -75,14 +75,14 @@ class SeekActivateTest {
     }
 
     @Test
-    fun `a tv opens a film on the seek bar`() = runComposeUiTest {
+    fun `a tv opens a film on the seek bar`() = runUiTest {
         val player = FakePlayer()
         showPlayingMovie(player)
         onNodeWithContentDescription("Seek").assert(isFocused())
     }
 
     @Test
-    fun `ok on the seek bar pauses what is playing`() = runComposeUiTest {
+    fun `ok on the seek bar pauses what is playing`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)
@@ -94,7 +94,7 @@ class SeekActivateTest {
     }
 
     @Test
-    fun `ok on the seek bar resumes what is paused`() = runComposeUiTest {
+    fun `ok on the seek bar resumes what is paused`() = runUiTest {
         val player = FakePlayer()
         player.play()
         player.pause()
@@ -111,7 +111,7 @@ class SeekActivateTest {
      * that works everywhere else in this transport has to work on the bar too.
      */
     @Test
-    fun `enter and space on the seek bar reach the same transport as ok`() = runComposeUiTest {
+    fun `enter and space on the seek bar reach the same transport as ok`() = runUiTest {
         for (key in listOf(Key.Enter, Key.Spacebar)) {
             val player = FakePlayer()
             player.play()
@@ -126,7 +126,7 @@ class SeekActivateTest {
 
     /** LEFT and RIGHT stay the viewer's, whatever else the bar now answers. */
     @Test
-    fun `the middle button does not spend the step keys`() = runComposeUiTest {
+    fun `the middle button does not spend the step keys`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)

@@ -1,10 +1,10 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
@@ -18,7 +18,7 @@ class RefreshWatchStateOnFocusTest {
         val clock = TestTimeSource()
         var focused by mutableStateOf(true)
         var refetched = false
-        runComposeUiTest {
+        runUiTest {
             setContent { RefreshWatchStateOnFocus(focused, timeSource = clock) }
             waitForIdle()
             val before = DataCache.versionOf("home")

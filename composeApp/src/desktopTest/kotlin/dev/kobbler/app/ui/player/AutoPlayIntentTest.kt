@@ -1,7 +1,8 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.platform.FormFactor
@@ -37,7 +38,7 @@ private val resolveBody = """
 class AutoPlayIntentTest {
 
     @Test
-    fun closingAPausedPlayerDoesNotRelaunchIt() = runComposeUiTest {
+    fun closingAPausedPlayerDoesNotRelaunchIt() = runUiTest {
         StubServer(mapOf(
             SEARCH to { searchBody },
             RESOLVE to { resolveBody },
@@ -56,7 +57,7 @@ class AutoPlayIntentTest {
             }
 
             // isFullscreen is the last thing the launch sets, so the load has finished.
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "m1" && gps.isFullscreen }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "m1" && gps.isFullscreen }
             assertEquals(1_200_000L, gps.pendingSeekMs)
 
             // Back out of a paused player: the scaffold's BackHandler stops the session.
@@ -77,7 +78,7 @@ class AutoPlayIntentTest {
      * on its way to play in it.
      */
     @Test
-    fun closingAPlayerDoesNotRelaunchALibraryTitle() = runComposeUiTest {
+    fun closingAPlayerDoesNotRelaunchALibraryTitle() = runUiTest {
         StubServer(mapOf(
             "/api/v1/admin/playback/sessions" to {
                 """{"session_id":"s1","direct_url":"/api/v1/admin/stream/s1/play","method":"direct"}"""
@@ -97,7 +98,7 @@ class AutoPlayIntentTest {
                 )
             }
 
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "m1" && gps.isFullscreen }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "m1" && gps.isFullscreen }
 
             runOnIdle { gps.stop(player, api, scope) }
             waitForIdle()

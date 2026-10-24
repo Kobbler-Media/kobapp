@@ -52,6 +52,9 @@ import coil3.compose.AsyncImage
 import dev.kobbler.app.data.IptvChannel
 import dev.kobbler.app.data.IptvEpgEntry
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.ui.dashboard.livetv.localHhMm
+import dev.kobbler.app.ui.dashboard.livetv.parseLiveInstant
+import dev.kobbler.app.ui.player.startIptvWatch
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.StripedBackdrop
@@ -59,7 +62,6 @@ import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobplayer.Player
 import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.coroutines.launch
 
 @Composable
@@ -89,7 +91,7 @@ fun IptvChannelDetailScreen(
     }
 
     val watchLive: () -> Unit = {
-        startWatch(channel, player, gps, api, scope)
+        startIptvWatch(channel, player, gps, api, scope)
     }
     val toggleFavourite: () -> Unit = {
         scope.launch {
@@ -428,7 +430,7 @@ private fun OnNowSection(entry: IptvEpgEntry, accent: Color, formFactor: FormFac
     val progress = liveProgress(entry.startTime, entry.stopTime)
     val startHm = formatEpgTime(entry.startTime)
     val endHm = formatEpgTime(entry.stopTime)
-    val nowHm = formatEpgTime(currentIsoTime())
+    val nowHm = Clock.System.now().localHhMm()
     val untilLabel = "On now · until $endHm"
 
     Column(
@@ -685,87 +687,11 @@ private fun SectionLabel(text: String, accent: Color) {
     )
 }
 
-private fun startWatch(
-    channel: IptvChannel,
-    player: Player?,
-    gps: GlobalPlayerState,
-    api: KobblerApi,
-    scope: kotlinx.coroutines.CoroutineScope,
-) {
-    if (player == null || gps.isPreparing) return
-
-    gps.sessionId?.let { sid ->
-        scope.launch { api.closeSession(sid) }
-    }
-    gps.sessionId = null
-    gps.mediaType = "iptv"
-    gps.mediaId = channel.id
-    gps.title = channel.name
-    gps.subtitle = channel.nowPlaying?.title
-    gps.posterUrl = channel.iconUrl
-    gps.logoUrl = null
-    gps.detailDestination = null
-    gps.chapters = emptyList()
-    gps.skipSegments = emptyList()
-    gps.thumbnailsUrl = null
-    gps.lufs = null
-    gps.serverAudioTracks = emptyList()
-    gps.selectedServerAudioIndex = null
-    gps.serverSubtitleTracks = emptyList()
-    gps.selectedServerSubtitleTrackId = null
-    gps.isLive = true
-    gps.loadingError = null
-    gps.isPreparing = true
-    gps.preparingNote = "Probing live sources — this can take up to a minute."
-    gps.isFullscreen = true
-
-    scope.launch {
-        try {
-            val session = api.playIptvChannel(channel.id)
-            if (gps.mediaId != channel.id || !gps.isPreparing) return@launch
-
-            val relUrl = session.playlistUrl ?: session.directUrl
-                ?: throw IllegalStateException("Server returned no stream URL (session_id=${session.sessionId})")
-            val url = if (relUrl.startsWith("http://") || relUrl.startsWith("https://")) relUrl
-                      else "${api.apiUrl}$relUrl"
-
-            gps.load(
-                player = player, api = api,
-                type = "iptv", id = channel.id,
-                streamUrl = url, newSessionId = session.sessionId,
-                newTitle = channel.name, newSubtitle = channel.nowPlaying?.title,
-                newPosterUrl = channel.iconUrl, newLogoUrl = null,
-                destination = null,
-            )
-            gps.playUnmuted(player)
-        } catch (e: Exception) {
-            if (gps.mediaId == channel.id) {
-                gps.failWith(e, listOf(
-                    "Channel: ${channel.name}",
-                    "ID: ${channel.id}",
-                    "Endpoint: ${api.apiUrl}/api/v1/admin/iptv/sessions",
-                ))
-            }
-        } finally {
-            if (gps.mediaId == channel.id) {
-                gps.isPreparing = false
-                gps.preparingNote = null
-            }
-        }
-    }
-}
-
-private fun formatEpgTime(iso: String): String {
-    val tIdx = iso.indexOf('T')
-    if (tIdx < 0) return iso
-    return iso.substring(tIdx + 1).take(5)
-}
-
-private fun currentIsoTime(): String = Clock.System.now().toString()
+private fun formatEpgTime(iso: String): String = parseLiveInstant(iso)?.localHhMm() ?: ""
 
 private fun liveProgress(startIso: String, stopIso: String): Float {
-    val start = parseInstant(startIso) ?: return 0f
-    val stop = parseInstant(stopIso) ?: return 0f
+    val start = parseLiveInstant(startIso) ?: return 0f
+    val stop = parseLiveInstant(stopIso) ?: return 0f
     val nowMs = Clock.System.now().toEpochMilliseconds()
     val startMs = start.toEpochMilliseconds()
     val stopMs = stop.toEpochMilliseconds()
@@ -774,18 +700,12 @@ private fun liveProgress(startIso: String, stopIso: String): Float {
 }
 
 private fun durationLabel(startIso: String, stopIso: String): String {
-    val start = parseInstant(startIso) ?: return ""
-    val stop = parseInstant(stopIso) ?: return ""
+    val start = parseLiveInstant(startIso) ?: return ""
+    val stop = parseLiveInstant(stopIso) ?: return ""
     val mins = ((stop.toEpochMilliseconds() - start.toEpochMilliseconds()) / 60_000L).toInt()
     if (mins <= 0) return ""
     if (mins < 60) return "${mins}m"
     val h = mins / 60
     val m = mins % 60
     return if (m == 0) "${h}h" else "${h}h${m}m"
-}
-
-private fun parseInstant(iso: String): Instant? = try {
-    Instant.parse(iso)
-} catch (_: Exception) {
-    null
 }

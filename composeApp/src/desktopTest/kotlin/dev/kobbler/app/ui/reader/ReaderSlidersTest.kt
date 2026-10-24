@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.reader
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -12,7 +13,6 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performMouseInput
-import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -27,7 +27,7 @@ class ReaderSlidersTest {
     private val slider = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
 
     @Test
-    fun `dragging the chapter slider jumps once, on release`() = runComposeUiTest {
+    fun `dragging the chapter slider jumps once, on release`() = runUiTest {
         val jumps = mutableListOf<Float>()
         setContent {
             ReaderBottomBar(
@@ -54,7 +54,7 @@ class ReaderSlidersTest {
     }
 
     @Test
-    fun `settings save once the value settles, not per change`() = runComposeUiTest {
+    fun `settings save once the value settles, not per change`() = runUiTest {
         mainClock.autoAdvance = false
         var saves = 0
         var value by mutableFloatStateOf(1f)
@@ -71,7 +71,7 @@ class ReaderSlidersTest {
     }
 
     @Test
-    fun `a change still pending when the reader closes is saved`() = runComposeUiTest {
+    fun `a change still pending when the reader closes is saved`() = runUiTest {
         mainClock.autoAdvance = false
         var saves = 0
         var value by mutableFloatStateOf(1f)

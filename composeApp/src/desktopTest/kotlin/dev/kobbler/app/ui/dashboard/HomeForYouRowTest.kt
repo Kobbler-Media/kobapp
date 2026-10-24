@@ -1,11 +1,12 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -31,7 +32,7 @@ class HomeForYouRowTest {
     @Test
     fun `for you row renders below stremio with its reason and opens the discover item`() {
         for (formFactor in listOf(FormFactor.Phone, FormFactor.TV)) {
-            runDesktopComposeUiTest(width = 1280, height = 1400) {
+            runUiTest(width = 1280, height = 1400) {
                 StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
                     DataCache.clear()
                     val api = KobblerApi(HttpClient(), stub.url, "token")
@@ -41,7 +42,7 @@ class HomeForYouRowTest {
                             HomeScreen(api = api, formFactor = formFactor, onDiscoverItemClick = { opened = it })
                         }
                     }
-                    waitUntil(timeoutMillis = 10_000) {
+                    waitUntil(timeoutMillis = UiTimeoutMs) {
                         onAllNodesWithText("Picked Film").fetchSemanticsNodes().isNotEmpty()
                     }
                     // A phone card is too narrow for the sentence, so it names only the title.

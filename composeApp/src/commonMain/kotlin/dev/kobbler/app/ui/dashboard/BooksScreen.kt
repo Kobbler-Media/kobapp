@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.GridSkeleton
 import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.clickable
@@ -40,6 +42,7 @@ import dev.kobbler.app.ui.components.Async
 import dev.kobbler.app.ui.components.AlphabetBarWidth
 import dev.kobbler.app.ui.components.alphabetLetterOf
 import dev.kobbler.app.ui.components.AsyncContent
+import dev.kobbler.app.ui.PinnedHeader
 import dev.kobbler.app.ui.components.BrowseHeader
 import dev.kobbler.app.ui.components.CachedPage
 import dev.kobbler.app.ui.components.rowKeyFor
@@ -91,7 +94,7 @@ fun BooksScreen(
         else -> dimens.pageGutter
     }
 
-    val page: @Composable (Modifier) -> Unit = { pageModifier -> Column(pageModifier.fillMaxSize()) {
+    val page: @Composable (Modifier) -> Unit = { pageModifier -> PinnedHeader(header = {
         if (onAuthorClick != null && onSeriesClick != null) {
             Row(
                 modifier = Modifier
@@ -118,17 +121,15 @@ fun BooksScreen(
                 )
             }
         }
-
-        Box(Modifier.weight(1f)) {
-            when (tab) {
-                BooksTab.All -> AllBooksGrid(
-                    api, audiobooksOnly, formFactor, onBookClick, onContinueClick, accentColor,
-                    entryFocusPending = entryFocusPending,
-                    onEntryFocused = { entryFocusPending = false },
-                )
-                BooksTab.Authors -> AuthorsGrid(api, headerGutter, onAuthorClick ?: {})
-                BooksTab.Series -> SeriesGrid(api, headerGutter, onSeriesClick ?: {})
-            }
+    }, modifier = pageModifier.fillMaxSize()) {
+        when (tab) {
+            BooksTab.All -> AllBooksGrid(
+                api, audiobooksOnly, formFactor, onBookClick, onContinueClick, accentColor,
+                entryFocusPending = entryFocusPending,
+                onEntryFocused = { entryFocusPending = false },
+            )
+            BooksTab.Authors -> AuthorsGrid(api, headerGutter, onAuthorClick ?: {})
+            BooksTab.Series -> SeriesGrid(api, headerGutter, onSeriesClick ?: {})
         }
     } }
     // The grid owns the spotlight but sits below the header, so on its own its picture
@@ -315,12 +316,12 @@ private fun AllBooksGrid(
                 state = gridState,
                 columns = GridCells.FixedSize(dimens.posterWidth),
                 contentPadding = PaddingValues(
-                    start = gutter, top = dimens.s4, bottom = dimens.s4,
+                    start = gutter, top = dimens.s4 + LocalTopChromeOverlap.current, bottom = dimens.s4,
                     end = railEnd,
                 ),
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                 verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                modifier = Modifier.onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusInert(progressBook != null).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.scrollsUnderTopChrome().onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusInert(progressBook != null).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 if (readNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "read-next") {
@@ -476,10 +477,10 @@ private fun AuthorsGrid(api: KobblerApi, gutter: Dp, onAuthorClick: (String) -> 
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = KobappTheme.dimens.posterWidth),
-            contentPadding = PaddingValues(horizontal = gutter, vertical = 16.dp),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp + LocalTopChromeOverlap.current, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
         ) {
             itemsIndexed(authors, key = { _, it -> it.id }) { idx, author ->
                 AuthorCard(author = author, preferredEntry = idx == 0, onClick = { onAuthorClick(author.id) })
@@ -532,10 +533,10 @@ private fun SeriesGrid(api: KobblerApi, gutter: Dp, onSeriesClick: (String) -> U
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = KobappTheme.dimens.posterWidth),
-            contentPadding = PaddingValues(horizontal = gutter, vertical = 16.dp),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp + LocalTopChromeOverlap.current, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
         ) {
             itemsIndexed(seriesList, key = { _, it -> it.id }) { idx, series ->
                 SeriesCard(series = series, preferredEntry = idx == 0, onClick = { onSeriesClick(series.id) })

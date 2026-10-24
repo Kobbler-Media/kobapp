@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -10,7 +11,6 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,7 +21,7 @@ class TvClickableTest {
     private fun clicksFor(key: Key): Int {
         var clicks = 0
         val target = FocusRequester()
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 val state = rememberTvFocusState()
                 Box(

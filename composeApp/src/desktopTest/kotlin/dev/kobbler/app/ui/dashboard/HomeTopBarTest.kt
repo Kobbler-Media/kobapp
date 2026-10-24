@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -10,7 +12,6 @@ import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -41,7 +42,7 @@ class HomeTopBarTest {
     @Test
     fun `home page runs under the top bar only when it has a hero`() {
         for (watchNext in listOf(3, 0)) {
-            runDesktopComposeUiTest(width = 1280, height = 900) {
+            runUiTest(width = 1280, height = 900) {
                 val hasHero = watchNext > 0
                 StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover(watchNext) })).use { stub ->
                     var toggled = 0
@@ -63,7 +64,7 @@ class HomeTopBarTest {
                             )
                         }
                     }
-                    waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(if (hasHero) "Queued 1" else "Recent 1").fetchSemanticsNodes().isNotEmpty() }
+                    waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(if (hasHero) "Queued 1" else "Recent 1").fetchSemanticsNodes().isNotEmpty() }
 
                     val bar = onNodeWithText("Search library & Discover").getUnclippedBoundsInRoot()
                     val firstItem = if (hasHero) onNodeWithTag(HomeHeroTag).getUnclippedBoundsInRoot()
@@ -79,7 +80,7 @@ class HomeTopBarTest {
 
     @Test
     fun `top bar stays up while home cannot show its page`() {
-        runDesktopComposeUiTest(width = 1280, height = 900) {
+        runUiTest(width = 1280, height = 900) {
             DataCache.clear()
             StubServer(emptyMap()).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
@@ -88,7 +89,7 @@ class HomeTopBarTest {
                         HomeScreen(api = api, formFactor = FormFactor.Desktop, topBar = { KobTopBar(transparent = it) })
                     }
                 }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Retry", ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Retry", ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
                 onNodeWithText("Search library & Discover").assertIsDisplayed()
             }
         }

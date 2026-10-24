@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard.calendar
 
 import androidx.compose.foundation.layout.Arrangement
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -122,13 +124,13 @@ internal fun AgendaList(
         state = listState,
         // The filters sit above every past day the list can page in, so UP is a long way
         // round on a remote; a row has nothing to its right, which makes RIGHT the shortcut.
-        modifier = modifier.fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
+        modifier = modifier.scrollsUnderTopChrome().fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
             event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight && onRight()
         },
         // A row's focus ring paints outside its bounds and the list clips at its own
         // edge; CalendarScreen pulls its gutter in by the same amount so the rows stay
         // on the page gutter while the ring gets room on both sides.
-        contentPadding = PaddingValues(start = bleed, end = bleed, top = bleed, bottom = 32.dp),
+        contentPadding = PaddingValues(start = bleed, end = bleed, top = bleed + LocalTopChromeOverlap.current, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         grouped.forEach { (date, dayItems) ->

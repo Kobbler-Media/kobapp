@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -10,7 +12,6 @@ import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -56,7 +57,7 @@ class BrowseBackdropTest {
         width: Int = 1280,
         height: Int = 800,
         test: DesktopComposeUiTest.(Page) -> Unit,
-    ) = runDesktopComposeUiTest(width = width, height = height) {
+    ) = runUiTest(width = width, height = height) {
         DataCache.clear()
         StubServer(
             mapOf(
@@ -76,10 +77,10 @@ class BrowseBackdropTest {
                 }
             }
             val first = if (tv) "Show 1" else "Grid 1"
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(first).fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(first).fetchSemanticsNodes().isNotEmpty() }
             waitForIdle()
             val page = Page(stub)
-            waitUntil(timeoutMillis = 10_000) { page.requested("/img/${if (tv) "s" else "g"}1-poster") }
+            waitUntil(timeoutMillis = UiTimeoutMs) { page.requested("/img/${if (tv) "s" else "g"}1-poster") }
             test(page)
         }
     }
@@ -106,15 +107,15 @@ class BrowseBackdropTest {
             val title = if (tv) "Show" else "Grid"
             browse(FormFactor.Desktop, tv) { page ->
                 settle()
-                waitUntil(timeoutMillis = 5_000) { page.requested("/img/${p}1-backdrop") }
+                waitUntil(timeoutMillis = UiTimeoutMs) { page.requested("/img/${p}1-backdrop") }
 
                 onAllNodesWithText("$title 3").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
                 settle()
-                waitUntil(timeoutMillis = 5_000) { page.requested("/img/${p}3-backdrop") }
+                waitUntil(timeoutMillis = UiTimeoutMs) { page.requested("/img/${p}3-backdrop") }
 
                 onAllNodesWithText("$title 2").onFirst().performMouseInput { moveTo(center) }
                 settle()
-                waitUntil(timeoutMillis = 5_000) { page.requested("/img/${p}2-backdrop") }
+                waitUntil(timeoutMillis = UiTimeoutMs) { page.requested("/img/${p}2-backdrop") }
             }
         }
     }
@@ -125,7 +126,7 @@ class BrowseBackdropTest {
             val p = if (tv) "s" else "g"
             browse(FormFactor.Phone, tv, width = 400, height = 800) { page ->
                 settle()
-                waitUntil(timeoutMillis = 5_000) { page.requested("/img/${p}1-backdrop") }
+                waitUntil(timeoutMillis = UiTimeoutMs) { page.requested("/img/${p}1-backdrop") }
                 val others = (2..60).map { "/img/$p$it-backdrop" }
                 assertTrue(!page.requestedAny(others), "the backdrop moved before any scroll")
 

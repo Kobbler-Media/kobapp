@@ -1,11 +1,11 @@
 package dev.kobbler.app.ui.dashboard.livetv
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.LiveGuideChannel
@@ -65,7 +65,7 @@ class LiveGuideClockTest {
      * they watch the row. Nothing is refetched; the clock is the only thing that moved.
      */
     @Test
-    fun `a programme that comes on air while the guide is open becomes watchable`() = runComposeUiTest {
+    fun `a programme that comes on air while the guide is open becomes watchable`() = runUiTest {
         val guide = listOf(
             LiveGuideChannel(
                 channel = LiveChannel(
@@ -83,24 +83,22 @@ class LiveGuideClockTest {
         setContent {
             FocusScopeHost(id = "guide", store = FocusScopeStore(), restoreEnabled = false) {
                 KobappTheme(formFactor = FormFactor.TV) {
-                    LiveGuideGrid(
+                    LiveGuideList(
                         guide = guide,
-                        windowStart = t0,
-                        windowMinutes = 240,
+                        at = null,
                         clock = clock,
-                        selection = LiveGuideSelectionHolder(),
-                        activeRecordings = emptyList(),
                         loading = false,
+                        wide = true,
                         accent = KobappTheme.colors.textHi,
-                        canWant = false,
                         gutter = 24.dp,
-                        modifier = Modifier.size(1280.dp, 720.dp),
-                        facetStrip = {},
-                        onSelect = {},
+                        entryKey = null,
+                        forYou = emptyList(),
+                        recorded = emptySet(),
+                        chips = {},
                         onWatch = { watched = it },
+                        onOpenChannel = {},
                         onRecord = {},
-                        onAddToWanted = {},
-                        onShiftWindow = {},
+                        modifier = Modifier.size(1280.dp, 720.dp),
                     )
                 }
             }

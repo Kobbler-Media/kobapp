@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -10,7 +12,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToIndex
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -52,7 +53,7 @@ class HomeRailsTest {
                 HomeScreen(api = api, formFactor = formFactor)
             }
         }
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Queued 1").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Queued 1").fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun ComposeUiTest.assertRailReachesEnd(first: String, last: String) {
@@ -68,7 +69,7 @@ class HomeRailsTest {
             for ((first, last) in listOf("Recent 1" to "Recent $railLength", "Pick 1" to "Pick $railLength")) {
                 // Tall enough that every rail is laid out: the phone layout's cards are
                 // half the default window's height.
-                runDesktopComposeUiTest(width = 1280, height = 3000) {
+                runUiTest(width = 1280, height = 3000) {
                     StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
                         showHome(stub, formFactor)
                         assertRailReachesEnd(first, last)
@@ -82,7 +83,7 @@ class HomeRailsTest {
     @Test
     fun `desktop rails scroll sideways with the trackpad`() {
         for (first in listOf("Queued 1", "Recent 1", "Pick 1")) {
-            runDesktopComposeUiTest(width = 1280, height = 3000) {
+            runUiTest(width = 1280, height = 3000) {
                 StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
                     showHome(stub, FormFactor.Desktop)
                     val card = onAllNodesWithText(first).onLast()

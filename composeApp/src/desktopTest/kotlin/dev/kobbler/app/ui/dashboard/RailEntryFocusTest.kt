@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -11,7 +13,6 @@ import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LocalAuthState
@@ -84,10 +85,10 @@ class RailEntryFocusTest {
         val steps = tabs.indexOf(tab) - tabs.indexOf(nav.currentTab)
         press(List(kotlin.math.abs(steps)) { if (steps > 0) Key.DirectionDown else Key.DirectionUp })
         press(Key.DirectionRight)
-        waitUntil(timeoutMillis = 10_000) { anythingFocused() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { anythingFocused() }
     }
 
-    private fun run(test: DesktopComposeUiTest.(NavigationState) -> Unit) = runDesktopComposeUiTest(width = 960, height = 540) {
+    private fun run(test: DesktopComposeUiTest.(NavigationState) -> Unit) = runUiTest(width = 960, height = 540) {
         DataCache.clear()
         StubServer(
             mapOf(

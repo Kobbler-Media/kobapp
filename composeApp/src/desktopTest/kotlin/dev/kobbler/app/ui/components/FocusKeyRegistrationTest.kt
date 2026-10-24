@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -8,7 +9,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.kobfocus.FocusScope
 import dev.kobbler.kobfocus.FocusScopeHost
 import dev.kobbler.kobfocus.FocusScopeStore
@@ -38,7 +38,7 @@ class FocusKeyRegistrationTest {
     }
 
     @Test
-    fun segmentedFilterKeysEachOption() = runComposeUiTest {
+    fun segmentedFilterKeysEachOption() = runUiTest {
         val keys = keysAfterTabbing(2) {
             SegmentedFilter(
                 options = listOf("All", "In Progress"),
@@ -51,7 +51,7 @@ class FocusKeyRegistrationTest {
     }
 
     @Test
-    fun sectionHeadingKeysSeeAll() = runComposeUiTest {
+    fun sectionHeadingKeysSeeAll() = runUiTest {
         val keys = keysAfterTabbing(1) {
             SectionHeading(
                 title = "Continue",

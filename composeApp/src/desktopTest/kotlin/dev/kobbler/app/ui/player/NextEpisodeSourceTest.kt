@@ -1,11 +1,12 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.ContinueEpisode
 import dev.kobbler.app.data.Episode
@@ -76,7 +77,7 @@ class NextEpisodeSourceTest {
         libraryHasNext: Boolean = true,
         refreshedNextFile: String? = nextFile,
         check: ComposeUiTest.(Rig) -> Unit,
-    ) = runComposeUiTest {
+    ) = runUiTest {
         val codeFor = { path: String, body: String ->
             when {
                 path != "/api/v1/admin/playback/sessions" -> null
@@ -92,13 +93,13 @@ class NextEpisodeSourceTest {
             setContent {
                 InlineTvPlayer(show = current, api = api, formFactor = FormFactor.Phone, player = player, gps = gps, autoPlay = true, onBack = {})
             }
-            waitUntil(timeoutMillis = 20_000) { gps.mediaId == "ep-1" && gps.isDebrid }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" && gps.isDebrid }
             runOnIdle { current = show(refreshedNextFile) }
             waitForIdle()
 
             player.currentMs.value = 2_900_000
             if (refreshedNextFile == null) {
-                waitUntil(timeoutMillis = 10_000) { "/api/v1/admin/stream/prewarm" in stub.requestBodies }
+                waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/prewarm" in stub.requestBodies }
             } else {
                 Thread.sleep(1_000)
             }
@@ -116,7 +117,7 @@ class NextEpisodeSourceTest {
     }
 
     private fun ComposeUiTest.assertPlayedLocally(rig: Rig, case: String) {
-        waitUntil(timeoutMillis = 10_000) { rig.gps.mediaId == "ep-2" }
+        waitUntil(timeoutMillis = UiTimeoutMs) { rig.gps.mediaId == "ep-2" }
         assertFalse(rig.gps.isDebrid, "$case: the next episode came from debrid")
         assertTrue(rig.player.loadedUrl?.contains("/lib2/") == true, "$case: played ${rig.player.loadedUrl}")
         assertNoDebridFor(rig, case)
@@ -145,7 +146,7 @@ class NextEpisodeSourceTest {
     fun `a next episode with a file the library cannot open is not streamed instead`() =
         Entry.entries.forEach { entry ->
             playNext(entry, nextFile = "stream", libraryHasNext = false) { rig ->
-                waitUntil(timeoutMillis = 10_000) { rig.gps.loadingError != null || rig.gps.mediaId == null }
+                waitUntil(timeoutMillis = UiTimeoutMs) { rig.gps.loadingError != null || rig.gps.mediaId == null }
                 assertNoDebridFor(rig, entry.name)
             }
         }
@@ -154,7 +155,7 @@ class NextEpisodeSourceTest {
     fun `a next episode without a file is prewarmed and claimed from debrid as before`() =
         Entry.entries.forEach { entry ->
             playNext(entry, nextFile = null, libraryHasNext = false) { rig ->
-                waitUntil(timeoutMillis = 10_000) { rig.gps.mediaId == "ep-2" }
+                waitUntil(timeoutMillis = UiTimeoutMs) { rig.gps.mediaId == "ep-2" }
                 assertTrue(rig.gps.isDebrid, "${entry.name}: not debrid")
                 assertTrue(rig.asked("/api/v1/admin/stream/prewarm/pw1/claim"), "${entry.name}: the prewarm went unclaimed")
                 assertEquals("sp", rig.gps.sessionId, entry.name)

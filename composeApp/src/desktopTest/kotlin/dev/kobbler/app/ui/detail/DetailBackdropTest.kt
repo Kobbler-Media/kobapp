@@ -1,7 +1,8 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.data.TvShow
@@ -20,7 +21,7 @@ class DetailBackdropTest {
     fun `movie and show pages load their backdrop`() {
         for (formFactor in listOf(FormFactor.Desktop, FormFactor.TV)) {
             for (kind in listOf("movie", "show")) {
-                runDesktopComposeUiTest(width = 1280, height = 800) {
+                runUiTest(width = 1280, height = 800) {
                     StubServer(emptyMap()).use { stub ->
                         val backdrop = "${stub.url}/img/$kind-backdrop"
                         val poster = "${stub.url}/img/$kind-poster"
@@ -39,7 +40,7 @@ class DetailBackdropTest {
                                 }
                             }
                         }
-                        waitUntil(timeoutMillis = 10_000) { "/img/$kind-poster" in stub.requestBodies.keys }
+                        waitUntil(timeoutMillis = UiTimeoutMs) { "/img/$kind-poster" in stub.requestBodies.keys }
                         repeat(50) {
                             if ("/img/$kind-backdrop" in stub.requestBodies.keys) return@use
                             mainClock.advanceTimeBy(500)

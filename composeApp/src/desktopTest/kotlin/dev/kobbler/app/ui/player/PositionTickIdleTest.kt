@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Recomposer
@@ -11,7 +13,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.PlaybackSubtitleTrackDto
@@ -51,7 +52,7 @@ class PositionTickIdleTest {
     private val intro = SkipSegment("intro", startSeconds = 60.0, endSeconds = 150.0)
 
     private fun ComposeUiTest.shows(text: String) =
-        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun ComposeUiTest.invalidationsWhile(ticks: () -> Unit): Int {
         val pending = AtomicInteger()
@@ -69,7 +70,7 @@ class PositionTickIdleTest {
 
     private fun playing(test: ComposeUiTest.(FakePlayer) -> Unit) =
         StubServer(mapOf("/subs/en.vtt" to { _ -> vtt })).use { server ->
-            runComposeUiTest {
+            runUiTest {
                 val player = FakePlayer().apply {
                     durationMs.value = 1_800_000
                     currentMs.value = 10_500
@@ -145,7 +146,7 @@ class PositionTickIdleTest {
         player.currentMs.value = 95_000
         waitForIdle()
         onRoot().performTouchInput { click(center) }
-        waitUntil(timeoutMillis = 5_000) {
+        waitUntil(timeoutMillis = UiTimeoutMs) {
             onAllNodesWithText("/ 30:00", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
         onNodeWithText("1:35 / 30:00").assertExists()

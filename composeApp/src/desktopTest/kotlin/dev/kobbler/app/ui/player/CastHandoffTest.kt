@@ -1,7 +1,8 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.CastDevice
@@ -85,7 +86,7 @@ class CastHandoffTest {
     }
 
     @Test
-    fun `connecting moves the watch to the receiver and stops it here`() = runComposeUiTest {
+    fun `connecting moves the watch to the receiver and stops it here`() = runUiTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
@@ -94,10 +95,10 @@ class CastHandoffTest {
             val cast = FakeSender()
 
             setContent { CastHandoff(cast, gps, api, player) }
-            waitUntil(timeoutMillis = 10_000) { cast.started }
+            waitUntil(timeoutMillis = UiTimeoutMs) { cast.started }
 
             cast.connect("Living Room TV")
-            waitUntil(timeoutMillis = 10_000) { gps.castSession != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
 
             assertEquals(1_380, cast.loads.single().startPositionSec)
             assertTrue("pause" in player.calls, "still playing here as well: ${player.calls}")
@@ -109,7 +110,7 @@ class CastHandoffTest {
     }
 
     @Test
-    fun `the transport reaches the receiver`() = runComposeUiTest {
+    fun `the transport reaches the receiver`() = runUiTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
@@ -118,11 +119,11 @@ class CastHandoffTest {
 
             setContent { CastHandoff(cast, gps, api, player) }
             cast.connect("Living Room TV")
-            waitUntil(timeoutMillis = 10_000) { gps.castSession != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
 
             gps.onCastPlayPause?.invoke()
             gps.onCastSeek?.invoke(3_600_000L)
-            waitUntil(timeoutMillis = 10_000) { cast.seeks.isNotEmpty() && cast.toggles > 0 }
+            waitUntil(timeoutMillis = UiTimeoutMs) { cast.seeks.isNotEmpty() && cast.toggles > 0 }
 
             assertEquals(listOf(3_600), cast.seeks)
             // Shown as moved straight away: the seek is a round trip, and the bar answers
@@ -136,7 +137,7 @@ class CastHandoffTest {
      * viewer lets go carries the position they scrubbed away from.
      */
     @Test
-    fun `a broadcast that predates the scrub does not drag the bar back`() = runComposeUiTest {
+    fun `a broadcast that predates the scrub does not drag the bar back`() = runUiTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
@@ -145,10 +146,10 @@ class CastHandoffTest {
 
             setContent { CastHandoff(cast, gps, api, player) }
             cast.connect("Living Room TV")
-            waitUntil(timeoutMillis = 10_000) { gps.castSession != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
 
             runBlocking { cast.say(CastEvent.Position(600.0, 7_200.0, isPlaying = true)) }
-            waitUntil(timeoutMillis = 10_000) { gps.castSession?.positionMs == 600_000L }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession?.positionMs == 600_000L }
 
             gps.onCastSeek?.invoke(3_600_000L)
             runBlocking { cast.say(CastEvent.Position(605.0, 7_200.0, isPlaying = true)) }
@@ -162,7 +163,7 @@ class CastHandoffTest {
     }
 
     @Test
-    fun `ending a cast picks the watch up where the receiver left it`() = runComposeUiTest {
+    fun `ending a cast picks the watch up where the receiver left it`() = runUiTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
@@ -171,12 +172,12 @@ class CastHandoffTest {
 
             setContent { CastHandoff(cast, gps, api, player) }
             cast.connect("Living Room TV")
-            waitUntil(timeoutMillis = 10_000) { gps.castSession != null }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
             runBlocking { cast.say(CastEvent.Position(2_400.0, 7_200.0, isPlaying = true)) }
-            waitUntil(timeoutMillis = 10_000) { gps.castSession?.positionMs == 2_400_000L }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession?.positionMs == 2_400_000L }
 
             cast.disconnect()
-            waitUntil(timeoutMillis = 10_000) { "play" in player.calls }
+            waitUntil(timeoutMillis = UiTimeoutMs) { "play" in player.calls }
 
             assertTrue(
                 "seek:2400000" in player.calls,

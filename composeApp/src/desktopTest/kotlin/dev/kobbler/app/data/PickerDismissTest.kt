@@ -1,9 +1,9 @@
 package dev.kobbler.app.data
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.ui.auth.ProfilePickerScreen
 import kotlinx.coroutines.CoroutineScope
@@ -67,7 +67,7 @@ class PickerDismissTest {
 
         auth.showPicker()
         assertEquals(AuthScreen.Picker, auth.screen)
-        runComposeUiTest {
+        runUiTest {
             setContent { ProfilePickerScreen(auth, FormFactor.TV) }
             waitForIdle()
             onAllNodesWithContentDescription("Back").assertCountEquals(0)

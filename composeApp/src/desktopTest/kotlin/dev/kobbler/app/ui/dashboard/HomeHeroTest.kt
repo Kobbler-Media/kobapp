@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.DesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -36,7 +37,7 @@ class HomeHeroTest {
         width: Int = 1280,
         height: Int = 900,
         test: DesktopComposeUiTest.() -> Unit,
-    ) = runDesktopComposeUiTest(width = width, height = height) {
+    ) = runUiTest(width = width, height = height) {
         StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val homeData = kotlinx.coroutines.runBlocking { api.getDiscover() }
@@ -52,7 +53,7 @@ class HomeHeroTest {
                     )
                 }
             }
-            waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Queued 1").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Queued 1").fetchSemanticsNodes().isNotEmpty() }
             test()
         }
     }

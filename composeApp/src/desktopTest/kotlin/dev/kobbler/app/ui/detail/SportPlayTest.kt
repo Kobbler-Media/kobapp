@@ -1,9 +1,9 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -33,7 +33,7 @@ class SportPlayTest {
 
     private fun played(category: String): Pair<Int, Int>? {
         var played: Pair<Int, Int>? = null
-        runDesktopComposeUiTest(width = 1280, height = 900) {
+        runUiTest(width = 1280, height = 900) {
             StubServer(mapOf(SHOW_PATH to { _ -> json(category) })).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 val show = runBlocking { api.getShow("show-1") }

@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail.tvshow
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
@@ -9,7 +10,6 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.runComposeUiTest
 import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.Season
 import dev.kobbler.app.platform.FormFactor
@@ -58,7 +58,7 @@ class EpisodeActionFocusTest {
     }
 
     @Test
-    fun rightFromAnEpisodeReachesItsStreamOptions() = runComposeUiTest {
+    fun rightFromAnEpisodeReachesItsStreamOptions() = runUiTest {
         val manager = showList()
         runOnIdle { manager.moveFocus(FocusDirection.Right) }
         waitForIdle()
@@ -66,7 +66,7 @@ class EpisodeActionFocusTest {
     }
 
     @Test
-    fun theWantedMarkerIsNotADpadStop() = runComposeUiTest {
+    fun theWantedMarkerIsNotADpadStop() = runUiTest {
         // An episode already wanted shows a bookmark, but pressing it would do nothing.
         // It must stay out of the focus order or a remote gains a dead stop between the
         // row and its real actions.
@@ -85,7 +85,7 @@ class EpisodeActionFocusTest {
     }
 
     @Test
-    fun downFromAnActionStaysInTheListAndMovesToTheNextEpisode() = runComposeUiTest {
+    fun downFromAnActionStaysInTheListAndMovesToTheNextEpisode() = runUiTest {
         // Splitting the row must not strand focus in the action column: the icons of
         // one episode still have to lead down to the next episode's icons.
         val manager = showList()

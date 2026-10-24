@@ -1,10 +1,10 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -15,7 +15,7 @@ import kotlin.test.Test
 class DetailBackButtonTest {
 
     @Test
-    fun `the back arrow keeps its size inside the circle`() = runComposeUiTest {
+    fun `the back arrow keeps its size inside the circle`() = runUiTest {
         setContent {
             KobappTheme(formFactor = FormFactor.Phone) {
                 DetailBackButton(onBack = {}, formFactor = FormFactor.Phone)

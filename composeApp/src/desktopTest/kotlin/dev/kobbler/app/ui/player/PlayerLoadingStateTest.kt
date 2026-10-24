@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -7,7 +8,6 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -38,7 +38,7 @@ class PlayerLoadingStateTest {
     }
 
     private fun runPlayer(starting: Boolean, assertions: ComposeUiTest.() -> Unit) =
-        runComposeUiTest {
+        runUiTest {
             mainClock.autoAdvance = false
             val player = FakePlayer().apply { durationMs.value = 9_444_000 }
             setContent {

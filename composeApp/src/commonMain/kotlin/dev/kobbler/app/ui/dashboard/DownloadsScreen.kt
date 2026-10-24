@@ -1,6 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.scrollsUnderTopChrome
+import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -26,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import dev.kobbler.kobfocus.focusKey
+import dev.kobbler.app.ui.PinnedHeader
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -156,25 +159,28 @@ internal fun DownloadsScreen(
 
     val activeCount = rows.count { it.status in ActiveStatuses }
 
-    Column(modifier.fillMaxSize()) {
-        Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
-            BrowseHeader(
-                title = "Downloads",
-                accent = accent,
-                countLine = if (activeCount > 0) "$activeCount active" else "${rows.size} total",
-                compact = compact,
-                trailing = sectionSwitch,
-                secondaryRow = {
-                    SegmentedFilter(
-                        options = DownloadFilterLabels,
-                        selectedIndex = filterIdx,
-                        accent = accent,
-                        onSelected = { filterIdx = it },
-                    )
-                },
-            )
-        }
-
+    PinnedHeader(
+        header = {
+            Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+                BrowseHeader(
+                    title = "Downloads",
+                    accent = accent,
+                    countLine = if (activeCount > 0) "$activeCount active" else "${rows.size} total",
+                    compact = compact,
+                    trailing = sectionSwitch,
+                    secondaryRow = {
+                        SegmentedFilter(
+                            options = DownloadFilterLabels,
+                            selectedIndex = filterIdx,
+                            accent = accent,
+                            onSelected = { filterIdx = it },
+                        )
+                    },
+                )
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
         when {
             loading && rows.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                 CircularProgressIndicator(color = accent)
@@ -190,9 +196,9 @@ internal fun DownloadsScreen(
                 subtitle = "Downloads from Kobload will appear here",
             )
             else -> LazyColumn(
-                contentPadding = PaddingValues(horizontal = gutter, vertical = dimens.s2),
+                contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
                 verticalArrangement = Arrangement.spacedBy(dimens.s2),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
             ) {
                 items(rows, key = { it.id }) { row ->
                     DownloadListItem(row, accent, onItemClick)

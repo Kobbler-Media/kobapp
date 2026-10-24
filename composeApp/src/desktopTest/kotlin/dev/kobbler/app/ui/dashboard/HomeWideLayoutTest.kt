@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -13,7 +15,6 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
@@ -53,7 +54,7 @@ class HomeWideLayoutTest {
     }
 
     private fun home(formFactor: FormFactor, width: Int, height: Int, test: DesktopComposeUiTest.() -> Unit) =
-        runDesktopComposeUiTest(width = width, height = height) {
+        runUiTest(width = width, height = height) {
             StubServer(mapOf("/api/v1/admin/discover" to { _ -> discover })).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 val homeData = kotlinx.coroutines.runBlocking { api.getDiscover() }
@@ -68,7 +69,7 @@ class HomeWideLayoutTest {
                         )
                     }
                 }
-                waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Recent 1").fetchSemanticsNodes().isNotEmpty() }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Recent 1").fetchSemanticsNodes().isNotEmpty() }
                 waitForIdle()
                 test()
             }
@@ -99,7 +100,7 @@ class HomeWideLayoutTest {
         onAllNodes(hasScrollToIndexAction()).onFirst().performScrollToIndex(7)
         onAllNodesWithText("Pick 6.1").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
         val heading = { onAllNodesWithText("Shelf 6").onFirst().getUnclippedBoundsInRoot() }
-        waitUntil(timeoutMillis = 5_000) { heading().bottom in 0.dp..540.dp }
+        waitUntil(timeoutMillis = UiTimeoutMs) { heading().bottom in 0.dp..540.dp }
         mainClock.advanceTimeBy(1_000)
         waitForIdle()
         val pixels = onRoot().captureToImage().toPixelMap()

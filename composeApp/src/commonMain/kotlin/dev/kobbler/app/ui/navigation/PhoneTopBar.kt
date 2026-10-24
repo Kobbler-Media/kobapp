@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cast
@@ -14,13 +15,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.kobTopInset
+import dev.kobbler.app.ui.rememberTopChromeShade
 import dev.kobbler.app.ui.safeTopPadding
+
+private val PhoneTopBarHeight = 48.dp
+
+val phoneTopBarOverlap: Dp
+    @Composable
+    get() = kobTopInset + PhoneTopBarHeight
 
 // The bar owns the top/side insets: it is the first thing the window paints, so
 // nothing above it may reserve space or the whole screen shifts down. The page's picture
@@ -33,9 +40,7 @@ fun KobPhoneTopBar(
     onMenuClick: () -> Unit = {},
 ) {
     val colors = KobappTheme.colors
-    val shade = remember(colors.bg) {
-        Brush.verticalGradient(0f to colors.bg.copy(alpha = 0.85f), 0.55f to colors.bg.copy(alpha = 0.55f), 1f to Color.Transparent)
-    }
+    val shade = rememberTopChromeShade()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -43,6 +48,7 @@ fun KobPhoneTopBar(
             .fillMaxWidth()
             .background(shade)
             .safeTopPadding()
+            .height(PhoneTopBarHeight)
             .padding(horizontal = 6.dp),
     ) {
         IconButton(onClick = onMenuClick) {

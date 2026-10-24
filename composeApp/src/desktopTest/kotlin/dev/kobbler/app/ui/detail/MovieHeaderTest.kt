@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -7,7 +8,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runDesktopComposeUiTest
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.platform.FormFactor
@@ -30,7 +30,7 @@ class MovieHeaderTest {
     private val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
 
     private fun movie(formFactor: FormFactor, width: Int, height: Int, test: androidx.compose.ui.test.DesktopComposeUiTest.() -> Unit) =
-        runDesktopComposeUiTest(width = width, height = height) {
+        runUiTest(width = width, height = height) {
             setContent {
                 KobappTheme(formFactor = formFactor) {
                     MovieDetailScreen(movie = raw, api = api, formFactor = formFactor, onBack = {}, onPlay = {}, onWatchedChanged = {})

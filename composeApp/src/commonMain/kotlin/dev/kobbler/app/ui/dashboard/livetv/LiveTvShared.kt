@@ -13,8 +13,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -46,9 +44,6 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.CenterFocusedItem
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
-import dev.kobbler.app.ui.components.rememberTvFocusState
-import dev.kobbler.app.ui.components.tvClickable
-import dev.kobbler.app.ui.components.tvFocusGlow
 import dev.kobbler.app.ui.components.bleedHorizontally
 import dev.kobbler.app.ui.components.rowEdgeBleed
 import dev.kobbler.kobfocus.focusKey
@@ -57,8 +52,6 @@ import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -74,16 +67,6 @@ internal class GuideFocus {
 @Composable
 internal fun CenterFocusedRow(state: LazyListState, focus: GuideFocus, topRow: Int = -1) {
     CenterFocusedItem(state, focus.lazyIndex, topRow)
-}
-
-/**
- * The selected programme, held off the screen's composition for the same reason: the
- * preview pane follows guide focus, and reading it in the screen body would recompose
- * the whole grid on every move.
- */
-@Stable
-class LiveGuideSelectionHolder {
-    var value by mutableStateOf<LiveGuideSelection?>(null)
 }
 
 /**
@@ -209,68 +192,12 @@ internal fun LiveChannel.tierLabel(): String? =
     typeLabel?.let { if (it.startsWith("SD")) "SD" else it }
 
 /**
- * How far the stored guide reaches either side of now.
- *
- * The feed is the HDHomeRun guide service: `guide.php` is paged until it stops
- * advancing, which reaches its own ~48 h horizon, and `guide_sync` prunes anything that
- * ended more than [GuideHistoryHours] ago. Stepping past either end is an empty grid, so
- * the steppers clamp to it rather than letting the viewer walk off the data.
+ * How far ahead the stored guide reaches: the HDHomeRun guide service is paged until it
+ * stops advancing, which is its own ~48 h horizon. Picking a time past it is an empty guide.
  */
-internal const val GuideHistoryHours = 24
 internal const val GuideFutureHours = 48
 
-internal fun clampGuideWindow(start: Instant, windowMinutes: Int, now: Instant): Instant {
-    val earliest = now - GuideHistoryHours.hours
-    val latest = now + GuideFutureHours.hours - windowMinutes.minutes
-    if (latest <= earliest) return earliest
-    return start.coerceIn(earliest, latest)
-}
-
-/**
- * Where the axis goes next. A zero delta is the steppers' "back to now"; anything else
- * walks by [deltaMinutes] from wherever the window already is.
- *
- * Now is now, not the half hour before it: a window rounded down to the slot reaches back
- * over programmes that have already finished, and those are what the grid puts at the
- * head of every row — the first thing the cursor lands on, and the one cell on the page
- * that cannot be watched.
- */
-internal fun shiftGuideWindow(
-    from: Instant,
-    deltaMinutes: Int,
-    windowMinutes: Int,
-    now: Instant = nowInstant(),
-): Instant =
-    if (deltaMinutes == 0) now else clampGuideWindow(from + deltaMinutes.minutes, windowMinutes, now)
-
-/**
- * The clock faces on the ruler: every half hour the window covers.
- *
- * The window itself starts wherever the viewer is in the schedule, so the labels cannot
- * be a row of equal boxes from its left edge — they are placed at their own times over
- * the track instead, and the first of them is the next half hour after the window opens.
- */
-internal fun guideRulerTicks(windowStart: Instant, windowMinutes: Int): List<Instant> {
-    val slotMs = GuideSlotMinutes * 60_000L
-    val startMs = windowStart.toEpochMilliseconds()
-    val endMs = startMs + windowMinutes * 60_000L
-    var tick = (startMs + slotMs - 1) / slotMs * slotMs
-    val ticks = mutableListOf<Instant>()
-    while (tick < endMs) {
-        ticks += Instant.fromEpochMilliseconds(tick)
-        tick += slotMs
-    }
-    return ticks
-}
-
-/**
- * Entries that have not finished yet.
- *
- * A window aligned to the half hour reaches back before now, so the feed answers with
- * programmes that have already ended — in a chronological rail they sit ahead of the one
- * marked NOW. The time-axis grid wants them (they occupy real space on its ruler); a rail
- * does not.
- */
+/** The feed answers a window with programmes overlapping it, including ones already over. */
 internal fun List<LiveGuideEntry>.stillRunning(now: Instant): List<LiveGuideEntry> = filter {
     val end = parseLiveInstant(it.endTime) ?: return@filter true
     end > now
@@ -432,15 +359,17 @@ internal fun LiveFacetChips(
     selected: String?,
     accent: Color,
     leading: List<Pair<String, String?>> = emptyList(),
+    prefix: (@Composable () -> Unit)? = null,
     onSelect: (String?) -> Unit,
 ) {
-    if (facets.isEmpty() && leading.isEmpty()) return
+    if (facets.isEmpty() && leading.isEmpty() && prefix == null) return
     val bleed = rowEdgeBleed()
     LazyRow(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = bleed),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.bleedHorizontally(bleed).focusKeyGroup(groupKey),
     ) {
+        if (prefix != null) item(key = "prefix") { prefix() }
         items(leading.size) { i ->
             val (label, value) = leading[i]
             KobChip(
@@ -462,123 +391,6 @@ internal fun LiveFacetChips(
                 modifier = Modifier.focusKey("f.${facet.value}", entryEligible = false),
             )
         }
-    }
-}
-
-/**
- * Moves the guide window by whole slots, and says which one is on screen.
- *
- * Shared by both guides: the phone rail has the same walk-the-schedule problem the grid
- * does, and it is the only way to see anything but the next few hours.
- */
-@Composable
-internal fun GuideWindowStepper(
-    windowStart: Instant,
-    windowMinutes: Int,
-    accent: Color,
-    compact: Boolean,
-    onShift: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    /**
-     * How far one press moves. A grid the viewer can scroll through already covers the
-     * window, so a half-hour step there just re-reads what is on screen — it pages by the
-     * whole window instead. A list that shows one slot at a time still steps by one.
-     */
-    stepMinutes: Int = GuideSlotMinutes,
-) {
-    val colors = KobappTheme.colors
-    val now = nowInstant()
-    // Whether the step this button actually takes lands anywhere new, so the arrow greys
-    // out on the edge of the data rather than at a full window's distance from it.
-    val step = stepMinutes.minutes
-    val canGoBack = clampGuideWindow(windowStart - step, windowMinutes, now) < windowStart
-    val canGoForward = clampGuideWindow(windowStart + step, windowMinutes, now) > windowStart
-    val atNow = now >= windowStart && now < windowStart + windowMinutes.minutes
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp),
-        modifier = modifier.focusKeyGroup("guidewindow"),
-    ) {
-        StepButton("back", Icons.Outlined.ChevronLeft, "Earlier", canGoBack, compact) { onShift(-stepMinutes) }
-        // The reading and the way home are the same control: a window that is not now
-        // says so in the accent, and pressing it comes back. A separate "Now" chip is a
-        // second thing to walk past for the one press it saves.
-        WindowLabel(windowStart, accent, atNow, compact) { if (!atNow) onShift(0) }
-        StepButton("fwd", Icons.Outlined.ChevronRight, "Later", canGoForward, compact) { onShift(stepMinutes) }
-    }
-}
-
-@Composable
-private fun WindowLabel(
-    windowStart: Instant,
-    accent: Color,
-    atNow: Boolean,
-    compact: Boolean,
-    onBackToNow: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val focusState = rememberTvFocusState()
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .then(
-                if (atNow) {
-                    Modifier
-                } else {
-                    Modifier
-                        .focusKey("guidewindow.now", entryEligible = false)
-                        .tvFocusGlow(focusState, cornerRadiusDp = 8f, scale = 1.06f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .tvClickable(focusState, onBackToNow)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                },
-            ),
-    ) {
-        Text(
-            if (atNow) windowStart.localHhMm() else "${windowStart.localHhMm()} ↩",
-            style = KobappTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = if (atNow) colors.textHi else accent,
-            maxLines = 1,
-        )
-        Text(
-            windowStart.localDayLabel(),
-            style = KobappTheme.type.labelSm,
-            color = colors.textLo,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-internal const val GuideSlotMinutes = 30
-
-@Composable
-private fun StepButton(
-    key: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    enabled: Boolean,
-    compact: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val focusState = rememberTvFocusState()
-    Box(
-        modifier = Modifier
-            .size(if (compact) 28.dp else 36.dp)
-            .focusKey(key, entryEligible = false)
-            .tvFocusGlow(focusState, cornerRadiusDp = 8f, scale = 1.08f)
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, colors.line, RoundedCornerShape(8.dp))
-            .then(if (enabled) Modifier.tvClickable(focusState, onClick) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (enabled) colors.textMd else colors.textXlo,
-            modifier = Modifier.size(18.dp),
-        )
     }
 }
 

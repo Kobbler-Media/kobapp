@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.auth
 
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -25,7 +26,7 @@ class PickerBackdropTest {
     fun `the newest arrivals cycle behind the profiles`() = picker({ url ->
         listOf(Profile(id = "adult", token = "adult-token", apiUrl = url))
     }) { _, _ ->
-        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { shows("Recent One") }
         assertTrue(shows("RECENTLY ADDED"))
         repeat(60) {
             if (shows("Recent Two")) return@picker
@@ -39,7 +40,7 @@ class PickerBackdropTest {
     fun `the next arrival fades in over the last even when it is already cached`() = picker({ url ->
         listOf(Profile(id = "adult", token = "adult-token", apiUrl = url))
     }) { _, _ ->
-        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { shows("Recent One") }
         mainClock.autoAdvance = false
         val layers = { onAllNodesWithTag(BackdropArtTag).fetchSemanticsNodes().size }
         var waited = 0
@@ -61,7 +62,7 @@ class PickerBackdropTest {
             Profile(id = "kid", token = "kid-token", apiUrl = url, isKids = true),
         )
     }) { tokens, _ ->
-        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { shows("Recent One") }
         assertTrue(tokens.isNotEmpty())
         assertEquals(setOf("Bearer kid-token"), tokens.toSet())
     }
@@ -70,7 +71,7 @@ class PickerBackdropTest {
     fun `the first profile keeps focus once the arrivals arrive`() = picker({ url ->
         listOf(Profile(id = "adult", token = "Alice", apiUrl = url))
     }, discoverDelayMs = 1_000) { _, _ ->
-        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { shows("Recent One") }
         mainClock.advanceTimeBy(500)
         waitForIdle()
         onNodeWithText("Alice").assertIsFocused()
@@ -83,7 +84,7 @@ class PickerBackdropTest {
             Profile(id = "b", token = "Bob", apiUrl = url),
         )
     }) { _, auth ->
-        waitUntil(timeoutMillis = 10_000) { shows("Alice") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { shows("Alice") }
         auth.confirmProfile("b")
         auth.showPicker()
         waitForIdle()
@@ -98,7 +99,7 @@ class PickerBackdropTest {
     fun `the picture is as bright at the bottom as at the top`() = picker({ url ->
         listOf(Profile(id = "adult", token = "adult-token", apiUrl = url))
     }) { _, _ ->
-        waitUntil(timeoutMillis = 10_000) { shows("Recent One") }
+        waitUntil(timeoutMillis = UiTimeoutMs) { shows("Recent One") }
         mainClock.advanceTimeBy(2_000)
         waitForIdle()
         val pixels = onRoot().captureToImage().toPixelMap()

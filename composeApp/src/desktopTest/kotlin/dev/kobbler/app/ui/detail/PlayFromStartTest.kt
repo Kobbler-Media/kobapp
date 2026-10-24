@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.runUiTest
+import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
@@ -8,7 +10,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.runComposeUiTest
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.ContinueEpisode
 import dev.kobbler.app.data.Episode
@@ -90,13 +91,13 @@ class PlayFromStartTest {
         }
 
     private fun ComposeUiTest.awaitLoaded(gps: GlobalPlayerState, id: String) =
-        waitUntil(timeoutMillis = 20_000) { gps.mediaId == id && gps.isFullscreen }
+        waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == id && gps.isFullscreen }
 
     private fun StubServer.lastSessionStart(): String? =
         Regex("\"start_time\":(\\d+)").find(requestBodies[SESSIONS].orEmpty())?.groupValues?.get(1)
 
     @Test
-    fun movieFromStartIgnoresTheSavedPosition() = runComposeUiTest {
+    fun movieFromStartIgnoresTheSavedPosition() = runUiTest {
         movieRig(nearEnd, """{"watched":false,"position_seconds":5900}""") { rig ->
             onNodeWithText("Resume").assertExists()
             onNodeWithContentDescription("From start").performClick()
@@ -107,7 +108,7 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun debridMovieFromStartIgnoresTheSavedPosition() = runComposeUiTest {
+    fun debridMovieFromStartIgnoresTheSavedPosition() = runUiTest {
         val stub = StubServer(routes("""{"watched":false,"position_seconds":5900}""") + mapOf(
             "/api/v1/admin/stream/search" to { _: HttpExchange ->
                 """{"options":[{"id":"o1","release_title":"Movie.2020","debrid_provider":"realdebrid",
@@ -137,7 +138,7 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun movieResumeStillResumes() = runComposeUiTest {
+    fun movieResumeStillResumes() = runUiTest {
         movieRig(nearEnd, """{"watched":false,"position_seconds":5900}""") { rig ->
             onNodeWithText("Resume").performClick()
             awaitLoaded(rig.gps, "m1")
@@ -146,7 +147,7 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun aWatchedMoviePlaysFromTheStart() = runComposeUiTest {
+    fun aWatchedMoviePlaysFromTheStart() = runUiTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
             onAllNodesWithText("Resume").assertCountEquals(0)
@@ -159,12 +160,12 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun markingAMovieUnwatchedForgetsWhereItWasLeft() = runComposeUiTest {
+    fun markingAMovieUnwatchedForgetsWhereItWasLeft() = runUiTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
             onNodeWithContentDescription("More").performClick()
             onNodeWithText("Mark unwatched").performClick()
-            waitUntil(timeoutMillis = 5_000) { rig.stub.requestBodies[MOVIE_STATE].orEmpty().contains("watched") }
+            waitUntil(timeoutMillis = UiTimeoutMs) { rig.stub.requestBodies[MOVIE_STATE].orEmpty().contains("watched") }
             val sent = rig.stub.requestBodies.getValue(MOVIE_STATE)
             assertTrue(sent.contains("\"watched\":false"), sent)
             assertTrue(sent.contains("\"position_seconds\":0"), "unwatching kept the old position: $sent")
@@ -176,7 +177,7 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun episodeFromStartIgnoresTheSavedPosition() = runComposeUiTest {
+    fun episodeFromStartIgnoresTheSavedPosition() = runUiTest {
         showRig(showNearEnd, """{"watched":false,"position_seconds":2500}""") { rig ->
             onNodeWithContentDescription("From start").performClick()
             awaitLoaded(rig.gps, "ep-1")
@@ -186,7 +187,7 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun episodeResumeStillResumes() = runComposeUiTest {
+    fun episodeResumeStillResumes() = runUiTest {
         showRig(showNearEnd, """{"watched":false,"position_seconds":2500}""") { rig ->
             onNodeWithText("Resume", substring = true).performClick()
             awaitLoaded(rig.gps, "ep-1")

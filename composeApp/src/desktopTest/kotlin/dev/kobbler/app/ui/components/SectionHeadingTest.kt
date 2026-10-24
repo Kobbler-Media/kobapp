@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.runUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -7,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -25,7 +25,7 @@ class SectionHeadingTest {
 
     private fun badgeSize(content: @Composable ((Int, Int) -> Unit) -> Unit): Pair<Int, Int> {
         var size = 0 to 0
-        runComposeUiTest {
+        runUiTest {
             setContent {
                 KobappTheme {
                     Box(Modifier.width(360.dp)) {
