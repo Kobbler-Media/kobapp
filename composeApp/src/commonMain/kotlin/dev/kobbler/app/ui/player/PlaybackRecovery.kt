@@ -382,10 +382,19 @@ suspend fun GlobalPlayerState.recoverPlayback(
 
     val dead = sessionId
     val deadLive = liveSessionId
+    // A restarted API rebuilds a title's session under the same id, so the stream may well
+    // still be there — but a session reopened once already and lost again is itself broken.
+    var kept = streamSession?.takeIf {
+        type in RecoverableMediaTypes && it.sessionId == dead && dead != reopenedSessionId
+    }
     player.stop()
     sessionId = null
     liveSessionId = null
-    if (dead != null) teardownScope.launch { api.closeSession(dead) }
+    // A channel already playing is answered with that same session, so a close still in
+    // flight when the reopen lands ends the session the reopen was just handed.
+    if (dead != null && kept == null) {
+        if (type == "iptv") api.closeSession(dead) else teardownScope.launch { api.closeSession(dead) }
+    }
     // A lease the server still thinks is in use is a tuner the retune cannot have.
     if (deadLive != null) teardownScope.launch { api.closeLiveSession(deadLive) }
 
@@ -395,6 +404,22 @@ suspend fun GlobalPlayerState.recoverPlayback(
             if (wait > 0) delay(wait)
             // A stop while this was waiting means nobody is watching any more.
             if (mediaId != id) return true
+            kept?.let { session ->
+                val status = api.sessionStatus(session.sessionId)
+                if (status is SessionStatus.Unknown) {
+                    last = IllegalStateException("The server could not be reached")
+                    return@let
+                }
+                kept = null
+                if (status is SessionStatusDto && status.state != "failed") {
+                    reopenedSessionId = session.sessionId
+                    loadInPlace(player, api, type, id, session, resumeSec)
+                    if (keepPaused) endPreload(player) else playUnmuted(player)
+                    return true
+                }
+                teardownScope.launch { api.closeSession(session.sessionId) }
+            }
+            if (kept != null) continue
             val reopened = try {
                 when (type) {
                     "livetv" -> reopenLive(player, api, id)
@@ -483,7 +508,7 @@ private suspend fun GlobalPlayerState.reopenLive(
     api: KobblerApi,
     id: String,
 ): Boolean {
-    val session = api.openLiveSession(id)
+    val session = api.openLiveSession(id, player.decodesFieldPictures)
     if (mediaId != id) {
         teardownScope.launch { api.closeLiveSession(session.sessionId) }
         return true

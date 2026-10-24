@@ -272,6 +272,12 @@ class GlobalPlayerState {
     var lastStreamUrl by mutableStateOf<String?>(null)
         internal set
 
+    /** The session the player was last opened on, so a reconnect can open it again. */
+    internal var streamSession: dev.kobbler.app.data.KobblerApi.StreamSession? = null
+
+    /** A session a reconnect already reopened once, not to be trusted with a second. */
+    internal var reopenedSessionId: String? = null
+
     var reportStatus by mutableStateOf(ReportStatus.Idle)
         private set
 
@@ -431,6 +437,7 @@ class GlobalPlayerState {
         sessionId = newSessionId
         sessionMethod = session?.method
         lastStreamUrl = streamUrl
+        streamSession = session
         timeline = PlayerTimeline.of(session?.serverStartSeconds)
         lastSaved = id to (timeline.toAbsoluteMs(seekToSec * 1000L) / 1000).toInt()
         chapters = session?.chapters ?: emptyList()

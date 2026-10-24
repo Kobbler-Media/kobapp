@@ -78,6 +78,51 @@ class PlaybackRecoveryTest {
         }
     }
 
+    /**
+     * A restarted API rebuilds the sessions it lost under the same ids, so the stream the
+     * player already had is still there to reopen — minting another throws away the
+     * segments the server kept for it.
+     */
+    @Test
+    fun `a lost stream reopens on its own session when the server still has it`() = runTest {
+        val minted = CopyOnWriteArrayList<String>()
+        val closed = CopyOnWriteArrayList<String>()
+        val routes = mintingRoutes(minted) + mapOf(
+            "/api/v1/admin/playback/sessions/dead-1/status" to { _: HttpExchange ->
+                """{"state":"ready","method":"remux"}"""
+            },
+            "/api/v1/admin/playback/sessions/dead-1" to { ex: HttpExchange ->
+                if (ex.requestMethod == "DELETE") closed += "dead-1"
+                "{}"
+            },
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val gps = watching().apply {
+                streamSession = KobblerApi.StreamSession(
+                    url = "${stub.url}/api/v1/admin/playback/sessions/dead-1/master.m3u8",
+                    sessionId = "dead-1",
+                    serverStartSeconds = 60,
+                )
+            }
+            val player = stalledPlayer(atMs = 30_000)
+            gps.timeline = PlayerTimeline.of(60)
+
+            assertTrue(gps.recoverPlayback(player, api))
+
+            assertEquals(emptyList(), minted.toList(), "minted a session the server still had")
+            assertEquals(emptyList(), closed.toList(), "closed the session it was about to reopen")
+            assertEquals("dead-1", gps.sessionId)
+            assertTrue(player.loadedUrl?.contains("dead-1/master.m3u8") == true, "${player.loadedUrl}")
+            assertEquals(30, player.loadedSource?.startTimeSec, "reopened somewhere other than the playhead")
+
+            // The same session failing again right after is the session that is broken.
+            assertTrue(gps.recoverPlayback(player, api))
+            assertEquals(listOf("s1"), minted.toList(), "reopened a session that had just failed again")
+            assertEquals(listOf("dead-1"), closed.toList())
+        }
+    }
+
     /** Nothing to reopen is an answer. Spinning on it is not. */
     @Test
     fun `a server with nothing to reopen gives up and says so`() = runTest {
@@ -233,6 +278,40 @@ class PlaybackRecoveryTest {
         }
     }
 
+    /**
+     * The server only sends the raw broadcast to a client whose decoder can show it.
+     * Tensor's hardware decoder cannot, and the alternative to telling the server is
+     * decoding every channel on the CPU.
+     */
+    @Test
+    fun `a tune says whether this player can decode field pictures`() = runTest {
+        val routes = mapOf(
+            "/api/v1/admin/livetv/sessions" to { _: HttpExchange ->
+                """{"session_id":"live-2","channel_id":"chan-1","method":"transcode","playlist_url":"http://127.0.0.1:1/live-2.m3u8"}"""
+            },
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            for (decodes in listOf(true, false)) {
+                val gps = GlobalPlayerState().apply {
+                    mediaType = "livetv"
+                    mediaId = "chan-1"
+                    title = "ABC"
+                }
+                val player = stalledPlayer(atMs = 0).apply { decodesFieldPictures = decodes }
+                assertTrue(gps.recoverPlayback(player, api))
+                val sent = kotlinx.serialization.json.Json.parseToJsonElement(
+                    stub.requestBodies.getValue("/api/v1/admin/livetv/sessions"),
+                ).let { it as kotlinx.serialization.json.JsonObject }
+                assertEquals(
+                    kotlinx.serialization.json.JsonPrimitive(decodes),
+                    (sent["capabilities"] as kotlinx.serialization.json.JsonObject)["supports_interlaced"],
+                    "decodesFieldPictures=$decodes",
+                )
+            }
+        }
+    }
+
     @Test
     fun `a lease the server let go is retuned by the live heartbeat`() {
         val routes = mapOf(
@@ -324,5 +403,59 @@ class PlaybackRecoveryTest {
         }
         val unreachable = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
         assertFalse(unreachable.sessionGone("live-1"), "a network blip read as a reaped session")
+    }
+
+    /**
+     * The server hands a second request for a channel it is already playing the same
+     * session, so a close of the dead one that lands after the reopen tears down the
+     * session that reopen was just given.
+     */
+    private fun channelRoutes(order: MutableList<String>) = mapOf(
+        "/api/v1/admin/playback/sessions/dead-1" to { _: HttpExchange ->
+            Thread.sleep(300)
+            order += "close dead-1"
+            "{}"
+        },
+        "/api/v1/admin/iptv/sessions" to { _: HttpExchange ->
+            order += "open"
+            """{"session_id":"iptv-2","method":"direct_play","direct_url":"/api/v1/admin/iptv/channels/chan-1/play.ts"}"""
+        },
+    )
+
+    private fun watchingChannel() = GlobalPlayerState().apply {
+        mediaType = "iptv"
+        mediaId = "chan-1"
+        sessionId = "dead-1"
+        title = "TNT Sports 2"
+    }
+
+    @Test
+    fun `a channel reconnect closes the dead session before it asks for another`() = runBlocking {
+        val order = CopyOnWriteArrayList<String>()
+        StubServer(channelRoutes(order)).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val gps = watchingChannel()
+
+            assertTrue(gps.recoverPlayback(stalledPlayer(atMs = 0), api))
+
+            withTimeout(5_000) { while (order.size < 2) delay(20) }
+            assertEquals(listOf("close dead-1", "open"), order.toList())
+            assertEquals("iptv-2", gps.sessionId)
+        }
+    }
+
+    @Test
+    fun `picking the playing channel again closes its session before opening one`() = runBlocking {
+        val order = CopyOnWriteArrayList<String>()
+        StubServer(channelRoutes(order)).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val gps = watchingChannel()
+            val channel = dev.kobbler.app.data.IptvChannel(id = "chan-1", name = "TNT Sports 2", iconUrl = null, category = null, language = null, country = null)
+
+            startIptvWatch(channel, stalledPlayer(atMs = 0), gps, api, this)
+
+            withTimeout(5_000) { while (order.size < 2) delay(20) }
+            assertEquals(listOf("close dead-1", "open"), order.toList())
+        }
     }
 }

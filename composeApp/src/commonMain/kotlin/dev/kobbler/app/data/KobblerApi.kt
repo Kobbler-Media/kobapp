@@ -3322,16 +3322,17 @@ class KobblerApi(
         put("priority", priority)
     }.toString()
 
-    private fun liveCapabilitiesJson() = buildJsonObject {
+    private fun liveCapabilitiesJson(supportsInterlaced: Boolean) = buildJsonObject {
         putJsonArray("video_codecs") { VLC_CAPABILITIES.videoCodecs.forEach { add(JsonPrimitive(it)) } }
         putJsonArray("audio_codecs") { VLC_CAPABILITIES.audioCodecs.forEach { add(JsonPrimitive(it)) } }
         putJsonArray("containers") { VLC_CAPABILITIES.containers.forEach { add(JsonPrimitive(it)) } }
+        put("supports_interlaced", supportsInterlaced)
     }
 
-    suspend fun openLiveSession(channelId: String): LiveSession {
+    suspend fun openLiveSession(channelId: String, supportsInterlaced: Boolean): LiveSession {
         val body = buildJsonObject {
             put("channel_id", channelId)
-            put("capabilities", liveCapabilitiesJson())
+            put("capabilities", liveCapabilitiesJson(supportsInterlaced))
         }
         return decodeMap<LiveSessionDto, LiveSession>(
             post("/api/v1/admin/livetv/sessions", body.toString()),
@@ -3340,10 +3341,14 @@ class KobblerApi(
 
     // Without capabilities the server falls back to its conservative default —
     // H.264 in MP4 — and transcodes a channel the player could have taken raw.
-    suspend fun switchLiveSessionChannel(sessionId: String, channelId: String): LiveSession {
+    suspend fun switchLiveSessionChannel(
+        sessionId: String,
+        channelId: String,
+        supportsInterlaced: Boolean,
+    ): LiveSession {
         val body = buildJsonObject {
             put("channel_id", channelId)
-            put("capabilities", liveCapabilitiesJson())
+            put("capabilities", liveCapabilitiesJson(supportsInterlaced))
         }
         return decodeMap<LiveSessionDto, LiveSession>(
             post("/api/v1/admin/livetv/sessions/$sessionId/channel", body.toString()),

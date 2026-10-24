@@ -457,6 +457,9 @@ internal class AndroidPlayer(
     private var forceSoftwareDecode = false
     private var fieldDecodeVerdict: FieldDecodeVerdict = storedFieldDecodeVerdict()
 
+    override val decodesFieldPictures: Boolean
+        get() = fieldDecodeVerdict != FieldDecodeVerdict.HardwareEmitsNothing
+
     private fun listenTo(player: MediaPlayer) {
         player.setEventListener { event ->
             // An abandoned player's events are about a title nobody is watching any more.
@@ -586,11 +589,13 @@ internal class AndroidPlayer(
             if (!config.hardwareAcceleration) {
                 addOption(":avcodec-hw=none")
             }
-            // `:codec=all` is what Media.setHWDecoderEnabled(false) emits: it
-            // does not deprioritise MediaCodec, it takes it away. So it is set
-            // only where this device has been seen to need it.
+            // What libVLC 4's Media.setHWDecoderEnabled(false) emits. Not `:codec=all`, the
+            // libVLC 3 spelling: under 4 that is just the default priority list, and the
+            // decoder restart on the first format change lands on MediaCodec anyway. This
+            // withholds the decoder device MediaCodec cannot open without, for the whole
+            // stream — so it is set only where this device has been seen to need it.
             if (forceSoftwareDecode || softwareDecodeRequired(source.fieldCoded, fieldDecodeVerdict)) {
-                addOption(":codec=all")
+                addOption(":no-hw-dec")
             }
             source.audioLanguage?.let { addOption(":audio-language=$it") }
             // `none` rather than `--no-spu`: no-spu disables the whole subtitle

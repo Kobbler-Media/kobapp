@@ -15,9 +15,7 @@ fun startIptvWatch(
 ) {
     if (player == null || gps.isPreparing) return
 
-    gps.sessionId?.let { sid ->
-        scope.launch { api.closeSession(sid) }
-    }
+    val previousSessionId = gps.sessionId
     gps.sessionId = null
     gps.mediaType = "iptv"
     gps.mediaId = channel.id
@@ -42,6 +40,9 @@ fun startIptvWatch(
 
     scope.launch {
         try {
+            // Awaited: the server answers a channel it is already playing with that same
+            // session, which a close landing after the open would then end.
+            previousSessionId?.let { api.closeSession(it) }
             val session = api.playIptvChannel(channel.id)
             if (gps.mediaId != channel.id || !gps.isPreparing) return@launch
 

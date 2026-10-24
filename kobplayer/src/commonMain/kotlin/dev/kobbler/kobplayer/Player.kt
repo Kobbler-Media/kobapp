@@ -249,6 +249,14 @@ interface Player {
      */
     val videoOutputReady: StateFlow<Boolean> get() = AlwaysReady
 
+    /**
+     * Whether this device's hardware decoder can show field-coded H.264.
+     *
+     * Told to the server so a decoder that cannot is sent a deinterlaced encode it can
+     * decode in hardware, rather than a raw broadcast it could only decode on the CPU.
+     */
+    val decodesFieldPictures: Boolean get() = true
+
     /** Release all resources. Called automatically by [rememberPlayer] on dispose. */
     fun release()
 
