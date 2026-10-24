@@ -11,6 +11,9 @@ import kotlinx.coroutines.withTimeout
 import com.sun.net.httpserver.HttpServer
 import java.io.File
 import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import uk.co.caprica.vlcj.player.base.State
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -227,10 +230,84 @@ class DesktopPlaybackTest {
         assertEquals(PlayerState.ERROR, settled, "stopped at ${player.currentMs.value} of ${player.durationMs.value}")
     }
 
+    private val quiet = CountDownLatch(1)
+
+    /**
+     * Hands out the first [fraction] of the file and then goes quiet with the connection held
+     * open, as a link that died without a word does. Only the read that plays the title
+     * stalls: the opening read and the jump to the cues at the end are answered in full, as a
+     * transfer that is never left idle stays alive.
+     */
+    private fun stalling(resource: String, fraction: Double): String {
+        val bytes = File(javaClass.getResource("/$resource")!!.toURI()).readBytes()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.executor = Executors.newCachedThreadPool()
+        server.createContext("/") { exchange ->
+            val from = exchange.requestHeaders.getFirst("Range")?.removePrefix("bytes=")?.substringBefore('-')?.toIntOrNull() ?: 0
+            exchange.responseHeaders.add("Accept-Ranges", "bytes")
+            exchange.responseHeaders.add("Content-Type", "video/x-matroska")
+            exchange.responseHeaders.add("Content-Range", "bytes $from-${bytes.size - 1}/${bytes.size}")
+            exchange.sendResponseHeaders(206, (bytes.size - from).toLong())
+            runCatching {
+                exchange.responseBody.use { body ->
+                    val stallAt = (bytes.size * fraction).toInt()
+                    if (from in 1 until bytes.size / 2) {
+                        if (from < stallAt) body.write(bytes, from, stallAt - from)
+                        body.flush()
+                        quiet.await()
+                    } else {
+                        // At a network's pace: read to its end at once, the opening read
+                        // hands the demuxer the cues before it asks for them.
+                        for (at in from until bytes.size step 8_192) {
+                            body.write(bytes, at, minOf(8_192, bytes.size - at))
+                            body.flush()
+                            Thread.sleep(20)
+                        }
+                    }
+                }
+            }
+        }
+        server.start()
+        servers += server
+        return "http://127.0.0.1:${server.address.port}/$resource"
+    }
+
+    private suspend fun DesktopPlayer.frozen() {
+        var last = currentMs.value
+        var still = 0
+        while (still < 15) {
+            delay(100)
+            if (currentMs.value == last) still++ else still = 0
+            last = currentMs.value
+        }
+    }
+
+    /**
+     * A transfer that goes quiet freezes the picture, and the input reading it must still
+     * stop when asked: one that cannot is a player nothing else will ever play on.
+     */
+    @Test
+    fun `a title whose transfer went quiet still stops, and the next one plays`() = withPlayer { player ->
+        player.load(MediaSource.Url(stalling("noise_176x100_20s.mkv", fraction = 0.4)))
+        player.currentMs.await("under way") { it > 300 }
+        player.frozen()
+        player.isBuffering.await("the spinner up over the frozen picture") { it }
+        player.stop()
+        val stopped = runCatching {
+            withTimeout(5_000) { while (player.vlcPlayer.status().state() !in setOf(State.STOPPED, State.NOTHING_SPECIAL, State.ERROR)) delay(50) }
+        }
+        assertTrue(stopped.isSuccess, "the input is still ${player.vlcPlayer.status().state()} 5s after stop")
+        player.load(MediaSource.Url(resourceUrl("red_176x100_sar4-3.mkv")))
+        player.currentMs.await("the next title under way") { it > 300 }
+    }
+
     private val servers = mutableListOf<HttpServer>()
 
     @kotlin.test.AfterTest
-    fun stopServers() = servers.forEach { it.stop(0) }
+    fun stopServers() {
+        quiet.countDown()
+        servers.forEach { it.stop(0) }
+    }
 
     private fun preloads(url: String) = withPlayer { player ->
         player.setPreloading(true)

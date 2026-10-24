@@ -12,12 +12,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -35,7 +36,6 @@ import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.interfaces.IVLCVout
 import java.io.File
 import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
 import kotlin.coroutines.CoroutineContext
 
 private const val FieldDecodePrefs = "kobplayer.decoder"
@@ -57,6 +57,10 @@ private const val FrameRateProbeWindowMs = 4_000L
 // A remux opens with an ESAdded per stream, dozens in one burst: one refresh answers them all.
 private const val TrackRefreshSettleMs = 50L
 private const val AudioClockPollMs = 250L
+
+// A stop or seek answers in well under a second; one that has not after this is stuck in
+// libVLC, and the title waiting behind it moves to a fresh player.
+private const val WedgedVlcCallMs = 4_000L
 
 /**
  * Android VLC player implementation using libvlc-android.
@@ -92,36 +96,43 @@ internal class AndroidPlayer(
         }
     })
 
-    val vlcPlayer = MediaPlayer(libVLC)
-
     // Releasing a player waits for its inputs to wind down, which takes as long as a
     // stalled network read does: on the main thread, a stream that hung while opening
     // took the app down with an ANR. One serial thread keeps libVLC calls off the UI and
-    // the play/pause/seek that follow a load in order behind it. View attach and detach
-    // stay on main: they touch the SurfaceHolder.
-    @Volatile private var released = false
+    // the play/pause/seek that follow a load in order behind it, and a load or stop that
+    // finds that thread stuck in a call gets a new player rather than waiting on it.
+    // View attach and detach stay on main: they touch the SurfaceHolder.
+    // Not [scope]: release() cancels that, and the lane still has the release itself to run.
+    // Its loop ends with the queue that close() closes.
+    private val lane = CommandLane(
+        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+        wedgedAfterMs = WedgedVlcCallMs,
+        newEngine = ::newEngine,
+        onReplaced = { stuck, _ -> withContext(Dispatchers.Main) { adoptFreshPlayer(stuck) } },
+    )
 
-    private val vlcThread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc") }
+    val vlcPlayer: MediaPlayer get() = lane.current
 
-    private fun post(task: () -> Unit): Boolean {
-        if (released) return false
-        return try {
-            vlcThread.execute(task)
-            true
-        } catch (_: RejectedExecutionException) {
-            false
+    private fun newEngine(): CommandLane.Engine<MediaPlayer> {
+        val thread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc").apply { isDaemon = true } }
+        val player = MediaPlayer(libVLC).also(::listenTo)
+        return CommandLane.Engine(player, thread.asCoroutineDispatcher()) {
+            it.setEventListener(null)
+            it.stop()
+            it.release()
+            thread.shutdown()
         }
     }
 
+    private fun post(task: () -> Unit): Boolean = lane.post { task() }
+
     private fun vlc(block: MediaPlayer.() -> Unit) {
-        post { vlcPlayer.block() }
+        lane.post(block)
     }
 
-    private suspend fun <T> onVlc(block: MediaPlayer.() -> T): T? {
-        val result = CompletableDeferred<T>()
-        if (!post { result.complete(vlcPlayer.block()) }) return null
-        return result.await()
-    }
+    private suspend fun <T> onVlc(block: MediaPlayer.() -> T): T? = lane.call(block)
+
+    @Volatile private var released = false
 
     private fun postSettled(task: () -> Unit): Boolean {
         if (released) return false
@@ -359,6 +370,10 @@ internal class AndroidPlayer(
     /** True when the player is silently preloading (decode without render). */
     internal val isPreloading = MutableStateFlow(false)
 
+    init {
+        scope.launch { watchFrozenClock(_state, _currentMs, _isBuffering, _error, held = { isPreloading.value }) }
+    }
+
     private val _contentFrameRate = MutableStateFlow(0f)
     internal val contentFrameRate: StateFlow<Float> = _contentFrameRate.asStateFlow()
 
@@ -442,8 +457,10 @@ internal class AndroidPlayer(
     private var forceSoftwareDecode = false
     private var fieldDecodeVerdict: FieldDecodeVerdict = storedFieldDecodeVerdict()
 
-    init {
-        vlcPlayer.setEventListener { event ->
+    private fun listenTo(player: MediaPlayer) {
+        player.setEventListener { event ->
+            // An abandoned player's events are about a title nobody is watching any more.
+            if (player !== vlcPlayer) return@setEventListener
             when (event.type) {
                 MediaPlayer.Event.Opening -> {
                     stopRequested = false
@@ -591,7 +608,7 @@ internal class AndroidPlayer(
         // steal focus from other apps like music players).
         if (!isPreloading.value) requestAudioFocus()
         seeks.clear()
-        vlc {
+        lane.supersede {
             stopRequested = true
             pausable = false
             pauseWhenPausable = false
@@ -717,7 +734,7 @@ internal class AndroidPlayer(
         fieldDecodeProbe?.cancel()
         frameRateProbe?.cancel()
         seeks.clear()
-        vlc {
+        lane.supersede {
             stopRequested = true
             pauseWhenPausable = false
             stop()
@@ -879,13 +896,23 @@ internal class AndroidPlayer(
         vlcPlayer.detachViews()
         val media = currentMedia
         currentMedia = null
-        vlcThread.execute {
-            vlcPlayer.stop()
+        lane.close {
             media?.release()
-            vlcPlayer.release()
             libVLC.release()
         }
-        vlcThread.shutdown()
+    }
+
+    // Main thread, before the load or stop that found the old player stuck runs on the new one.
+    private fun adoptFreshPlayer(stuck: MediaPlayer) {
+        println("[kobplayer] libVLC player stuck in a call for ${WedgedVlcCallMs}ms; replaced")
+        if (stuck.vlcVout.areViewsAttached()) stuck.vlcVout.detachViews()
+        voutAttached = false
+        attachVoutIfReady()
+        appliedAudioDevice = null
+        audioRoute.offer(Unit)
+        restoreVolume()
+        val speed = _playbackSpeed.value
+        vlc { rate = speed }
     }
 
     // --- Internal ---

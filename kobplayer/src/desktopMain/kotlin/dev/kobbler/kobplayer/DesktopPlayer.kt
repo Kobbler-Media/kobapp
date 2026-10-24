@@ -5,9 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -199,21 +197,7 @@ internal class DesktopPlayer(
             }
         }
 
-        // Fallback buffering detection: position not advancing for 1.5s while "playing"
-        scope.launch {
-            _state.collectLatest { playerState ->
-                if (playerState != PlayerState.PLAYING) return@collectLatest
-                var lastPosition = _currentMs.value
-                while (true) {
-                    delay(1500)
-                    val pos = _currentMs.value
-                    if (pos == lastPosition && pos > 0) {
-                        _isBuffering.value = true
-                    }
-                    lastPosition = pos
-                }
-            }
-        }
+        scope.launch { watchFrozenClock(_state, _currentMs, _isBuffering, _error, held = { isPreloading.value }) }
 
         // VLC player events — the heart of our clean state machine
         vlcPlayer.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
