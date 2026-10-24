@@ -8,6 +8,7 @@ import dev.kobbler.app.ui.PinnedHeader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -97,10 +98,12 @@ fun NotificationsScreen(
                     subtitle = "You're all caught up",
                 )
             } else {
+                val listState = rememberLazyListState()
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
                     verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                    modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                    modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
                 ) {
                     items(notifications, key = { it.id }) { notification ->
                         var isRead by remember(notification.id) { mutableStateOf(notification.read) }

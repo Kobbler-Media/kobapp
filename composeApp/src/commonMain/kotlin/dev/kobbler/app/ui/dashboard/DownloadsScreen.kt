@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -181,6 +182,7 @@ internal fun DownloadsScreen(
         },
         modifier = modifier.fillMaxSize(),
     ) {
+        val listState = rememberLazyListState()
         when {
             loading && rows.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                 CircularProgressIndicator(color = accent)
@@ -196,9 +198,10 @@ internal fun DownloadsScreen(
                 subtitle = "Downloads from Kobload will appear here",
             )
             else -> LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
                 verticalArrangement = Arrangement.spacedBy(dimens.s2),
-                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             ) {
                 items(rows, key = { it.id }) { row ->
                     DownloadListItem(row, accent, onItemClick)

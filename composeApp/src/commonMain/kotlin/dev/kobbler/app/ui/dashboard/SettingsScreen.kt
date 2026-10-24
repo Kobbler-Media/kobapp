@@ -205,12 +205,13 @@ fun SettingsScreen(
     val active = auth.currentProfile
     val displayServer = serverUrl.removePrefix("https://").removePrefix("http://")
 
+    val scroll = rememberScrollState()
     Column(
         modifier = modifier
-            .scrollsUnderTopChrome()
+            .scrollsUnderTopChrome(scroll)
             .fillMaxSize()
             .imePaddingUnlessTv()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(horizontal = gutter),
     ) {
         Spacer(Modifier.height(dimens.s4 + LocalTopChromeOverlap.current))

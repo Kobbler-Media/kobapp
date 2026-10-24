@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -110,6 +111,7 @@ fun IptvChannelsDirectoryScreen(
         publish()
     }
     val grouped = directory.groups
+    val listState = rememberLazyListState()
 
     Column(modifier.fillMaxSize()) {
         if (showHeader) {
@@ -142,9 +144,10 @@ fun IptvChannelsDirectoryScreen(
             // layout only windows top-level items, so a wrapping Column composes and
             // measures every channel in the frame its page arrives.
             else -> LazyColumn(
+                state = listState,
                 contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
                 verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             ) {
                 grouped.forEach { (category, list) ->
                     item(key = "h-$category") {

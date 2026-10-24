@@ -11,7 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.CircularProgressIndicator
@@ -88,7 +88,7 @@ fun LiveGuideList(
         val showForYou = at == null && forYou.isNotEmpty()
         LazyColumn(
             state = listState,
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(if (wide) dimens.s1 else 2.dp),
         ) {
@@ -156,9 +156,8 @@ private fun GuideRow(
     val isRecorded = current?.let { it.id in recorded || it.recordingId != null } == true
 
     ChannelGuideRow(
-        number = channel.lcn ?: "",
         name = channel.name,
-        logo = { size -> ChannelLogo(channel, accent, size) },
+        logo = { size -> ChannelLogo(channel, accent, size, numbered = true) },
         badges = { if (channel.hd) LiveBadge("HD", accent) },
         current = current?.slot(),
         following = following.map { it.slot() },
@@ -194,11 +193,12 @@ private fun GuideRow(
                 iconSize = 12.dp,
             )
             else -> RowIconButton(
-                icon = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                icon = Icons.Outlined.CalendarMonth,
                 label = "${channel.name} schedule",
                 focusKey = "schedule",
                 wide = wide,
                 onClick = { onOpenChannel(channel) },
+                iconSize = 16.dp,
             )
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -265,7 +266,9 @@ private fun ChannelHero(
         FormFactor.Phone -> 88.dp
     }
 
-    Box(Modifier.fillMaxWidth().height(heroHeight)) {
+    // A floor, not a fixed height: on a phone the stacked logo, name and actions run taller
+    // than the hero and the actions were measured last, into no room at all.
+    Box(Modifier.fillMaxWidth().heightIn(min = heroHeight), contentAlignment = Alignment.BottomStart) {
         StripedBackdrop(
             accent = accent,
             opacity = 0.40f,
@@ -285,9 +288,8 @@ private fun ChannelHero(
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(start = gutter, end = gutter, top = kobTopInset + 70.dp, bottom = 22.dp),
-            verticalArrangement = Arrangement.Bottom,
         ) {
             val crumb = buildString {
                 append("Live TV · channel")

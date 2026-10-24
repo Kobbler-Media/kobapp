@@ -190,7 +190,7 @@ fun LiveChannelDetailScreen(
                 state = listState,
                 contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, start = gutter, end = gutter, bottom = dimens.s6),
                 verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             ) {
                 itemsIndexed(entries, key = { _, it -> it.id }) { index, entry ->
                     GuideEntryRow(

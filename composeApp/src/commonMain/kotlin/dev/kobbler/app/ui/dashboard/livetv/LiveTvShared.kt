@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -254,11 +256,21 @@ internal fun LiveBadge(text: String, tint: Color, modifier: Modifier = Modifier)
 }
 
 @Composable
-internal fun ChannelLogo(channel: LiveChannel, accent: Color, size: Dp) {
+internal fun ChannelLogo(channel: LiveChannel, accent: Color, size: Dp, numbered: Boolean = false) {
+    val number = channel.lcn?.takeIf { numbered && it.isNotBlank() }
+    Box(Modifier.size(size)) {
+        val initials = channel.name.take(2).uppercase()
+        LogoTile(channel, accent, placeholder = if (number != null) initials else channel.lcn ?: initials)
+        if (number != null) ChannelNumberChip(number, Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp))
+    }
+}
+
+@Composable
+private fun LogoTile(channel: LiveChannel, accent: Color, placeholder: String) {
     val colors = KobappTheme.colors
     Box(
         modifier = Modifier
-            .size(size)
+            .fillMaxSize()
             .clip(RoundedCornerShape(6.dp))
             .background(lerp(colors.elev2, accent, 0.14f))
             .border(1.dp, colors.lineSoft, RoundedCornerShape(6.dp)),
@@ -274,7 +286,7 @@ internal fun ChannelLogo(channel: LiveChannel, accent: Color, size: Dp) {
             )
         } else {
             Text(
-                channel.lcn ?: channel.name.take(2).uppercase(),
+                placeholder,
                 style = KobappTheme.type.caption.copy(fontWeight = FontWeight.Bold),
                 color = accent,
                 maxLines = 1,
@@ -282,6 +294,22 @@ internal fun ChannelLogo(channel: LiveChannel, accent: Color, size: Dp) {
             )
         }
     }
+}
+
+@Composable
+private fun ChannelNumberChip(number: String, modifier: Modifier = Modifier) {
+    val colors = KobappTheme.colors
+    Text(
+        number,
+        style = KobappTheme.type.labelSm.copy(fontWeight = FontWeight.Bold),
+        color = colors.textMd,
+        maxLines = 1,
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(colors.elev3)
+            .border(1.dp, colors.lineSoft, RoundedCornerShape(4.dp))
+            .padding(horizontal = 4.dp),
+    )
 }
 
 /** A fixed tile for a programme still, so rows keep one baseline whether or not the feed had art. */

@@ -181,7 +181,7 @@ fun LiveRecordingsScreen(
                 state = listState,
                 contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s3 + LocalTopChromeOverlap.current, bottom = dimens.s6),
                 verticalArrangement = Arrangement.spacedBy(dimens.s2),
-                modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             ) {
                 itemsIndexed(data.recordings, key = { _, it -> it.id }) { index, rec ->
                     RecordingRow(

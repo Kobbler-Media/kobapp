@@ -69,13 +69,14 @@ fun LiveRecordingDetailScreen(
     var busy by remember { mutableStateOf(false) }
 
     UnderStatusBar {
+        val scroll = rememberScrollState()
         Column(
             modifier
-                .scrollsUnderTopChrome()
+                .scrollsUnderTopChrome(scroll)
                 .fillMaxSize()
                 .background(colors.bg)
                 .safeHorizontalPadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(top = LocalTopChromeOverlap.current)
                 .padding(horizontal = gutter, vertical = dimens.s4),
             verticalArrangement = Arrangement.spacedBy(dimens.s4),

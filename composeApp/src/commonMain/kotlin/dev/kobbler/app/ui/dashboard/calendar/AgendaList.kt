@@ -124,7 +124,7 @@ internal fun AgendaList(
         state = listState,
         // The filters sit above every past day the list can page in, so UP is a long way
         // round on a remote; a row has nothing to its right, which makes RIGHT the shortcut.
-        modifier = modifier.scrollsUnderTopChrome().fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
+        modifier = modifier.scrollsUnderTopChrome(listState).fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
             event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight && onRight()
         },
         // A row's focus ring paints outside its bounds and the list clips at its own

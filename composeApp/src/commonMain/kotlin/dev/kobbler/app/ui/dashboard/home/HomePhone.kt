@@ -126,7 +126,7 @@ fun HomePhone(
         val heroHeight = minOf(railWidth * (10f / 16f), maxHeight * 0.55f)
         LazyColumn(
             state = listState,
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             contentPadding = PaddingValues(start = gutter, end = gutter, top = LocalTopChromeOverlap.current, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

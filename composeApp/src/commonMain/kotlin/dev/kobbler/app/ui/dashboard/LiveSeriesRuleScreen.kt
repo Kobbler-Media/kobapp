@@ -241,8 +241,9 @@ fun LiveSeriesRuleScreen(
                 modifier = Modifier.fillMaxSize().safeHorizontalPadding(),
             ) {
                 if (compact) {
+                    val scroll = rememberScrollState()
                     Column(
-                        Modifier.scrollsUnderTopChrome().fillMaxSize().verticalScroll(rememberScrollState())
+                        Modifier.scrollsUnderTopChrome(scroll).fillMaxSize().verticalScroll(scroll)
                             .padding(horizontal = gutter).padding(top = LocalTopChromeOverlap.current),
                         verticalArrangement = Arrangement.spacedBy(dimens.s4),
                     ) {

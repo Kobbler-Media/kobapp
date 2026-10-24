@@ -221,7 +221,7 @@ fun MoviesScreen(
             }
             val gridFocus = remember { FocusRequester() }
             LazyVerticalGrid(
-                modifier = Modifier.scrollsUnderTopChrome().onSizeChanged { gridWidthPx = it.width }.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.scrollsUnderTopChrome(gridState).onSizeChanged { gridWidthPx = it.width }.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
                 state = gridState,
                 columns = GridCells.FixedSize(dimens.posterWidth),
                 contentPadding = PaddingValues(

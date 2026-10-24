@@ -321,7 +321,7 @@ private fun AllBooksGrid(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                 verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                modifier = Modifier.scrollsUnderTopChrome().onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusInert(progressBook != null).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.scrollsUnderTopChrome(gridState).onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusInert(progressBook != null).focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 if (readNext.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "read-next") {
@@ -480,7 +480,7 @@ private fun AuthorsGrid(api: KobblerApi, gutter: Dp, onAuthorClick: (String) -> 
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp + LocalTopChromeOverlap.current, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(gridState).fillMaxSize(),
         ) {
             itemsIndexed(authors, key = { _, it -> it.id }) { idx, author ->
                 AuthorCard(author = author, preferredEntry = idx == 0, onClick = { onAuthorClick(author.id) })
@@ -536,7 +536,7 @@ private fun SeriesGrid(api: KobblerApi, gutter: Dp, onSeriesClick: (String) -> U
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp + LocalTopChromeOverlap.current, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(gridState).fillMaxSize(),
         ) {
             itemsIndexed(seriesList, key = { _, it -> it.id }) { idx, series ->
                 SeriesCard(series = series, preferredEntry = idx == 0, onClick = { onSeriesClick(series.id) })

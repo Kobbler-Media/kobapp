@@ -97,7 +97,7 @@ fun LiveOnNowTab(
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             contentPadding = PaddingValues(top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(dimens.s5),
         ) {

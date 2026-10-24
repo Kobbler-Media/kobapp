@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import dev.kobbler.app.ui.scrollsUnderTopChrome
 import dev.kobbler.app.ui.PinnedHeader
 import dev.kobbler.app.ui.LocalTopChromeOverlap
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -32,7 +31,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,8 +43,6 @@ import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
-
-private val LcnLaneWidth = 30.dp
 
 @Composable
 fun LiveChannelsList(
@@ -94,7 +90,7 @@ fun LiveChannelsList(
             state = listState,
             contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, start = gutter, end = gutter, bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(dimens.s1),
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
         ) {
             itemsIndexed(channels, key = { _, it -> it.id }) { index, channel ->
                 val key = "lch.${channel.id}"
@@ -141,35 +137,21 @@ private fun LiveChannelRow(
             .fillMaxWidth()
             .focusKeyGroup(key)
             .onFocusChanged { if (it.hasFocus) onFocused() }
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.elev1)
-            .border(1.dp, colors.lineSoft, RoundedCornerShape(10.dp))
-            .focusGroup()
-            .padding(horizontal = dimens.s3, vertical = dimens.s2),
+            .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             modifier = Modifier
                 .weight(1f)
                 .focusKey("row", preferredEntry = preferredEntry)
-                .tvFocusGlow(focusState, cornerRadiusDp = 10f, scale = 1.01f)
-                .clip(RoundedCornerShape(10.dp))
-                .tvClickable(focusState, onClick),
+                .tvFocusGlow(focusState, cornerRadiusDp = 12f, scale = 1.01f)
+                .clip(RoundedCornerShape(12.dp))
+                .tvClickable(focusState, onClick)
+                .padding(vertical = 10.dp, horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Right-aligned in a fixed lane: left-aligned, a one-digit number left a
-            // 30dp hole between it and the logo while a three-digit one sat flush.
-            Text(
-                channel.lcn ?: "",
-                style = KobappTheme.type.bodySm.copy(fontWeight = FontWeight.Bold),
-                color = colors.textMd,
-                maxLines = 1,
-                textAlign = TextAlign.End,
-                modifier = Modifier.width(LcnLaneWidth),
-            )
-            Spacer(Modifier.width(dimens.s2))
-            ChannelLogo(channel, accent, 44.dp)
-            Spacer(Modifier.width(dimens.s3))
+            ChannelLogo(channel, accent, 44.dp, numbered = true)
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(

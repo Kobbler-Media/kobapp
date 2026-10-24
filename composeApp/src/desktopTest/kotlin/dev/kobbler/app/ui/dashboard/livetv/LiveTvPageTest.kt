@@ -22,6 +22,7 @@ import dev.kobbler.app.ui.dashboard.LiveTvScreen
 import dev.kobbler.app.ui.player.StubServer
 import dev.kobbler.kobfocus.FocusScopeHost
 import io.ktor.client.HttpClient
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -173,5 +174,24 @@ class LiveTvPageTest {
     fun `on now is a tab of the page`() = everywhere { _, _, _ ->
         onNodeWithText("On now").performClick()
         waitUntil(timeoutMillis = UiTimeoutMs) { has("Because you watch it") }
+    }
+
+    /** A number lane left a hole beside a one-digit number; it is a chip on the logo instead. */
+    @Test
+    fun `the channel number sits on the logo, once`() = everywhere { _, _, _ ->
+        for (tab in listOf("Guide", "Channels")) {
+            onNodeWithText(tab).performClick()
+            waitUntil(timeoutMillis = UiTimeoutMs) { has("Seven") }
+            waitForIdle()
+            val numbers = onAllNodesWithText("7", useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+            val maxGap = with(density) { 24.dp.toPx() }
+            val reach = with(density) { 50.dp.toPx() }
+            onAllNodesWithText("Seven", useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }.forEach { name ->
+                val mine = numbers.filter { kotlin.math.abs(it.center.y - name.center.y) < reach && it.right <= name.left + 1 }
+                assertEquals(1, mine.size, "$tab: numbers beside $name are $mine")
+                val gap = name.left - mine.single().right
+                assertTrue(gap <= maxGap, "$tab: the number ends ${gap}px before the name")
+            }
+        }
     }
 }

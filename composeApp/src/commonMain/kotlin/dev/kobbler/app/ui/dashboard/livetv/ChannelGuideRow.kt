@@ -27,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -39,7 +38,6 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import kotlin.time.Instant
 
-private val NumberLaneWidth = 26.dp
 private val WideNameWidth = 190.dp
 
 /** One programme in a channel row, whichever feed it came from. */
@@ -52,7 +50,6 @@ data class GuideSlot(val title: String, val start: Instant?, val end: Instant?)
  */
 @Composable
 internal fun ChannelGuideRow(
-    number: String?,
     name: String,
     logo: @Composable (Dp) -> Unit,
     current: GuideSlot?,
@@ -90,16 +87,6 @@ internal fun ChannelGuideRow(
                 .tvClickable(focusState, onClick)
                 .padding(vertical = if (wide) 10.dp else 9.dp, horizontal = 6.dp),
         ) {
-            if (number != null) {
-                Text(
-                    number,
-                    style = KobappTheme.type.caption.copy(fontWeight = FontWeight.Bold),
-                    color = colors.textLo,
-                    maxLines = 1,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.width(NumberLaneWidth),
-                )
-            }
             logo(if (wide) 44.dp else 38.dp)
             if (wide) {
                 ChannelName(name, Modifier.width(WideNameWidth), badges)

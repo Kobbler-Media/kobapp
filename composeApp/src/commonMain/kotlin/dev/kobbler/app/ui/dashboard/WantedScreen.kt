@@ -8,6 +8,7 @@ import dev.kobbler.app.ui.PinnedHeader
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.runtime.*
@@ -118,12 +119,14 @@ private fun WantedList(
                     if (filter.mediaType == null) items
                     else items.filter { it.mediaType == filter.mediaType }
                 }
+                val gridState = rememberLazyGridState()
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Adaptive(minSize = dimens.posterWidth),
                     contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s4 + LocalTopChromeOverlap.current, bottom = dimens.s4),
                     horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                     verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                    modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                    modifier = Modifier.scrollsUnderTopChrome(gridState).fillMaxSize(),
                 ) {
                     items(filtered, key = { "${it.mediaType}-${it.id}" }) { item ->
                         val accent = when (item.mediaType) {

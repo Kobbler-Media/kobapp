@@ -272,7 +272,7 @@ fun TvShowsScreen(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(spacing.s3),
                 verticalArrangement = Arrangement.spacedBy(spacing.s4),
-                modifier = Modifier.scrollsUnderTopChrome().onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
+                modifier = Modifier.scrollsUnderTopChrome(gridState).onSizeChanged { gridWidthPx = it.width }.fillMaxSize().focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
                     // Fixed-size columns leave the grid's slack past the last one, and a

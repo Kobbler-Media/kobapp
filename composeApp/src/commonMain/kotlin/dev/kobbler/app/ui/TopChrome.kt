@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,22 +13,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
@@ -38,9 +34,20 @@ val LocalTopChromeOverlap = compositionLocalOf { 0.dp }
 
 // The page is laid out below the chrome so its skeletons and empty states stay clear of it;
 // a scroller wearing this grows back up under the chrome to the top of the screen, and must
-// pad its content top by LocalTopChromeOverlap so it still opens below it.
+// pad its content top by LocalTopChromeOverlap so it still opens below it. Its state is what
+// tells a pinned header above it whether anything is underneath.
 @Composable
-fun Modifier.scrollsUnderTopChrome(): Modifier {
+fun Modifier.scrollsUnderTopChrome(state: ScrollableState): Modifier {
+    val shade = LocalPinnedShade.current
+    DisposableEffect(shade, state) {
+        shade?.scroller = state
+        onDispose { if (shade?.scroller === state) shade.scroller = null }
+    }
+    return growsUnderTopChrome()
+}
+
+@Composable
+private fun Modifier.growsUnderTopChrome(): Modifier {
     val overlap = LocalTopChromeOverlap.current
     if (overlap == 0.dp) return this
     return layout { measurable, constraints ->
@@ -68,28 +75,21 @@ fun UnderStatusBar(content: @Composable () -> Unit) {
     }
 }
 
-private class ScrolledUnder : NestedScrollConnection {
-    var px by mutableFloatStateOf(0f)
-
-    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-        px = (px - consumed.y).coerceAtLeast(0f)
-        return Offset.Zero
-    }
-}
-
 private enum class PinnedSlot { Header, Content }
 
 // One shade over all the pinned chrome: a header pinned inside another's page reaches up to
 // the top of the screen too, so it draws the shade for both and the outer one stands down.
 private class PinnedShade {
     var nested by mutableStateOf(false)
+    var scroller by mutableStateOf<ScrollableState?>(null)
 }
 
 private val LocalPinnedShade = staticCompositionLocalOf<PinnedShade?> { null }
 
 // A header that stays put while its page scrolls up beneath it and the chrome above it. Its
 // shade only comes in once something has scrolled under it: at rest it would grey out the
-// top of the page's picture.
+// top of the page's picture. Read off the scroller's position, not summed scroll deltas: a
+// page that opens part way down (the calendar, on today) or is scrolled by code sends none.
 @Composable
 fun PinnedHeader(
     header: @Composable () -> Unit,
@@ -109,21 +109,20 @@ fun PinnedHeader(
     val shade = remember(bg) {
         Brush.verticalGradient(0f to bg.copy(alpha = 0.92f), 0.8f to bg.copy(alpha = 0.82f), 1f to Color.Transparent)
     }
-    val scrolled = remember { ScrolledUnder() }
     val ownShade = remember { PinnedShade() }
+    val shadeAlpha by animateFloatAsState(if (ownShade.scroller?.canScrollBackward == true) 1f else 0f)
     val parentShade = LocalPinnedShade.current
     DisposableEffect(parentShade) {
         parentShade?.nested = true
         onDispose { parentShade?.nested = false }
     }
-    val fadePx = with(LocalDensity.current) { 96.dp.toPx() }
-    SubcomposeLayout(modifier.scrollsUnderTopChrome().nestedScroll(scrolled)) { constraints ->
+    SubcomposeLayout(modifier.growsUnderTopChrome()) { constraints ->
         val loose = constraints.copy(minHeight = 0)
         val headerPlaceable = subcompose(PinnedSlot.Header) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .drawBehind { if (!ownShade.nested) drawRect(shade, alpha = (scrolled.px / fadePx).coerceIn(0f, 1f)) }
+                    .drawBehind { if (!ownShade.nested) drawRect(shade, alpha = shadeAlpha) }
                     .padding(top = overlap),
             ) { header() }
         }.single().measure(loose.copy(maxHeight = Constraints.Infinity))

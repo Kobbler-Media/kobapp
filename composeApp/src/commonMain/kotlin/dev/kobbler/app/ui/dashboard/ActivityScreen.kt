@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -144,13 +145,15 @@ fun ActivityScreen(
             )
             else -> {
                 val grouped = remember(events.size, retryToken) { groupEventsByDay(events) }
+                val listState = rememberLazyListState()
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(
                         start = gutter, end = gutter,
                         top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6,
                     ),
                     verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                    modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+                    modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
                 ) {
                     grouped.forEach { (day, dayEvents) ->
                         item(key = "h-$day") {

@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LiveTv
@@ -357,7 +357,7 @@ private fun IptvGuideList(
         }
         LazyColumn(
             state = listState,
-            modifier = Modifier.scrollsUnderTopChrome().fillMaxSize(),
+            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
             contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(if (wide) dimens.s1 else 2.dp),
         ) {
@@ -382,7 +382,6 @@ private fun IptvGuideList(
             val offset = if (matches.isNotEmpty()) 1 else 0
             itemsIndexed(rows, key = { _, it -> it.id }) { index, channel ->
                 ChannelGuideRow(
-                    number = null,
                     name = channel.name,
                     logo = { size -> ChannelIcon(channel.iconUrl, channel.name, accent, size) },
                     current = channel.nowPlaying?.slot(),
@@ -410,11 +409,12 @@ private fun IptvGuideList(
                         iconSize = 18.dp,
                     )
                     RowIconButton(
-                        icon = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                        icon = Icons.Outlined.CalendarMonth,
                         label = "${channel.name} schedule",
                         focusKey = "schedule",
                         wide = wide,
                         onClick = { onOpenChannel(channel) },
+                        iconSize = 16.dp,
                     )
                 }
             }
