@@ -125,7 +125,11 @@ class FakePlayer(private val clock: CoroutineScope = CoroutineScope(Dispatchers.
         clockReport = null
         positionReported.value = false
     }
-    override fun pause() { calls += "pause"; isPlaying.value = false }
+    override fun pause() {
+        calls += "pause"
+        isPlaying.value = false
+        state.value = PlayerState.PAUSED
+    }
     override fun togglePlayPause() = if (isPlaying.value) pause() else play()
     override fun seekTo(ms: Long) {
         record("seek:$ms")

@@ -165,6 +165,8 @@ fun VideoPlayerOverlay(
     subtitle: String? = null,
     logoUrl: String? = null,
     isPlaying: Boolean,
+    /** Paused by the viewer, wherever from; unlike !isPlaying, not while buffering. */
+    paused: Boolean = false,
     /**
      * Collected only while the controls are shown. A state read in composition even once
      * wakes the recomposer on every later write, so one held above the chrome cost a vsync
@@ -330,6 +332,12 @@ fun VideoPlayerOverlay(
             delay(if (tv) 5000 else 4000)
             controlsVisible = false
         }
+    }
+
+    // A headset, the notification or the lock screen pauses through the media session,
+    // and the picture stopped with nothing on it to resume from.
+    LaunchedEffect(paused) {
+        if (paused) onInteraction()
     }
 
     var skipBurst by remember { mutableStateOf<SkipBurst?>(null) }

@@ -25,6 +25,7 @@ fun PlayerOverlay(
     subtitle: String? = null,
     logoUrl: String? = null,
     isPlaying: Boolean,
+    paused: Boolean = false,
     position: StateFlow<Long>,
     durationMs: Long,
     onPlayPause: () -> Unit,
@@ -74,7 +75,7 @@ fun PlayerOverlay(
     )
     VideoPlayerOverlay(
         title = title, subtitle = subtitle, logoUrl = logoUrl,
-        isPlaying = isPlaying, position = position, durationMs = durationMs,
+        isPlaying = isPlaying, paused = paused, position = position, durationMs = durationMs,
         onPlayPause = onPlayPause, onSeek = onSeek, onBack = onBack,
         onToggleFullscreen = onToggleFullscreen, isFullscreen = isFullscreen,
         audioTracks = audioTracks, selectedAudioTrack = selectedAudioTrack,

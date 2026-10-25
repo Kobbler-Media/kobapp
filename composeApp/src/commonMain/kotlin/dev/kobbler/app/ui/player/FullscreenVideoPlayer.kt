@@ -63,6 +63,7 @@ import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobplayer.Player
+import dev.kobbler.kobplayer.PlayerState
 import dev.kobbler.kobplayer.TrackInfo
 import dev.kobbler.kobplayer.VideoSurface
 import dev.kobbler.kobplayer.mapState
@@ -381,6 +382,7 @@ fun FullscreenVideoPlayer(
     }
 
     val isPlaying by player.isPlaying.collectAsState()
+    val paused = player.state.collectAsState().value == PlayerState.PAUSED
 
     // Everything below this line is in absolute media time; the player's own clock only
     // reappears at seekTo. See [PlayerTimeline].
@@ -628,6 +630,7 @@ fun FullscreenVideoPlayer(
                 logoUrl = state.logoUrl,
                 subtitle = state.subtitle,
                 isPlaying = isPlaying,
+                paused = paused,
                 position = overlayPosition,
                 durationMs = overlayDurationMs,
                 onPlayPause = {
