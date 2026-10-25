@@ -23,6 +23,7 @@ kotlin {
         namespace = "dev.kobbler.kobplayer"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+        withHostTest {}
     }
 
     jvm("desktop")
@@ -68,6 +69,12 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.libvlc.android)
             implementation(libs.media3.common)
+        }
+
+        getByName("androidHostTest").dependencies {
+            implementation(kotlin("test-junit"))
+            implementation(libs.junit)
+            implementation(libs.robolectric)
         }
 
         if (hostIsMac) {

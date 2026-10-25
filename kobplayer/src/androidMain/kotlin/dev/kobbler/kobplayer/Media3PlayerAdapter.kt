@@ -35,7 +35,7 @@ class Media3PlayerAdapter(
     var onStopRequested: (() -> Unit)? = null,
     private val positionMs: () -> Long = { player.currentMs.value },
     private val durationMs: () -> Long = { player.durationMs.value },
-    private val seekTo: (Long) -> Unit = player::seekTo,
+    private val seekPlayerTo: (Long) -> Unit = player::seekTo,
     private val seekBackIncrementMs: () -> Long = { C.DEFAULT_SEEK_BACK_INCREMENT_MS },
     private val seekForwardIncrementMs: () -> Long = { C.DEFAULT_SEEK_FORWARD_INCREMENT_MS },
     looper: Looper = Looper.getMainLooper(),
@@ -151,7 +151,7 @@ class Media3PlayerAdapter(
         positionMs: Long,
         seekCommand: @Player.Command Int,
     ): ListenableFuture<*> {
-        seekTo(positionMs)
+        seekPlayerTo(positionMs)
         return Futures.immediateVoidFuture()
     }
 

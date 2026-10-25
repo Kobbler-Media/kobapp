@@ -95,7 +95,7 @@ class PlaybackService : Service() {
                         player,
                         positionMs = { PlaybackBridge.timeline?.positionMs?.invoke() ?: player.currentMs.value },
                         durationMs = { PlaybackBridge.timeline?.durationMs?.invoke() ?: player.durationMs.value },
-                        seekTo = { ms -> PlaybackBridge.timeline?.seekTo?.invoke(ms) ?: player.seekTo(ms) },
+                        seekPlayerTo = { ms -> PlaybackBridge.timeline?.seekTo?.invoke(ms) ?: player.seekTo(ms) },
                         seekBackIncrementMs = { PlaybackBridge.timeline?.skipBackMs ?: DEFAULT_SKIP_MS },
                         seekForwardIncrementMs = { PlaybackBridge.timeline?.skipForwardMs ?: DEFAULT_SKIP_MS },
                     ).also { a ->
