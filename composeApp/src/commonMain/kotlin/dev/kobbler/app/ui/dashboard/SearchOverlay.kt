@@ -18,27 +18,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Collections
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Tv
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,11 +61,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import dev.kobbler.kobfocus.FocusScopeHost
 import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
@@ -87,21 +77,15 @@ import dev.kobbler.app.data.SearchResult
 import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.BackHandler
 import dev.kobbler.app.platform.FormFactor
-import dev.kobbler.app.theme.KobappColors
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.PillStatus
-import dev.kobbler.app.ui.components.SectionHeading
-import dev.kobbler.app.ui.components.StatusPill
 import dev.kobbler.app.ui.components.tvAutoGlow
-import dev.kobbler.app.ui.detail.RatingBadge
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.app.ui.imePaddingUnlessTv
 
-internal const val SearchSectionTopN = 5
 private const val RECENT_MAX = 8
 private const val RECENT_KEY = "search_recents"
 
@@ -358,6 +342,20 @@ private fun SearchContent(
     val tv = formFactor == FormFactor.TV
 
     val nothing = !loading && sections.isEmpty() && query.isNotBlank()
+    val jumps = if (query.isBlank()) emptyList() else searchJumps(sections, expandedSections)
+    val gridState = rememberLazyGridState()
+    val coroutineScope = rememberCoroutineScope()
+    val focusScope = LocalFocusScope.current
+    val onJump: (SearchJump) -> Unit = { jump ->
+        coroutineScope.launch {
+            if (tv) {
+                gridState.scrollToItem(jump.itemIndex)
+                focusScope.restore(jump.focusKey, maxFrames = 40)
+            } else {
+                gridState.animateScrollToItem(jump.itemIndex)
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().imePaddingUnlessTv()) {
         SearchBar(
@@ -369,35 +367,54 @@ private fun SearchContent(
             focusRequester = focusRequester,
             phone = phone,
             tv = tv,
-            loading = loading,
             placeholder = scope.placeholder,
         )
-        if (scopes.size > 1) {
-            SearchScopeChips(scope = scope, scopes = scopes, onSelect = onScopeChange, phone = phone)
+        if (scopes.size > 1 || jumps.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (phone) 16.dp else 18.dp)
+                    .padding(bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (scopes.size > 1) {
+                    SearchScopeChips(scope = scope, scopes = scopes, onSelect = onScopeChange, modifier = Modifier.weight(1f))
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                if (jumps.isNotEmpty()) SearchJumpChips(jumps = jumps, onJump = onJump)
+            }
         }
 
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(if (tv) 2 else 1),
+            state = gridState,
             modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(if (tv) 24.dp else 0.dp),
             contentPadding = PaddingValues(
                 start = if (phone) 16.dp else 14.dp,
                 end = if (phone) 16.dp else 14.dp,
-                top = 4.dp,
                 bottom = if (phone) 24.dp else 18.dp,
             ),
         ) {
+            // The lazy grid holds its place by the key of the first visible item. With no
+            // fixed item up here, a source answering late slots in above whatever row was
+            // first and the grid scrolls to keep that row, shoving the new results off the top.
+            fullWidthItem(key = "top") { Spacer(Modifier.height(4.dp)) }
             if (query.isBlank()) {
                 if (recents.isNotEmpty()) {
-                    item(key = "recents-head") {
+                    fullWidthItem(key = "recents-head") {
                         RecentsHeader(onClear = onClearRecents)
                     }
-                    items(recents, key = { "recent-$it" }) { term ->
+                    items(recents, key = { "recent-$it" }, span = { GridItemSpan(maxLineSpan) }) { term ->
                         RecentRow(term = term, onClick = { onPickRecent(term) })
                     }
                 } else {
-                    item(key = "empty-hint") { EmptyHint() }
+                    fullWidthItem(key = "empty-hint") { EmptyHint() }
                 }
             } else if (nothing) {
-                item(key = "no-results") {
+                fullWidthItem(key = "no-results") {
                     Box(
                         Modifier.fillMaxWidth().padding(vertical = 48.dp),
                         contentAlignment = Alignment.Center,
@@ -406,67 +423,31 @@ private fun SearchContent(
                     }
                 }
             } else {
-                sections.forEach { section ->
-                    when (section) {
-                        is SearchSection.Library -> librarySubsection(
-                            type = section.type,
-                            hits = section.hits,
-                            apiUrl = apiUrl,
-                            expanded = expandedSections["lib:${section.type}"] == true,
-                            onToggleExpand = {
-                                expandedSections["lib:${section.type}"] =
-                                    expandedSections["lib:${section.type}"] != true
-                            },
-                            onResultClick = onResultClick,
-                            colors = colors,
-                        )
-                        is SearchSection.Discover -> discoverSubsection(
-                            mediaType = section.mediaType,
-                            items = section.items,
-                            expanded = expandedSections["disc:${section.mediaType}"] == true,
-                            onToggleExpand = {
-                                expandedSections["disc:${section.mediaType}"] =
-                                    expandedSections["disc:${section.mediaType}"] != true
-                            },
-                            onItemClick = onDiscoverClick,
-                            colors = colors,
-                        )
-                        is SearchSection.LiveChannels -> liveChannelsSubsection(section.channels, onLiveClick)
-                        is SearchSection.LiveAirings -> liveAiringsSubsection(
-                            airings = section.airings,
-                            expanded = expandedSections["live:airings"] == true,
-                            moreRow = {
-                                MoreRow(
-                                    expanded = expandedSections["live:airings"] == true,
-                                    remaining = section.airings.size - SearchSectionTopN,
-                                    accent = colors.accLive,
-                                    key = "live-more.airings",
-                                    onClick = { expandedSections["live:airings"] = expandedSections["live:airings"] != true },
-                                )
-                            },
-                            onClick = { onLiveClick(it.channel) },
-                        )
-                        is SearchSection.IptvChannels -> iptvChannelsSubsection(section.channels, onIptvClick)
-                    }
-                }
+                searchResultSections(
+                    sections = sections,
+                    expanded = expandedSections,
+                    apiUrl = apiUrl,
+                    colors = colors,
+                    onResultClick = onResultClick,
+                    onDiscoverClick = onDiscoverClick,
+                    onLiveClick = onLiveClick,
+                    onIptvClick = onIptvClick,
+                )
                 if (libraryLoading) {
-                    item(key = "lib-loading") { SectionLoadingRow("Searching library…") }
+                    fullWidthItem(key = "lib-loading") { SectionLoadingRow("Searching library…") }
                 }
-                // Discover answers well after the library does, so its own rows arrive
-                // into a list that is already being read. The search bar carries the
-                // spinner; this only says which half is still out.
                 if (discoverLoading) {
-                    item(key = "disc-loading") { SectionLoadingRow("Searching Discover…") }
+                    fullWidthItem(key = "disc-loading") { SectionLoadingRow("Searching Discover…") }
                 }
                 if (liveLoading) {
-                    item(key = "live-loading") { SectionLoadingRow("Searching the TV guide…") }
+                    fullWidthItem(key = "live-loading") { SectionLoadingRow("Searching the TV guide…") }
                 }
                 if (iptvLoading) {
-                    item(key = "iptv-loading") { SectionLoadingRow("Searching IPTV…") }
+                    fullWidthItem(key = "iptv-loading") { SectionLoadingRow("Searching IPTV…") }
                 }
 
                 if (phone) {
-                    item { Spacer(Modifier.height(32.dp).navigationBarsPadding()) }
+                    fullWidthItem(key = "bottom-spacer") { Spacer(Modifier.height(32.dp).navigationBarsPadding()) }
                 }
             }
         }
@@ -497,127 +478,114 @@ private fun SearchBar(
     focusRequester: FocusRequester,
     phone: Boolean,
     tv: Boolean,
-    loading: Boolean,
     placeholder: String,
 ) {
     val colors = KobappTheme.colors
     val focusManager = LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    Column(Modifier.fillMaxWidth()) {
-        Row(
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusKeyGroup("searchbar")
+            .padding(
+                horizontal = if (phone) 10.dp else 18.dp,
+                vertical = if (phone) 8.dp else 14.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (phone) 8.dp else 12.dp),
+    ) {
+        IconBubble(
+            icon = Icons.AutoMirrored.Outlined.ArrowBack,
+            onClick = onDismiss,
+            tint = colors.textHi,
+            key = "back",
+        )
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .focusKeyGroup("searchbar")
-                .padding(
-                    horizontal = if (phone) 10.dp else 18.dp,
-                    vertical = if (phone) 8.dp else 14.dp,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (phone) 8.dp else 12.dp),
+                .weight(1f)
+                .heightIn(min = if (phone) 40.dp else 48.dp)
+                .clip(KobappTheme.shapes.pill)
+                .background(colors.elev2)
+                .border(1.dp, colors.lineSoft, KobappTheme.shapes.pill)
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            IconBubble(
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                onClick = onDismiss,
-                tint = colors.textHi,
-                key = "back",
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = if (phone) 40.dp else 48.dp)
-                    .clip(KobappTheme.shapes.pill)
-                    .background(colors.elev2)
-                    .border(1.dp, colors.lineSoft, KobappTheme.shapes.pill)
-                    .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.CenterStart,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.Search,
-                        contentDescription = null,
-                        tint = colors.textLo,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                        if (query.isEmpty()) {
-                            Text(
-                                placeholder,
-                                style = KobappTheme.type.body,
-                                color = colors.textLo,
-                            )
-                        }
-                        BasicTextField(
-                            value = query,
-                            onValueChange = onQueryChange,
-                            singleLine = true,
-                            textStyle = KobappTheme.type.body.copy(color = colors.textHi),
-                            cursorBrush = SolidColor(KobappTheme.colors.accHome),
-                            // A single-line text field consumes DPAD down, which would
-                            // otherwise trap the remote in the query box.
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .onPreviewKeyEvent { event ->
-                                    event.type == KeyEventType.KeyDown &&
-                                        event.key == Key.DirectionDown &&
-                                        focusManager.moveFocus(FocusDirection.Down)
-                                },
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-                            ),
-                            // The TV IME's tick only dismisses if something actually
-                            // handles the action.
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onAny = {
-                                    onSubmit()
-                                    keyboardController?.hide()
-                                },
-                            ),
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = null,
+                    tint = colors.textLo,
+                    modifier = Modifier.size(18.dp),
+                )
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = KobappTheme.type.body,
+                            color = colors.textLo,
                         )
                     }
-                    if (query.isNotEmpty()) {
-                        IconBubble(icon = Icons.Outlined.Close, onClick = onClear, tint = colors.textLo, key = "clear", size = 28.dp)
-                    }
-                }
-            }
-            if (phone) {
-                val voiceLauncher = dev.kobbler.app.platform.rememberVoiceInputLauncher { spoken ->
-                    onQueryChange(spoken)
-                    onSubmit()
-                }
-                if (voiceLauncher != null && voiceLauncher.isAvailable) {
-                    IconBubble(
-                        icon = Icons.Outlined.Mic,
-                        onClick = { voiceLauncher.start() },
-                        tint = colors.textHi,
-                        key = "voice",
-                        accentTint = colors.accHome,
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = KobappTheme.type.body.copy(color = colors.textHi),
+                        cursorBrush = SolidColor(KobappTheme.colors.accHome),
+                        // A single-line text field consumes DPAD down, which would
+                        // otherwise trap the remote in the query box.
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                            .onPreviewKeyEvent { event ->
+                                event.type == KeyEventType.KeyDown &&
+                                    event.key == Key.DirectionDown &&
+                                    focusManager.moveFocus(FocusDirection.Down)
+                            },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                        ),
+                        // The TV IME's tick only dismisses if something actually
+                        // handles the action.
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onAny = {
+                                onSubmit()
+                                keyboardController?.hide()
+                            },
+                        ),
                     )
                 }
-            } else if (!tv) {
-                Text(
-                    "Esc",
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textLo,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .border(1.dp, colors.line, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                )
+                if (query.isNotEmpty()) {
+                    IconBubble(icon = Icons.Outlined.Close, onClick = onClear, tint = colors.textLo, key = "clear", size = 28.dp)
+                }
             }
         }
-        if (loading) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .background(lerp(colors.elev2, colors.accHome, 0.6f).copy(alpha = 0.55f)),
+        if (phone) {
+            val voiceLauncher = dev.kobbler.app.platform.rememberVoiceInputLauncher { spoken ->
+                onQueryChange(spoken)
+                onSubmit()
+            }
+            if (voiceLauncher != null && voiceLauncher.isAvailable) {
+                IconBubble(
+                    icon = Icons.Outlined.Mic,
+                    onClick = { voiceLauncher.start() },
+                    tint = colors.textHi,
+                    key = "voice",
+                    accentTint = colors.accHome,
+                )
+            }
+        } else if (!tv) {
+            Text(
+                "Esc",
+                style = KobappTheme.type.bodySm,
+                color = colors.textLo,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .border(1.dp, colors.line, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
             )
-        } else if (!phone) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.lineSoft))
         }
     }
 }
@@ -718,334 +686,6 @@ private fun EmptyHint() {
         )
     }
 }
-
-private fun LazyListScope.librarySubsection(
-    type: String,
-    hits: List<SearchHitDto>,
-    apiUrl: String,
-    expanded: Boolean,
-    onToggleExpand: () -> Unit,
-    onResultClick: (SearchHitDto) -> Unit,
-    colors: KobappColors,
-) {
-    item(key = "lib-section-$type") {
-        Spacer(Modifier.height(14.dp))
-        SectionHeading(
-            title = sectionTitle(type),
-            accent = typeAccent(type, colors),
-            trailing = {
-                Text(
-                    "${hits.size}",
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textLo,
-                )
-            },
-        )
-        Spacer(Modifier.height(6.dp))
-    }
-    val visible = if (expanded) hits else hits.take(SearchSectionTopN)
-    items(visible, key = { "lib-${it.type}-${it.id}" }) { hit ->
-        SearchResultRow(hit = hit, apiUrl = apiUrl, accent = typeAccent(hit.type, colors), key = "lib.${hit.type}.${hit.id}", onClick = { onResultClick(hit) })
-    }
-    if (hits.size > SearchSectionTopN) {
-        item(key = "lib-more-$type") {
-            MoreRow(
-                expanded = expanded,
-                remaining = hits.size - SearchSectionTopN,
-                accent = typeAccent(type, colors),
-                key = "lib-more.$type",
-                onClick = onToggleExpand,
-            )
-        }
-    }
-}
-
-private fun LazyListScope.discoverSubsection(
-    mediaType: String,
-    items: List<DiscoverItem>,
-    expanded: Boolean,
-    onToggleExpand: () -> Unit,
-    onItemClick: (DiscoverItem) -> Unit,
-    colors: KobappColors,
-) {
-    val accent = when (mediaType) {
-        "movie" -> colors.accMovies
-        "tv" -> colors.accTv
-        "book" -> colors.accBooks
-        else -> colors.textLo
-    }
-    // Each one stands on its own now that they are read beside the library's sections,
-    // so each says where it came from instead of sharing one heading further down.
-    val label = when (mediaType) {
-        "movie" -> "Discover · Movies"; "tv" -> "Discover · TV Shows"
-        "book" -> "Discover · Books"; else -> "Discover · $mediaType"
-    }
-    item(key = "disc-section-$mediaType") {
-        Spacer(Modifier.height(10.dp))
-        SectionHeading(
-            title = label,
-            accent = accent,
-            trailing = {
-                Text(
-                    "${items.size}",
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textLo,
-                )
-            },
-        )
-        Spacer(Modifier.height(4.dp))
-    }
-    val visible = if (expanded) items else items.take(SearchSectionTopN)
-    items(visible, key = { "disc-${it.provider}-${it.providerId}" }) { item ->
-        DiscoverOverlayCard(item = item, accent = accent, key = "disc.${item.provider}.${item.providerId}", onClick = { onItemClick(item) })
-    }
-    if (items.size > SearchSectionTopN) {
-        item(key = "disc-more-$mediaType") {
-            MoreRow(
-                expanded = expanded,
-                remaining = items.size - SearchSectionTopN,
-                accent = accent,
-                key = "disc-more.$mediaType",
-                onClick = onToggleExpand,
-            )
-        }
-    }
-}
-
-@Composable
-private fun MoreRow(expanded: Boolean, remaining: Int, accent: Color, key: String, onClick: () -> Unit) {
-    val colors = KobappTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusKey(key)
-            .tvAutoGlow(cornerRadiusDp = 8f, scale = 1f)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-            null,
-            tint = accent,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            if (expanded) "Show less" else "More ($remaining)",
-            style = KobappTheme.type.caption.copy(fontWeight = FontWeight.SemiBold),
-            color = accent,
-        )
-    }
-}
-
-@Composable
-private fun SectionLoadingRow(label: String) {
-    val colors = KobappTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(14.dp),
-            strokeWidth = 2.dp,
-            color = colors.textLo,
-        )
-        Text(label, style = KobappTheme.type.caption, color = colors.textLo)
-    }
-}
-
-@Composable
-private fun SearchResultRow(
-    hit: SearchHitDto,
-    apiUrl: String,
-    accent: Color,
-    key: String,
-    onClick: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val displayTitle = hit.resolvedTitle()
-    val subtitle = hit.resolvedSubtitle()
-    val imageUrl = hit.resolvedImageUrl(apiUrl)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusKey(key)
-            .tvAutoGlow(cornerRadiusDp = 10f, scale = 1f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.Transparent)
-            .clickable(onClick = onClick)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .padding(vertical = 8.dp, horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Thumb(imageUrl, hit.type, accent)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                displayTitle,
-                style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.textHi,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (subtitle != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    subtitle,
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textLo,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        StatusPill(status = PillStatus.InLibrary)
-    }
-}
-
-@Composable
-private fun DiscoverOverlayCard(item: DiscoverItem, accent: Color, key: String, onClick: () -> Unit) {
-    val colors = KobappTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusKey(key)
-            .tvAutoGlow(cornerRadiusDp = 10f, scale = 1f)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .padding(vertical = 8.dp, horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        AsyncImage(
-            model = item.posterUrl,
-            contentDescription = item.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(width = 42.dp, height = 60.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(colors.elev2),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                item.title,
-                style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.textHi,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val meta = when (item.mediaType) {
-                    "book" -> item.authors.firstOrNull()
-                    else -> item.year?.toString()
-                }
-                if (meta != null) {
-                    Text(
-                        meta,
-                        style = KobappTheme.type.bodySm,
-                        color = colors.textLo,
-                        maxLines = 1,
-                    )
-                }
-                if (item.rating != null) RatingBadge(item.rating)
-            }
-        }
-        StatusPill(status = if (item.isInLibrary) PillStatus.InLibrary else PillStatus.NotInLibrary)
-    }
-}
-
-@Composable
-private fun Thumb(imageUrl: String?, type: String, accent: Color) {
-    val colors = KobappTheme.colors
-    if (imageUrl != null) {
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(width = 42.dp, height = 60.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(colors.elev2),
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(width = 42.dp, height = 60.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(lerp(colors.elev2, accent, 0.12f))
-                .border(1.dp, lerp(Color.Transparent, accent, 0.25f), RoundedCornerShape(6.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(typeIcon(type), null, tint = accent, modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-private fun sectionTitle(type: String): String = when (type) {
-    "movie" -> "Movies"; "tv_show" -> "TV Shows"; "tv_season" -> "Seasons"; "tv_episode" -> "Episodes"
-    "book" -> "Books"; "author" -> "Authors"; "series" -> "Series"; "person" -> "People"; "page" -> "Pages"
-    else -> type.replaceFirstChar { it.uppercase() }
-}
-
-private fun typeIcon(type: String): ImageVector = when (type) {
-    "movie" -> Icons.Outlined.Movie
-    "tv_show", "tv_season" -> Icons.Outlined.Tv
-    "tv_episode" -> Icons.Outlined.PlayCircle
-    "book" -> Icons.AutoMirrored.Outlined.MenuBook
-    "author", "person" -> Icons.Outlined.Person
-    "series" -> Icons.Outlined.Collections
-    else -> Icons.Outlined.Search
-}
-
-private fun typeAccent(type: String, colors: KobappColors): Color = when (type) {
-    "movie" -> colors.accMovies
-    "tv_show", "tv_season", "tv_episode" -> colors.accTv
-    "book" -> colors.accBooks
-    "author", "series" -> colors.accBooks.copy(alpha = 0.85f)
-    "person" -> colors.accMovies.copy(alpha = 0.85f)
-    else -> colors.textLo
-}
-
-private fun SearchHitDto.resolvedTitle(): String = when (type) {
-    "tv_season" -> displayTitle ?: seasonIdentifier ?: title ?: label ?: name ?: id
-    "tv_episode" -> displayTitle ?: buildString {
-        episodeCode?.let { append(it) }
-        episodeTitle?.let { if (isNotEmpty()) append(" "); append(it) }
-    }.ifEmpty { null } ?: title ?: label ?: name ?: id
-    else -> title ?: label ?: name ?: id
-}
-
-private fun SearchHitDto.resolvedSubtitle(): String? = when (type) {
-    "movie" -> year?.toString()
-    "tv_show" -> buildString {
-        network?.let { append(it) }
-        year?.let { if (isNotEmpty()) append(" • "); append(it) }
-    }.ifEmpty { null }
-    "tv_season" -> showTitle
-    "tv_episode" -> showTitle
-    "book" -> authors?.joinToString(", ")
-    else -> null
-}
-
-private fun SearchHitDto.resolvedImageUrl(apiUrl: String): String? =
-    (coverUrl ?: posterUrl ?: imageUrl ?: stillUrl ?: logoUrl)?.let { url ->
-        if (url.startsWith("http")) url else "$apiUrl$url"
-    }
-
-private fun SearchHitDto.toSearchResult(apiUrl: String): SearchResult = SearchResult(
-    type = type,
-    id = id,
-    title = resolvedTitle(),
-    subtitle = resolvedSubtitle(),
-    imageUrl = resolvedImageUrl(apiUrl),
-)
 
 private fun loadRecents(): List<String> =
     UserSettings.getString(RECENT_KEY)

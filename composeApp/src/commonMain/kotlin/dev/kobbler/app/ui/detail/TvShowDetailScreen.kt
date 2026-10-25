@@ -29,6 +29,7 @@ fun TvShowDetailScreen(
     onStreamEpisode: ((seasonIdx: Int, episodeIdx: Int) -> Unit)? = null,
     onStreamEpisodePick: ((seasonIdx: Int, episodeIdx: Int) -> Unit)? = null,
     keep: KeepAction? = null,
+    initialSeasonId: String? = null,
 ) {
     val colors = KobappTheme.colors
     // `show` is a fetched snapshot. Starting a show over moves Resume back to its first
@@ -42,7 +43,8 @@ fun TvShowDetailScreen(
     // The season you are part-way through beats the newest one you own: the action stack
     // offers Resume from it, and the tab strip has to agree with the button next to it.
     val initialSeasonIdx = remember(fetched) {
-        fetched.continueEpisode?.seasonIdx?.takeIf { it in fetched.seasons.indices }
+        fetched.seasons.indexOfFirst { it.id != null && it.id == initialSeasonId }.takeIf { it >= 0 }
+            ?: fetched.continueEpisode?.seasonIdx?.takeIf { it in fetched.seasons.indices }
             ?: fetched.seasons.indexOfLast { s -> s.episodes.any { it.filePath != null } }
                 .takeIf { it >= 0 }
             ?: 0

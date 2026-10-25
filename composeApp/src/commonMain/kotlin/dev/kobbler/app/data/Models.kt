@@ -212,6 +212,7 @@ data class SearchResult(
     val subtitle: String? = null,
     val imageUrl: String? = null,
     val link: String? = null,
+    val showId: String? = null,
 )
 
 // -- Wanted --

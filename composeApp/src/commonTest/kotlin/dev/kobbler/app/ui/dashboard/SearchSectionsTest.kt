@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.dashboard
 
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.DiscoverSearchResults
+import dev.kobbler.app.data.IptvChannel
 import dev.kobbler.app.data.SearchHitDto
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,9 +11,10 @@ import kotlin.test.assertTrue
 /**
  * What a query looks like when read top to bottom.
  *
- * The house this is built for has tens of thousands of books, so the library answers a
- * two-word query with a section for every type it holds. Discover after all of them is
- * Discover nobody sees.
+ * Discover, the guide and IPTV answer well after the library, so they are read after it:
+ * anything that lands above rows already on screen pushes them away. The house this is
+ * built for answers a two-word query with a section for every type it holds, so each of
+ * those later groups is a jump away rather than a scroll.
  */
 class SearchSectionsTest {
 
@@ -37,7 +39,7 @@ class SearchSectionsTest {
     }
 
     @Test
-    fun `a discovered show is read with the shows, not after the bookshelf`() {
+    fun `discover is read after every library section, so its late answer never lands above them`() {
         val sections = searchSections(
             libraryHits = listOf(
                 hit("book", "b1", "Last Seen Wearing"),
@@ -46,16 +48,48 @@ class SearchSectionsTest {
                 hit("movie", "m1", "Last Seen"),
             ),
             discover = DiscoverSearchResults(
-                movies = emptyList(),
+                movies = listOf(item("Last Seen Again", 2020, id = "mv")),
                 tvShows = listOf(item("Last Seen", 2026)),
                 books = emptyList(),
             ),
         )
 
         assertEquals(
-            listOf("lib:movie", "lib:tv_show", "disc:tv", "lib:book", "lib:author"),
+            listOf("lib:movie", "lib:tv_show", "lib:book", "lib:author", "disc:movie", "disc:tv"),
             labels(sections),
         )
+    }
+
+    @Test
+    fun `each later-arriving group offers a jump to its first row`() {
+        val sections = searchSections(
+            libraryHits = listOf(hit("movie", "m1", "One"), hit("movie", "m2", "Two")) +
+                (1..7).map { hit("tv_show", "s$it", "Show $it") },
+            discover = DiscoverSearchResults(
+                movies = listOf(item("Elsewhere", 2020, id = "mv")),
+                tvShows = emptyList(),
+                books = emptyList(),
+            ),
+            iptv = listOf(IptvChannel(id = "i1", name = "Channel", iconUrl = null, category = null, language = null, country = null)),
+        )
+
+        val collapsed = searchJumps(sections, expanded = emptyMap())
+        assertEquals(
+            listOf(SearchJump(SearchGroup.Discover, 11, "disc.tmdb.mv"), SearchJump(SearchGroup.Iptv, 13, "iptv.ch.i1")),
+            collapsed,
+        )
+        val expanded = searchJumps(sections, expanded = mapOf("lib:tv_show" to true))
+        assertEquals(listOf(13, 15), expanded.map { it.itemIndex })
+    }
+
+    @Test
+    fun `nothing to jump to when the later group is already at the top`() {
+        val sections = searchSections(
+            libraryHits = emptyList(),
+            discover = DiscoverSearchResults(movies = listOf(item("Elsewhere", id = "mv")), tvShows = emptyList(), books = emptyList()),
+        )
+
+        assertEquals(emptyList(), searchJumps(sections, expanded = emptyMap()))
     }
 
     @Test
@@ -84,7 +118,7 @@ class SearchSectionsTest {
             ),
         )
 
-        assertEquals("disc.tmdb.42", sections.first().firstRowKey)
+        assertEquals("lib.book.b1", sections.first().firstRowKey)
         assertTrue(sections.none { it is SearchSection.Discover && it.items.isEmpty() }, "an empty section was kept")
     }
 }

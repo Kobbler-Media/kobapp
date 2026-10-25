@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +25,6 @@ import dev.kobbler.app.data.IptvChannel
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.components.SectionHeading
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.dashboard.livetv.ChannelLogo
 import dev.kobbler.app.ui.dashboard.livetv.GuideFutureHours
@@ -50,8 +49,8 @@ private const val IptvChannelHits = 8
 suspend fun searchIptv(api: KobblerApi, query: String): List<IptvChannel> =
     runCatching { api.getIptvChannels(search = query, limit = IptvChannelHits).channels }.getOrDefault(emptyList())
 
-internal fun LazyListScope.iptvChannelsSubsection(channels: List<IptvChannel>, onClick: (IptvChannel) -> Unit) {
-    item(key = "iptv-channels-head") { LiveHeading("IPTV · Channels", channels.size) }
+internal fun LazyGridScope.iptvChannelsSubsection(channels: List<IptvChannel>, onClick: (IptvChannel) -> Unit) {
+    fullWidthItem(key = "iptv-channels-head") { SectionHeader("IPTV · Channels", KobappTheme.colors.accLive, channels.size) }
     items(channels, key = { "iptv-ch-${it.id}" }) { channel ->
         ResultRow(
             key = "iptv.ch.${channel.id}",
@@ -82,8 +81,8 @@ suspend fun searchLive(api: KobblerApi, query: String): LiveSearchResults = coro
     )
 }
 
-internal fun LazyListScope.liveChannelsSubsection(channels: List<LiveChannel>, onClick: (LiveChannel) -> Unit) {
-    item(key = "live-channels-head") { LiveHeading("Live TV · Channels", channels.size) }
+internal fun LazyGridScope.liveChannelsSubsection(channels: List<LiveChannel>, onClick: (LiveChannel) -> Unit) {
+    fullWidthItem(key = "live-channels-head") { SectionHeader("Live TV · Channels", KobappTheme.colors.accLive, channels.size) }
     items(channels, key = { "live-ch-${it.id}" }) { channel ->
         ResultRow(
             key = "live.ch.${channel.id}",
@@ -96,15 +95,14 @@ internal fun LazyListScope.liveChannelsSubsection(channels: List<LiveChannel>, o
     }
 }
 
-internal fun LazyListScope.liveAiringsSubsection(
-    airings: List<LiveGuideSelection>,
-    expanded: Boolean,
-    moreRow: @Composable () -> Unit,
+internal fun LazyGridScope.liveAiringsSubsection(
+    visible: List<LiveGuideSelection>,
+    total: Int,
     onClick: (LiveGuideSelection) -> Unit,
 ) {
-    item(key = "live-airings-head") { LiveHeading("Live TV · On the guide", airings.size) }
+    fullWidthItem(key = "live-airings-head") { SectionHeader("Live TV · On the guide", KobappTheme.colors.accLive, total) }
     val now = nowInstant()
-    items(if (expanded) airings else airings.take(SearchSectionTopN), key = { "live-air-${it.entry.id}" }) { airing ->
+    items(visible, key = { "live-air-${it.entry.id}" }) { airing ->
         val start = parseLiveInstant(airing.entry.startTime)
         val onAir = airing.entry.isAiringAt(now)
         val whenLabel = when {
@@ -121,21 +119,6 @@ internal fun LazyListScope.liveAiringsSubsection(
             onAir = onAir,
             onClick = { onClick(airing) },
         )
-    }
-    if (airings.size > SearchSectionTopN) item(key = "live-air-more") { moreRow() }
-}
-
-@Composable
-private fun LiveHeading(title: String, count: Int) {
-    val colors = KobappTheme.colors
-    Column {
-        Spacer(Modifier.height(14.dp))
-        SectionHeading(
-            title = title,
-            accent = colors.accLive,
-            trailing = { Text("$count", style = KobappTheme.type.bodySm, color = colors.textLo) },
-        )
-        Spacer(Modifier.height(6.dp))
     }
 }
 

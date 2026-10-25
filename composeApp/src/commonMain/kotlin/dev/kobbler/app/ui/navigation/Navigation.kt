@@ -107,7 +107,12 @@ sealed interface Destination {
     data object WatchHistory : Destination
 
     data class MovieDetail(val movieId: String, val autoPlay: Boolean = false) : Destination
-    data class TvShowDetail(val showId: String, val autoPlay: Boolean = false, val isEpisodeId: Boolean = false) : Destination
+    data class TvShowDetail(
+        val showId: String,
+        val autoPlay: Boolean = false,
+        val isEpisodeId: Boolean = false,
+        val seasonId: String? = null,
+    ) : Destination
     data class BookDetail(val bookId: String) : Destination
     data class AuthorDetail(val authorId: String) : Destination
     data class SeriesDetail(val seriesId: String) : Destination
@@ -1035,7 +1040,8 @@ private fun navigateContinueItem(
 private fun navigateToSearchResult(nav: NavigationState, result: dev.kobbler.app.data.SearchResult) {
     when (result.type) {
         "movie" -> nav.navigateFromSearch(Destination.MovieDetail(result.id))
-        "tv_show", "tv_season" -> nav.navigateFromSearch(Destination.TvShowDetail(result.id))
+        "tv_show" -> nav.navigateFromSearch(Destination.TvShowDetail(result.id))
+        "tv_season" -> nav.navigateFromSearch(Destination.TvShowDetail(result.showId ?: result.id, seasonId = result.id))
         "tv_episode" -> nav.navigateFromSearch(Destination.TvShowDetail(result.id, isEpisodeId = true))
         "book" -> nav.navigateFromSearch(Destination.BookDetail(result.id))
         "author" -> nav.navigateFromSearch(Destination.AuthorDetail(result.id))
@@ -1334,6 +1340,7 @@ private fun DetailContent(
                     player = player,
                     gps = gps,
                     autoPlay = dest.autoPlay,
+                    initialSeasonId = dest.seasonId,
                     onBack = { nav.goBack() },
                     onPersonClick = { personId -> nav.navigate(Destination.PersonDetail(personId)) },
                 )

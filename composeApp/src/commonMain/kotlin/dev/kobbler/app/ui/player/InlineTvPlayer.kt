@@ -43,6 +43,7 @@ fun InlineTvPlayer(
     player: Player?,
     gps: GlobalPlayerState,
     autoPlay: Boolean = false,
+    initialSeasonId: String? = null,
     onBack: () -> Unit,
     onPersonClick: ((String) -> Unit)? = null,
 ) {
@@ -336,6 +337,7 @@ fun InlineTvPlayer(
         TvShowDetailScreen(
             show = show.withReportedProgress(gps.reportedPositions),
             formFactor = formFactor,
+            initialSeasonId = initialSeasonId,
             onBack = onBack,
             api = api,
             onPlayEpisode = { sIdx, eIdx, fromStart ->

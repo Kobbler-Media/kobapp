@@ -1018,6 +1018,7 @@ data class SearchHitDto(
     val path: String? = null,
     // TV season/episode fields from server
     @SerialName("display_title") val displayTitle: String? = null,
+    @SerialName("show_id") val showId: String? = null,
     @SerialName("show_title") val showTitle: String? = null,
     @SerialName("episode_title") val episodeTitle: String? = null,
     @SerialName("episode_code") val episodeCode: String? = null,
