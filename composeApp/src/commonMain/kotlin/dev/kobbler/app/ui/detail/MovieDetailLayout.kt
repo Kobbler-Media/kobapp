@@ -60,10 +60,10 @@ internal fun MovieDetailLayout(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         val pageScroll = rememberScrollState()
-        DetailBackdrop(movie.spotlight(), accent, pageScroll)
-        val pageTopHold = rememberPageTopHold(pageScroll)
+        DetailBackdrop(movie.spotlight(), accent, pageScroll.asPageScroll())
+        val pageTopHold = rememberPageTopHold(pageScroll.asPageScroll())
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
-        Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
+        Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll.asPageScroll()).verticalScroll(pageScroll)) {
             if (stacked) {
                 Spacer(Modifier.height(kobTopInset + 72.dp))
                 Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
@@ -240,7 +240,7 @@ private fun TopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .detailTopScrim(scroll)
+            .detailTopScrim(scroll.asPageScroll())
             .safeTopPadding()
             .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

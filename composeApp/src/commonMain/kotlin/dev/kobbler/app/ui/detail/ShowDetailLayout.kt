@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -16,18 +17,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -37,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import dev.kobbler.app.data.Season
 import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -48,6 +56,7 @@ import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
+import dev.kobbler.kobfocus.focusReveal
 import kotlinx.coroutines.launch
 
 internal typealias SeasonMenu = @Composable ColumnScope.(close: () -> Unit) -> Unit
@@ -69,27 +78,52 @@ internal fun ShowDetailLayout(
     onPersonClick: ((String) -> Unit)?,
     actions: @Composable (wide: Boolean, anchor: Modifier, exitDown: FocusRequester?) -> Unit,
     seasonMenu: @Composable (fallbackFocus: FocusRequester?) -> SeasonMenu?,
-    episodes: @Composable (seasonEntry: FocusRequester?) -> Unit,
+    episodes: LazyListScope.(seasonEntry: FocusRequester?) -> Unit,
     topBarStatus: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val gutter = gutterFor(formFactor)
-    val pageScroll = rememberScrollState()
+    val listState = rememberLazyListState()
+    val pageScroll = listState.asPageScroll()
     val pageTopHold = rememberPageTopHold(pageScroll)
     val pageScope = rememberCoroutineScope()
+    val seasonEntry = remember { FocusRequester() }
+    val season = show.seasons.getOrNull(selectedSeasonIdx)
+    val body = ShowBody(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, actions, seasonMenu)
+    // The head is a lazy item, so its actions register during measure; a back button
+    // composed before then would be all entry focus could find.
+    var headPlaced by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         DetailBackdrop(show.spotlight(), accent, pageScroll)
 
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
-            Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
-                Spacer(Modifier.height(kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp))
-                val body = remember(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, onPersonClick, actions, seasonMenu, episodes) {
-                    ShowBody(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, onPersonClick, actions, seasonMenu, episodes)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scrollWhenFocusIsStuck(pageScroll, asFocusTarget = false)
+                    .focusReveal { key -> listState.revealEpisode(key, season) },
+                state = listState,
+                contentPadding = PaddingValues(
+                    start = gutter,
+                    end = gutter,
+                    top = kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp,
+                    bottom = 64.dp,
+                ),
+            ) {
+                item(key = HeadKey, contentType = HeadKey) {
+                    Box(Modifier.onPlaced { headPlaced = true }) {
+                        if (stacked) PhoneHead(body, pageTopHold.anchor) else WideHead(body, formFactor, pageTopHold.anchor, seasonEntry)
+                    }
                 }
-                if (stacked) PhoneLayout(body, gutter, pageTopHold.anchor) else WideLayout(body, gutter, formFactor, pageTopHold.anchor)
-                Spacer(Modifier.height(64.dp))
+                if (show.seasons.isNotEmpty()) episodes(seasonEntry.takeIf { !stacked })
+                if (show.cast.isNotEmpty()) {
+                    item(key = CastKey, contentType = CastKey) {
+                        Spacer(Modifier.height(if (stacked) 22.dp else 36.dp))
+                        CastRow(show.cast, onPersonClick = onPersonClick)
+                    }
+                }
             }
         }
 
@@ -100,15 +134,35 @@ internal fun ShowDetailLayout(
             gutter = gutter,
             accent = accent,
             status = topBarStatus,
+            // Not on TV: nothing in the D-pad graph reaches this pinned bar, and the
+            // remote's BACK already unwinds the detail destination.
+            showBack = formFactor != FormFactor.TV && headPlaced,
             modifier = Modifier.pageTopOverlay(pageTopHold),
             onBack = onBack,
             // The bar is pinned over the scrolling body, so focusing it while the page
             // is scrolled would otherwise leave the title stranded off-screen.
-            onBackFocused = { pageScope.launch { pageScroll.animateScrollTo(0) } },
+            onBackFocused = { pageScope.launch { pageScroll.scrollToTop() } },
         )
 
         overlay()
     }
+}
+
+private const val HeadKey = "head"
+private const val CastKey = "cast"
+
+/**
+ * Scrolls a remembered episode row into composition so a restore can land on it. Assumes
+ * the `episodes` slot lists [season]'s episodes in order, straight after the head item.
+ */
+private suspend fun LazyListState.revealEpisode(key: String, season: Season?): Boolean {
+    if (season == null) return false
+    val number = key.removePrefix("season.${season.number}.episode.").takeIf { it != key }
+        ?.substringBefore('.')?.toIntOrNull() ?: return false
+    val idx = season.episodes.indexOfFirst { it.number == number }
+    if (idx < 0) return false
+    scrollToItem(idx + 1)
+    return true
 }
 
 private class ShowBody(
@@ -117,24 +171,21 @@ private class ShowBody(
     val accent: Color,
     val selectedSeasonIdx: Int,
     val onSeasonSelected: (Int) -> Unit,
-    val onPersonClick: ((String) -> Unit)?,
     val actions: @Composable (wide: Boolean, anchor: Modifier, exitDown: FocusRequester?) -> Unit,
     val seasonMenu: @Composable (fallbackFocus: FocusRequester?) -> SeasonMenu?,
-    val episodes: @Composable (seasonEntry: FocusRequester?) -> Unit,
 )
 
 @Composable
-private fun WideLayout(body: ShowBody, gutter: Dp, formFactor: FormFactor, actionsAnchor: Modifier) {
+private fun WideHead(body: ShowBody, formFactor: FormFactor, actionsAnchor: Modifier, seasonEntry: FocusRequester) {
     val show = body.show
     val colors = KobappTheme.colors
-    val seasonEntry = remember { FocusRequester() }
     val posterWidth = when (formFactor) {
         FormFactor.TV -> 200.dp
         FormFactor.Phone -> 160.dp
         FormFactor.Desktop -> 280.dp
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = gutter)) {
+    Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(36.dp),
@@ -173,20 +224,14 @@ private fun WideLayout(body: ShowBody, gutter: Dp, formFactor: FormFactor, actio
                 menu = body.seasonMenu(seasonEntry),
             )
             Spacer(Modifier.height(8.dp))
-            body.episodes(seasonEntry)
-        }
-
-        if (show.cast.isNotEmpty()) {
-            Spacer(Modifier.height(36.dp))
-            CastRow(show.cast, onPersonClick = body.onPersonClick)
         }
     }
 }
 
 @Composable
-private fun PhoneLayout(body: ShowBody, gutter: Dp, actionsAnchor: Modifier) {
+private fun PhoneHead(body: ShowBody, actionsAnchor: Modifier) {
     val show = body.show
-    Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
+    Column(Modifier.fillMaxWidth()) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
             DetailPoster(show.posterUrl, body.accent, Modifier.width(120.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -208,11 +253,6 @@ private fun PhoneLayout(body: ShowBody, gutter: Dp, actionsAnchor: Modifier) {
                 menu = body.seasonMenu(null),
             )
             Spacer(Modifier.height(6.dp))
-            body.episodes(null)
-        }
-        if (show.cast.isNotEmpty()) {
-            Spacer(Modifier.height(22.dp))
-            CastRow(show.cast, onPersonClick = body.onPersonClick)
         }
     }
 }
@@ -231,11 +271,12 @@ private fun MetaRow(show: TvShow, episodeTotal: Int) {
 @Composable
 private fun TopBar(
     show: TvShow,
-    scroll: ScrollState,
+    scroll: PageScroll,
     formFactor: FormFactor,
     gutter: Dp,
     accent: Color,
     status: @Composable () -> Unit,
+    showBack: Boolean,
     onBack: () -> Unit,
     onBackFocused: () -> Unit,
     modifier: Modifier = Modifier,
@@ -250,9 +291,7 @@ private fun TopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // Not on TV: nothing in the D-pad graph reaches this pinned bar, and the
-        // remote's BACK already unwinds the detail destination.
-        if (formFactor != FormFactor.TV) {
+        if (showBack) {
             val contentScope = LocalFocusScope.current
             val barScope = rememberCoroutineScope()
             CircleBackButton(

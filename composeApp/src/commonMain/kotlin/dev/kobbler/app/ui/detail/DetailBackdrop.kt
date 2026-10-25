@@ -2,7 +2,6 @@ package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.platform.FormFactor
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -24,7 +23,7 @@ private const val PhoneDimScrolled = 0.75f
 private val DetailDimFade = 320.dp
 
 @Composable
-fun DetailBackdrop(spotlight: Spotlight, accent: Color, scroll: ScrollState) {
+fun DetailBackdrop(spotlight: Spotlight, accent: Color, scroll: PageScroll) {
     val fadePx = with(LocalDensity.current) { DetailDimFade.toPx() }
     val phone = LocalFormFactor.current == FormFactor.Phone
     val top = if (phone) PhoneDimTop else DetailDimTop
@@ -33,7 +32,7 @@ fun DetailBackdrop(spotlight: Spotlight, accent: Color, scroll: ScrollState) {
         spotlight = { spotlight },
         accent = accent,
         dim = {
-            val scrolled = (scroll.value / fadePx).coerceIn(0f, 1f)
+            val scrolled = (scroll.offset / fadePx).coerceIn(0f, 1f)
             top + scrolled * (scrolledDim - top)
         },
         modifier = Modifier.fillMaxSize(),

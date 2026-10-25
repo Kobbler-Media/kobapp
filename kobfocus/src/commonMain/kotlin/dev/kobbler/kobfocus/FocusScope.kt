@@ -103,15 +103,40 @@ class FocusScope {
      *
      * A restore is issued before layout has placed the node it names — lazy rails in
      * particular compose their items over several frames — so this retries across up to
-     * [maxFrames] frames rather than failing on the first attempt.
+     * [maxFrames] frames rather than failing on the first attempt. A key nothing has
+     * registered is offered to the [focusReveal] whose group encloses it.
      * Returns true once focus is taken.
      */
     suspend fun restore(key: String?, maxFrames: Int = 8): Boolean {
         if (key == null) return false
+        var revealed = false
         repeat(maxFrames) {
             val requester = requesters[key]
             if (requester != null && requester.takesFocus(key)) return true
+            if (requester == null && !revealed) revealed = reveal(key)
             withFrameNanos { }
+        }
+        return false
+    }
+
+    private val revealers = mutableMapOf<String, suspend (String) -> Boolean>()
+
+    fun registerReveal(prefix: String, reveal: suspend (String) -> Boolean) {
+        revealers[prefix] = reveal
+    }
+
+    fun unregisterReveal(prefix: String, reveal: suspend (String) -> Boolean) {
+        if (revealers[prefix] === reveal) revealers.remove(prefix)
+    }
+
+    private suspend fun reveal(key: String): Boolean {
+        for ((prefix, reveal) in revealers) {
+            val relative = when {
+                prefix.isEmpty() -> key
+                key.startsWith("$prefix.") -> key.substring(prefix.length + 1)
+                else -> continue
+            }
+            if (reveal(relative)) return true
         }
         return false
     }

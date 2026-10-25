@@ -96,13 +96,13 @@ fun BookDetailScreen(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         val pageScroll = rememberScrollState()
-        DetailBackdrop(book.spotlight(), accent, pageScroll)
-        val pageTopHold = rememberPageTopHold(pageScroll)
+        DetailBackdrop(book.spotlight(), accent, pageScroll.asPageScroll())
+        val pageTopHold = rememberPageTopHold(pageScroll.asPageScroll())
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(
             Modifier
                 .fillMaxSize()
-                .scrollWhenFocusIsStuck(pageScroll)
+                .scrollWhenFocusIsStuck(pageScroll.asPageScroll())
                 .verticalScroll(pageScroll),
         ) {
             if (stacked) {
@@ -582,7 +582,7 @@ private fun TopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .detailTopScrim(scroll)
+            .detailTopScrim(scroll.asPageScroll())
             .safeTopPadding()
             .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

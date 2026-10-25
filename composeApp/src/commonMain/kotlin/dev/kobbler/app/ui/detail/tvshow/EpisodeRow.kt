@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -198,8 +200,7 @@ fun SeasonTabs(
     }
 }
 
-@Composable
-fun EpisodeList(
+fun LazyListScope.episodeList(
     season: Season?,
     seasonIdx: Int,
     accent: Color,
@@ -216,8 +217,8 @@ fun EpisodeList(
     if (season == null) return
     // Above the first row is the tab strip, and a geometric search up out of the list
     // lands on whichever tab sits nearest the row's centre — the last season, never the
-    // one being listed. Redirected on leaving the list rather than on the first row, so
-    // it holds from the row's action icons as well as its body.
+    // one being listed. Redirected on leaving the first row rather than on its body, so
+    // it holds from the row's action icons as well.
     val exitUp = if (seasonEntry != null) {
         Modifier.focusProperties {
             onExit = { if (requestedFocusDirection == FocusDirection.Up) seasonEntry.requestFocus() }
@@ -225,50 +226,52 @@ fun EpisodeList(
     } else {
         Modifier
     }
-    // Scoped per season: without it every season registers `episode.1`, and a restore
-    // after recomposition hands focus to whichever season claimed the key last.
-    Column(Modifier.fillMaxWidth().focusKeyGroup("season.${season.number}").then(exitUp)) {
-        season.episodes.forEachIndexed { idx, ep ->
-            val isCurrent = currentEpisodeId != null && ep.id == currentEpisodeId
-            val canPlayLocal = ep.filePath != null && supportsVideoPlayback
-            val canStream = onStreamEpisode != null && supportsVideoPlayback
-            EpisodeRow(
-                // Toggling watched clears the saved position, which `ep` cannot know.
-                episode = if (ep.id != null && ep.id in watchedOverrides) ep.copy(watchProgress = null) else ep,
-                accent = accent,
-                isCurrent = isCurrent,
-                watched = ep.isWatchedNow(watchedOverrides),
-                canPlayLocal = canPlayLocal,
-                canStream = canStream,
-                airsSoon = isUpcoming?.invoke(ep) ?: (!canPlayLocal && ep.filePath == null && !canStream),
-                onClick = {
-                    if (ep.filePath != null) onPlayEpisode(seasonIdx, idx, false)
-                    else if (onStreamEpisode != null) onStreamEpisode(seasonIdx, idx)
-                },
-                onStreamPick = if (onStreamEpisodePick != null && supportsVideoPlayback) {
-                    { onStreamEpisodePick(seasonIdx, idx) }
-                } else null,
-                wanted = ep.isWantedNow(wantOverrides),
-                onWant = if (api != null && ep.id != null && ep.canBeWanted(api.canWant) && !ep.isWantedNow(wantOverrides)) {
-                    {
-                        // Optimistic like the watched toggle: the round-trip enqueues a
-                        // search, so the row is the only thing that can answer the tap.
-                        wantOverrides[ep.id] = true
-                        runCatching { api.wantEpisode(ep.id) }
-                            .onFailure { wantOverrides.remove(ep.id) }
-                    }
-                } else null,
-                onToggleWatched = if (api != null && ep.id != null) {
-                    { newState ->
-                        // Optimistic: the row is the only feedback a tap gets, and the
-                        // round-trip is long enough to read as a dead control.
-                        watchedOverrides[ep.id] = newState
-                        runCatching { api.setEpisodeWatched(ep.id, newState) }
-                            .onFailure { watchedOverrides[ep.id] = !newState }
-                    }
-                } else null,
-            )
-        }
+    itemsIndexed(
+        season.episodes,
+        key = { idx, ep -> ep.id ?: "${season.number}:$idx" },
+        contentType = { _, _ -> "episode" },
+    ) { idx, ep ->
+        val canPlayLocal = ep.filePath != null && supportsVideoPlayback
+        val canStream = onStreamEpisode != null && supportsVideoPlayback
+        EpisodeRow(
+            // Toggling watched clears the saved position, which `ep` cannot know.
+            episode = if (ep.id != null && ep.id in watchedOverrides) ep.copy(watchProgress = null) else ep,
+            accent = accent,
+            isCurrent = currentEpisodeId != null && ep.id == currentEpisodeId,
+            watched = ep.isWatchedNow(watchedOverrides),
+            canPlayLocal = canPlayLocal,
+            canStream = canStream,
+            airsSoon = isUpcoming?.invoke(ep) ?: (!canPlayLocal && ep.filePath == null && !canStream),
+            onClick = {
+                if (ep.filePath != null) onPlayEpisode(seasonIdx, idx, false)
+                else if (onStreamEpisode != null) onStreamEpisode(seasonIdx, idx)
+            },
+            onStreamPick = if (onStreamEpisodePick != null && supportsVideoPlayback) {
+                { onStreamEpisodePick(seasonIdx, idx) }
+            } else null,
+            wanted = ep.isWantedNow(wantOverrides),
+            onWant = if (api != null && ep.id != null && ep.canBeWanted(api.canWant) && !ep.isWantedNow(wantOverrides)) {
+                {
+                    // Optimistic like the watched toggle: the round-trip enqueues a
+                    // search, so the row is the only thing that can answer the tap.
+                    wantOverrides[ep.id] = true
+                    runCatching { api.wantEpisode(ep.id) }
+                        .onFailure { wantOverrides.remove(ep.id) }
+                }
+            } else null,
+            onToggleWatched = if (api != null && ep.id != null) {
+                { newState ->
+                    // Optimistic: the row is the only feedback a tap gets, and the
+                    // round-trip is long enough to read as a dead control.
+                    watchedOverrides[ep.id] = newState
+                    runCatching { api.setEpisodeWatched(ep.id, newState) }
+                        .onFailure { watchedOverrides[ep.id] = !newState }
+                }
+            } else null,
+            // Scoped per season: without it every season registers `episode.1`, and a restore
+            // after recomposition hands focus to whichever season claimed the key last.
+            modifier = Modifier.focusKeyGroup("season.${season.number}").then(if (idx == 0) exitUp else Modifier),
+        )
     }
 }
 

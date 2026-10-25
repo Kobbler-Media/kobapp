@@ -80,6 +80,7 @@ internal class FocusKeyNode(
     override val traverseKey: Any = FocusKeyNode::class
 
     private var registeredKey: String? = null
+    private var registeredRequester: FocusRequester? = null
     private var preferenceDirty = false
     var isFocused = false
         private set
@@ -95,17 +96,17 @@ internal class FocusKeyNode(
     override fun onAttach() = updateRegistration()
 
     override fun onDetach() {
-        val requester = focusRequester
-        if (requester != null) {
-            registeredKey?.let {
-                // The focus target below detaches first and reports the blur before this
-                // runs, so "was it focused" has to come from the scope's memory.
-                if (scope.focused == null && scope.save() == it) scope.onVanished(it)
-                scope.onBlurred(it)
-                scope.unregister(it, requester)
-            }
+        val requester = registeredRequester
+        val key = registeredKey
+        if (requester != null && key != null) {
+            // The focus target below detaches first and reports the blur before this
+            // runs, so "was it focused" has to come from the scope's memory.
+            if (scope.focused == null && scope.save() == key) scope.onVanished(key)
+            scope.onBlurred(key)
+            scope.unregister(key, requester)
         }
         registeredKey = null
+        registeredRequester = null
     }
 
     fun update(
@@ -142,13 +143,19 @@ internal class FocusKeyNode(
         }
     }
 
+    // Compared against what was registered rather than what update() was handed: a lazy
+    // list recycling a row renames the row's group before its leaves get their new
+    // requesters, so a leaf is re-registered under its new key with the old requester first.
     private fun updateRegistration() {
         val requester = focusRequester ?: return
         val newKey = fullKey
-        if (newKey == registeredKey && !preferenceDirty) return
+        if (newKey == registeredKey && requester === registeredRequester && !preferenceDirty) return
         preferenceDirty = false
-        registeredKey?.let { scope.unregister(it, requester) }
+        val oldKey = registeredKey
+        val oldRequester = registeredRequester
+        if (oldKey != null && oldRequester != null) scope.unregister(oldKey, oldRequester)
         registeredKey = newKey
+        registeredRequester = requester
         scope.register(newKey, requester, preferredEntry, entryEligible)
     }
 

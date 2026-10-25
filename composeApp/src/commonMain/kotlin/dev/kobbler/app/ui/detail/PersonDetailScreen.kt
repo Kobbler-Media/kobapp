@@ -84,11 +84,11 @@ fun PersonDetailScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         val pageScroll = rememberScrollState()
-        DetailBackdrop(Spotlight(posterUrl = person.imageUrl ?: sortedFilmography.firstNotNullOfOrNull { it.posterUrl }), accent, pageScroll)
+        DetailBackdrop(Spotlight(posterUrl = person.imageUrl ?: sortedFilmography.firstNotNullOfOrNull { it.posterUrl }), accent, pageScroll.asPageScroll())
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .scrollWhenFocusIsStuck(pageScroll)
+                .scrollWhenFocusIsStuck(pageScroll.asPageScroll())
                 .verticalScroll(pageScroll)
                 .padding(
                     top = kobTopInset + 72.dp,

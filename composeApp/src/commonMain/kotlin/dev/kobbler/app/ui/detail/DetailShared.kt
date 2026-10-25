@@ -4,12 +4,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.BringIntoViewSpec
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -243,7 +241,7 @@ fun CircleBackButton(
  * Provide [spec] over the scrolling container and put [anchor] on the action block:
  *
  * ```
- * val hold = rememberPageTopHold(pageScroll)
+ * val hold = rememberPageTopHold(pageScroll.asPageScroll())
  * CompositionLocalProvider(LocalBringIntoViewSpec provides hold.spec) {
  *     Column(Modifier.verticalScroll(pageScroll)) { ActionStack(modifier = hold.anchor) }
  * }
@@ -251,7 +249,7 @@ fun CircleBackButton(
  */
 @Stable
 class PageTopHold internal constructor(
-    private val scroll: ScrollState,
+    private val scroll: PageScroll,
     private val enabled: Boolean,
     private val edgeMarginPx: Float,
 ) {
@@ -294,7 +292,7 @@ class PageTopHold internal constructor(
             // distance is covered, so an unreachable one keeps a frame callback armed for as
             // long as the page is open. The page itself is a focus target taller than the
             // viewport, and at the top it always wants to move down to the margin.
-            return (offset - target).coerceIn((-scroll.value).toFloat(), (scroll.maxValue - scroll.value).toFloat())
+            return (offset - target).coerceIn((-scroll.offset).toFloat(), scroll.remaining.toFloat())
         }
     }
 
@@ -307,7 +305,7 @@ class PageTopHold internal constructor(
             if (coords != null && coords.isAttached) {
                 // Undo the current scroll to get where the focused control rests with the
                 // page at the top; the scrolling column starts at the root's origin.
-                fitsAtTop = coords.positionInRoot().y + coords.size.height + scroll.value <=
+                fitsAtTop = coords.positionInRoot().y + coords.size.height + scroll.offset <=
                     coords.findRootCoordinates().size.height
             }
         }
@@ -319,14 +317,14 @@ class PageTopHold internal constructor(
  * happens to hold focus.
  */
 @Composable
-fun rememberPageTopHold(scroll: ScrollState): PageTopHold {
+fun rememberPageTopHold(scroll: PageScroll): PageTopHold {
     val enabled = LocalFormFactor.current == FormFactor.TV
     val margin = with(LocalDensity.current) { FocusEdgeMargin.toPx() }
     val hold = remember(scroll, enabled, margin) { PageTopHold(scroll, enabled, margin) }
     // Arriving at the action block from further down the page still has to travel; the
     // spec only refuses scrolls, it cannot produce the one that gets us to the top.
     LaunchedEffect(hold.holding) {
-        if (hold.holding && scroll.value != 0) scroll.animateScrollTo(0)
+        if (hold.holding && scroll.offset != 0) scroll.scrollToTop()
     }
     return hold
 }
@@ -342,33 +340,32 @@ fun rememberPageTopHold(scroll: ScrollState): PageTopHold {
  * The page registers as a focus target so a screen with no controls at all still has
  * somewhere for focus to sit, but never as an entry candidate — landing the viewer on
  * the page instead of its play button would be a worse first frame than the one this
- * fixes.
+ * fixes. A lazy page turns that off with [asFocusTarget]: its controls register during
+ * measure, after the page, and entry focus settles on whatever is registered first.
  */
 @Composable
-fun Modifier.scrollWhenFocusIsStuck(scroll: ScrollState, step: Dp = 480.dp): Modifier {
+fun Modifier.scrollWhenFocusIsStuck(scroll: PageScroll, step: Dp = 480.dp, asFocusTarget: Boolean = true): Modifier {
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val stepPx = with(LocalDensity.current) { step.toPx() }
-    return this
-        .focusKey("page", entryEligible = false)
-        .onKeyEvent { event ->
-            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-            val down = when (event.key) {
-                Key.DirectionDown -> true
-                Key.DirectionUp -> false
-                else -> return@onKeyEvent false
-            }
-            if (focusManager.moveFocus(if (down) FocusDirection.Down else FocusDirection.Up)) {
-                return@onKeyEvent true
-            }
-            val room = if (down) scroll.maxValue - scroll.value else scroll.value
-            // Nothing to scroll and nowhere to focus: let the key through, so the root
-            // handler can still fall back to the sidebar.
-            if (room <= 0) return@onKeyEvent false
-            scope.launch { scroll.animateScrollBy(if (down) stepPx else -stepPx) }
-            true
+    val stuckScroll = Modifier.onKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+        val down = when (event.key) {
+            Key.DirectionDown -> true
+            Key.DirectionUp -> false
+            else -> return@onKeyEvent false
         }
-        .focusable()
+        if (focusManager.moveFocus(if (down) FocusDirection.Down else FocusDirection.Up)) {
+            return@onKeyEvent true
+        }
+        val room = if (down) scroll.remaining else scroll.offset
+        // Nothing to scroll and nowhere to focus: let the key through, so the root
+        // handler can still fall back to the sidebar.
+        if (room <= 0) return@onKeyEvent false
+        scope.launch { scroll.scrollBy(if (down) stepPx else -stepPx) }
+        true
+    }
+    return if (asFocusTarget) focusKey("page", entryEligible = false).then(stuckScroll).focusable() else then(stuckScroll)
 }
 
 /** Reports this element's height to [hold] as the page's pinned overlay. */
@@ -383,14 +380,14 @@ fun Modifier.pageTopOverlay(hold: PageTopHold): Modifier =
  * bar's light shade and the poster stays visible until it leaves the screen.
  */
 @Composable
-fun Modifier.detailTopScrim(scroll: ScrollState): Modifier {
+fun Modifier.detailTopScrim(scroll: PageScroll): Modifier {
     val bg = KobappTheme.colors.bg
     val fadeIn = with(LocalDensity.current) { 96.dp.toPx() }
     val phoneShade = rememberTopChromeShade()
     val brush = if (LocalFormFactor.current == FormFactor.Phone) phoneShade
     else remember(bg) { Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to Color.Transparent) }
     return drawBehind {
-        drawRect(brush, alpha = (scroll.value / fadeIn).coerceIn(0f, 1f))
+        drawRect(brush, alpha = (scroll.offset / fadeIn).coerceIn(0f, 1f))
     }
 }
 

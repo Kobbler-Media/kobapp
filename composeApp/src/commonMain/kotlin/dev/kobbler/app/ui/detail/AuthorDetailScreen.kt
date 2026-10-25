@@ -73,8 +73,8 @@ fun AuthorDetailScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         val pageScroll = rememberScrollState()
-        DetailBackdrop(Spotlight(posterUrl = author.imageUrl ?: books.firstOrNull()?.coverUrl), accent, pageScroll)
-        Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
+        DetailBackdrop(Spotlight(posterUrl = author.imageUrl ?: books.firstOrNull()?.coverUrl), accent, pageScroll.asPageScroll())
+        Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll.asPageScroll()).verticalScroll(pageScroll)) {
             Spacer(Modifier.height(56.dp))
 
             if (stacked) {

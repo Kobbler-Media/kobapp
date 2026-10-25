@@ -146,7 +146,7 @@ private fun WideLayout(
 ) {
     val isTv = formFactor == FormFactor.TV
     val pageScroll = rememberScrollState()
-    Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll).verticalScroll(pageScroll)) {
+    Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll.asPageScroll()).verticalScroll(pageScroll)) {
         ChannelHero(
             channel = channel, accent = accent, gutter = gutter, formFactor = formFactor,
             isFavourite = isFavourite, isLoading = isLoading,

@@ -14,7 +14,7 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.detail.tvshow.EpisodeList
+import dev.kobbler.app.ui.detail.tvshow.episodeList
 import dev.kobbler.app.ui.player.KeepAction
 
 @Composable
@@ -94,7 +94,7 @@ fun TvShowDetailScreen(
         },
         seasonMenu = { fallback -> seasonMenu(shown, selectedSeason, api, watchedOverrides, wantOverrides, toast, accent, fallbackFocus = fallback) },
         episodes = { seasonEntry ->
-            EpisodeList(
+            episodeList(
                 season = selectedSeason,
                 seasonIdx = selectedSeasonIdx,
                 accent = accent,

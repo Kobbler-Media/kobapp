@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.detail.tvshow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
+import dev.kobbler.app.platform.FormFactor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,6 +14,12 @@ class ShowDetailRemoteTest {
 
     @Test
     fun `entry focus is the play action`() = showPage {
+        assertTrue(focusedText()!!.startsWith("Resume"), "entry focus was ${focusedText()}")
+    }
+
+    @Test
+    fun `entry focus is the play action with a keyboard too`() = showPage(formFactor = FormFactor.Desktop) {
+        runCatching { waitUntil(timeoutMillis = 5_000) { focusedText()?.startsWith("Resume") == true } }
         assertTrue(focusedText()!!.startsWith("Resume"), "entry focus was ${focusedText()}")
     }
 

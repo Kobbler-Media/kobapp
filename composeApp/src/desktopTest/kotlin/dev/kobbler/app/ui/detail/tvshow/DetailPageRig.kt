@@ -68,11 +68,13 @@ internal fun showPage(
     canStream: Boolean = false,
     gps: GlobalPlayerState = GlobalPlayerState(),
     androidFocus: AndroidLikeFocus? = null,
+    nav: NavigationState = NavigationState(),
+    formFactor: FormFactor = FormFactor.TV,
     test: DesktopComposeUiTest.(StubServer) -> Unit,
 ) = detailPage(
     Destination.TvShowDetail("show-1"),
     mapOf<String, (HttpExchange) -> String>(SHOW_PATH to { _ -> json }) + routes,
-    canStream, gps, androidFocus, test,
+    canStream, gps, androidFocus, nav, formFactor, test,
 )
 
 /** A detail page driven by a remote, through the real scaffold: it is what maps the D-pad to focus moves. */
@@ -83,16 +85,17 @@ internal fun detailPage(
     canStream: Boolean = false,
     gps: GlobalPlayerState = GlobalPlayerState(),
     androidFocus: AndroidLikeFocus? = null,
+    nav: NavigationState = NavigationState(),
+    formFactor: FormFactor = FormFactor.TV,
     test: DesktopComposeUiTest.(StubServer) -> Unit,
 ) = runUiTest(width = 960, height = 540) {
     DataCache.clear()
     // The page probes for streaming itself, and an unanswered probe turns it back off.
     val probe = "/api/v1/library/stats" to { _: HttpExchange -> """{"kobload_configured":$canStream}""" }
     StubServer(mapOf(probe) + routes).use { stub ->
-        val nav = NavigationState()
         val api = KobblerApi(HttpClient(), stub.url, "token", canManageKids = true).also { it.canStream = canStream }
         setContent {
-            val auth = AuthState(rememberCoroutineScope(), FormFactor.TV)
+            val auth = AuthState(rememberCoroutineScope(), formFactor)
             // The default focus memory is process-wide; a page reopened by a later test
             // would otherwise restore focus to wherever the last one left it.
             val owner = LocalFocusManager.current
@@ -102,7 +105,7 @@ internal fun detailPage(
                 LocalFocusScopeStore provides FocusScopeStore(),
                 LocalFocusManager provides focusManager,
             ) {
-                KobappTheme(formFactor = FormFactor.TV) {
+                KobappTheme(formFactor = formFactor) {
                     // AdaptiveScaffold's covered layer; it cannot be hosted here, as it builds
                     // the real player.
                     Box(Modifier.focusInert(gps.isFullscreen || gps.loadingError != null)) {
@@ -110,7 +113,7 @@ internal fun detailPage(
                             nav = nav,
                             navConfig = defaultNavConfig,
                             api = api,
-                            formFactor = FormFactor.TV,
+                            formFactor = formFactor,
                             player = null,
                             gps = gps,
                         )

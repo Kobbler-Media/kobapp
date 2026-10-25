@@ -33,7 +33,7 @@ class DetailTopScrimTest {
             setContent {
                 KobappTheme(formFactor = formFactor) {
                     Box(Modifier.fillMaxSize().background(Color.Red)) {
-                        Box(Modifier.fillMaxWidth().height(100.dp).detailTopScrim(ScrollState(10_000)))
+                        Box(Modifier.fillMaxWidth().height(100.dp).detailTopScrim(ScrollState(10_000).asPageScroll()))
                     }
                 }
             }

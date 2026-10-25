@@ -26,7 +26,7 @@ import dev.kobbler.app.data.LibraryStatus
 import dev.kobbler.app.data.localToday
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.detail.tvshow.EpisodeList
+import dev.kobbler.app.ui.detail.tvshow.episodeList
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -90,16 +90,20 @@ internal fun DiscoverShowPage(
             val n = selectedNumber
             when {
                 n == null -> Unit
-                n in failed || episodes[n]?.isEmpty() == true -> Text(
-                    "No episodes found",
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textLo,
-                    modifier = Modifier.padding(16.dp),
-                )
-                n !in episodes -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = accent, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                n in failed || episodes[n]?.isEmpty() == true -> item {
+                    Text(
+                        "No episodes found",
+                        style = KobappTheme.type.bodySm,
+                        color = colors.textLo,
+                        modifier = Modifier.padding(16.dp),
+                    )
                 }
-                else -> EpisodeList(
+                n !in episodes -> item {
+                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = accent, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    }
+                }
+                else -> episodeList(
                     season = show.seasons[selectedSeasonIdx],
                     seasonIdx = selectedSeasonIdx,
                     accent = accent,

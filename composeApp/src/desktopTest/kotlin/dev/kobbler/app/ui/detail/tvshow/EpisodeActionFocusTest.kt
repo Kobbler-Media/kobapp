@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.detail.tvshow
 
 import dev.kobbler.app.runUiTest
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
@@ -36,18 +37,21 @@ class EpisodeActionFocusTest {
         setContent {
             KobappTheme(formFactor = FormFactor.TV) {
                 manager = LocalFocusManager.current
-                EpisodeList(
-                    season = target,
-                    seasonIdx = 0,
-                    accent = KobappTheme.colors.textHi,
-                    currentEpisodeId = null,
-                    api = null,
-                    watchedOverrides = mutableStateMapOf(),
-                    onPlayEpisode = { _, _, _ -> },
-                    onStreamEpisode = { _, _ -> },
-                    onStreamEpisodePick = { _, _ -> },
-                    wantOverrides = mutableStateMapOf(),
-                )
+                val accent = KobappTheme.colors.textHi
+                LazyColumn {
+                    episodeList(
+                        season = target,
+                        seasonIdx = 0,
+                        accent = accent,
+                        currentEpisodeId = null,
+                        api = null,
+                        watchedOverrides = mutableStateMapOf(),
+                        onPlayEpisode = { _, _, _ -> },
+                        onStreamEpisode = { _, _ -> },
+                        onStreamEpisodePick = { _, _ -> },
+                        wantOverrides = mutableStateMapOf(),
+                    )
+                }
             }
         }
         waitForIdle()

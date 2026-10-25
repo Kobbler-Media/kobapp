@@ -235,7 +235,7 @@ private fun DiscoverHeroPage(
     val palette = rememberPalette(detail.posterUrl)
     val gutter = gutterFor(formFactor)
     val pageScroll = rememberScrollState()
-    val pageTopHold = rememberPageTopHold(pageScroll)
+    val pageTopHold = rememberPageTopHold(pageScroll.asPageScroll())
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
@@ -243,7 +243,7 @@ private fun DiscoverHeroPage(
             Modifier
                 .fillMaxSize()
                 .focusInert(inert)
-                .scrollWhenFocusIsStuck(pageScroll)
+                .scrollWhenFocusIsStuck(pageScroll.asPageScroll())
                 .verticalScroll(pageScroll),
         ) {
             DetailHero(
