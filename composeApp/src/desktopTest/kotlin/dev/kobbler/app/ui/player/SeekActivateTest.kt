@@ -45,7 +45,7 @@ class SeekActivateTest {
         subtitle = "2026 • 2h 37m"
     }
 
-    /** A film mid-play, with the transport up and entry focus settled where a remote lands. */
+    /** A film mid-play, brought up by the viewer's first press, with entry focus settled where it lands. */
     private fun ComposeUiTest.showPlayingMovie(player: FakePlayer) {
         player.durationMs.value = 9_444_000
         player.currentMs.value = 3_600_000
@@ -72,13 +72,16 @@ class SeekActivateTest {
         waitForIdle()
         // Whatever the opening itself asked the player for is not the viewer's doing.
         player.calls.clear()
+        revealControls(FormFactor.TV)
     }
 
     @Test
-    fun `a tv opens a film on the seek bar`() = runUiTest {
+    fun `the press that brings up a film lands on the seek bar and is spent on nothing else`() = runUiTest {
         val player = FakePlayer()
+        player.play()
         showPlayingMovie(player)
         onNodeWithContentDescription("Seek").assert(isFocused())
+        assertEquals(emptyList(), player.calls, "the press that brought the controls up reached the player")
     }
 
     @Test

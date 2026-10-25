@@ -90,9 +90,7 @@ class LiveControlFocusTest {
           }
         }
         waitForIdle()
-        // The overlay parks entry focus on play/pause, which is where a remote starts.
-        mainClock.advanceTimeBy(500)
-        waitForIdle()
+        revealControls(FormFactor.TV)
         return FocusScopeAndManager(scope, focusManager)
     }
 
@@ -151,7 +149,7 @@ class LiveControlFocusTest {
      * there — so the first LEFT of every watch went nowhere instead of stepping back.
      */
     @Test
-    fun `the live transport opens on the seek bar`() = runUiTest {
+    fun `the press that brings up the live transport lands on the seek bar`() = runUiTest {
         val (scope, _) = showLivePlayer(
             liveState(timeshiftable = true),
             KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"),

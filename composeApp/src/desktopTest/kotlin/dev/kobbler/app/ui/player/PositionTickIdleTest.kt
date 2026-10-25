@@ -134,6 +134,7 @@ class PositionTickIdleTest {
 
     @Test
     fun `the shown controls still follow the playhead`() = playing { player ->
+        revealControls(FormFactor.Phone)
         shows("0:10 / 30:00")
         player.currentMs.value = 12_500
         shows("0:12 / 30:00")

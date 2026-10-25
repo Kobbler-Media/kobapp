@@ -86,8 +86,7 @@ class TvTransportTest {
             }
         }
         waitForIdle()
-        mainClock.advanceTimeBy(500)
-        waitForIdle()
+        revealControls(FormFactor.TV)
         player.calls.clear()
     }
 
@@ -264,7 +263,7 @@ class TvTransportTest {
      * every press restarts the clock, so a longer window only buys chrome over the picture.
      */
     @Test
-    fun `the tv chrome auto-hides after five idle seconds`() = runUiTest {
+    fun `the tv chrome auto-hides five idle seconds after the press that brought it up`() = runUiTest {
         val player = FakePlayer()
         player.play()
         showPlayingMovie(player)

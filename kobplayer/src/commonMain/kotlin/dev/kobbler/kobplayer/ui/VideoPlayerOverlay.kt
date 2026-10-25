@@ -220,7 +220,7 @@ fun VideoPlayerOverlay(
     focusDecoration: ControlFocus = { _, _, _ -> Modifier },
     extraControls: @Composable RowScope.() -> Unit = {},
 ) {
-    var controlsVisible by remember { mutableStateOf(true) }
+    var controlsVisible by remember { mutableStateOf(false) }
     var interactionTick by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekFraction by remember { mutableFloatStateOf(0f) }

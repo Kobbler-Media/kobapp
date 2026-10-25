@@ -63,8 +63,7 @@ class PlayerLayerFocusTest {
             }
         }
         waitForIdle()
-        mainClock.advanceTimeBy(500)
-        waitForIdle()
+        revealControls(FormFactor.TV)
         return scope
     }
 

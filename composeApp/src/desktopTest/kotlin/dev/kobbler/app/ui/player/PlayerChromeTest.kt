@@ -52,6 +52,7 @@ class PlayerChromeTest {
     fun `only a TV leaves the exit to its remote`() {
         mapOf(FormFactor.Phone to 1, FormFactor.Desktop to 1, FormFactor.TV to 0).forEach { (ff, expected) ->
             player(ff) {
+                revealControls(ff)
                 assertEquals(expected, onAllNodesWithContentDescription("Back").fetchSemanticsNodes().size, "back buttons on $ff")
             }
         }
@@ -85,12 +86,14 @@ class PlayerChromeTest {
 
     @Test
     fun `desktop back button leaves the player`() = player(FormFactor.Desktop) { rig ->
+        revealControls(FormFactor.Desktop)
         onNodeWithContentDescription("Back").performClick()
         assertEquals(1, rig.backs)
     }
 
     @Test
     fun `desktop play pause sits with the seek bar, not over the picture`() = player(FormFactor.Desktop) {
+        revealControls(FormFactor.Desktop)
         val button = onNodeWithContentDescription("Play/Pause").getUnclippedBoundsInRoot()
         val bar = onNodeWithContentDescription("Seek").getUnclippedBoundsInRoot()
         assertTrue(button.top >= bar.top, "play/pause $button is above the seek bar $bar")

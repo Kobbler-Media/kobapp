@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.unit.dp
+import dev.kobbler.kobplayer.ui.PlayerChrome
 import dev.kobbler.kobplayer.ui.VideoPlayerOverlay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
@@ -46,8 +47,7 @@ class ScrubPreviewLayoutTest {
             )
         }
         waitForIdle()
-        mainClock.advanceTimeBy(500)
-        waitForIdle()
+        revealControls(PlayerChrome.Pointer)
 
         val bar = onNodeWithContentDescription("Seek")
         val before = bar.fetchSemanticsNode().boundsInRoot.top

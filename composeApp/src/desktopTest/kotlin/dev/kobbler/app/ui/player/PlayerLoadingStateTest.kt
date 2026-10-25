@@ -60,18 +60,19 @@ class PlayerLoadingStateTest {
                 }
             }
             repeat(4) { mainClock.advanceTimeByFrame() }
+            revealControls(FormFactor.TV)
             assertions()
         }
 
     @Test
-    fun `no transport while the stream is opening`() = runPlayer(starting = true) {
+    fun `a remote press brings no transport while the stream is opening`() = runPlayer(starting = true) {
         onNodeWithContentDescription("Seek").assertDoesNotExist()
         onNodeWithContentDescription("Play/Pause").assertDoesNotExist()
         onNodeWithContentDescription("Back").assertDoesNotExist()
     }
 
     @Test
-    fun `the transport is there once the stream is open`() = runPlayer(starting = false) {
+    fun `a remote press brings the transport once the stream is open`() = runPlayer(starting = false) {
         onNodeWithContentDescription("Seek").assertIsDisplayed()
         // The TV's transport is the bar and the status label, not the disc.
         onNodeWithContentDescription("Paused").assertIsDisplayed()

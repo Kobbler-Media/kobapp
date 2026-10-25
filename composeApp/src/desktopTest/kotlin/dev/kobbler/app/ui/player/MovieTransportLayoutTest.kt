@@ -58,8 +58,7 @@ class MovieTransportLayoutTest {
             }
         }
         waitForIdle()
-        mainClock.advanceTimeBy(500)
-        waitForIdle()
+        revealControls(FormFactor.TV)
 
         val screen = onNodeWithContentDescription("screen").fetchSemanticsNode().boundsInRoot
         val bar = onNodeWithContentDescription("Seek").fetchSemanticsNode().boundsInRoot

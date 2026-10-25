@@ -78,6 +78,7 @@ class PlayerTvPickerTest {
             }
         }
         waitForIdle()
+        revealControls(FormFactor.TV)
         test(rig)
     }
 
