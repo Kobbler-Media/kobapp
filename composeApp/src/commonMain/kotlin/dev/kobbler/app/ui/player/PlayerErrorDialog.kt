@@ -98,43 +98,49 @@ fun PlayerErrorDialog(
                 .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(
-                Icons.Outlined.ErrorOutline,
-                contentDescription = null,
-                tint = colors.err,
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(Modifier.height(14.dp))
-            Text(title, style = KobappTheme.type.h3, color = colors.textHi)
-            Spacer(Modifier.height(8.dp))
             var showDetails by remember(message) { mutableStateOf(summary == null) }
-            if (summary != null) {
-                Text(summary, style = KobappTheme.type.body, color = colors.textMd, textAlign = TextAlign.Center)
-            }
-            if (showDetails) {
-                if (summary != null) Spacer(Modifier.height(12.dp))
-                DiagnosticText(message)
-            }
-
-            val reportLine = when (reportStatus) {
-                ReportStatus.Idle -> null
-                ReportStatus.Sending -> "Reporting to the server…"
-                ReportStatus.Sent -> "Reported to the server"
-                ReportStatus.Failed -> "Could not reach the server to report this"
-            }
-            if (reportLine != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(reportLine, style = KobappTheme.type.bodySm, color = colors.textLo)
-            }
-
             var showAlternatives by remember(alternatives) { mutableStateOf(false) }
-            if (showAlternatives) {
-                Spacer(Modifier.height(20.dp))
-                AlternativesSection(
-                    alternatives = alternatives,
-                    accent = accent,
-                    onPick = onPickAlternative,
+            // The trace and the release list scroll; the buttons below never leave the screen.
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    Icons.Outlined.ErrorOutline,
+                    contentDescription = null,
+                    tint = colors.err,
+                    modifier = Modifier.size(48.dp),
                 )
+                Spacer(Modifier.height(14.dp))
+                Text(title, style = KobappTheme.type.h3, color = colors.textHi)
+                Spacer(Modifier.height(8.dp))
+                if (summary != null) {
+                    Text(summary, style = KobappTheme.type.body, color = colors.textMd, textAlign = TextAlign.Center)
+                }
+                if (showDetails) {
+                    if (summary != null) Spacer(Modifier.height(12.dp))
+                    DiagnosticText(message)
+                }
+
+                val reportLine = when (reportStatus) {
+                    ReportStatus.Idle -> null
+                    ReportStatus.Sending -> "Reporting to the server…"
+                    ReportStatus.Sent -> "Reported to the server"
+                    ReportStatus.Failed -> "Could not reach the server to report this"
+                }
+                if (reportLine != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(reportLine, style = KobappTheme.type.bodySm, color = colors.textLo)
+                }
+
+                if (showAlternatives) {
+                    Spacer(Modifier.height(20.dp))
+                    AlternativesSection(
+                        alternatives = alternatives,
+                        accent = accent,
+                        onPick = onPickAlternative,
+                    )
+                }
             }
 
             Spacer(Modifier.height(22.dp))

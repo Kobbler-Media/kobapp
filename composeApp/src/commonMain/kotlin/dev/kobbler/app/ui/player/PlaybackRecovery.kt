@@ -72,6 +72,9 @@ internal sealed interface StartOutcome {
 
     /** Nothing played. [sourceHealthy]: the server still had the file coming when it was called. */
     data class Stalled(val reason: String, val sourceHealthy: Boolean = false) : StartOutcome
+
+    /** The playback this start belonged to already failed, or a newer start replaced it: no verdict is owed. */
+    data object Abandoned : StartOutcome
 }
 
 /** A start that never played, as the failure handed to whoever takes it over. */
@@ -97,8 +100,10 @@ internal suspend fun GlobalPlayerState.superviseStart(
     var budget = startBudgetMs(sessionMethod)
     var readyAt: Long? = 0L
     var feed: SessionFeed? = null
+    val serial = startSerial
     try {
         while (true) {
+            if (loadingError != null || startSerial != serial) return StartOutcome.Abandoned
             // The timeout only bounds the wait — a stream that starts reports it at once, so
             // backing this off never delays noticing that it did.
             val playing = withTimeoutOrNull(interval) {
@@ -142,6 +147,7 @@ internal suspend fun GlobalPlayerState.superviseStart(
                 }
             }
             if (player.state.value == PlayerState.PLAYING) return StartOutcome.Playing
+            if (loadingError != null || startSerial != serial) return StartOutcome.Abandoned
             startProgress = if (waited >= FEED_NOTE_AFTER_MS) startFeedLine(feed) else null
             val probe = StartProbe(waited, readyAt?.let { waited - it }, budget, feed, servedGrew, downloadGrew)
             when (val verdict = judgeStart(probe)) {
@@ -225,6 +231,7 @@ suspend fun GlobalPlayerState.watchPlayback(player: Player, api: KobblerApi) = c
                     PlaybackTrace.end()
                     debridPlayback?.onPlaying(sessionId)
                 }
+                StartOutcome.Abandoned -> {}
                 is StartOutcome.Broken -> handleLostStart(player, api, outcome.cause)
                 is StartOutcome.Stalled -> handleLostStart(
                     player, api, StartStall(outcome.reason, outcome.sourceHealthy),

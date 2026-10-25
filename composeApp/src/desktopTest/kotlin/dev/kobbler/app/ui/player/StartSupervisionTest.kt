@@ -176,6 +176,41 @@ class StartSupervisionTest {
         }
     }
 
+    /**
+     * A playback already showing its failure owes no second verdict: the start a player
+     * error ended kept waiting out its budget and replaced the dialog with a timeout.
+     */
+    @Test
+    fun `a start whose playback has already failed is abandoned without a verdict`() = runTest {
+        val gps = watching(method = "direct_play")
+        val routes = mapOf(
+            "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange ->
+                gps.failWith(IllegalStateException("Stream stopped at 0s of 1366s"))
+                status("preparing")
+            },
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            assertEquals(StartOutcome.Abandoned, gps.superviseStart(stalled(), api, probeIntervalMs = 50))
+        }
+    }
+
+    @Test
+    fun `a start replaced by a newer one is abandoned rather than judged on the old clock`() = runTest {
+        val gps = watching(method = "direct_play")
+        val player = stalled()
+        val routes = mapOf(
+            "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange ->
+                gps.playUnmuted(player)
+                status("preparing")
+            },
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            assertEquals(StartOutcome.Abandoned, gps.superviseStart(player, api, probeIntervalMs = 50))
+        }
+    }
+
     /** An unreachable server is not a dead session. */
     @Test
     fun `a probe that cannot be delivered is not a verdict`() = runTest {

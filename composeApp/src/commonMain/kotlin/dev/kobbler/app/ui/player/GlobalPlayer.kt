@@ -314,6 +314,9 @@ class GlobalPlayerState {
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
     )
 
+    internal var startSerial = 0
+        private set
+
     /**
      * How the server said it would deliver the loaded stream. Sets what a start is
      * allowed to cost before it is called lost — see [startBudgetMs].
@@ -886,6 +889,7 @@ class GlobalPlayerState {
             player.state.first { it == dev.kobbler.kobplayer.PlayerState.PLAYING }
             onStarted(player)
         }
+        startSerial++
         startRequests.tryEmit(Unit)
     }
 
