@@ -1,17 +1,29 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
+import dev.kobbler.app.ui.detail.OverflowItem
+import dev.kobbler.app.ui.detail.OverflowMenu
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
 
 enum class SearchScope(val label: String, val placeholder: String) {
     All("All", "Search movies, TV, books, authors…"),
@@ -58,31 +70,52 @@ private val BookTypes = setOf("book", "author", "series")
 
 internal const val LiveChannelResultType = "live_channel"
 internal const val IptvChannelResultType = "iptv_channel"
-
-/** A filter, not a radio button: tapping the one already on clears it back to All. */
-fun SearchScope.tapped(option: SearchScope): SearchScope =
-    if (option == this && option != SearchScope.All) SearchScope.All else option
+internal const val SearchScopeChipTag = "search-scope"
 
 @Composable
-internal fun SearchScopeChips(
+internal fun SearchScopeChip(
     scope: SearchScope,
     scopes: List<SearchScope>,
     onSelect: (SearchScope) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = modifier
-            .focusKeyGroup("searchscope")
-            .horizontalScroll(rememberScrollState()),
-    ) {
-        scopes.forEach { option ->
-            KobChip(
-                text = option.label,
-                style = if (option == scope) KobChipStyle.AccentTint else KobChipStyle.Default,
-                onClick = { onSelect(scope.tapped(option)) },
-                modifier = Modifier.focusKey("scope.${option.name}", entryEligible = false),
-            )
+    var open by remember { mutableStateOf(false) }
+    val anchor = remember { FocusRequester() }
+    val accent = KobappTheme.accent
+    Box {
+        KobChip(
+            text = scope.label,
+            style = if (scope == SearchScope.All) KobChipStyle.Default else KobChipStyle.AccentTint,
+            leading = { Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(14.dp)) },
+            onClick = { open = true },
+            modifier = Modifier
+                .focusKey("scope", entryEligible = false)
+                .focusRequester(anchor)
+                .testTag(SearchScopeChipTag),
+        )
+        OverflowMenu(expanded = open, anchor = anchor, onClose = { open = false }) { close ->
+            scopes.forEach { option ->
+                OverflowItem(
+                    key = "scope.${option.name}",
+                    icon = option.icon,
+                    label = option.label,
+                    accent = accent,
+                    selected = option == scope,
+                    onClick = {
+                        onSelect(option)
+                        close()
+                    },
+                )
+            }
         }
     }
 }
+
+private val SearchScope.icon: ImageVector
+    get() = when (this) {
+        SearchScope.All -> Icons.Outlined.Search
+        SearchScope.Movies -> Destination.Tab.Movies.icon
+        SearchScope.Tv -> Destination.Tab.TvShows.icon
+        SearchScope.Books -> Destination.Tab.Books.icon
+        SearchScope.LiveTv -> Destination.Tab.LiveTv.icon
+        SearchScope.Iptv -> Destination.Tab.Iptv.icon
+    }

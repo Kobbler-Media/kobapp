@@ -9,8 +9,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -23,8 +21,8 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * Search opens scoped to the section it was opened from, and the scope is a chip the viewer
- * can widen to everything, by picking All or by tapping the selected chip again. Live TV is
+ * Search opens scoped to the section it was opened from, and the scope is a chip in the search
+ * bar whose menu widens it to everything or narrows it to one kind. Live TV is
  * a scope of its own: the guide and the channel list are searched there, and nowhere else
  * but All. Hits the library search returns for a type the app cannot open never surface as
  * a section of their own.
@@ -55,7 +53,7 @@ class SearchScopeTest {
         val scopes: List<SearchScope> = SearchScope.entries,
         val shown: List<String>,
         val hidden: List<String>,
-        val tap: String? = null,
+        val pick: SearchScope? = null,
     )
 
     private val cases = listOf(
@@ -63,8 +61,8 @@ class SearchScopeTest {
         Case("iptv", SearchScope.Iptv, shown = listOf("Block Sports HD"), hidden = listOf("Blockbuster", "The Block", "Blocktown TV")),
         Case("movies", SearchScope.Movies, shown = listOf("Blockbuster"), hidden = listOf("Blockhead", "The Block", "Blocktown TV")),
         Case("tv", SearchScope.Tv, shown = listOf("Blockhead"), hidden = listOf("Blockbuster", "The Block")),
-        Case("live tv widened", SearchScope.LiveTv, shown = listOf("The Block", "Blocktown TV", "Blockbuster", "Blockhead", "Block Sports HD"), hidden = listOf("Iptv_channel", "Blocklist settings"), tap = "All"),
-        Case("selected chip tapped again clears it", SearchScope.Tv, shown = listOf("Blockbuster", "Blockhead"), hidden = emptyList(), tap = "TV"),
+        Case("live tv widened", SearchScope.LiveTv, shown = listOf("The Block", "Blocktown TV", "Blockbuster", "Blockhead", "Block Sports HD"), hidden = listOf("Iptv_channel", "Blocklist settings"), pick = SearchScope.All),
+        Case("all narrowed to tv", SearchScope.All, shown = listOf("Blockhead"), hidden = listOf("Blockbuster", "The Block", "Block Sports HD"), pick = SearchScope.Tv),
         Case(
             "no live tv",
             SearchScope.All,
@@ -104,7 +102,7 @@ class SearchScopeTest {
                     )
                 }
             }
-            case.tap?.let { onNodeWithText(it).performClick() }
+            case.pick?.let { pickScope(it) }
             waitUntil(timeoutMillis = UiTimeoutMs) { case.shown.all { has(it) } }
             mainClock.advanceTimeBy(1_000)
             waitForIdle()

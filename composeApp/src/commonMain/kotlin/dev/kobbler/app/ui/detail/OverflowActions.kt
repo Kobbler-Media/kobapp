@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.LibraryAdd
 import androidx.compose.material.icons.outlined.MoreHoriz
 import kotlinx.coroutines.launch
@@ -26,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -89,7 +91,9 @@ internal fun OverflowMenu(
     LaunchedEffect(expanded) {
         if (!expanded) return@LaunchedEffect
         repeat(10) {
-            if (runCatching { entry.requester.requestFocus() }.isSuccess) return@LaunchedEffect
+            // The popup's items attach a frame or more after it opens, and a requester with
+            // nothing attached yet neither throws nor focuses: only the result says it took.
+            if (runCatching { entry.requester.requestFocus(FocusDirection.Enter) }.getOrDefault(false)) return@LaunchedEffect
             withFrameNanos { }
         }
     }
@@ -131,8 +135,10 @@ internal fun OverflowItem(
     accent: Color,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    selected: Boolean = false,
 ) {
     val colors = KobappTheme.colors
+    val marked = !enabled || selected
     // A filled row rather than the ring the rest of the app uses: the ring is drawn
     // outside the element's bounds and a menu row has none to spare — it escaped the
     // panel as a stray white outline.
@@ -144,13 +150,18 @@ internal fun OverflowItem(
             Text(
                 label,
                 style = KobappTheme.type.body,
-                color = if (enabled) colors.textHi else accent,
+                color = if (marked) accent else colors.textHi,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
         leadingIcon = {
-            Icon(icon, null, tint = if (enabled) colors.textMd else accent, modifier = Modifier.size(18.dp))
+            Icon(icon, null, tint = if (marked) accent else colors.textMd, modifier = Modifier.size(18.dp))
+        },
+        trailingIcon = if (selected) {
+            { Icon(Icons.Outlined.Check, "Selected", tint = accent, modifier = Modifier.size(18.dp)) }
+        } else {
+            null
         },
         onClick = onClick,
         enabled = enabled,

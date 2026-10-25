@@ -368,23 +368,21 @@ private fun SearchContent(
             phone = phone,
             tv = tv,
             placeholder = scope.placeholder,
+            scopeChip = if (scopes.size > 1) {
+                { SearchScopeChip(scope = scope, scopes = scopes, onSelect = onScopeChange) }
+            } else {
+                null
+            },
         )
-        if (scopes.size > 1 || jumps.isNotEmpty()) {
-            Row(
+        if (jumps.isNotEmpty()) {
+            SearchJumpChips(
+                jumps = jumps,
+                onJump = onJump,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = if (phone) 16.dp else 18.dp)
                     .padding(bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (scopes.size > 1) {
-                    SearchScopeChips(scope = scope, scopes = scopes, onSelect = onScopeChange, modifier = Modifier.weight(1f))
-                } else {
-                    Spacer(Modifier.weight(1f))
-                }
-                if (jumps.isNotEmpty()) SearchJumpChips(jumps = jumps, onJump = onJump)
-            }
+            )
         }
 
         LazyVerticalGrid(
@@ -479,6 +477,7 @@ private fun SearchBar(
     phone: Boolean,
     tv: Boolean,
     placeholder: String,
+    scopeChip: (@Composable () -> Unit)?,
 ) {
     val colors = KobappTheme.colors
     val focusManager = LocalFocusManager.current
@@ -560,6 +559,7 @@ private fun SearchBar(
                 if (query.isNotEmpty()) {
                     IconBubble(icon = Icons.Outlined.Close, onClick = onClear, tint = colors.textLo, key = "clear", size = 28.dp)
                 }
+                scopeChip?.invoke()
             }
         }
         if (phone) {
