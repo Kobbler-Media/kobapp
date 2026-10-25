@@ -28,6 +28,14 @@ const val RESUME_TOLERANCE_MS = 30_000L
 const val RESUME_PARSE_TIMEOUT_MS = 8_000L
 
 /**
+ * How long to wait for the decoder's first clock report before judging the open-time start.
+ *
+ * Until it comes, the position is only the one the source was asked to open at. On a TV it
+ * lands 2.5–4 s after PLAYING; a stream still silent after this is seeked regardless.
+ */
+const val RESUME_CLOCK_TIMEOUT_MS = 10_000L
+
+/**
  * How long to leave a seek before reading the clock back.
  *
  * Every player answers a seek optimistically — it reports the position it was asked for
@@ -51,8 +59,10 @@ const val RESUME_REPAIR_ATTEMPTS = 3
 suspend fun Player.settleAt(targetMs: Long) {
     if (targetMs <= 0) return
     withTimeoutOrNull(RESUME_PARSE_TIMEOUT_MS) { durationMs.first { it > 0 } }
-    repeat(RESUME_REPAIR_ATTEMPTS) {
-        if (currentMs.value >= targetMs - RESUME_TOLERANCE_MS) return
+    val reported = withTimeoutOrNull(RESUME_CLOCK_TIMEOUT_MS) { positionReported.first { it } } != null
+    repeat(RESUME_REPAIR_ATTEMPTS) { attempt ->
+        val unconfirmed = attempt == 0 && !reported
+        if (!unconfirmed && currentMs.value >= targetMs - RESUME_TOLERANCE_MS) return
         seekTo(targetMs)
         delay(RESUME_CONFIRM_MS)
     }

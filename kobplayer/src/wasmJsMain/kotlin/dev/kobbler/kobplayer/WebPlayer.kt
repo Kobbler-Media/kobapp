@@ -53,6 +53,9 @@ internal class WebPlayer(
     private val _currentMs = MutableStateFlow(0L)
     override val currentMs: StateFlow<Long> = _currentMs.asStateFlow()
 
+    private val _positionReported = MutableStateFlow(false)
+    override val positionReported: StateFlow<Boolean> = _positionReported.asStateFlow()
+
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
@@ -126,6 +129,7 @@ internal class WebPlayer(
                 }
             }
             _currentMs.value = time
+            _positionReported.value = true
         }
         videoElement.addEventListener("durationchange") {
             val dur = videoElement.duration
@@ -164,6 +168,7 @@ internal class WebPlayer(
                 _isBuffering.value = true
                 _bufferPercent.value = 0f
                 _currentMs.value = 0L
+                _positionReported.value = false
                 _durationMs.value = 0L
                 _error.value = null
 

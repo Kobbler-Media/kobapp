@@ -35,8 +35,11 @@ private fun directPlaySession(startTime: String? = null) = """
 
 class DebridResumeTest {
 
-    private fun launch(resolveBody: String, resumeSec: Int): Pair<GlobalPlayerState, FakePlayer> {
-        val player = FakePlayer()
+    private fun launch(
+        resolveBody: String,
+        resumeSec: Int,
+        player: FakePlayer = FakePlayer(),
+    ): Pair<GlobalPlayerState, FakePlayer> {
         player.durationMs.value = 3_600_000
         val gps = GlobalPlayerState()
         StubServer(mapOf(RESOLVE to { resolveBody })).use { stub ->
@@ -60,6 +63,18 @@ class DebridResumeTest {
         assertEquals("ep-1", gps.mediaId)
         assertEquals(1_200_000L, gps.pendingSeekMs)
         assertEquals(1200, player.loadedSource?.startTimeSec, "the stream did not open at the resume point")
+    }
+
+    /**
+     * What a debrid stream does on a TV: VLC drops the open-time start, and the player
+     * shows the asked-for position until VLC's own clock arrives seconds after PLAYING.
+     */
+    @Test
+    fun aDebridEpisodeWhoseStartWasIgnoredIsPutBack() {
+        val (_, player) = launch(directPlaySession(), resumeSec = 1200, FakePlayer().apply { startTimeIgnored = true })
+        player.awaitSettled()
+        assertEquals(listOf("seek:1200000"), player.seeks(), "${player.calls}")
+        assertEquals(1_200_000L, player.currentMs.value)
     }
 
     @Test

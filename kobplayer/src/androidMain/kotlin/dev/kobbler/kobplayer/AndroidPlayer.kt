@@ -164,6 +164,9 @@ internal class AndroidPlayer(
     private val _currentMs = MutableStateFlow(0L)
     override val currentMs: StateFlow<Long> = _currentMs.asStateFlow()
 
+    private val _positionReported = MutableStateFlow(false)
+    override val positionReported: StateFlow<Boolean> = _positionReported.asStateFlow()
+
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
@@ -175,7 +178,10 @@ internal class AndroidPlayer(
                 while (state == PlayerState.PLAYING) {
                     delay(AudioClockPollMs)
                     val time = onVlc { time } ?: break
-                    if (time >= 0) _currentMs.value = publishedPosition(_currentMs.value, time)
+                    if (time >= 0) {
+                        _currentMs.value = publishedPosition(_currentMs.value, time)
+                        _positionReported.value = true
+                    }
                 }
             }
         }
@@ -464,6 +470,7 @@ internal class AndroidPlayer(
             when (event.type) {
                 MediaPlayer.Event.Opening -> {
                     stopRequested = false
+                    _positionReported.value = false
                     _state.value = PlayerState.LOADING
                     _isBuffering.value = true
                 }
@@ -511,6 +518,7 @@ internal class AndroidPlayer(
                         }
                     }
                     _currentMs.value = publishedPosition(_currentMs.value, time)
+                    _positionReported.value = true
                 }
                 MediaPlayer.Event.LengthChanged -> {
                     _durationMs.value = event.lengthChanged
@@ -562,6 +570,7 @@ internal class AndroidPlayer(
         _isBuffering.value = true
         _bufferPercent.value = 0f
         _currentMs.value = source.startTimeSec?.let { it * 1000L } ?: 0L
+        _positionReported.value = false
         _durationMs.value = 0L
         updateModeSwitchAllowed()
         _error.value = null
@@ -684,6 +693,7 @@ internal class AndroidPlayer(
         }
         _state.value = PlayerState.IDLE
         _currentMs.value = 0L
+        _positionReported.value = false
         _durationMs.value = 0L
         _isBuffering.value = false
         _bufferPercent.value = 0f

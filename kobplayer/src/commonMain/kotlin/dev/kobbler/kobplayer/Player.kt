@@ -163,6 +163,12 @@ interface Player {
     val state: StateFlow<PlayerState>
     val isPlaying: StateFlow<Boolean>
     val currentMs: StateFlow<Long>
+    /**
+     * True once the decoder has reported a position since the last [load]. Until then
+     * [currentMs] is only where the source was asked to open, which a demuxer that
+     * ignored the open-time start never went near.
+     */
+    val positionReported: StateFlow<Boolean>
     val durationMs: StateFlow<Long>
     val error: StateFlow<Throwable?>
 

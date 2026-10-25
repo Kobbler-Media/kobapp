@@ -339,7 +339,21 @@ class GlobalPlayerState {
 
     // Where this playback was asked to start, in ms. The stream is opened at it rather
     // than seeked to it; this is kept so [repairResume] can tell whether that landed.
-    var pendingSeekMs by mutableStateOf(0L)
+    private var pendingSeek by mutableStateOf(0L)
+    var pendingSeekMs: Long
+        get() = pendingSeek
+        set(value) {
+            pendingSeek = value
+            resumeSettling = value > 0
+        }
+
+    // Until [repairResume] has the playhead at [pendingSeekMs], it may still be reading the
+    // head of a file that ignored its start, and a save then overwrites the resume point.
+    private var resumeSettling = false
+
+    internal fun isShortOfResume(id: String, absoluteMs: Long): Boolean =
+        resumeSettling && id == mediaId &&
+            absoluteMs < timeline.toAbsoluteMs(pendingSeekMs) - RESUME_TOLERANCE_MS
 
     // True when audio was muted for silent preload — play paths must unmute
     var mutedForPreload by mutableStateOf(false)
@@ -871,6 +885,7 @@ class GlobalPlayerState {
         startJob?.cancel()
         startJob = null
         isStarting = false
+        resumeSettling = false
     }
 
     /** Unmute if we muted for preload, then play. */
@@ -909,7 +924,9 @@ class GlobalPlayerState {
      * against; the alternative is paying for the parse on every start to protect against
      * the rare source that needs it.
      */
-    private suspend fun repairResume(player: dev.kobbler.kobplayer.Player) =
+    private suspend fun repairResume(player: dev.kobbler.kobplayer.Player) {
         player.settleAt(pendingSeekMs)
+        resumeSettling = false
+    }
 }
 

@@ -69,7 +69,7 @@ class AudiobookStartTest {
     /** A demuxer may ignore the open-time position. One check, after it is really playing. */
     @Test
     fun `a start time the source ignored is repaired`() = runTest {
-        val player = FakePlayer().apply { startTimeIgnored = true; durationMs.value = 3_600_000 }
+        val player = FakePlayer(backgroundScope).apply { startTimeIgnored = true; durationMs.value = 3_600_000 }
         val s = state(player)
 
         s.playFileAt(0, positionMs = 742_000)
@@ -83,10 +83,7 @@ class AudiobookStartTest {
 
     @Test
     fun `a source that opened where it was asked to is left alone`() = runTest {
-        val player = FakePlayer().apply {
-            durationMs.value = 3_600_000
-            currentMs.value = 742_000
-        }
+        val player = FakePlayer(backgroundScope).apply { durationMs.value = 3_600_000 }
         val s = state(player)
 
         s.playFileAt(0, positionMs = 742_000)

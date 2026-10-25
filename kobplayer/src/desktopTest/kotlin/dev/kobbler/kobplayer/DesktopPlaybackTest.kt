@@ -88,6 +88,19 @@ class DesktopPlaybackTest {
         assertTrue(player.durationMs.value in 9_900..10_100, "duration ${player.durationMs.value}")
     }
 
+    @Test
+    fun `the open-time position is not reported as the decoder's own until it is`() = withPlayer { player ->
+        player.load(MediaSource.Url(resourceUrl("red_176x100_sar4-3.mkv")))
+        player.positionReported.await("first title reported") { it }
+        player.load(MediaSource.Url(resourceUrl("red_176x100_subtitled.mkv"), startTimeSec = 5))
+        assertEquals(5_000, player.currentMs.value)
+        assertEquals(false, player.positionReported.value, "the asked-for start passed off as a report")
+        player.positionReported.await("decoder clock") { it }
+        assertTrue(player.currentMs.value in 4_000..9_000, "position ${player.currentMs.value}")
+        player.stop()
+        assertEquals(false, player.positionReported.value, "a stopped player still claims a clock")
+    }
+
     // How the app starts every title, Up Next included: load at the resume point, pause at
     // once, play when ready.
     @Test

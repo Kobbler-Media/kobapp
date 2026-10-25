@@ -70,6 +70,9 @@ class TvAutoPlayResumeTest {
      * The show page is a cached payload, drawn straight away while it revalidates, and
      * Continue resumed from the position in it — wherever this device last saw the
      * episode, not where the device the viewer just left saved it.
+     *
+     * And once it plays it has to be there: a library file honours the open-time start
+     * and is not seeked again, while a debrid stream VLC opens at the head is put back.
      */
     @Test
     fun continueResumesFromTheServerNotTheCachedShow() {
@@ -80,6 +83,10 @@ class TvAutoPlayResumeTest {
             "debrid" to show,
         )
         for ((name, cachedShow) in cases) runUiTest {
+            val player = FakePlayer().also {
+                it.durationMs.value = 3_600_000
+                it.startTimeIgnored = name == "debrid"
+            }
             val session = "/api/v1/admin/playback/sessions" to { _: com.sun.net.httpserver.HttpExchange ->
                 """{"session_id":"s1","direct_url":"/api/v1/admin/stream/s1/play","method":"direct"}"""
             }
@@ -94,12 +101,18 @@ class TvAutoPlayResumeTest {
                 setContent {
                     InlineTvPlayer(
                         show = cachedShow, api = api, formFactor = FormFactor.Phone,
-                        player = FakePlayer().also { it.durationMs.value = 3_600_000 },
+                        player = player,
                         gps = gps, autoPlay = true, onBack = {},
                     )
                 }
                 waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == "ep-1" && gps.isFullscreen }
                 assertEquals(2_500_000L, gps.timeline.toAbsoluteMs(gps.pendingSeekMs), "$name resumed from the cached show")
+                assertEquals(2_500, player.loadedSource?.startTimeSec, "$name did not open at the resume point")
+
+                player.awaitSettled()
+                val repairs = if (name == "debrid") listOf("seek:2500000") else emptyList()
+                assertEquals(repairs, player.seeks(), "$name: ${player.calls}")
+                assertEquals(2_500_000L, player.currentMs.value, "$name is not at the resume point")
             }
         }
     }

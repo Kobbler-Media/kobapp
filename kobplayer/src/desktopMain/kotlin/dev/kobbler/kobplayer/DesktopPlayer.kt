@@ -91,6 +91,9 @@ internal class DesktopPlayer(
     private val _currentMs = MutableStateFlow(0L)
     override val currentMs: StateFlow<Long> = _currentMs.asStateFlow()
 
+    private val _positionReported = MutableStateFlow(false)
+    override val positionReported: StateFlow<Boolean> = _positionReported.asStateFlow()
+
     private val _durationMs = MutableStateFlow(0L)
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
@@ -302,6 +305,7 @@ internal class DesktopPlayer(
                     }
                 }
                 _currentMs.value = newTime
+                _positionReported.value = true
             }
         })
     }
@@ -330,6 +334,7 @@ internal class DesktopPlayer(
                 _isBuffering.value = true
                 _bufferPercent.value = 0f
                 _currentMs.value = source.startTimeSec?.let { it * 1000L } ?: 0L
+                _positionReported.value = false
                 _durationMs.value = 0L
                 _error.value = null
                 hasStartedPlaying = false
@@ -390,6 +395,7 @@ internal class DesktopPlayer(
         } catch (_: RejectedExecutionException) {}
         _state.value = PlayerState.IDLE
         _currentMs.value = 0L
+        _positionReported.value = false
         _durationMs.value = 0L
         _isBuffering.value = false
         _bufferPercent.value = 0f
@@ -410,7 +416,7 @@ internal class DesktopPlayer(
 
     override fun seekTo(ms: Long) {
         val clamped = clampSeekTarget(ms, _durationMs.value)
-        if (clamped == _currentMs.value) return
+        if (clamped == _currentMs.value && _positionReported.value) return
 
         _currentMs.value = clamped
         vlcPlayer.submit {
