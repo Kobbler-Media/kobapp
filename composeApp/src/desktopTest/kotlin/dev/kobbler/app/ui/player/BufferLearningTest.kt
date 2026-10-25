@@ -1,8 +1,11 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.BufferClass
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.OriginProfile
 import dev.kobbler.app.data.OriginProfiles
+import dev.kobbler.app.data.RemoteLiveNetworkCacheMs
+import dev.kobbler.app.data.RemoteNetworkCacheMs
 import dev.kobbler.app.data.StallStepMs
 import dev.kobbler.kobplayer.PlayerState
 import io.ktor.client.HttpClient
@@ -93,5 +96,35 @@ class BufferLearningTest {
         runCurrent()
 
         assertEquals(0, s.profiles.get(host).stallAllowanceMs)
+    }
+
+    /**
+     * A channel is relayed by the library server but stalls with the IPTV provider behind
+     * it, so what one teaches the buffer says nothing about the other.
+     */
+    @Test
+    fun `IPTV and films learn their buffers apart on the same server`() = runTest {
+        val film = RemoteNetworkCacheMs
+        val channel = RemoteLiveNetworkCacheMs
+        listOf(
+            Triple("iptv", film, channel + StallStepMs),
+            Triple("movie", film + StallStepMs, channel),
+        ).forEach { (stalling, filmAfter, channelAfter) ->
+            val s = watching(mediaType = stalling)
+            play(s.player, fromMs = 600_000, forMs = 30_000)
+            s.player.state.value = PlayerState.BUFFERING
+            runCurrent()
+
+            assertEquals(filmAfter, s.api.networkCacheMsFor(stream, BufferClass.Vod), "film after a $stalling stall")
+            assertEquals(channelAfter, s.api.networkCacheMsFor(stream, BufferClass.RemoteLive), "channel after a $stalling stall")
+        }
+    }
+
+    @Test
+    fun `clean IPTV watching does not ease a film buffer the server earned`() = runTest {
+        val s = watching(start = OriginProfile(stallAllowanceMs = 2 * StallStepMs), mediaType = "iptv")
+        play(s.player, fromMs = 0, forMs = 11 * 60_000)
+
+        assertEquals(2 * StallStepMs, s.profiles.get(host).stallAllowanceMs)
     }
 }

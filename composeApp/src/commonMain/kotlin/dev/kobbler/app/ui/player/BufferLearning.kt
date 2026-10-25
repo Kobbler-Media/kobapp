@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.BufferClass
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.isSeekJump
 import dev.kobbler.app.data.isStall
@@ -16,7 +17,7 @@ private val monotonicStart = TimeSource.Monotonic.markNow()
 /**
  * Tell the buffer policy what playback ran into: a stream that ran dry mid-play earns its
  * server a deeper buffer from the next start, and a long stretch played without one eases
- * it back. Starts are the start supervisor's to judge, so only buffering out of playing
+ * it back. A channel learns apart from the server relaying it. Starts are the start supervisor's to judge, so only buffering out of playing
  * counts, and buffering a seek caused is the seek's.
  */
 internal suspend fun GlobalPlayerState.learnBuffering(
@@ -39,7 +40,7 @@ internal suspend fun GlobalPlayerState.learnBuffering(
         player.currentMs.collect {
             val since = cleanSince ?: return@collect
             if (player.state.value != PlayerState.PLAYING || now() - since < CLEAN_STRETCH_MS) return@collect
-            lastStreamUrl?.let(api::recordCleanSession)
+            lastStreamUrl?.let { api.recordCleanSession(it, BufferClass.of(mediaType)) }
             cleanSince = now()
         }
     }
@@ -49,7 +50,7 @@ internal suspend fun GlobalPlayerState.learnBuffering(
         if (previousState == PlayerState.PLAYING && state == PlayerState.BUFFERING && mediaType != "livetv" &&
             isStall(lastSeekAt?.let { now() - it })
         ) {
-            lastStreamUrl?.let(api::recordStall)
+            lastStreamUrl?.let { api.recordStall(it, BufferClass.of(mediaType)) }
             cleanSince = null
         }
         previousState = state

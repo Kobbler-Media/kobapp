@@ -2143,8 +2143,8 @@ class KobblerApi(
     private val originLatency = OriginLatency()
 
     /** Buffer depth for a player source. See [networkCacheMsFor]. */
-    fun networkCacheMsFor(url: String, liveTuner: Boolean = false): Int =
-        networkCacheMsFor(url, apiUrl, originLatency.roundTripMs(), originProfiles.get(hostOf(url).orEmpty()), liveTuner)
+    fun networkCacheMsFor(url: String, bufferClass: BufferClass = BufferClass.Vod): Int =
+        networkCacheMsFor(url, apiUrl, originLatency.roundTripMs(), originProfiles.get(profileKeyFor(url, bufferClass)), bufferClass)
 
     /**
      * Time the network to the server rather than a request to it: on a Chromecast an HTTP
@@ -2167,13 +2167,13 @@ class KobblerApi(
         originProfiles.update(host) { it.copy(roundTripMs = measured) }
     }
 
-    /** The stream ran dry mid-play: give its host a deeper buffer from the next start. */
-    fun recordStall(streamUrl: String) =
-        originProfiles.update(hostOf(streamUrl).orEmpty()) { it.afterStall() }
+    /** The stream ran dry mid-play: give its profile a deeper buffer from the next start. */
+    fun recordStall(streamUrl: String, bufferClass: BufferClass) =
+        originProfiles.update(profileKeyFor(streamUrl, bufferClass)) { it.afterStall() }
 
-    /** A long stretch played without a stall: ease its host's buffer back a step. */
-    fun recordCleanSession(streamUrl: String) =
-        originProfiles.update(hostOf(streamUrl).orEmpty()) { it.afterCleanSession() }
+    /** A long stretch played without a stall: ease its profile's buffer back a step. */
+    fun recordCleanSession(streamUrl: String, bufferClass: BufferClass) =
+        originProfiles.update(profileKeyFor(streamUrl, bufferClass)) { it.afterCleanSession() }
 
     /** Measured round trip to the server, or null before anything has been timed. */
     fun originRoundTripMs(): Long? = originLatency.roundTripMs()

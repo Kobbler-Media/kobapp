@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.kobbler.app.data.BufferClass
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.ui.navigation.Destination
 import kotlinx.coroutines.CancellationException
@@ -510,7 +511,7 @@ class GlobalPlayerState {
                 // reports, and a credential does not belong in one.
                 api.playerUrl(streamUrl),
                 fieldCoded = liveFieldCoded,
-                networkCacheMs = api.networkCacheMsFor(streamUrl, liveTuner = type == "livetv"),
+                networkCacheMs = api.networkCacheMsFor(streamUrl, BufferClass.of(type)),
                 audioLanguage = intent.audioLanguage,
                 subtitleOrdinal = intent.subtitleOrdinal,
                 subtitlesOff = intent.subtitlesOff,

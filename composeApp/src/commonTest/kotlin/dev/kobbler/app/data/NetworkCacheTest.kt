@@ -15,8 +15,8 @@ class NetworkCacheTest {
         streamUrl: String,
         roundTripMs: Long? = null,
         profile: OriginProfile = OriginProfile(),
-        liveTuner: Boolean = false,
-    ) = networkCacheMsFor(streamUrl, api, roundTripMs, profile, liveTuner)
+        bufferClass: BufferClass = BufferClass.Vod,
+    ) = networkCacheMsFor(streamUrl, api, roundTripMs, profile, bufferClass)
 
     @Test
     fun `a host that can only be local needs no measurement`() {
@@ -165,7 +165,48 @@ class NetworkCacheTest {
     @Test
     fun `a live tune does not pay the allowance a server earned on films`() {
         val stalled = OriginProfile(stallAllowanceMs = MaxStallAllowanceMs)
-        assertEquals(340, cache(ownStream, roundTripMs = 4, profile = stalled, liveTuner = true))
+        assertEquals(340, cache(ownStream, roundTripMs = 4, profile = stalled, bufferClass = BufferClass.LiveTuner))
         assertEquals(340 + MaxStallAllowanceMs, cache(ownStream, roundTripMs = 4, profile = stalled))
+    }
+
+    /**
+     * The relay is the library server, often a LAN hop away, but the bytes behind it come
+     * over the internet at broadcast rate: the start cushion is all a channel ever has.
+     */
+    @Test
+    fun `an IPTV channel buffers for the provider behind the relay, not for the relay`() {
+        listOf(
+            Triple("http://10.0.0.208:8080/api/v1/admin/iptv/channels/c/play.ts", 2L, "LAN relay"),
+            Triple("$api/api/v1/admin/iptv/channels/c/play.ts", 4L, "measured-near relay"),
+            Triple("$api/api/v1/admin/iptv/sessions/s/live.m3u8", null, "unmeasured relay"),
+            Triple("http://provider.example.net/live/u/p/1.ts", 2L, "provider URL"),
+        ).forEach { (url, roundTrip, label) ->
+            assertEquals(RemoteLiveNetworkCacheMs, cache(url, roundTripMs = roundTrip, bufferClass = BufferClass.RemoteLive), label)
+        }
+    }
+
+    @Test
+    fun `an IPTV channel's learned allowance goes on top of its floor, up to the cap`() {
+        val lan = "http://10.0.0.208:8080/api/v1/admin/iptv/channels/c/play.ts"
+        listOf(
+            1 to RemoteLiveNetworkCacheMs + StallStepMs,
+            MaxStallAllowanceMs / StallStepMs to RemoteLiveNetworkCacheMs + MaxStallAllowanceMs,
+        ).forEach { (stalls, expected) ->
+            var profile = OriginProfile()
+            repeat(stalls) { profile = profile.afterStall() }
+            assertEquals(expected, cache(lan, profile = profile, bufferClass = BufferClass.RemoteLive), "$stalls stalls")
+        }
+        assertEquals(MaxNetworkCacheMs, RemoteLiveNetworkCacheMs + MaxStallAllowanceMs, "a fully learned channel is not clipped")
+    }
+
+    @Test
+    fun `media types map onto their buffer class`() {
+        listOf(
+            "iptv" to BufferClass.RemoteLive,
+            "livetv" to BufferClass.LiveTuner,
+            "movie" to BufferClass.Vod,
+            "episode" to BufferClass.Vod,
+            null to BufferClass.Vod,
+        ).forEach { (type, expected) -> assertEquals(expected, BufferClass.of(type), "$type") }
     }
 }

@@ -21,10 +21,13 @@ internal fun networkCacheMsFor(
     apiUrl: String,
     roundTripMs: Long?,
     profile: OriginProfile,
-    liveTuner: Boolean = false,
+    bufferClass: BufferClass = BufferClass.Vod,
 ): Int {
     val roundTrip = roundTripMs ?: profile.roundTripMs
     val base = when {
+        // The relay being near says nothing about the provider feeding it at broadcast rate,
+        // and a live source cannot read ahead, so the start cushion is all it ever has.
+        bufferClass == BufferClass.RemoteLive -> RemoteLiveNetworkCacheMs
         isLanHost(hostOf(streamUrl)) -> LanNetworkCacheMs
         // Only the API's own origin has been measured. A debrid CDN is a host this client has
         // never timed, and guessing it is near because the library server is would be wrong in
@@ -34,7 +37,7 @@ internal fun networkCacheMsFor(
     }
     // A tuner delivers at broadcast rate, so the buffer fills no faster than it plays and
     // every extra ms holds the first picture frozen; what films taught the server stays theirs.
-    val allowance = if (liveTuner) 0 else profile.stallAllowanceMs
+    val allowance = if (bufferClass == BufferClass.LiveTuner) 0 else profile.stallAllowanceMs
     return (base + allowance).coerceAtMost(MaxNetworkCacheMs)
 }
 
@@ -43,13 +46,41 @@ internal fun networkCacheMsFor(
 private fun bufferForRoundTrip(roundTripMs: Long): Int =
     (LanNetworkCacheMs + roundTripMs * 10).coerceAtMost(RemoteNetworkCacheMs.toLong()).toInt()
 
+enum class BufferClass {
+    Vod, LiveTuner, RemoteLive;
+
+    companion object {
+        fun of(mediaType: String?): BufferClass = when (mediaType) {
+            "livetv" -> LiveTuner
+            "iptv" -> RemoteLive
+            else -> Vod
+        }
+    }
+}
+
 const val LanNetworkCacheMs = 300
 const val RemoteNetworkCacheMs = 1500
-const val MaxNetworkCacheMs = 4000
+// Rides out a provider-side segment fetch or upstream reconnect of a couple of seconds,
+// which is what an internet IPTV source routinely does; on a channel nobody can see how far
+// behind the broadcast it runs, and every extra second is paid once at tune.
+const val RemoteLiveNetworkCacheMs = 3000
 
 const val StallStepMs = 500
 const val MaxStallAllowanceMs = 2500
+// Room for a fully learned allowance on the deepest base; no VOD source reaches it.
+const val MaxNetworkCacheMs = RemoteLiveNetworkCacheMs + MaxStallAllowanceMs
 private const val CleanSessionReliefMs = StallStepMs / 2
+
+/**
+ * Whose [OriginProfile] a source learns into. A channel stalls with the IPTV provider behind
+ * the relay, not with the relay, so it must not share the library server's profile; the
+ * server does not say which provider a session landed on, so all channels share one.
+ */
+internal fun profileKeyFor(url: String, bufferClass: BufferClass): String =
+    if (bufferClass == BufferClass.RemoteLive) IptvProfileKey else hostOf(url).orEmpty()
+
+// A colon and non-hex letters: no host [hostOf] returns can collide with it.
+private const val IptvProfileKey = "live:iptv"
 
 /**
  * What streaming from one host has taught the buffer, kept across launches.
