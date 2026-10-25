@@ -4,10 +4,9 @@ import dev.kobbler.app.runUiTest
 import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -19,6 +18,10 @@ import dev.kobbler.app.data.LocalAuthState
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.DataCache
+import dev.kobbler.app.ui.detail.tvshow.assertFocusSettlesOn
+import dev.kobbler.app.ui.detail.tvshow.focusedText
+import dev.kobbler.app.ui.detail.tvshow.moveUntil
+import dev.kobbler.app.ui.detail.tvshow.press
 import dev.kobbler.app.ui.navigation.DesktopScaffold
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.app.ui.navigation.NavigationState
@@ -60,10 +63,13 @@ class DiscoverShowPageTest {
         "/api/v1/library/stats" to { _ -> """{"kobload_configured":true}""" },
     )
 
-    private fun discoverPage(test: DesktopComposeUiTest.(StubServer) -> Unit) =
+    private fun discoverPage(
+        extraRoutes: Map<String, (HttpExchange) -> String> = emptyMap(),
+        test: DesktopComposeUiTest.(StubServer) -> Unit,
+    ) =
         runUiTest(width = 1280, height = 720) {
             DataCache.clear()
-            StubServer(routes).use { stub ->
+            StubServer(routes + extraRoutes).use { stub ->
                 val nav = NavigationState()
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 // Probed before the page opens, as the app does at sign-in: a probe landing
@@ -91,15 +97,6 @@ class DiscoverShowPageTest {
             }
         }
 
-    private fun DesktopComposeUiTest.focusedText(): String? =
-        onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
-            .fetchSemanticsNodes().lastOrNull()
-            ?.let { node ->
-                node.config.getOrElseNullable(SemanticsProperties.Text) { null }?.joinToString(" ")
-                    ?: node.config.getOrElseNullable(SemanticsProperties.ContentDescription) { null }?.joinToString(" ")
-                    ?: ""
-            }
-
     @Test
     fun `entry focus is the stream action, naming the first episode`() = discoverPage {
         assertEquals("Stream S01 E01", focusedText())
@@ -120,5 +117,21 @@ class DiscoverShowPageTest {
         assertEquals(1, search["season"]?.jsonPrimitive?.int)
         assertEquals(1, search["episode"]?.jsonPrimitive?.int)
         assertTrue(search["tmdb_id"] != null)
+    }
+
+    @Test
+    fun `closing an episode's stream options returns to the button that opened them`() = discoverPage(
+        mapOf("/api/v1/admin/stream/search" to { _ ->
+            """{"options":[{"id":"o1","release_title":"Mayor.of.Kingstown.S01E01.1080p","debrid_provider":"rd","debrid_provider_id":"rd1"}]}"""
+        }),
+    ) {
+        waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("The Mayor").fetchSemanticsNodes().isNotEmpty() }
+        moveUntil(Key.DirectionDown, { it?.contains("The Mayor") == true })
+        moveUntil(Key.DirectionRight, { it == "Stream options" })
+        assertEquals("Stream options", focusedText())
+        press(Key.Enter)
+        waitUntil(timeoutMillis = UiTimeoutMs) { focusedText()?.contains("Mayor.of.Kingstown.S01E01.1080p") == true }
+        press(Key.Back)
+        assertFocusSettlesOn("Stream options")
     }
 }

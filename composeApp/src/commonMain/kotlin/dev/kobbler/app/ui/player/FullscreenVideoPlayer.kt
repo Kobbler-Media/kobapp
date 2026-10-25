@@ -554,21 +554,6 @@ fun FullscreenVideoPlayer(
     // closes. A tune's own preparing shell counts: it covers the player too.
     val overlaid = showSubtitleSearch || state.isPreparing || railOpen
 
-    // Going inert evicts whatever was lit down here, and a layer that hosts its own focus
-    // scope — subtitle search does — hands nothing back on the way out. Landing anywhere
-    // in the player beats landing nowhere: with no focus at all, no key reaches the
-    // overlay, so the transport can never be asked back.
-    var overlayReturnKey by remember { mutableStateOf<String?>(null) }
-    val openOverlay: (() -> Unit) -> Unit = { open ->
-        overlayReturnKey = focusScope.save()
-        open()
-    }
-    LaunchedEffect(overlaid) {
-        if (overlaid) return@LaunchedEffect
-        val key = overlayReturnKey ?: return@LaunchedEffect
-        overlayReturnKey = null
-        if (!focusScope.restore(key)) focusScope.focusFirst()
-    }
     // The rail registers into this same scope rather than hosting its own, so entry focus
     // for it is this scope's preferred pass — which lands on the current channel's card.
     LaunchedEffect(railOpen) { if (railOpen) focusScope.focusFirst() }
@@ -577,7 +562,7 @@ fun FullscreenVideoPlayer(
     LaunchedEffect(isLiveTv) { if (!isLiveTv) railOpen = false }
     InterceptBack(enabled = railOpen, onBack = { railOpen = false })
 
-    val openChannelPanel = { openOverlay { railOpen = true } }
+    val openChannelPanel = { railOpen = true }
 
     var recordRequested by remember(state.liveSessionId) { mutableStateOf(false) }
     if (isLiveTv) {
@@ -697,7 +682,7 @@ fun FullscreenVideoPlayer(
                     )
                 } else null,
                 onFindSubtitles = if (state.sessionId != null && mediaType in listOf("movie", "episode")) {
-                    { openOverlay { showSubtitleSearch = true } }
+                    { showSubtitleSearch = true }
                 } else null,
                 // Nothing airs ahead of the live edge, so the press that would have
                 // seeked there opens the channel list instead — the one thing a remote

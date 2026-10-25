@@ -67,7 +67,7 @@ private data class FocusKeyElement(
     }
 }
 
-private class FocusKeyNode(
+internal class FocusKeyNode(
     var key: String,
     var focusRequester: FocusRequester?,
     var preferredEntry: Boolean = false,
@@ -81,14 +81,16 @@ private class FocusKeyNode(
 
     private var registeredKey: String? = null
     private var preferenceDirty = false
+    var isFocused = false
+        private set
 
-    private val fullKey: String
+    val fullKey: String
         get() {
             val parent = findNearestAncestor(traverseKey) as? FocusKeyNode
             return parent?.let { "${it.fullKey}.$key" } ?: key
         }
 
-    private val scope get() = currentValueOf(LocalFocusScope)
+    val scope: FocusScope get() = currentValueOf(LocalFocusScope)
 
     override fun onAttach() = updateRegistration()
 
@@ -96,6 +98,9 @@ private class FocusKeyNode(
         val requester = focusRequester
         if (requester != null) {
             registeredKey?.let {
+                // The focus target below detaches first and reports the blur before this
+                // runs, so "was it focused" has to come from the scope's memory.
+                if (scope.focused == null && scope.save() == it) scope.onVanished(it)
                 scope.onBlurred(it)
                 scope.unregister(it, requester)
             }
@@ -149,6 +154,7 @@ private class FocusKeyNode(
 
     override fun onFocusEvent(focusState: FocusState) {
         if (focusRequester == null) return
+        isFocused = focusState.isFocused
         if (focusState.isFocused) scope.onFocused(fullKey) else scope.onBlurred(fullKey)
     }
 }

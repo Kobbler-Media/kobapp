@@ -1069,8 +1069,8 @@ private fun ScreenContent(
 ) {
     val isOnDetail = nav.current !is Destination.Tab
     // The player paints over the whole scaffold and takes it out of focus traversal
-    // while it is up. Nothing hands focus back on the way out, so the page the viewer
-    // returns to has none — track it as a restore trigger instead.
+    // while it is up. A page that first composed under it never got entry focus, so
+    // uncovering has to be a restore trigger as well.
     val covered = gps.isFullscreen || gps.loadingError != null
     // State holder lives here so it survives the tab↔detail toggle
     val stateHolder = rememberSaveableStateHolder()

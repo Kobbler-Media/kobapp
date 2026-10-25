@@ -249,7 +249,7 @@ fun EpisodeList(
                     { onStreamEpisodePick(seasonIdx, idx) }
                 } else null,
                 wanted = ep.isWantedNow(wantOverrides),
-                onWant = if (api != null && ep.id != null && ep.canBeWanted(api.canWant)) {
+                onWant = if (api != null && ep.id != null && ep.canBeWanted(api.canWant) && !ep.isWantedNow(wantOverrides)) {
                     {
                         // Optimistic like the watched toggle: the round-trip enqueues a
                         // search, so the row is the only thing that can answer the tap.

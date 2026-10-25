@@ -88,11 +88,17 @@ fun FocusScopeHost(
         snapshotFlow { scope.registrations }.collectLatest {
             if (granted) return@collectLatest
             granted = when {
-                scope.restore(store.recall(id)) -> true
+                // The live memory first: a host re-enabled in place — its layer uncovered — has
+                // never been disposed, so the store still holds whatever it had before.
+                scope.restore(scope.save() ?: store.recall(id)) -> true
                 fallback != null -> { fallback(scope); true }
                 else -> scope.focusFirst()
             }
         }
+    }
+
+    LaunchedEffect(scope) {
+        snapshotFlow { scope.vanishedHeirs }.collect { if (it != null) scope.handOffVanished() }
     }
 
     DisposableEffect(id) {

@@ -2,6 +2,7 @@ package dev.kobbler.kobfocus
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusRequester
@@ -41,6 +42,7 @@ class FocusScope {
         entryEligible: Boolean = true,
     ) {
         requesters[key] = requester
+        firstSeen += key
         if (preferredEntry) preferred += key else preferred -= key
         if (entryEligible) chrome -= key else chrome += key
         registrationCount.intValue++
@@ -55,6 +57,33 @@ class FocusScope {
             requesters.remove(key)
             preferred -= key
             chrome -= key
+        }
+    }
+
+    // Removing the focused node — a "Want" button that is replaced by a marker once
+    // pressed — drops focus to nowhere, and nothing in Compose hands it on. Only its own
+    // group is a sensible heir: the next control along takes its place on screen.
+    // "Along" is first-seen order: nodes re-register whenever their modifier chain is
+    // rebuilt, so the live registry's order drifts away from the layout's.
+    private val firstSeen = LinkedHashSet<String>()
+    private val vanished = mutableStateOf<List<String>?>(null)
+    internal val vanishedHeirs: List<String>? get() = vanished.value
+
+    internal fun onVanished(key: String) {
+        val parent = key.substringBeforeLast('.', "")
+        if (parent.isEmpty()) return
+        val siblings = firstSeen.filter { it.substringBeforeLast('.', "") == parent }
+        val at = siblings.indexOf(key)
+        vanished.value = listOf(key) + siblings.drop(at + 1) + siblings.take(at).reversed()
+    }
+
+    internal suspend fun handOffVanished() {
+        val heirs = vanished.value ?: return
+        vanished.value = null
+        withFrameNanos { }
+        if (focusedKey != null) return
+        for (key in heirs) {
+            if (requesters[key]?.takesFocus(key) == true) return
         }
     }
 
