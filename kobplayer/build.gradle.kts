@@ -69,6 +69,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.libvlc.android)
             implementation(libs.media3.common)
+            implementation(libs.media3.session)
         }
 
         getByName("androidHostTest").dependencies {

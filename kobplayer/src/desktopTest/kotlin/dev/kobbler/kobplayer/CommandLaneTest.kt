@@ -51,6 +51,7 @@ class CommandLaneTest {
             }
         },
         onReplaced = { old, new -> replaced += old.id to new.id },
+        resumeTitle = { ran += "resume" },
     )
 
     @AfterTest
@@ -106,15 +107,55 @@ class CommandLaneTest {
     }
 
     @Test
-    fun aStuckCallWithNothingWaitingOnItIsLeftAlone() {
+    fun aNewTitleWhoseStopOfTheOldOneNeverReturnsStillStartsOnAFreshPlayer() {
+        val first = lane.current
+        val stopping = CountDownLatch(1)
+        lane.replaceTitle(
+            stop = { stopping.countDown(); stuck.await() },
+            start = { ran += "open B" },
+        )
+        assertTrue(stopping.await(3, TimeUnit.SECONDS), "the stop never started")
+        lane.post { ran += "play B" }
+        eventually("B playing on a new player") { lane.current !== first && lane.current.ran == listOf("open B", "play B") }
+        assertEquals(emptyList(), first.ran)
+    }
+
+    @Test
+    fun aNewTitleWhoseStopReturnsStartsOnTheSamePlayer() {
+        val first = lane.current
+        lane.replaceTitle(stop = { ran += "stop A" }, start = { ran += "open B" })
+        lane.post { ran += "play B" }
+        eventually("B playing") { first.ran.lastOrNull() == "play B" }
+        assertEquals(listOf("stop A", "open B", "play B"), first.ran)
+        assertEquals(emptyList(), replaced)
+    }
+
+    @Test
+    fun aStuckCallWithNothingQueuedBehindItIsLeftAlone() {
         val first = lane.current
         postStuck()
-        lane.post { ran += "pause" }
         Thread.sleep(1_000)
         assertTrue(lane.current === first)
         assertEquals(emptyList(), replaced)
-        stuck.countDown()
-        eventually("the pause runs once the call returns") { first.ran == listOf("pause") }
+    }
+
+    @Test
+    fun aPauseQueuedBehindAStuckSeekRunsOnAFreshPlayerThatPickedTheTitleBackUp() {
+        val first = lane.current
+        postStuck()
+        lane.post { ran += "pause" }
+        eventually("paused on a new player") { lane.current !== first && lane.current.ran == listOf("resume", "pause") }
+        assertEquals(listOf(1 to 2), replaced)
+        assertEquals(emptyList(), first.ran)
+    }
+
+    @Test
+    fun aCallQueuedBehindAStuckCallIsAnsweredByTheFreshPlayer() = runBlocking {
+        val first = lane.current
+        postStuck()
+        val answer = withTimeout(3_000) { lane.call { id } }
+        assertTrue(lane.current !== first)
+        assertEquals(lane.current.id, answer)
     }
 
     @Test
@@ -147,5 +188,14 @@ class CommandLaneTest {
         val started = System.nanoTime()
         lane.close()
         assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) < 100)
+    }
+
+    @Test
+    fun closingBehindAStuckCallStartsNoFreshPlayer() {
+        postStuck()
+        lane.close()
+        Thread.sleep(1_000)
+        assertEquals(1, made.get())
+        assertEquals(emptyList(), replaced)
     }
 }

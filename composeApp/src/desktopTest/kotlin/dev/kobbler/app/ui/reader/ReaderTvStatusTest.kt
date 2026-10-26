@@ -21,7 +21,7 @@ class ReaderTvStatusTest {
         val cursor = mutableStateOf(false)
         setContent {
             KobappTheme(formFactor = FormFactor.TV) {
-                ReaderTvStatus(pages = { 4 to 10 }, currentChapter = 2, totalChapters = 5, cursorActive = cursor.value, theme = theme)
+                ReaderTvStatus(pages = { 4 to 10 }, currentChapter = 2, totalChapters = 5, cursorActive = cursor.value, downOpensChapters = true, theme = theme)
             }
         }
         onNodeWithText(readerProgressLabel(4 to 10, 2, 5)).assertExists()
@@ -32,5 +32,16 @@ class ReaderTvStatusTest {
         cursor.value = true
         mainClock.advanceTimeBy(500)
         assertTrue(onAllNodesWithText("read aloud", substring = true).fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun `during listen-along the down hint points at playback, not chapters`() = runUiTest {
+        setContent {
+            KobappTheme(formFactor = FormFactor.TV) {
+                ReaderTvStatus(pages = { 4 to 10 }, currentChapter = 2, totalChapters = 5, cursorActive = false, downOpensChapters = false, theme = theme)
+            }
+        }
+        assertTrue(onAllNodesWithText("▼  playback", substring = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(onAllNodesWithText("▼  chapters", substring = true).fetchSemanticsNodes().isEmpty())
     }
 }

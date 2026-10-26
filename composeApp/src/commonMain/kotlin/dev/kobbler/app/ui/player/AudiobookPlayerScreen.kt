@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.PlaybackLifecycle
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
@@ -213,13 +214,16 @@ private fun TopBar(
             .padding(horizontal = KobappTheme.dimens.s2, vertical = KobappTheme.dimens.s1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.focusKey("back").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.textHi)
+        val touch = LocalFormFactor.current != FormFactor.TV
+        if (touch) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.focusKey("back").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.textHi)
+            }
         }
-        Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+        Column(Modifier.weight(1f).padding(horizontal = if (touch) 6.dp else KobappTheme.dimens.s2)) {
             Text(
                 "Now playing",
                 color = colors.textLo,
@@ -490,29 +494,22 @@ private fun ProgressLabels(state: AudiobookPlayerState) {
     val colors = KobappTheme.colors
     val type = KobappTheme.type
     val positionSec by remember(state) { derivedStateOf { state.globalPositionMs / 1000 } }
-    val totalSec = state.totalBookDurationMs / 1000
+    val chapterRemainingSec by remember(state) { derivedStateOf { state.chapterRemainingMs?.div(1000) } }
+    val remaining = chapterRemainingSec.takeIf { state.currentChapter?.title != null }
     Row(
         Modifier.fillMaxWidth().padding(top = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(formatTime(positionSec * 1000), style = type.bodySm, color = colors.textHi)
         Text(
-            "-${formatTime((totalSec - positionSec).coerceAtLeast(0) * 1000)}",
-            style = type.bodySm,
-            color = colors.textLo,
-        )
-    }
-    val chapterRemainingSec by remember(state) { derivedStateOf { state.chapterRemainingMs?.div(1000) } }
-    val remaining = chapterRemainingSec
-    if (remaining != null && state.currentChapter?.title != null) {
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "${formatTime(remaining * 1000)} left in chapter",
+            remaining?.let { "${formatTime(it * 1000)} left in chapter" }.orEmpty(),
             style = type.caption,
             color = colors.textLo.copy(alpha = 0.7f),
-            modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
         )
+        Text(formatTime(state.totalBookDurationMs), style = type.bodySm, color = colors.textLo)
     }
 }
 

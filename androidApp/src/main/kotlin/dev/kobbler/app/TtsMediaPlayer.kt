@@ -84,7 +84,7 @@ class TtsMediaPlayer(
     }
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-        PlaybackBridge.onPlayPause?.invoke()
+        if (playWhenReady != PlaybackBridge.nowPlaying.value.isPlaying) PlaybackBridge.onPlayPause?.invoke()
         return Futures.immediateVoidFuture()
     }
 

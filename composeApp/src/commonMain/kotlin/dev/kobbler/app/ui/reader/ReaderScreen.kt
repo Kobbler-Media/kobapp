@@ -569,9 +569,19 @@ private fun ReaderLoaded(
             ReaderKeyAction.CursorDown -> { cursor?.moveCursor(cursorBlock, forward = true); true }
             ReaderKeyAction.CursorSelect -> cursor?.selectCursor(cursorBlock) ?: false
             ReaderKeyAction.CursorExit -> { cursorBlock.value = null; true }
+            ReaderKeyAction.OpenChapters -> { onShowTocChange(true); true }
+            ReaderKeyAction.ClosePanel -> {
+                when {
+                    showSettings -> onShowSettingsChange(false)
+                    showSearch -> onShowSearchChange(false)
+                    else -> onShowTocChange(false)
+                }
+                true
+            }
             else -> false
         }
     }
+    ReaderBackHandler(state = nav, panelOpen = panelOpen, cursorActive = cursorBlock.value != null, onAction = onKeyAction)
 
     // Entry focus, and the way back after a panel that stole it closes. Reading must never
     // be left with nothing focused — Compose only delivers keys into the focused subtree.
@@ -666,6 +676,7 @@ private fun ReaderLoaded(
                 },
                 theme = theme,
                 entryFocus = nav.bottomBarFocus,
+                onChapters = if (immersive) { { onShowTocChange(true) } } else null,
             )
         }
     }
@@ -675,8 +686,9 @@ private fun ReaderLoaded(
             .fillMaxSize()
             .readerKeyNav(
                 state = nav,
-                enabled = !panelOpen,
+                panelOpen = panelOpen,
                 cursorActive = cursorBlock.value != null,
+                chaptersOnDown = immersive && syncMode != SyncMode.SYNCING,
                 onAction = onKeyAction,
             )
     ) {
@@ -840,6 +852,7 @@ private fun ReaderLoaded(
                     currentChapter = currentChapter,
                     totalChapters = epub.chapters.size,
                     cursorActive = cursorBlock.value != null,
+                    downOpensChapters = syncMode != SyncMode.SYNCING,
                     theme = theme,
                 )
             }

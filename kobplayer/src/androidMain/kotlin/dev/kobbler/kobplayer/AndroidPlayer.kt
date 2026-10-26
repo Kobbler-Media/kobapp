@@ -55,8 +55,12 @@ private const val TrackRefreshSettleMs = 50L
 private const val AudioClockPollMs = 250L
 
 // A stop or seek answers in well under a second; one that has not after this is stuck in
-// libVLC, and the title waiting behind it moves to a fresh player.
-private const val WedgedVlcCallMs = 4_000L
+// libVLC, and whatever is waiting behind it moves to a fresh player.
+private const val WedgedVlcCallMs = 1_500L
+
+// A view rebuilt on the next frame has its surface within a few; past this the stream is
+// opened without one rather than held up.
+private const val FreshSurfaceWaitMs = 1_000L
 
 /**
  * Android VLC player implementation using libvlc-android.
@@ -95,8 +99,8 @@ internal class AndroidPlayer(
     // Releasing a player waits for its inputs to wind down, which takes as long as a
     // stalled network read does: on the main thread, a stream that hung while opening
     // took the app down with an ANR. One serial thread keeps libVLC calls off the UI and
-    // the play/pause/seek that follow a load in order behind it, and a load or stop that
-    // finds that thread stuck in a call gets a new player rather than waiting on it.
+    // the play/pause/seek that follow a load in order behind it, and anything that finds
+    // that thread stuck in a call gets a new player rather than waiting on it.
     // View attach and detach stay on main: they touch the SurfaceHolder.
     // Not [scope]: release() cancels that, and the lane still has the release itself to run.
     // Its loop ends with the queue that close() closes.
@@ -105,6 +109,7 @@ internal class AndroidPlayer(
         wedgedAfterMs = WedgedVlcCallMs,
         newEngine = ::newEngine,
         onReplaced = { stuck, _ -> withContext(Dispatchers.Main) { adoptFreshPlayer(stuck) } },
+        resumeTitle = { resumeTitle() },
     )
 
     val vlcPlayer: MediaPlayer get() = lane.current
@@ -171,7 +176,11 @@ internal class AndroidPlayer(
     override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
     // TimeChanged rides on pictures, so with :no-video libVLC reports the clock only every
-    // several seconds and an audiobook's elapsed time visibly lurched.
+    // several seconds and an audiobook's elapsed time visibly lurched. The poll is then the
+    // only clock: TimeChanged runs ahead of what is heard by the output latency, and the two
+    // taking turns walked the position back and forth.
+    private val audioClock = PolledClock { SystemClock.elapsedRealtime() }
+
     init {
         if (config.audioOnly) scope.launch {
             _state.collectLatest { state ->
@@ -179,7 +188,7 @@ internal class AndroidPlayer(
                     delay(AudioClockPollMs)
                     val time = onVlc { time } ?: break
                     if (time >= 0) {
-                        _currentMs.value = publishedPosition(_currentMs.value, time)
+                        _currentMs.value = audioClock.publish(_currentMs.value, time)
                         _positionReported.value = true
                     }
                 }
@@ -291,18 +300,17 @@ internal class AndroidPlayer(
     // libavcodec and software-decoded H.264 for its whole duration, which on a TV box is
     // the difference between smooth and stuttering. Preload is silent, not invisible; the
     // preparing scrim is what the viewer sees over it.
-    private var pendingSurface: android.view.SurfaceHolder? = null
+    private val surfaces = SurfaceSlot<android.view.SurfaceHolder>()
     private var voutAttached = false
 
-    private val _videoOutputReady = MutableStateFlow(false)
-    override val videoOutputReady: StateFlow<Boolean> = _videoOutputReady.asStateFlow()
+    override val videoOutputReady: StateFlow<Boolean> = surfaces.ready
+    internal val surfaceEpoch: StateFlow<Int> = surfaces.epoch
 
     internal fun onSurfaceCreated(holder: android.view.SurfaceHolder) {
         // Attached immediately, preload included: a decoder is chosen when the stream
         // opens and cannot be handed a window that turns up afterwards.
-        pendingSurface = holder
+        surfaces.created(holder)
         attachVoutIfReady()
-        _videoOutputReady.value = true
         pictureTimeout?.cancel()
         when (surfaceReturnRedraw(_state.value)) {
             SurfaceReturnRedraw.Now -> redrawPicture()
@@ -355,11 +363,10 @@ internal class AndroidPlayer(
         _pictureReturns.value++
     }
 
-    internal fun onSurfaceDestroyed() {
+    internal fun onSurfaceDestroyed(holder: android.view.SurfaceHolder) {
+        if (!surfaces.destroyed(holder)) return
         deferredRedraw?.cancel()
         deferredRedraw = null
-        _videoOutputReady.value = false
-        pendingSurface = null
         detachVout()
     }
 
@@ -430,7 +437,7 @@ internal class AndroidPlayer(
     }
 
     private fun attachVoutIfReady() {
-        val holder = pendingSurface ?: return
+        val holder = surfaces.current ?: return
         if (voutAttached) return
         val vout = vlcPlayer.vlcVout
         if (vout.areViewsAttached()) vout.detachViews()
@@ -451,6 +458,7 @@ internal class AndroidPlayer(
     // --- Internal ---
 
     @Volatile private var currentMedia: Media? = null
+    @Volatile private var openedSource: MediaSource.Url? = null
     @Volatile private var stopRequested = false
     @Volatile private var sourceLive = false
 
@@ -517,7 +525,7 @@ internal class AndroidPlayer(
                             _isBuffering.value = false
                         }
                     }
-                    _currentMs.value = publishedPosition(_currentMs.value, time)
+                    if (!config.audioOnly) _currentMs.value = publishedPosition(_currentMs.value, time)
                     _positionReported.value = true
                 }
                 MediaPlayer.Event.LengthChanged -> {
@@ -569,17 +577,51 @@ internal class AndroidPlayer(
         _state.value = PlayerState.LOADING
         _isBuffering.value = true
         _bufferPercent.value = 0f
+        audioClock.reset()
         _currentMs.value = source.startTimeSec?.let { it * 1000L } ?: 0L
         _positionReported.value = false
         _durationMs.value = 0L
         updateModeSwitchAllowed()
         _error.value = null
 
-        val headers = source.headers.mapKeys { it.key.lowercase() }
-
         val previous = currentMedia
-        val uri = Uri.parse(source.url)
-        val media = Media(libVLC, uri).apply {
+        val media = media(source)
+        openedSource = source
+        currentMedia = media
+        // Before play(), never after. play() opens the elementary stream, and that
+        // is the one moment a decoder is chosen; a window that arrives later is a
+        // window MediaCodec was never offered.
+        attachVoutIfReady()
+        // Only grab audio focus if not preloading (preload should not
+        // steal focus from other apps like music players).
+        if (!isPreloading.value) requestAudioFocus()
+        seeks.clear()
+        lane.replaceTitle(
+            stop = {
+                stopRequested = true
+                pausable = false
+                pauseWhenPausable = false
+                // Media handed to a libVLC 4 player that is still playing is swapped in gaplessly:
+                // the player never leaves its playing state, so the new title reports no opening
+                // and its end reads as the stop asked for here. stop() returns once it has stopped
+                // — or never, for a live stream the server ended in the same moment.
+                stop()
+            },
+        ) {
+            this.media = media
+            previous?.release()
+            play()
+            // Not :start-time: libVLC 4 clips the title there, reporting time and length from
+            // the start point. Before play() there is no input to take the seek; straight
+            // after, it is the first thing the input does once the demuxer is open. Fast, so
+            // a resume lands on the keyframe before the mark instead of decoding up to it.
+            source.startTimeSec?.let { setTime(it * 1000L, true) }
+        }
+    }
+
+    private fun media(source: MediaSource.Url): Media {
+        val headers = source.headers.mapKeys { it.key.lowercase() }
+        return Media(libVLC, Uri.parse(source.url)).apply {
             addOption(":http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
             addOption(":network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
             // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
@@ -605,31 +647,24 @@ internal class AndroidPlayer(
             if (source.subtitlesOff) addOption(":sub-language=none")
             else source.subtitleOrdinal?.let { addOption(":sub-track=$it") }
         }
+    }
+
+    // On a fresh player that took over from one stuck mid-title, ahead of the pause or seek
+    // that was waiting on it. The stuck player keeps its media: releasing it under a call
+    // still running in it is a native crash.
+    private fun MediaPlayer.resumeTitle() {
+        val source = openedSource ?: return
+        val atMs = _currentMs.value
+        stopRequested = false
+        pausable = false
+        pauseWhenPausable = _state.value == PlayerState.PAUSED
+        val media = media(source)
         currentMedia = media
-        // Before play(), never after. play() opens the elementary stream, and that
-        // is the one moment a decoder is chosen; a window that arrives later is a
-        // window MediaCodec was never offered.
-        attachVoutIfReady()
-        // Only grab audio focus if not preloading (preload should not
-        // steal focus from other apps like music players).
-        if (!isPreloading.value) requestAudioFocus()
-        seeks.clear()
-        lane.supersede {
-            stopRequested = true
-            pausable = false
-            pauseWhenPausable = false
-            // Media handed to a libVLC 4 player that is still playing is swapped in gaplessly:
-            // the player never leaves its playing state, so the new title reports no opening
-            // and its end reads as the stop asked for here. stop() returns once it has stopped.
-            stop()
-            this.media = media
-            previous?.release()
-            play()
-            // Not :start-time: libVLC 4 clips the title there, reporting time and length from
-            // the start point. Before play() there is no input to take the seek; straight
-            // after, it is the first thing the input does once the demuxer is open. Fast, so
-            // a resume lands on the keyframe before the mark instead of decoding up to it.
-            source.startTimeSec?.let { setTime(it * 1000L, true) }
+        this.media = media
+        play()
+        if (!source.live) {
+            audioClock.seeked(atMs)
+            setTime(atMs, true)
         }
     }
 
@@ -681,6 +716,7 @@ internal class AndroidPlayer(
     }
 
     override fun stop() {
+        openedSource = null
         deferredRedraw?.cancel()
         deferredRedraw = null
         fieldDecodeProbe?.cancel()
@@ -715,6 +751,7 @@ internal class AndroidPlayer(
     override fun seekTo(ms: Long) {
         val clamped = clampSeekTarget(ms, _durationMs.value)
         _currentMs.value = clamped
+        audioClock.seeked(clamped)
         seeks.offer(clamped)
     }
 
@@ -856,10 +893,14 @@ internal class AndroidPlayer(
     }
 
     // Main thread, before the load or stop that found the old player stuck runs on the new one.
-    private fun adoptFreshPlayer(stuck: MediaPlayer) {
+    // Its display is a layer on the surface that a detach never reaches while it is stuck:
+    // shared, it drew bars around the new player's picture. So the new player gets a new
+    // surface, and the stuck one's goes with the view that held it.
+    private suspend fun adoptFreshPlayer(stuck: MediaPlayer) {
         println("[kobplayer] libVLC player stuck in a call for ${WedgedVlcCallMs}ms; replaced")
         if (stuck.vlcVout.areViewsAttached()) stuck.vlcVout.detachViews()
         voutAttached = false
+        surfaces.renew(FreshSurfaceWaitMs)
         attachVoutIfReady()
         appliedAudioDevice = null
         audioRoute.offer(Unit)

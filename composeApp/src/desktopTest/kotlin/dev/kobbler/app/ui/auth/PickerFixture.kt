@@ -40,6 +40,7 @@ internal fun picker(
     test: DesktopComposeUiTest.(tokens: List<String>, auth: AuthState) -> Unit,
 ) = runUiTest(width = width, height = height) {
     val tokens = CopyOnWriteArrayList<String>()
+    var roster = emptyList<Profile>()
     SingletonImageLoader.setUnsafe(cachedArtLoader())
     StubServer(
         mapOf(
@@ -50,11 +51,12 @@ internal fun picker(
             },
             "/api/v1/admin/me" to { exchange ->
                 val token = exchange.requestHeaders.getFirst("Authorization").orEmpty().removePrefix("Bearer ")
-                """{"user_id":"$token","email":"","role":"viewer","display_name":"$token"}"""
+                val isKids = roster.any { it.token == token && it.isKids }
+                """{"user_id":"$token","email":"","role":"viewer","display_name":"$token","is_kids":$isKids}"""
             },
         ),
     ).use { stub ->
-        val roster = profiles(stub.url)
+        roster = profiles(stub.url)
         val store = InMemoryKeyValueStore().apply {
             putString("kobbler_profiles_v1", Json.encodeToString(roster))
             putString("kobbler_current_profile_id", roster.first().id)

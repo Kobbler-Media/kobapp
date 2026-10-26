@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.Bookmark as BookmarkData
@@ -40,6 +42,11 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
+
+private const val LeadingEntries = 3
+
+internal fun activeTocEntry(entries: List<TocEntry>, currentChapter: Int): Int =
+    entries.indexOfLast { it.chapterIndex <= currentChapter }.coerceAtLeast(0)
 
 @Composable
 internal fun ReaderTocPanel(
@@ -61,7 +68,7 @@ internal fun ReaderTocPanel(
     ) {
         Column(
             Modifier
-                .focusKeyGroup("toc")
+                .readerPanel("toc")
                 .fillMaxWidth(0.85f)
                 .fillMaxHeight()
                 .align(Alignment.CenterStart)
@@ -100,16 +107,20 @@ internal fun ReaderTocPanel(
             }
 
             if (tocTab == 0) {
-                LazyColumn(Modifier.focusKeyGroup("chapters")) {
+                val active = activeTocEntry(entries, currentChapter)
+                val listState = rememberLazyListState(initialFirstVisibleItemIndex = (active - LeadingEntries).coerceAtLeast(0))
+                val entryFocus = rememberPanelEntryFocus()
+                LazyColumn(Modifier.focusKeyGroup("chapters"), state = listState) {
                     itemsIndexed(entries) { index, entry ->
-                        val isActive = entry.chapterIndex == currentChapter
+                        val isActive = index == active
+                        val ownFocus = remember { FocusRequester() }
                         Text(
                             text = entry.title,
                             style = KobappTheme.type.body.copy(
                                 color = if (isActive) theme.linkColor else theme.textColor.copy(alpha = 0.7f),
                             ),
                             modifier = Modifier
-                                .focusKey("entry.$index")
+                                .focusKey("entry.$index", focusRequester = if (isActive) entryFocus else ownFocus)
                                 .fillMaxWidth()
                                 .tvAutoGlow(cornerRadiusDp = 4f, scale = 1.01f)
                                 .clip(RoundedCornerShape(4.dp))

@@ -64,6 +64,7 @@ import dev.kobbler.app.ui.components.AsyncContent
 import dev.kobbler.app.ui.components.RefreshOnEvents
 import dev.kobbler.app.ui.components.rememberCached
 import dev.kobbler.app.ui.dashboard.SearchScope
+import dev.kobbler.app.ui.dashboard.SearchSession
 import dev.kobbler.app.ui.dashboard.HomeScreen
 import dev.kobbler.app.ui.player.AudiobookPlayerScreen
 import dev.kobbler.app.ui.player.GlobalPlayerState
@@ -206,10 +207,12 @@ class NavigationState {
     var searchOpen by mutableStateOf(false)
     var searchQuery by mutableStateOf("")
     var searchScope by mutableStateOf(SearchScope.All)
+    val searchSession = SearchSession()
     private var searchResultDepth = -1
 
     fun openSearch(from: Destination.Tab = currentTab) {
         searchScope = SearchScope.forTab(from)
+        searchSession.reset()
         searchOpen = true
     }
 
@@ -218,6 +221,7 @@ class NavigationState {
             _stack.clear()
             _stack.add(dest)
             searchResultDepth = -1
+            searchSession.reset()
         } else {
             _stack.add(dest)
         }
@@ -550,6 +554,7 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
             scope = nav.searchScope,
             onScopeChange = { nav.searchScope = it },
             scopes = searchScopesFor(navConfig),
+            session = nav.searchSession,
             query = nav.searchQuery,
             onQueryChange = { nav.searchQuery = it },
             onDismiss = { showSearch = false },
@@ -685,6 +690,7 @@ internal fun DesktopScaffold(
             scope = nav.searchScope,
             onScopeChange = { nav.searchScope = it },
             scopes = searchScopesFor(navConfig),
+            session = nav.searchSession,
             query = nav.searchQuery,
             onQueryChange = { nav.searchQuery = it },
             onDismiss = closeSearch,
@@ -1122,6 +1128,9 @@ private fun SingleTabContent(
     isActive: Boolean = true,
 ) {
     val playerScope = rememberCoroutineScope()
+    // Browse screens carry no search bar; on a TV the header's search button is the only
+    // way into search scoped to the section without a trip up the rail.
+    val sectionSearch = onSearchClick.takeIf { formFactor == FormFactor.TV }
     when (tab) {
         is Destination.Tab.Home -> TabScreenWithTopBar(onMenuClick, onSearchClick, formFactor) {
             HomeScreen(
@@ -1154,6 +1163,7 @@ private fun SingleTabContent(
                     formFactor = formFactor,
                     onMovieClick = { movie -> nav.navigate(Destination.MovieDetail(movie.id)) },
                     onContinueClick = { item -> navigateContinueItem(nav, gps, item) },
+                    onSearchClick = sectionSearch,
                 )
             }
         }
@@ -1167,6 +1177,7 @@ private fun SingleTabContent(
                     formFactor = formFactor,
                     onShowClick = { show -> nav.navigate(Destination.TvShowDetail(show.id)) },
                     onContinueClick = { item -> navigateContinueItem(nav, gps, item) },
+                    onSearchClick = sectionSearch,
                 )
             }
         }
@@ -1182,6 +1193,7 @@ private fun SingleTabContent(
                     onContinueClick = { item -> navigateContinueItem(nav, gps, item) },
                     onAuthorClick = { authorId -> nav.navigate(Destination.AuthorDetail(authorId)) },
                     onSeriesClick = { seriesId -> nav.navigate(Destination.SeriesDetail(seriesId)) },
+                    onSearchClick = sectionSearch,
                 )
             }
         }
@@ -1194,6 +1206,7 @@ private fun SingleTabContent(
                     formFactor = formFactor,
                     onChannelClick = { channel -> nav.navigate(Destination.IptvChannelDetail(channel.id)) },
                     onWatch = { channel -> dev.kobbler.app.ui.player.startIptvWatch(channel, player, gps, api, playerScope) },
+                    onSearchClick = sectionSearch,
                 )
             }
         }
@@ -1209,6 +1222,7 @@ private fun SingleTabContent(
                     onWatch = { ch -> dev.kobbler.app.ui.player.startLiveWatch(ch, player, gps, api, playerScope) },
                     onRecordingClick = { recordingId -> nav.navigate(Destination.LiveRecordingDetail(recordingId)) },
                     onSeriesRulesClick = { nav.navigate(Destination.LiveSeriesRuleDetail(null)) },
+                    onSearchClick = sectionSearch,
                 )
             }
         }

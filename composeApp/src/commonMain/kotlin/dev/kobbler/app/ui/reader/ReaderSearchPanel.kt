@@ -80,7 +80,7 @@ internal fun ReaderSearchPanel(
     ) {
         Column(
             Modifier
-                .focusKeyGroup("search")
+                .readerPanel("search")
                 .fillMaxWidth(0.9f)
                 .fillMaxHeight()
                 .align(Alignment.Center)
@@ -90,6 +90,7 @@ internal fun ReaderSearchPanel(
                 .padding(16.dp)
         ) {
             val keyboardController = LocalSoftwareKeyboardController.current
+            val entryFocus = rememberPanelEntryFocus()
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -114,7 +115,7 @@ internal fun ReaderSearchPanel(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.focusKey("query", focusRequester = entryFocus).fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
             if (query.length >= EpubSearchIndex.MIN_QUERY_LENGTH) {

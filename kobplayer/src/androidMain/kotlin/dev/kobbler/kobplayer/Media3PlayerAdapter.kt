@@ -36,6 +36,7 @@ class Media3PlayerAdapter(
     private val positionMs: () -> Long = { player.currentMs.value },
     private val durationMs: () -> Long = { player.durationMs.value },
     private val seekPlayerTo: (Long) -> Unit = player::seekTo,
+    private val togglePlayPause: () -> Unit = player::togglePlayPause,
     private val seekBackIncrementMs: () -> Long = { C.DEFAULT_SEEK_BACK_INCREMENT_MS },
     private val seekForwardIncrementMs: () -> Long = { C.DEFAULT_SEEK_FORWARD_INCREMENT_MS },
     looper: Looper = Looper.getMainLooper(),
@@ -134,15 +135,11 @@ class Media3PlayerAdapter(
             .build()
     }
 
+    // Through the screen's own play/pause, never the player directly: live TV resumes from
+    // its timeshift, and a muted preload must not be started by Bluetooth or the lock screen.
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-        // Only honor play commands if the player was explicitly started by the user
-        // (not during muted preload). Android media routing, Bluetooth, and lock screen
-        // can trigger this, which would unmute and start preloaded content unexpectedly.
-        if (playWhenReady) {
-            if (!player.isMuted.value) player.play()
-        } else {
-            player.pause()
-        }
+        if (playWhenReady && player.isMuted.value) return Futures.immediateVoidFuture()
+        if (tapReaches(playWhenReady, player.state.value)) togglePlayPause()
         return Futures.immediateVoidFuture()
     }
 

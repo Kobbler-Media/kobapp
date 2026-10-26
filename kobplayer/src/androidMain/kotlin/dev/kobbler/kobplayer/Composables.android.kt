@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -55,6 +56,7 @@ actual fun VideoSurface(
     val modeSwitchAllowed by android.modeSwitchAllowed.collectAsState()
     val matchDisplayRefresh by android.matchDisplayRefresh.collectAsState()
     val pictureReturns by android.pictureReturns.collectAsState()
+    val surfaceEpoch by android.surfaceEpoch.collectAsState()
     var frameView by remember { mutableStateOf<VideoFrameLayout?>(null) }
 
     LaunchedEffect(pictureReturns) {
@@ -75,50 +77,52 @@ actual fun VideoSurface(
             }
         }
 
-        AndroidView(
-            factory = { ctx ->
-                val surface = SurfaceView(ctx).apply {
-                    // A SurfaceView's surface is destroyed and rebuilt with view
-                    // visibility by default, so it arrives later than the stream that
-                    // needs it. Tying it to attachment instead is framework code — the
-                    // same on every chipset — and is what Media3's own PlayerView does.
-                    if (Build.VERSION.SDK_INT >= 34) {
-                        setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
+        key(surfaceEpoch) {
+            AndroidView(
+                factory = { ctx ->
+                    val surface = SurfaceView(ctx).apply {
+                        // A SurfaceView's surface is destroyed and rebuilt with view
+                        // visibility by default, so it arrives later than the stream that
+                        // needs it. Tying it to attachment instead is framework code — the
+                        // same on every chipset — and is what Media3's own PlayerView does.
+                        if (Build.VERSION.SDK_INT >= 34) {
+                            setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
+                        }
                     }
-                }
-                VideoFrameLayout(ctx, surface).also { frame ->
-                    frameView = frame
-                    surface.holder.addCallback(object : android.view.SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                            frame.applyFrameRate()
-                            android.onSurfaceCreated(holder)
-                        }
+                    VideoFrameLayout(ctx, surface).also { frame ->
+                        frameView = frame
+                        surface.holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                                frame.applyFrameRate()
+                                android.onSurfaceCreated(holder)
+                            }
 
-                        override fun surfaceChanged(
-                            holder: android.view.SurfaceHolder,
-                            format: Int,
-                            width: Int,
-                            height: Int,
-                        ) = android.onSurfaceSize(width, height)
+                            override fun surfaceChanged(
+                                holder: android.view.SurfaceHolder,
+                                format: Int,
+                                width: Int,
+                                height: Int,
+                            ) = android.onSurfaceSize(width, height)
 
-                        override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-                            frame.holdFrame()
-                            android.onSurfaceDestroyed()
-                        }
-                    })
-                }
-            },
-            update = {
-                it.picture = decodedPicture
-                it.frameRate = contentFrameRate
-                it.modeSwitchAllowed = modeSwitchAllowed
-                it.matchDisplayRefresh = matchDisplayRefresh
-            },
-            // Without it Compose discards and recreates the view inside any reusable
-            // container, and a recreated SurfaceView is a destroyed surface.
-            onReset = {},
-            modifier = frameModifier,
-        )
+                            override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
+                                frame.holdFrame()
+                                android.onSurfaceDestroyed(holder)
+                            }
+                        })
+                    }
+                },
+                update = {
+                    it.picture = decodedPicture
+                    it.frameRate = contentFrameRate
+                    it.modeSwitchAllowed = modeSwitchAllowed
+                    it.matchDisplayRefresh = matchDisplayRefresh
+                },
+                // Without it Compose discards and recreates the view inside any reusable
+                // container, and a recreated SurfaceView is a destroyed surface.
+                onReset = {},
+                modifier = frameModifier,
+            )
+        }
 
         overlay(player)
     }

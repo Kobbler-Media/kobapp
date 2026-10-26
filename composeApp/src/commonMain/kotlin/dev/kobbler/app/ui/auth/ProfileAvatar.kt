@@ -31,34 +31,38 @@ private fun colorFor(seed: String): Color {
     return palette[((h % palette.size) + palette.size) % palette.size]
 }
 
-private fun initialOf(profile: Profile): String {
-    val name = profile.displayName.trim()
-    return name.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-}
-
 @Composable
 fun ProfileAvatar(
     profile: Profile,
     size: Dp = 64.dp,
     modifier: Modifier = Modifier,
+) = Avatar(profile.displayName, profile.avatarSeed, profile.avatarUrl, profile.apiUrl, size, modifier)
+
+@Composable
+fun Avatar(
+    name: String,
+    seed: String,
+    imagePath: String?,
+    apiUrl: String,
+    size: Dp,
+    modifier: Modifier = Modifier,
 ) {
-    val bg = colorFor(profile.avatarSeed)
-    val avatarUrl = profile.avatarUrl?.let { path ->
-        if (path.startsWith("http")) path else "${profile.apiUrl.trimEnd('/')}$path"
+    val imageUrl = imagePath?.let { path ->
+        if (path.startsWith("http")) path else "${apiUrl.trimEnd('/')}$path"
     }
     Box(
-        modifier = modifier.size(size).clip(CircleShape).background(bg),
+        modifier = modifier.size(size).clip(CircleShape).background(colorFor(seed)),
         contentAlignment = Alignment.Center,
     ) {
-        if (avatarUrl != null) {
+        if (imageUrl != null) {
             AsyncImage(
-                model = avatarUrl,
-                contentDescription = profile.displayName,
+                model = imageUrl,
+                contentDescription = name,
                 modifier = Modifier.size(size).clip(CircleShape),
             )
         } else {
             Text(
-                initialOf(profile),
+                name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                 color = Color.White,
                 fontSize = (size.value * 0.42f).sp,
                 fontWeight = FontWeight.SemiBold,

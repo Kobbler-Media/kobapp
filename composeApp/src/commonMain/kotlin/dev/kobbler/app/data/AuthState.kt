@@ -83,6 +83,7 @@ data class RosterUser(
     val email: String,
     val role: String = "viewer",
     val display_name: String? = null,
+    val avatar_url: String? = null,
 )
 
 @Serializable
@@ -173,11 +174,10 @@ class AuthState(
         scope.launch {
             applyStored(withContext(ioDispatcher) { readStoredProfiles() })
             decideInitialScreen()
-            if (currentProfile != null) refreshCurrentProfileFromServer()
-            // Every profile, not just the active one: a family TV profile nobody picks for
-            // 90 days would otherwise expire even though the device is in daily use. Each
-            // is rate-limited to one call a day, so this is a handful of requests at most.
-            profiles.map { it.id }.forEach { touchSession(it) }
+            // Every profile, not just the active one: the picker shows each one's name and
+            // avatar, and a family TV profile nobody picks for 90 days would otherwise
+            // expire even though the device is in daily use.
+            refreshAllProfilesFromServer()
         }
     }
 
@@ -255,6 +255,7 @@ class AuthState(
             screen = AuthScreen.Login
         } else {
             openPicker()
+            scope.launch { refreshAllProfilesFromServer() }
         }
     }
 
@@ -266,7 +267,7 @@ class AuthState(
         updateProfile(profileId) { it.copy(lastUsedAtMs = nowMs()) }
         if (switched) DataCache.clear()
         screen = AuthScreen.LoggedIn
-        scope.launch { refreshCurrentProfileFromServer() }
+        scope.launch { refreshProfileFromServer(profileId) }
     }
 
     /** Remove a profile. If it was active, fall back to picker / login. */
@@ -296,44 +297,12 @@ class AuthState(
 
     /** Re-read the active profile from the server after changing one of its fields. */
     fun refreshCurrentProfile() {
-        scope.launch { refreshCurrentProfileFromServer() }
+        val id = currentProfileId ?: return
+        scope.launch { refreshProfileFromServer(id) }
     }
 
-    /** Refresh the active profile's server-side fields (role, name, avatar, has_pin). */
-    private suspend fun refreshCurrentProfileFromServer() {
-        val profile = currentProfile ?: return
-        try {
-            val resp = httpClient.get("${profile.apiUrl}/api/v1/admin/me") {
-                header(HttpHeaders.Authorization, "Bearer ${profile.token}")
-            }
-            if (resp.status == HttpStatusCode.Unauthorized || resp.status == HttpStatusCode.Forbidden) {
-                // Keep the profile so relinking reuses its id and its per-profile prefs.
-                updateProfile(profile.id) { it.copy(needsRelink = true) }
-                // Every other request is about to 401 too, so send them to the picker
-                // rather than leave a signed-in shell that fails on every screen.
-                openPicker()
-                return
-            }
-            val me = runCatching { json.decodeFromString<MeResponse>(resp.bodyAsText()) }.getOrNull()
-                ?: return
-            updateProfile(profile.id) {
-                it.copy(
-                    userId = me.user_id.ifEmpty { it.userId },
-                    email = me.email.ifEmpty { it.email },
-                    role = me.role,
-                    name = me.display_name,
-                    avatarUrl = me.avatar_url,
-                    hasPin = me.has_pin,
-                    isKids = me.is_kids,
-                    needsRelink = false,
-                )
-            }
-            touchSession(profile.id)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // Offline or transient; keep cached profile state.
-        }
+    private suspend fun refreshAllProfilesFromServer() {
+        profiles.sortedByDescending { it.id == currentProfileId }.map { it.id }.forEach { refreshProfileFromServer(it) }
     }
 
     private fun nowMs() = Clock.System.now().toEpochMilliseconds()
@@ -541,11 +510,20 @@ class AuthState(
         refreshProfileFromServer(id)
     }
 
+    /** Mirror a linked profile's server-side fields (role, name, avatar, has_pin) onto the device. */
     private suspend fun refreshProfileFromServer(id: String) {
         val profile = profiles.firstOrNull { it.id == id } ?: return
         try {
             val resp = httpClient.get("${profile.apiUrl}/api/v1/admin/me") {
                 header(HttpHeaders.Authorization, "Bearer ${profile.token}")
+            }
+            if (resp.status == HttpStatusCode.Unauthorized || resp.status == HttpStatusCode.Forbidden) {
+                // Keep the profile so relinking reuses its id and its per-profile prefs.
+                updateProfile(id) { it.copy(needsRelink = true) }
+                // Every other request is about to 401 too, so send them to the picker
+                // rather than leave a signed-in shell that fails on every screen.
+                if (id == currentProfileId) openPicker()
+                return
             }
             val me = runCatching { json.decodeFromString<MeResponse>(resp.bodyAsText()) }.getOrNull()
                 ?: return
@@ -565,7 +543,7 @@ class AuthState(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // ignore
+            // Offline or transient; keep cached profile state.
         }
     }
 

@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeSource
 
@@ -16,9 +17,11 @@ import kotlin.time.TimeSource
  *
  * Commands run in the order given. [supersede] is for a command that replaces the
  * title — a load or a stop: whatever was queued for the old one and has not started is
- * dropped, and if the command running ahead of it has been running for [wedgedAfterMs],
- * the native player is presumed stuck in it and abandoned. A fresh engine takes over,
- * and the abandoned one is retired whenever its call does return.
+ * dropped. A command that has been running for [wedgedAfterMs] while anything waits behind
+ * it has the native player presumed stuck in it and abandoned. A fresh engine takes over,
+ * and the abandoned one is retired whenever its call does return. Unless the next thing
+ * waiting is a new title, the fresh engine first runs [resumeTitle] to pick the current one
+ * back up, so the commands that were waiting have something to act on.
  */
 @OptIn(ExperimentalAtomicApi::class)
 internal class CommandLane<T>(
@@ -26,21 +29,29 @@ internal class CommandLane<T>(
     private val wedgedAfterMs: Long,
     private val newEngine: () -> Engine<T>,
     private val onReplaced: suspend (old: T, new: T) -> Unit,
+    private val resumeTitle: T.() -> Unit = {},
 ) {
     class Engine<T>(val target: T, val dispatcher: CoroutineDispatcher, val retire: (T) -> Unit)
 
-    private class Command<T>(val generation: Int, val block: T.() -> Unit, val dropped: () -> Unit)
+    private class Command<T>(
+        val generation: Int,
+        val block: T.() -> Unit,
+        val dropped: () -> Unit,
+        val holdsUpTitle: Boolean = false,
+    )
 
     @kotlin.concurrent.Volatile private var engine = newEngine()
     val current: T get() = engine.target
 
     private val queue = Channel<Command<T>>(Channel.UNLIMITED)
     private val generation = AtomicInt(0)
+    private val waiting = AtomicInt(0)
     @kotlin.concurrent.Volatile private var closed = false
 
     init {
         scope.launch {
             for (command in queue) {
+                waiting.decrementAndFetch()
                 if (command.generation < generation.load()) command.dropped() else run(command)
             }
         }
@@ -49,6 +60,12 @@ internal class CommandLane<T>(
     fun post(block: T.() -> Unit): Boolean = send(generation.load(), block, dropped = {})
 
     fun supersede(block: T.() -> Unit): Boolean = send(generation.incrementAndFetch(), block, dropped = {})
+
+    /** [supersede] for a load: a [stop] of the old title that gets stuck is escaped like any call a new title waits on. */
+    fun replaceTitle(stop: T.() -> Unit, start: T.() -> Unit): Boolean {
+        val title = generation.incrementAndFetch()
+        return send(title, stop, dropped = {}, holdsUpTitle = true) && send(title, start, dropped = {})
+    }
 
     /** [block]'s answer, or null if it was dropped or the lane is closed. */
     suspend fun <R> call(block: T.() -> R): R? {
@@ -64,9 +81,15 @@ internal class CommandLane<T>(
         queue.close()
     }
 
-    private fun send(generation: Int, block: T.() -> Unit, dropped: () -> Unit): Boolean {
+    private fun send(generation: Int, block: T.() -> Unit, dropped: () -> Unit, holdsUpTitle: Boolean = false): Boolean {
         if (closed) return false
-        return queue.trySend(Command(generation, block, dropped)).isSuccess.also { if (!it) dropped() }
+        waiting.incrementAndFetch()
+        return queue.trySend(Command(generation, block, dropped, holdsUpTitle)).isSuccess.also {
+            if (!it) {
+                waiting.decrementAndFetch()
+                dropped()
+            }
+        }
     }
 
     private suspend fun run(command: Command<T>) {
@@ -74,9 +97,10 @@ internal class CommandLane<T>(
         val job = scope.launch(running.dispatcher) { command.block(running.target) }
         val started = TimeSource.Monotonic.markNow()
         while (withTimeoutOrNull(WatchSliceMs) { job.join() } == null) {
-            val waitedOn = generation.load() > command.generation
-            if (waitedOn && started.elapsedNow().inWholeMilliseconds >= wedgedAfterMs) {
+            val titleWaits = command.holdsUpTitle || generation.load() > command.generation
+            if ((titleWaits || (!closed && waiting.load() > 0)) && started.elapsedNow().inWholeMilliseconds >= wedgedAfterMs) {
                 replace(running)
+                if (!titleWaits) run(Command(command.generation, resumeTitle, dropped = {}))
                 return
             }
         }

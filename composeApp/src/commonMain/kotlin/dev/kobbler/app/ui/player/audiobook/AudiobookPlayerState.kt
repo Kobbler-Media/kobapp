@@ -56,7 +56,12 @@ class AudiobookPlayerState internal constructor(
     private val scope: CoroutineScope,
 ) {
     var audioFiles by mutableStateOf<List<AudioFileDto>>(emptyList())
-    var chapters by mutableStateOf<List<UnifiedChapterDto>>(emptyList())
+    private var playbackOrderChapters by mutableStateOf<List<UnifiedChapterDto>>(emptyList())
+    var chapters: List<UnifiedChapterDto>
+        get() = playbackOrderChapters
+        set(value) {
+            playbackOrderChapters = value.sortedBy { it.globalStartSeconds }
+        }
     var transcriptSegments by mutableStateOf<List<TranscriptSegmentDto>>(emptyList())
     var currentFileIndex by mutableIntStateOf(0)
     var dataLoaded by mutableStateOf(false)

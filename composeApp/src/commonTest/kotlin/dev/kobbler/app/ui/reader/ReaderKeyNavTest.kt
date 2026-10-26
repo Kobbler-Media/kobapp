@@ -10,13 +10,16 @@ class ReaderKeyNavTest {
         zone: ReaderZone = ReaderZone.Body,
         cursorActive: Boolean = false,
         chromeVisible: Boolean = false,
-    ) = readerKeyAction(key, zone, cursorActive, chromeVisible, immersive = true)
+        panelOpen: Boolean = false,
+        listening: Boolean = false,
+    ) = readerKeyAction(key, zone, cursorActive, chromeVisible, immersive = true, panelOpen = panelOpen, chaptersOnDown = !listening)
 
     private fun desktop(
         key: ReaderKey,
         zone: ReaderZone = ReaderZone.Body,
         cursorActive: Boolean = false,
-    ) = readerKeyAction(key, zone, cursorActive, chromeVisible = true, immersive = false)
+        panelOpen: Boolean = false,
+    ) = readerKeyAction(key, zone, cursorActive, chromeVisible = true, immersive = false, panelOpen = panelOpen, chaptersOnDown = false)
 
     @Test
     fun readingPages() {
@@ -36,7 +39,8 @@ class ReaderKeyNavTest {
     @Test
     fun verticalRevealsChromeWhileTheCursorIsInactive() {
         assertEquals(ReaderKeyAction.FocusTopBar, tv(ReaderKey.Up))
-        assertEquals(ReaderKeyAction.FocusBottomBar, tv(ReaderKey.Down))
+        assertEquals(ReaderKeyAction.OpenChapters, tv(ReaderKey.Down))
+        assertEquals(ReaderKeyAction.FocusBottomBar, tv(ReaderKey.Down, listening = true))
         assertEquals(ReaderKeyAction.FocusTopBar, desktop(ReaderKey.Up))
         assertEquals(ReaderKeyAction.FocusBottomBar, desktop(ReaderKey.Down))
     }
@@ -89,5 +93,17 @@ class ReaderKeyNavTest {
         assertEquals(ReaderKeyAction.FocusBody, tv(ReaderKey.Back, zone = ReaderZone.TopBar, chromeVisible = true))
         assertEquals(ReaderKeyAction.FocusBody, tv(ReaderKey.Back, zone = ReaderZone.BottomBar, chromeVisible = true))
         assertEquals(ReaderKeyAction.Pass, desktop(ReaderKey.Back, zone = ReaderZone.TopBar))
+    }
+
+    @Test
+    fun anOpenPanelTakesOnlyBackAndBackClosesIt() {
+        for (zone in ReaderZone.entries) {
+            for (key in ReaderKey.entries) {
+                val expected = if (key == ReaderKey.Back) ReaderKeyAction.ClosePanel else ReaderKeyAction.Pass
+                assertEquals(expected, tv(key, zone = zone, panelOpen = true, chromeVisible = true), "tv $zone $key")
+                assertEquals(expected, tv(key, zone = zone, panelOpen = true, cursorActive = true), "tv cursor $zone $key")
+                assertEquals(expected, desktop(key, zone = zone, panelOpen = true), "desktop $zone $key")
+            }
+        }
     }
 }

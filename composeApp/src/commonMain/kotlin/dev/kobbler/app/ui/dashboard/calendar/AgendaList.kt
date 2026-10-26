@@ -36,6 +36,7 @@ import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.CalendarItemDto
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.daysUntil
 
@@ -120,33 +121,38 @@ internal fun AgendaList(
         isLoadingMore = false
     }
 
-    LazyColumn(
-        state = listState,
-        // The filters sit above every past day the list can page in, so UP is a long way
-        // round on a remote; a row has nothing to its right, which makes RIGHT the shortcut.
-        modifier = modifier.scrollsUnderTopChrome(listState).fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
-            event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight && onRight()
-        },
-        // A row's focus ring paints outside its bounds and the list clips at its own
-        // edge; CalendarScreen pulls its gutter in by the same amount so the rows stay
-        // on the page gutter while the ring gets room on both sides.
-        contentPadding = PaddingValues(start = bleed, end = bleed, top = bleed + LocalTopChromeOverlap.current, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        grouped.forEach { (date, dayItems) ->
-            item(key = "header-$date") {
-                AgendaDateHeader(date, today)
+    // The landing scroll above puts today's header at the top. Left to Android TV's default
+    // pivot, focusing the row under it scrolled the list on to 30% down the screen, so it
+    // moved a second time after it had drawn.
+    FocusEdgeSlack {
+        LazyColumn(
+            state = listState,
+            // The filters sit above every past day the list can page in, so UP is a long way
+            // round on a remote; a row has nothing to its right, which makes RIGHT the shortcut.
+            modifier = modifier.scrollsUnderTopChrome(listState).fillMaxSize().focusKeyGroup(AGENDA_GROUP).onPreviewKeyEvent { event ->
+                event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight && onRight()
+            },
+            // A row's focus ring paints outside its bounds and the list clips at its own
+            // edge; CalendarScreen pulls its gutter in by the same amount so the rows stay
+            // on the page gutter while the ring gets room on both sides.
+            contentPadding = PaddingValues(start = bleed, end = bleed, top = bleed + LocalTopChromeOverlap.current, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            grouped.forEach { (date, dayItems) ->
+                item(key = "header-$date") {
+                    AgendaDateHeader(date, today)
+                }
+                items(dayItems, key = { "${it.id}-${it.mediaType}-$date" }) { item ->
+                    ScheduleRow(
+                        item = item,
+                        apiUrl = apiUrl,
+                        key = rowKey(item, date),
+                        preferredEntry = item === anchorItem,
+                        onClick = { onItemClick(item) },
+                    )
+                }
+                item(key = "spacer-$date") { Spacer(Modifier.height(4.dp)) }
             }
-            items(dayItems, key = { "${it.id}-${it.mediaType}-$date" }) { item ->
-                ScheduleRow(
-                    item = item,
-                    apiUrl = apiUrl,
-                    key = rowKey(item, date),
-                    preferredEntry = item === anchorItem,
-                    onClick = { onItemClick(item) },
-                )
-            }
-            item(key = "spacer-$date") { Spacer(Modifier.height(4.dp)) }
         }
     }
 }

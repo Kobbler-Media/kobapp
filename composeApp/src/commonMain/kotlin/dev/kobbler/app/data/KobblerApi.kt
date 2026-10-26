@@ -995,6 +995,16 @@ data class CalendarItemDto(
 // -- Search DTOs --
 
 @Serializable
+data class SearchSuggestion(
+    val title: String,
+    @SerialName("media_type") val mediaType: String,
+    val source: String,
+)
+
+@Serializable
+data class SearchSuggestionsResponse(val suggestions: List<SearchSuggestion> = emptyList())
+
+@Serializable
 data class SearchResponse(
     @SerialName("top_hits") val topHits: List<SearchHitDto> = emptyList(),
     val remaining: List<SearchHitDto> = emptyList(),
@@ -2884,6 +2894,11 @@ class KobblerApi(
 
     suspend fun search(query: String, limit: Int = 10): SearchResponse =
         decode(get("/api/v1/admin/search?q=${query.encodeURLParameter()}&limit=$limit"))
+
+    suspend fun searchSuggestions(query: String, mediaTypes: Set<String>, limit: Int = 8): List<SearchSuggestion> =
+        decode<SearchSuggestionsResponse>(
+            get("/api/v1/admin/search/suggestions?q=${query.encodeURLParameter()}&media=${mediaTypes.joinToString(",")}&limit=$limit"),
+        ).suggestions
 
     private suspend fun searchExternalMovies(query: String): List<DiscoverItem> {
         val provider = topVideoProvider("movie_search")

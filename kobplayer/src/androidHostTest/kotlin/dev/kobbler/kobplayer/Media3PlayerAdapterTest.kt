@@ -1,10 +1,8 @@
 package dev.kobbler.kobplayer
 
-import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -24,7 +22,7 @@ class Media3PlayerAdapterTest {
         val failures = cases.mapNotNull { (name, seek) ->
             val sought = mutableListOf<Long>()
             val adapter = Media3PlayerAdapter(
-                stubPlayer(),
+                StubPlayer().player,
                 positionMs = { 60_000 },
                 durationMs = { 600_000 },
                 seekPlayerTo = { sought += it },
@@ -41,15 +39,4 @@ class Media3PlayerAdapterTest {
         }
         assertEquals(emptyList(), failures)
     }
-
-    private fun stubPlayer(): Player = Proxy.newProxyInstance(Player::class.java.classLoader, arrayOf(Player::class.java)) { _, method, _ ->
-        when (method.name) {
-            "getState" -> MutableStateFlow(PlayerState.PLAYING)
-            "getCurrentMs", "getDurationMs" -> MutableStateFlow(0L)
-            "getPlaybackSpeed" -> MutableStateFlow(1f)
-            "isMuted", "isBuffering", "isPlaying" -> MutableStateFlow(false)
-            "getMaxVolume" -> 1f
-            else -> if (method.returnType == kotlinx.coroutines.flow.StateFlow::class.java) MutableStateFlow(null) else null
-        }
-    } as Player
 }

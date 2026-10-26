@@ -111,6 +111,7 @@ fun IptvScreen(
     formFactor: FormFactor = FormFactor.Desktop,
     onChannelClick: (IptvChannel) -> Unit = {},
     onWatch: (IptvChannel) -> Unit = {},
+    onSearchClick: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val focusScope = LocalFocusScope.current
@@ -250,7 +251,7 @@ fun IptvScreen(
                     if (compact) {
                         tabs(Modifier.fillMaxWidth())
                     } else {
-                        BrowseHeader(title = "IPTV", accent = accent, compact = dense, trailing = { tabs(Modifier) })
+                        BrowseHeader(title = "IPTV", accent = accent, compact = dense, trailing = { tabs(Modifier) }, onSearch = onSearchClick)
                     }
                 }
             },

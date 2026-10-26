@@ -312,6 +312,14 @@ fun playPauseIntent(current: PlayerState): PlayPauseIntent =
         PlayerState.IDLE, PlayerState.FINISHED, PlayerState.ERROR -> PlayPauseIntent.None
     }
 
+/** Whether a request for [playing] from outside the transport needs a tap of it to get there. */
+fun tapReaches(playing: Boolean, current: PlayerState): Boolean =
+    when (playPauseIntent(current)) {
+        PlayPauseIntent.Pause -> !playing
+        PlayPauseIntent.Play -> playing
+        PlayPauseIntent.None -> false
+    }
+
 // More than credits rounding or a last partial segment, less than anything a viewer would
 // call the end; a short title gets a tenth of its length instead. Never under the floor:
 // the last position report trails the real end by a few hundred milliseconds.

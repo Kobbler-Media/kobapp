@@ -202,14 +202,7 @@ fun FullscreenVideoPlayer(
         val controlScope = state.teardownScope
         PlaybackLifecycle.setPlayer(player)
         PlaybackLifecycle.setControls(
-            onPlayPause = {
-                if (mediaType == "livetv") {
-                    if (player.isPlaying.value) pauseLive(state, player, api, controlScope)
-                    else resumeLive(state, player, api, controlScope)
-                } else {
-                    player.togglePlayPause()
-                }
-            },
+            onPlayPause = { state.togglePlayback(player, api, controlScope) },
             onSkipForward = { seekPlayerTo((player.currentMs.value + VIDEO_SKIP_MS).coerceAtMost(player.durationMs.value)) },
             onSkipBack = { seekPlayerTo((player.currentMs.value - VIDEO_SKIP_MS).coerceAtLeast(0)) },
             onStop = {
@@ -633,14 +626,7 @@ fun FullscreenVideoPlayer(
                 paused = paused,
                 position = overlayPosition,
                 durationMs = overlayDurationMs,
-                onPlayPause = {
-                    if (isLiveTv) {
-                        if (isPlaying) pauseLive(state, player, api, scope)
-                        else resumeLive(state, player, api, scope)
-                    } else {
-                        player.togglePlayPause()
-                    }
-                },
+                onPlayPause = { state.togglePlayback(player, api, scope) },
                 onSeek = overlaySeek,
                 onBack = saveAndBack,
                 // A TV player has no windowed mode to toggle into, so the control is a

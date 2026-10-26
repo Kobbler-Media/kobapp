@@ -19,6 +19,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import dev.kobbler.app.ui.navigation.InterceptBack
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.delay
 
@@ -119,31 +120,54 @@ internal fun Modifier.readerZone(state: ReaderNavState, zone: ReaderZone): Modif
 @Composable
 internal fun Modifier.readerKeyNav(
     state: ReaderNavState,
-    enabled: Boolean,
+    panelOpen: Boolean,
     cursorActive: Boolean,
+    chaptersOnDown: Boolean,
     onAction: (ReaderKeyAction) -> Boolean,
 ): Modifier {
     if (!state.keyNav) return this
     val act by rememberUpdatedState(onAction)
+    val panel by rememberUpdatedState(panelOpen)
     val cursorOn by rememberUpdatedState(cursorActive)
+    val chapters by rememberUpdatedState(chaptersOnDown)
     return this
         .focusKey("reader", focusRequester = state.rootFocus, preferredEntry = true)
         .onFocusChanged { if (it.isFocused) state.zone = ReaderZone.Body }
         .focusable()
         .onPreviewKeyEvent { event ->
-            if (!enabled || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             val key = event.key.toReaderKey() ?: return@onPreviewKeyEvent false
-            if (state.chromeVisible) state.poke()
-            val action = readerKeyAction(key, state.zone, cursorOn, state.chromeVisible, state.immersive)
-            when (action) {
-                ReaderKeyAction.Pass -> false
-                ReaderKeyAction.FocusTopBar -> { state.showChrome(ReaderZone.TopBar); true }
-                ReaderKeyAction.FocusBottomBar -> { state.showChrome(ReaderZone.BottomBar); true }
-                ReaderKeyAction.FocusBody -> { state.returnToBody(); true }
-                else -> act(action)
-            }
+            if (state.chromeVisible && !panel) state.poke()
+            state.perform(readerKeyAction(key, state.zone, cursorOn, state.chromeVisible, state.immersive, panel, chapters), act)
         }
 }
+
+/**
+ * BACK as the platform delivers it rather than as a key: Android hands it to
+ * OnBackPressedDispatcher whenever the key never reaches Compose (predictive back, or a
+ * text field holding focus), and unclaimed there it leaves the reader.
+ */
+@Composable
+internal fun ReaderBackHandler(
+    state: ReaderNavState,
+    panelOpen: Boolean,
+    cursorActive: Boolean,
+    onAction: (ReaderKeyAction) -> Boolean,
+) {
+    val action = readerKeyAction(
+        ReaderKey.Back, state.zone, cursorActive, state.chromeVisible, state.immersive, panelOpen, chaptersOnDown = false,
+    )
+    InterceptBack(enabled = action != ReaderKeyAction.Pass) { state.perform(action, onAction) }
+}
+
+private fun ReaderNavState.perform(action: ReaderKeyAction, act: (ReaderKeyAction) -> Boolean): Boolean =
+    when (action) {
+        ReaderKeyAction.Pass -> false
+        ReaderKeyAction.FocusTopBar -> { showChrome(ReaderZone.TopBar); true }
+        ReaderKeyAction.FocusBottomBar -> { showChrome(ReaderZone.BottomBar); true }
+        ReaderKeyAction.FocusBody -> { returnToBody(); true }
+        else -> act(action)
+    }
 
 private fun Key.toReaderKey(): ReaderKey? = when (this) {
     Key.DirectionLeft -> ReaderKey.Left

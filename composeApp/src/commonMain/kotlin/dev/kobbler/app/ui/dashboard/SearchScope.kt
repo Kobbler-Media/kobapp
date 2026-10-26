@@ -51,6 +51,16 @@ enum class SearchScope(val label: String, val placeholder: String) {
             LiveTv, Iptv -> emptySet()
         }
 
+    val suggestionMediaTypes: Set<String>
+        get() = when (this) {
+            All -> setOf("movie", "tv", "book")
+            Movies -> setOf("movie")
+            Tv -> setOf("tv")
+            Books -> setOf("book")
+            LiveTv -> setOf("livetv")
+            Iptv -> setOf("iptv")
+        }
+
     val searchesLibrary: Boolean get() = this != LiveTv && this != Iptv
 
     companion object {

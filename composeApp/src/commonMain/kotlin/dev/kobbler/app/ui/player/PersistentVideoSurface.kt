@@ -343,7 +343,7 @@ fun PersistentVideoSurface(
                 if (showMiniControls) {
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
                         IconButton(
-                            onClick = { player.togglePlayPause() },
+                            onClick = { state.togglePlayback(player, api, scope) },
                             modifier = Modifier.align(Alignment.Center).size(40.dp)
                                 .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.1f),
                         ) {

@@ -14,6 +14,8 @@ internal enum class ReaderKeyAction {
     FocusTopBar,
     FocusBottomBar,
     FocusBody,
+    OpenChapters,
+    ClosePanel,
     Pass,
 }
 
@@ -24,6 +26,11 @@ internal enum class ReaderKeyAction {
  * [ReaderKeyAction.Pass] means "did not act" and the caller must leave the event unconsumed.
  * The handler runs as a root preview, so consuming a key it cannot act on would stop the
  * focused chrome element from ever seeing it.
+ *
+ * An open panel owns every key but BACK, which closes it rather than leaving the reader.
+ * [chaptersOnDown] is the TV's DOWN: its bottom bar holds nothing but the chapter
+ * position, so the remote goes straight to the chapter list unless listen-along has put
+ * controls there.
  */
 internal fun readerKeyAction(
     key: ReaderKey,
@@ -31,12 +38,31 @@ internal fun readerKeyAction(
     cursorActive: Boolean,
     chromeVisible: Boolean,
     immersive: Boolean,
+    panelOpen: Boolean,
+    chaptersOnDown: Boolean,
+): ReaderKeyAction = when {
+    !panelOpen -> readingKeyAction(key, zone, cursorActive, chromeVisible, immersive, chaptersOnDown)
+    key == ReaderKey.Back -> ReaderKeyAction.ClosePanel
+    else -> ReaderKeyAction.Pass
+}
+
+private fun readingKeyAction(
+    key: ReaderKey,
+    zone: ReaderZone,
+    cursorActive: Boolean,
+    chromeVisible: Boolean,
+    immersive: Boolean,
+    chaptersOnDown: Boolean,
 ): ReaderKeyAction = when (zone) {
     ReaderZone.Body -> when (key) {
         ReaderKey.Left, ReaderKey.PageUp -> ReaderKeyAction.PrevPage
         ReaderKey.Right, ReaderKey.PageDown, ReaderKey.Space -> ReaderKeyAction.NextPage
         ReaderKey.Up -> if (cursorActive) ReaderKeyAction.CursorUp else ReaderKeyAction.FocusTopBar
-        ReaderKey.Down -> if (cursorActive) ReaderKeyAction.CursorDown else ReaderKeyAction.FocusBottomBar
+        ReaderKey.Down -> when {
+            cursorActive -> ReaderKeyAction.CursorDown
+            chaptersOnDown -> ReaderKeyAction.OpenChapters
+            else -> ReaderKeyAction.FocusBottomBar
+        }
         ReaderKey.Center -> ReaderKeyAction.CursorSelect
         ReaderKey.Back -> when {
             cursorActive -> ReaderKeyAction.CursorExit

@@ -31,8 +31,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,7 +54,6 @@ import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.ui.safeBottomPadding
 
 @Composable
@@ -87,7 +84,7 @@ internal fun ReaderSettingsPanel(
         val maxSheetHeight = maxHeight
         Column(
             Modifier
-                .focusKeyGroup("settings")
+                .readerPanel("settings")
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(theme.backgroundColor, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
@@ -98,14 +95,7 @@ internal fun ReaderSettingsPanel(
                 .safeBottomPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // A remote has no pointer to reach into the sheet with, so it opens holding focus.
-            val entry = remember { FocusRequester() }
-            LaunchedEffect(Unit) {
-                repeat(EntryFocusFrames) {
-                    if (runCatching { entry.requestFocus() }.isSuccess) return@LaunchedEffect
-                    withFrameNanos {}
-                }
-            }
+            val entry = rememberPanelEntryFocus()
             Text("Reader Settings", style = KobappTheme.type.h3.copy(color = theme.textColor))
             Spacer(Modifier.height(20.dp))
 
@@ -306,8 +296,6 @@ private fun ThemedSlider(
         colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),
     )
 }
-
-private const val EntryFocusFrames = 8
 
 // A Material slider steps its value on UP and DOWN as well as LEFT and RIGHT, so on a remote
 // the sheet's rows could be adjusted but never left.

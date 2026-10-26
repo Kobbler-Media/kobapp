@@ -18,13 +18,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
@@ -55,11 +58,16 @@ internal fun ReaderTopBar(
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.focusKey("back", focusRequester = entryFocus).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = theme.textColor)
+        // A remote has its own BACK, so on a TV the bar starts at its first action instead.
+        val showBack = LocalFormFactor.current != FormFactor.TV
+        val firstAction = if (showBack) remember { FocusRequester() } else entryFocus
+        if (showBack) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.focusKey("back", focusRequester = entryFocus).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = theme.textColor)
+            }
         }
         Text(
             title,
@@ -71,7 +79,7 @@ internal fun ReaderTopBar(
         if (hasAudiobook) {
             IconButton(
                 onClick = onListenAlong,
-                modifier = Modifier.focusKey("listenalong").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+                modifier = Modifier.focusKey("listenalong", focusRequester = firstAction).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
             ) {
                 Icon(
                     Icons.Outlined.Headphones, "Listen Along",
@@ -81,7 +89,7 @@ internal fun ReaderTopBar(
         }
         IconButton(
             onClick = onTts,
-            modifier = Modifier.focusKey("tts").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+            modifier = Modifier.focusKey("tts", focusRequester = if (hasAudiobook) remember { FocusRequester() } else firstAction).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
         ) {
             val icon = when (ttsState) {
                 TtsState.IDLE -> Icons.Outlined.RecordVoiceOver

@@ -88,9 +88,12 @@ fun HouseholdProfilesDialog(
                                 colors = CheckboxDefaults.colors(checkedColor = colors.accSet),
                             )
                             Spacer(Modifier.width(10.dp))
+                            val name = user.display_name?.takeIf { it.isNotBlank() } ?: user.email
+                            Avatar(name, user.email, user.avatar_url, auth.apiUrl.orEmpty(), size = 32.dp)
+                            Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    user.display_name?.takeIf { it.isNotBlank() } ?: user.email,
+                                    name,
                                     color = colors.textHi,
                                     style = type.body,
                                 )

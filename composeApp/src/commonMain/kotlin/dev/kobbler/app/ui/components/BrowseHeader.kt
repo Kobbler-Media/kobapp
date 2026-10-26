@@ -11,7 +11,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
@@ -84,6 +89,7 @@ fun BrowseHeader(
     compact: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
     secondaryRow: (@Composable () -> Unit)? = null,
+    onSearch: (() -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -122,12 +128,42 @@ fun BrowseHeader(
                     )
                 }
             }
-            if (trailing != null) trailing()
+            if (onSearch != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    trailing?.invoke()
+                    BrowseSearchButton(title = title, onClick = onSearch)
+                }
+            } else if (trailing != null) {
+                trailing()
+            }
         }
         if (secondaryRow != null) {
             Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
             secondaryRow()
         }
+    }
+}
+
+@Composable
+private fun BrowseSearchButton(title: String, onClick: () -> Unit) {
+    val colors = KobappTheme.colors
+    val focusState = rememberTvFocusState()
+    Box(
+        modifier = Modifier
+            .focusKey("browse.search", entryEligible = false)
+            .tvFocusGlow(focusState, cornerRadiusDp = 999f, scale = TvFocusScale.Subtle)
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(colors.elev1)
+            .border(1.dp, colors.lineSoft, CircleShape)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .tvClickable(focusState, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Outlined.Search, contentDescription = "Search $title", tint = colors.textMd, modifier = Modifier.size(18.dp))
     }
 }
 

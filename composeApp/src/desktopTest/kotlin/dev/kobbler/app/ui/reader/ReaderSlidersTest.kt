@@ -37,6 +37,7 @@ class ReaderSlidersTest {
                 onSliderChange = { jumps += it },
                 theme = ReaderTheme.Dark,
                 entryFocus = remember { FocusRequester() },
+                onChapters = null,
             )
         }
         onNodeWithText("Ch 1/20", substring = true).performMouseInput { click() }

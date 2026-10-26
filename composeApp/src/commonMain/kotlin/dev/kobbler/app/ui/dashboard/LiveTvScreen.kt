@@ -96,6 +96,7 @@ fun LiveTvScreen(
     onWatch: (LiveChannel) -> Unit = {},
     onRecordingClick: (String) -> Unit = {},
     onSeriesRulesClick: () -> Unit = {},
+    onSearchClick: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val focusScope = LocalFocusScope.current
@@ -329,6 +330,7 @@ fun LiveTvScreen(
                             title = "Live TV",
                             accent = accent,
                             compact = dense,
+                            onSearch = onSearchClick,
                             trailing = {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,

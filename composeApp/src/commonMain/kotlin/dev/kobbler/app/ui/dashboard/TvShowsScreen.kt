@@ -46,6 +46,7 @@ fun TvShowsScreen(
     formFactor: FormFactor = FormFactor.Desktop,
     onShowClick: (TvShow) -> Unit,
     onContinueClick: (ContinueItem) -> Unit = {},
+    onSearchClick: (() -> Unit)? = null,
 ) {
     val shows = remember { mutableStateListOf<TvShow>() }
     var nextCursor by remember { mutableStateOf<String?>(null) }
@@ -283,6 +284,7 @@ fun TvShowsScreen(
                             title = if (sportsOnly) "Sports" else "TV Shows",
                             accent = accentColor,
                             compact = compact,
+                            onSearch = onSearchClick,
                             trailing = if (sportsOnly) null else {
                                 {
                                     BrowseScopeFilter(

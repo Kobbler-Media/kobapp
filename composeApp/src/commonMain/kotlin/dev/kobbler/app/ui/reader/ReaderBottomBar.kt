@@ -33,6 +33,7 @@ internal fun ReaderBottomBar(
     onSliderChange: (Float) -> Unit,
     theme: ReaderTheme,
     entryFocus: FocusRequester,
+    onChapters: (() -> Unit)?,
 ) {
     var showSlider by remember { mutableStateOf(false) }
     Column(
@@ -64,7 +65,7 @@ internal fun ReaderBottomBar(
                 .focusKey("progress", focusRequester = entryFocus)
                 .fillMaxWidth()
                 .tvAutoGlow(cornerRadiusDp = 6f, scale = 1.01f)
-                .clickable { showSlider = !showSlider }
+                .clickable { if (onChapters != null) onChapters() else showSlider = !showSlider }
                 .padding(vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {

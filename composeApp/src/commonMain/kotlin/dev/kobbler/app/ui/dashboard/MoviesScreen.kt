@@ -39,6 +39,7 @@ fun MoviesScreen(
     formFactor: FormFactor = FormFactor.Desktop,
     onMovieClick: (Movie) -> Unit,
     onContinueClick: (ContinueItem) -> Unit = {},
+    onSearchClick: (() -> Unit)? = null,
 ) {
     val movies = remember { mutableStateListOf<Movie>() }
     var nextCursor by remember { mutableStateOf<String?>(null) }
@@ -240,6 +241,7 @@ fun MoviesScreen(
                             title = "Movies",
                             accent = accent,
                             compact = compact,
+                            onSearch = onSearchClick,
                             trailing = {
                                 BrowseScopeFilter(
                                     scopes = listOf(allLabel(compact)),

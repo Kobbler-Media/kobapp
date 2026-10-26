@@ -24,6 +24,7 @@ import dev.kobbler.app.platform.NowPlayingInfo
 import dev.kobbler.app.platform.PlaybackBridge
 import dev.kobbler.app.platform.loadCoverArt
 import dev.kobbler.kobplayer.Media3PlayerAdapter
+import dev.kobbler.kobplayer.playPauseSession
 import kotlinx.coroutines.*
 
 @OptIn(UnstableApi::class)
@@ -96,6 +97,7 @@ class PlaybackService : Service() {
                         positionMs = { PlaybackBridge.timeline?.positionMs?.invoke() ?: player.currentMs.value },
                         durationMs = { PlaybackBridge.timeline?.durationMs?.invoke() ?: player.durationMs.value },
                         seekPlayerTo = { ms -> PlaybackBridge.timeline?.seekTo?.invoke(ms) ?: player.seekTo(ms) },
+                        togglePlayPause = { PlaybackBridge.onPlayPause?.invoke() ?: player.togglePlayPause() },
                         seekBackIncrementMs = { PlaybackBridge.timeline?.skipBackMs ?: DEFAULT_SKIP_MS },
                         seekForwardIncrementMs = { PlaybackBridge.timeline?.skipForwardMs ?: DEFAULT_SKIP_MS },
                     ).also { a ->
@@ -103,7 +105,7 @@ class PlaybackService : Service() {
                             PlaybackBridge.onStop?.invoke()
                             stopSelf()
                         }
-                        media3Session = MediaSession.Builder(this@PlaybackService, a).build()
+                        media3Session = playPauseSession(this@PlaybackService, a)
                     }
                 } else {
                     adapter = null
@@ -156,7 +158,7 @@ class PlaybackService : Service() {
         if (ttsSession != null) return
         val player = TtsMediaPlayer().also { it.artworkData = cachedCoverData }
         ttsPlayer = player
-        ttsSession = MediaSession.Builder(this, player).build()
+        ttsSession = playPauseSession(this, player)
     }
 
     private fun tearDownTtsSession() {

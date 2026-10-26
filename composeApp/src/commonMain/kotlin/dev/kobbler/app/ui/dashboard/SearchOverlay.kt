@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -37,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,13 +67,12 @@ import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.DiscoverItem
-import dev.kobbler.app.data.DiscoverSearchResults
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.IptvChannel
 import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.SearchHitDto
-import dev.kobbler.app.data.SearchResponse
 import dev.kobbler.app.data.SearchResult
+import dev.kobbler.app.data.SearchSuggestion
 import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.BackHandler
 import dev.kobbler.app.platform.FormFactor
@@ -81,6 +80,7 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.tvAutoGlow
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.safeTopPadding
@@ -107,24 +107,24 @@ fun SearchOverlay(
      */
     autoFocusQuery: Boolean = true,
     scopes: List<SearchScope> = SearchScope.entries,
+    session: SearchSession = remember { SearchSession() },
 ) {
     val colors = KobappTheme.colors
     val tv = formFactor == FormFactor.TV
     val searchesLive = scope == SearchScope.LiveTv || (scope == SearchScope.All && SearchScope.LiveTv in scopes)
     val searchesIptv = scope == SearchScope.Iptv || (scope == SearchScope.All && SearchScope.Iptv in scopes)
 
-    var libraryResults by remember { mutableStateOf<SearchResponse?>(null) }
+    val searchKey = SearchKey(query, scope, searchesLive, searchesIptv)
+    val returning = remember { session.takeReturn(searchKey) }
     var libraryLoading by remember { mutableStateOf(false) }
-    var discoverResults by remember { mutableStateOf<DiscoverSearchResults?>(null) }
     var discoverLoading by remember { mutableStateOf(false) }
-    var liveResults by remember { mutableStateOf<LiveSearchResults?>(null) }
     var liveLoading by remember { mutableStateOf(false) }
-    var iptvResults by remember { mutableStateOf<List<IptvChannel>?>(null) }
     var iptvLoading by remember { mutableStateOf(false) }
-    val libraryHits = remember(libraryResults, scope) {
-        libraryResults?.let { it.topHits + it.remaining }.orEmpty().filter { scope.includes(it.type) }
+    val libraryHits = remember(session.library, scope) {
+        session.library?.let { it.topHits + it.remaining }.orEmpty().filter { scope.includes(it.type) }
     }
-    val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
+    val expandedSections = session.expanded
+    val gridState = rememberLazyGridState(returning?.index ?: 0, returning?.offset ?: 0)
     val focusRequester = remember { FocusRequester() }
     var recents by remember { mutableStateOf(loadRecents()) }
     // Committing a query — picking a recent, or pressing the keyboard's go — takes the
@@ -132,54 +132,68 @@ fun SearchOverlay(
     // there is one; typing does not arm it, or every keystroke would yank focus out of
     // the field and into the list.
     var focusResults by remember { mutableStateOf(false) }
-    val sections = remember(libraryHits, discoverResults, liveResults, iptvResults) {
-        searchSections(libraryHits, discoverResults, liveResults, iptvResults)
+    val sections = remember(libraryHits, session.discover, session.live, session.iptv) {
+        searchSections(libraryHits, session.discover, session.live, session.iptv)
     }
     val firstResultKey = sections.firstOrNull()?.firstRowKey
 
-    LaunchedEffect(query, scope, searchesLive, searchesIptv) {
-        libraryResults = null
-        discoverResults = null
-        liveResults = null
-        iptvResults = null
+    LaunchedEffect(searchKey) {
+        if (session.completeKey == searchKey) return@LaunchedEffect
+        // A page left for a result before every source answered keeps what it had, so
+        // BACK lands on the same rows while the rest is fetched again.
+        val resumed = session.resultsKey == searchKey
+        if (!resumed) session.clear()
         libraryLoading = false
         discoverLoading = false
         liveLoading = false
         iptvLoading = false
         if (query.isBlank()) return@LaunchedEffect
-        delay(250)
-        expandedSections.clear()
-        if (scope.searchesLibrary) {
-            libraryLoading = true
-            launch {
-                try { libraryResults = api.search(query, limit = 50) } catch (_: Exception) {}
-                libraryLoading = false
+        if (!resumed) {
+            delay(250)
+            expandedSections.clear()
+            session.resultsKey = searchKey
+        }
+        coroutineScope {
+            if (scope.searchesLibrary) {
+                libraryLoading = true
+                launch {
+                    try { session.library = api.search(query, limit = 50) } catch (_: Exception) {}
+                    libraryLoading = false
+                }
+            }
+            if (scope.discoverMediaTypes.isNotEmpty()) {
+                discoverLoading = true
+                launch {
+                    try { session.discover = api.searchDiscover(query, scope.discoverMediaTypes) } catch (_: Exception) {}
+                    discoverLoading = false
+                }
+            }
+            if (searchesLive) {
+                liveLoading = true
+                launch {
+                    session.live = searchLive(api, query)
+                    liveLoading = false
+                }
+            }
+            if (searchesIptv) {
+                iptvLoading = true
+                launch {
+                    session.iptv = searchIptv(api, query)
+                    iptvLoading = false
+                }
             }
         }
-        if (scope.discoverMediaTypes.isNotEmpty()) {
-            discoverLoading = true
-            launch {
-                try { discoverResults = api.searchDiscover(query, scope.discoverMediaTypes) } catch (_: Exception) {}
-                discoverLoading = false
-            }
-        }
-        if (searchesLive) {
-            liveLoading = true
-            launch {
-                liveResults = searchLive(api, query)
-                liveLoading = false
-            }
-        }
-        if (searchesIptv) {
-            iptvLoading = true
-            launch {
-                iptvResults = searchIptv(api, query)
-                iptvLoading = false
-            }
-        }
+        session.completeKey = searchKey
     }
 
-    LaunchedEffect(autoFocusQuery) { if (autoFocusQuery) focusRequester.requestFocus() }
+    LaunchedEffect(query.trim(), scope) {
+        val key = query.trim() to scope
+        if (session.suggestionsKey == key) return@LaunchedEffect
+        if (session.suggestionsKey?.first?.isBlank() != key.first.isBlank()) session.suggestions = emptyList()
+        delay(150)
+        session.suggestions = fetchSuggestions(api, query, scope)
+        session.suggestionsKey = key
+    }
 
     val commitRecent: (String) -> Unit = { term ->
         val t = term.trim()
@@ -212,6 +226,11 @@ fun SearchOverlay(
     }
 
     val content: @Composable () -> Unit = {
+        val focusScope = LocalFocusScope.current
+        val leaving: (() -> Unit) -> Unit = { open ->
+            session.leaveFor(focusScope.focused, gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+            open()
+        }
         SearchContent(
             query = query,
             onQueryChange = { onQueryChange(it); focusResults = false },
@@ -229,12 +248,14 @@ fun SearchOverlay(
             liveLoading = liveLoading,
             iptvLoading = iptvLoading,
             expandedSections = expandedSections,
+            gridState = gridState,
             apiUrl = api.apiUrl,
-            onResultClick = handleResultClick,
-            onDiscoverClick = handleDiscoverClick,
-            onLiveClick = handleLiveClick,
-            onIptvClick = handleIptvClick,
+            onResultClick = { leaving { handleResultClick(it) } },
+            onDiscoverClick = { leaving { handleDiscoverClick(it) } },
+            onLiveClick = { leaving { handleLiveClick(it) } },
+            onIptvClick = { leaving { handleIptvClick(it) } },
             recents = recents,
+            suggestions = session.suggestions.filterNot { it.title.equals(query.trim(), ignoreCase = true) },
             onPickRecent = { onQueryChange(it); focusResults = formFactor != FormFactor.Phone },
             onClearRecents = {
                 recents = emptyList()
@@ -258,6 +279,11 @@ fun SearchOverlay(
     // Its own scope, so the keyed rows below register here and not in the detached
     // global one shared with the screen underneath. Entry focus is set explicitly.
     FocusScopeHost(id = "search-overlay", restoreEnabled = false) {
+        EntryFocus(
+            enabled = autoFocusQuery,
+            returnTo = returning?.let { listOfNotNull(it.focusKey, firstResultKey) },
+            queryField = focusRequester,
+        )
         FocusFirstResult(
             armed = focusResults,
             key = firstResultKey,
@@ -327,12 +353,14 @@ private fun SearchContent(
     liveLoading: Boolean,
     iptvLoading: Boolean,
     expandedSections: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    gridState: LazyGridState,
     apiUrl: String,
     onResultClick: (SearchHitDto) -> Unit,
     onDiscoverClick: (DiscoverItem) -> Unit,
     onLiveClick: (LiveChannel) -> Unit,
     onIptvClick: (IptvChannel) -> Unit,
     recents: List<String>,
+    suggestions: List<SearchSuggestion>,
     onPickRecent: (String) -> Unit,
     onClearRecents: () -> Unit,
     formFactor: FormFactor,
@@ -343,7 +371,6 @@ private fun SearchContent(
 
     val nothing = !loading && sections.isEmpty() && query.isNotBlank()
     val jumps = if (query.isBlank()) emptyList() else searchJumps(sections, expandedSections)
-    val gridState = rememberLazyGridState()
     val coroutineScope = rememberCoroutineScope()
     val focusScope = LocalFocusScope.current
     val onJump: (SearchJump) -> Unit = { jump ->
@@ -374,6 +401,16 @@ private fun SearchContent(
                 null
             },
         )
+        if (query.isNotBlank() && suggestions.isNotEmpty()) {
+            SearchSuggestionChips(
+                suggestions = suggestions,
+                onPick = onPickRecent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (phone) 16.dp else 18.dp)
+                    .padding(bottom = 6.dp),
+            )
+        }
         if (jumps.isNotEmpty()) {
             SearchJumpChips(
                 jumps = jumps,
@@ -403,14 +440,15 @@ private fun SearchContent(
             if (query.isBlank()) {
                 if (recents.isNotEmpty()) {
                     fullWidthItem(key = "recents-head") {
-                        RecentsHeader(onClear = onClearRecents)
+                        SearchTermsHeader("RECENT SEARCHES", Icons.Outlined.History, onClear = onClearRecents)
                     }
                     items(recents, key = { "recent-$it" }, span = { GridItemSpan(maxLineSpan) }) { term ->
-                        RecentRow(term = term, onClick = { onPickRecent(term) })
+                        SearchTermRow(term = term, icon = Icons.Outlined.History, focusKey = "recent.$term", onClick = { onPickRecent(term) })
                     }
                 } else {
                     fullWidthItem(key = "empty-hint") { EmptyHint() }
                 }
+                trendingSuggestions(suggestions, onPick = onPickRecent)
             } else if (nothing) {
                 fullWidthItem(key = "no-results") {
                     Box(
@@ -449,6 +487,19 @@ private fun SearchContent(
                 }
             }
         }
+    }
+}
+
+/**
+ * Back from a result the viewer opened, focus goes back to that row; focusing the query
+ * field instead would raise the on-screen keyboard over the results they came back to.
+ */
+@Composable
+private fun EntryFocus(enabled: Boolean, returnTo: List<String>?, queryField: FocusRequester) {
+    val scope = LocalFocusScope.current
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
+        if (returnTo?.any { scope.restore(it, maxFrames = 40) } != true) queryField.requestFocus()
     }
 }
 
@@ -617,37 +668,39 @@ private fun IconBubble(
 }
 
 @Composable
-private fun RecentsHeader(onClear: () -> Unit) {
+internal fun SearchTermsHeader(label: String, icon: ImageVector, onClear: (() -> Unit)? = null) {
     val colors = KobappTheme.colors
     Row(
         Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Outlined.History, null, tint = colors.textLo, modifier = Modifier.size(14.dp))
+        Icon(icon, null, tint = colors.textLo, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            "RECENT SEARCHES",
+            label,
             style = KobappTheme.type.label,
             color = colors.textLo,
         )
-        Spacer(Modifier.weight(1f))
-        KobButton(
-            onClick = onClear,
-            style = KobButtonStyle.Ghost,
-            modifier = Modifier.focusKey("clear-recents"),
-        ) {
-            Text("Clear", style = KobappTheme.type.caption, color = colors.textLo)
+        if (onClear != null) {
+            Spacer(Modifier.weight(1f))
+            KobButton(
+                onClick = onClear,
+                style = KobButtonStyle.Ghost,
+                modifier = Modifier.focusKey("clear-recents"),
+            ) {
+                Text("Clear", style = KobappTheme.type.caption, color = colors.textLo)
+            }
         }
     }
 }
 
 @Composable
-private fun RecentRow(term: String, onClick: () -> Unit) {
+internal fun SearchTermRow(term: String, icon: ImageVector, focusKey: String, onClick: () -> Unit) {
     val colors = KobappTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .focusKey("recent.$term")
+            .focusKey(focusKey)
             .tvAutoGlow(cornerRadiusDp = 10f, scale = 1f)
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
@@ -663,7 +716,7 @@ private fun RecentRow(term: String, onClick: () -> Unit) {
                 .background(colors.elev2),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.History, null, tint = colors.textLo, modifier = Modifier.size(14.dp))
+            Icon(icon, null, tint = colors.textLo, modifier = Modifier.size(14.dp))
         }
         Text(term, style = KobappTheme.type.body, color = colors.textHi, modifier = Modifier.weight(1f))
         Icon(Icons.Outlined.Search, null, tint = colors.textLo, modifier = Modifier.size(14.dp))

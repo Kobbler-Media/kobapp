@@ -42,6 +42,7 @@ internal fun ReaderTvStatus(
     currentChapter: Int,
     totalChapters: Int,
     cursorActive: Boolean,
+    downOpensChapters: Boolean,
     theme: ReaderTheme,
     modifier: Modifier = Modifier,
 ) {
@@ -58,7 +59,8 @@ internal fun ReaderTvStatus(
     ) {
         val hint = when {
             cursorActive -> "OK  read aloud from here  •  ▲ ▼  move  •  Back  cancel"
-            showKeys -> "◀ ▶  turn pages  •  ▲  menu: contents, text size, read aloud  •  ▼  chapters  •  OK  pick a line"
+            showKeys -> "◀ ▶  turn pages  •  ▲  menu: contents, text size, read aloud  •  " +
+                (if (downOpensChapters) "▼  chapters" else "▼  playback") + "  •  OK  pick a line"
             else -> null
         }
         AnimatedVisibility(hint != null, enter = fadeIn(), exit = fadeOut()) {

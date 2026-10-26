@@ -79,6 +79,7 @@ fun BooksScreen(
     onContinueClick: (ContinueItem) -> Unit = {},
     onAuthorClick: ((String) -> Unit)? = null,
     onSeriesClick: ((String) -> Unit)? = null,
+    onSearchClick: (() -> Unit)? = null,
 ) {
     var tab by remember { mutableStateOf(BooksTab.All) }
     // Latched by any deliberate tab press: after that, landing back on All must leave
@@ -107,6 +108,7 @@ fun BooksScreen(
                     title = if (audiobooksOnly) "Audiobooks" else "Books",
                     accent = accentColor,
                     compact = compact,
+                    onSearch = onSearchClick,
                     trailing = {
                         SegmentedFilter(
                             options = BooksTab.entries.map { it.name },

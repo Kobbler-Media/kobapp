@@ -4,6 +4,8 @@ import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.kobbler.app.data.AudioFileDto
@@ -19,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
@@ -65,5 +68,43 @@ class AudiobookFormFactorTest {
         waitForIdle()
         val play = onNodeWithContentDescription("Play").getUnclippedBoundsInRoot()
         assertTrue(play.bottom <= 540.dp, "the play button ends at ${play.bottom} of 540dp")
+    }
+
+    private fun backShown(formFactor: FormFactor): Boolean {
+        var shown = false
+        runUiTest(width = 960, height = 540) {
+            val state = state()
+            setContent {
+                KobappTheme(formFactor = formFactor) {
+                    AudiobookPlayerContent(book = book, state = state, onBack = {}, onOpenReader = null)
+                }
+            }
+            waitForIdle()
+            shown = onAllNodesWithContentDescription("Back").fetchSemanticsNodes().isNotEmpty()
+        }
+        return shown
+    }
+
+    @Test
+    fun `a TV leaves going back to the remote`() = assertFalse(backShown(FormFactor.TV))
+
+    @Test
+    fun `a touchscreen keeps its back button`() = assertTrue(backShown(FormFactor.Phone))
+
+    @Test
+    fun `the clocks share one row`() = runUiTest(width = 960, height = 540) {
+        val state = state()
+        setContent {
+            KobappTheme(formFactor = FormFactor.TV) {
+                AudiobookPlayerContent(book = book, state = state, onBack = {}, onOpenReader = null)
+            }
+        }
+        state.currentMs = 65_000
+        waitForIdle()
+        val rows = listOf("1:05", "8:55 left in chapter", "10:00").map { label ->
+            onAllNodesWithText(label)[0].getUnclippedBoundsInRoot().let { (it.top + it.bottom) / 2 }
+        }
+        assertTrue(rows.max() - rows.min() < 1.dp, "the clocks sit on different rows: $rows")
+        assertTrue(onAllNodesWithText("-8:55").fetchSemanticsNodes().isEmpty(), "a second countdown is still ticking")
     }
 }
