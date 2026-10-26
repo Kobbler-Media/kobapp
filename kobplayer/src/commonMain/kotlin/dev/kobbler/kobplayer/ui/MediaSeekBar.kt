@@ -191,8 +191,8 @@ fun MediaSeekBar(
                     onDragCancel = {
                         isDragging = false
                     },
-                    onHorizontalDrag = { _, dragAmount ->
-                        dragFraction = (dragFraction + dragAmount / size.width).coerceIn(0f, 1f)
+                    onHorizontalDrag = { change, _ ->
+                        dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
                         onSeeking?.invoke(dragFraction)
                     },
                 )

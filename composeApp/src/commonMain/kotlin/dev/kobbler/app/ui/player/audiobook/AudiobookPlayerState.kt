@@ -101,15 +101,17 @@ class AudiobookPlayerState internal constructor(
         else chapters.map { (it.globalStartSeconds * 1000 / total).toFloat() }
     }
 
-    val currentChapter: UnifiedChapterDto? by derivedStateOf {
-        val pos = globalPositionMs
-        chapters.lastOrNull { (it.globalStartSeconds * 1000).toLong() <= pos }
-    }
+    val currentChapter: UnifiedChapterDto? by derivedStateOf { chapterAt(globalPositionMs) }
 
     val chapterRemainingMs: Long?
-        get() = currentChapter?.let { ch ->
-            ((ch.globalEndSeconds * 1000).toLong() - globalPositionMs).coerceAtLeast(0)
-        }
+        get() = chapterRemainingAt(globalPositionMs)
+
+    fun chapterAt(globalMs: Long): UnifiedChapterDto? =
+        chapters.lastOrNull { (it.globalStartSeconds * 1000).toLong() <= globalMs }
+
+    fun chapterRemainingAt(globalMs: Long): Long? = chapterAt(globalMs)?.let { ch ->
+        ((ch.globalEndSeconds * 1000).toLong() - globalMs).coerceAtLeast(0)
+    }
 
     private val segmentIndicesByFile: Map<String, List<Int>> by derivedStateOf {
         transcriptSegments.indices.groupBy { transcriptSegments[it].fileId }

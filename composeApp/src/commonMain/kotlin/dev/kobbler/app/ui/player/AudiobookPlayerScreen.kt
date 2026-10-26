@@ -31,7 +31,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -470,37 +472,44 @@ private fun BookTitleBlock(
 @Composable
 private fun ProgressBlock(state: AudiobookPlayerState, modifier: Modifier = Modifier) {
     val accent = KobappTheme.colors.accAudio
+    var scrubMs by remember(state) { mutableStateOf<Long?>(null) }
     Column(modifier = modifier.focusKeyGroup("progress").fillMaxWidth()) {
         MediaSeekBar(
             progress = {
                 if (state.totalBookDurationMs > 0) state.globalPositionMs.toFloat() / state.totalBookDurationMs else 0f
             },
-            onSeek = { frac -> state.seekToGlobal((frac * state.totalBookDurationMs).toLong()) },
+            onSeek = { frac ->
+                scrubMs = null
+                state.seekToGlobal((frac * state.totalBookDurationMs).toLong())
+            },
+            onSeeking = { frac -> scrubMs = (frac * state.totalBookDurationMs).toLong() },
             activeColor = accent,
             modifier = Modifier.fillMaxWidth(),
             chapterMarkers = state.chapterMarkers,
-            focusDecoration = Modifier.focusKey("seek").tvAutoGlow(cornerRadiusDp = 14f, scale = 1f),
+            focusDecoration = Modifier.focusKey("seek"),
             dpadStepFraction = if (state.totalBookDurationMs > 0) 30_000f / state.totalBookDurationMs else 0f,
             // The bar is what a remote stops on, so it answers OK with the transport next to it
             // rather than leaving the press unanswered.
             onActivate = { state.player.togglePlayPause() },
         )
-        ProgressLabels(state)
+        ProgressLabels(state, scrubMs)
     }
 }
 
 @Composable
-private fun ProgressLabels(state: AudiobookPlayerState) {
+private fun ProgressLabels(state: AudiobookPlayerState, scrubMs: Long?) {
     val colors = KobappTheme.colors
     val type = KobappTheme.type
-    val positionSec by remember(state) { derivedStateOf { state.globalPositionMs / 1000 } }
-    val chapterRemainingSec by remember(state) { derivedStateOf { state.chapterRemainingMs?.div(1000) } }
+    val shownSec by remember(state, scrubMs) { derivedStateOf { (scrubMs ?: state.globalPositionMs) / 1000 } }
+    val chapterRemainingSec by remember(state, scrubMs) {
+        derivedStateOf { state.chapterRemainingAt(scrubMs ?: state.globalPositionMs)?.div(1000) }
+    }
     val remaining = chapterRemainingSec.takeIf { state.currentChapter?.title != null }
     Row(
         Modifier.fillMaxWidth().padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(formatTime(positionSec * 1000), style = type.bodySm, color = colors.textHi)
+        Text(formatTime(shownSec * 1000), style = type.bodySm, color = colors.textHi)
         Text(
             remaining?.let { "${formatTime(it * 1000)} left in chapter" }.orEmpty(),
             style = type.caption,
