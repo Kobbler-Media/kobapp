@@ -572,6 +572,9 @@ internal class AndroidPlayer(
         deferredRedraw?.cancel()
         deferredRedraw = null
         hasVideoTrack = false
+        // The last title's geometry would size this one's frame until its own tracks report.
+        _videoSize.value = 0 to 0
+        _decodedPicture.value = null
         _contentFrameRate.value = 0f
         armFrameRateProbe()
         _state.value = PlayerState.LOADING

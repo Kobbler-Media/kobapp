@@ -82,7 +82,7 @@ import dev.kobbler.app.ui.reader.ComicReader
 import dev.kobbler.app.ui.reader.ReaderScreen
 import dev.kobbler.app.ui.player.PlaybackSessionHeartbeat
 import dev.kobbler.app.ui.player.canRecoverSession
-import dev.kobbler.app.ui.player.leaveFullscreen
+import dev.kobbler.app.ui.player.back
 import dev.kobbler.app.ui.player.retryPlayback
 import dev.kobbler.app.ui.player.watchPlayback
 
@@ -320,7 +320,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     // Not on TV: the mini player's controls are tap-only and it carries no focus target,
     // so shrinking into it strands playback somewhere the remote can never reach again.
     BackHandler(enabled = gps.isFullscreen) {
-        if (player != null) gps.leaveFullscreen(player, api!!, formFactor, scope)
+        if (player != null) gps.back(player, api!!, formFactor, scope)
     }
     // Only plain Home leaves the app; any other tab steps back to it first.
     BackHandler(enabled = nav.current != Destination.Tab.Home && !gps.isFullscreen) {

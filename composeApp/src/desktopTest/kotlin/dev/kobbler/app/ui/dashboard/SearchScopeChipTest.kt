@@ -17,6 +17,8 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.kobbler.app.UiTimeoutMs
@@ -115,8 +117,8 @@ class SearchScopeChipTest {
         runUiTest(width = 1280, height = 900) {
             StubServer(routes).use { stub ->
                 showSearch(stub, ff, query = "block", scopes = withoutLive)
-                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Discover").fetchSemanticsNodes().isNotEmpty() }
-                val jump = onNodeWithText("Discover").fetchSemanticsNode().boundsInRoot
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithTag(SearchJumpChipsTag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+                val jump = onNodeWithTag(SearchJumpChipsTag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
                 val field = onNode(hasSetTextAction()).fetchSemanticsNode().boundsInRoot
                 assertTrue(jump.left < field.left, "jump chip at ${jump.left} is not left of the field at ${field.left}")
             }

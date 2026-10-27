@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.systemBars
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.LocalFormFactor
@@ -57,3 +59,7 @@ fun Modifier.safeContentPadding(): Modifier = windowInsetsPadding(kobChromeInset
 @Composable
 fun Modifier.imePaddingUnlessTv(): Modifier =
     if (LocalFormFactor.current == FormFactor.TV) this else imePadding()
+
+val kobKeyboardShown: Boolean
+    @Composable
+    get() = WindowInsets.ime.getBottom(LocalDensity.current) > 0

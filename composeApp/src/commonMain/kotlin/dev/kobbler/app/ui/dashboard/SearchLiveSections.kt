@@ -49,8 +49,7 @@ private const val IptvChannelHits = 8
 suspend fun searchIptv(api: KobblerApi, query: String): List<IptvChannel> =
     runCatching { api.getIptvChannels(search = query, limit = IptvChannelHits).channels }.getOrDefault(emptyList())
 
-internal fun LazyGridScope.iptvChannelsSubsection(channels: List<IptvChannel>, onClick: (IptvChannel) -> Unit) {
-    fullWidthItem(key = "iptv-channels-head") { SectionHeader("IPTV · Channels", KobappTheme.colors.accLive, channels.size) }
+internal fun LazyGridScope.iptvChannelRows(channels: List<IptvChannel>, onClick: (IptvChannel) -> Unit) {
     items(channels, key = { "iptv-ch-${it.id}" }) { channel ->
         ResultRow(
             key = "iptv.ch.${channel.id}",
@@ -81,8 +80,7 @@ suspend fun searchLive(api: KobblerApi, query: String): LiveSearchResults = coro
     )
 }
 
-internal fun LazyGridScope.liveChannelsSubsection(channels: List<LiveChannel>, onClick: (LiveChannel) -> Unit) {
-    fullWidthItem(key = "live-channels-head") { SectionHeader("Live TV · Channels", KobappTheme.colors.accLive, channels.size) }
+internal fun LazyGridScope.liveChannelRows(channels: List<LiveChannel>, onClick: (LiveChannel) -> Unit) {
     items(channels, key = { "live-ch-${it.id}" }) { channel ->
         ResultRow(
             key = "live.ch.${channel.id}",
@@ -95,12 +93,7 @@ internal fun LazyGridScope.liveChannelsSubsection(channels: List<LiveChannel>, o
     }
 }
 
-internal fun LazyGridScope.liveAiringsSubsection(
-    visible: List<LiveGuideSelection>,
-    total: Int,
-    onClick: (LiveGuideSelection) -> Unit,
-) {
-    fullWidthItem(key = "live-airings-head") { SectionHeader("Live TV · On the guide", KobappTheme.colors.accLive, total) }
+internal fun LazyGridScope.liveAiringRows(visible: List<LiveGuideSelection>, onClick: (LiveGuideSelection) -> Unit) {
     val now = nowInstant()
     items(visible, key = { "live-air-${it.entry.id}" }) { airing ->
         val start = parseLiveInstant(airing.entry.startTime)

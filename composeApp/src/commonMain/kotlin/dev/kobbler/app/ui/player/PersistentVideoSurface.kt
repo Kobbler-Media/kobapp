@@ -42,6 +42,20 @@ import kotlinx.coroutines.launch
 private const val SNAP_MS = 250
 
 /** Applies [fullscreenExit]; the two dismiss paths share it so they cannot disagree. */
+/** Back out of the player: while a start is still being found it is called off, not just hidden. */
+fun GlobalPlayerState.back(player: Player, api: KobblerApi, formFactor: FormFactor, scope: CoroutineScope) {
+    if (isPreparing) cancelStart(player, api, scope) else leaveFullscreen(player, api, formFactor, scope)
+}
+
+fun GlobalPlayerState.cancelStart(player: Player, api: KobblerApi, scope: CoroutineScope) {
+    val cancel = onPreparingCancel
+    when {
+        cancel != null -> cancel()
+        mediaId == null -> cancelPreparing()
+        else -> stop(player, api, scope)
+    }
+}
+
 fun GlobalPlayerState.leaveFullscreen(
     player: Player,
     api: KobblerApi,
@@ -377,7 +391,7 @@ fun PersistentVideoSurface(
                 state = state,
                 api = api,
                 formFactor = formFactor,
-                onBack = { state.leaveFullscreen(player, api, formFactor, scope) },
+                onBack = { state.back(player, api, formFactor, scope) },
                 onFinished = state.onFinished,
                 onToggleFullscreen = onToggleFullscreen,
                 isFullscreen = isFullscreen,

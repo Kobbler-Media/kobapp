@@ -32,8 +32,10 @@ import dev.kobbler.kobfocus.focusKeyGroup
 
 internal const val SearchSuggestionStripTag = "search-suggestions"
 
+/** Shows and movies lead: the app is mostly watched from, and the server's order is the web's, which reads too. */
 suspend fun fetchSuggestions(api: KobblerApi, query: String, scope: SearchScope): List<SearchSuggestion> =
     runCatching { api.searchSuggestions(query.trim(), scope.suggestionMediaTypes) }.getOrDefault(emptyList())
+        .sortedBy { it.mediaType != "movie" && it.mediaType != "tv" }
 
 @Composable
 internal fun SearchSuggestionStrip(suggestions: List<SearchSuggestion>, onPick: (String) -> Unit, modifier: Modifier = Modifier) {

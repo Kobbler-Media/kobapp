@@ -77,6 +77,7 @@ import dev.kobbler.app.data.SearchSuggestion
 import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.BackHandler
 import dev.kobbler.app.platform.FormFactor
+import dev.kobbler.app.platform.KeyboardCompletions
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
@@ -86,6 +87,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.app.ui.imePaddingUnlessTv
+import dev.kobbler.app.ui.kobKeyboardShown
 
 private const val RECENT_MAX = 8
 private const val RECENT_KEY = "search_recents"
@@ -103,6 +105,7 @@ fun SearchOverlay(
     onResultClick: (SearchResult) -> Unit,
     onDiscoverItemClick: (DiscoverItem) -> Unit = {},
     formFactor: FormFactor = FormFactor.Desktop,
+    keyboardShown: Boolean = kobKeyboardShown,
     /**
      * Whether the query field should take focus. False while the search page is on
      * screen but the viewer is still in the sidebar: focusing the field there opens the
@@ -135,10 +138,10 @@ fun SearchOverlay(
     // there is one; typing does not arm it, or every keystroke would yank focus out of
     // the field and into the list.
     var focusResults by remember { mutableStateOf(false) }
-    val sections = remember(libraryHits, session.discover, session.live, session.iptv) {
-        searchSections(libraryHits, session.discover, session.live, session.iptv)
+    val layout = remember(libraryHits, session.discover, session.live, session.iptv) {
+        searchLayout(searchSections(libraryHits, session.discover, session.live, session.iptv), query)
     }
-    val firstResultKey = sections.firstOrNull()?.firstRowKey
+    val firstResultKey = layout.firstRowKey
 
     LaunchedEffect(searchKey) {
         if (session.completeKey == searchKey) return@LaunchedEffect
@@ -244,7 +247,7 @@ fun SearchOverlay(
             scope = scope,
             scopes = scopes,
             onScopeChange = onScopeChange,
-            sections = sections,
+            layout = layout,
             loading = libraryLoading || discoverLoading || liveLoading || iptvLoading,
             libraryLoading = libraryLoading,
             discoverLoading = discoverLoading,
@@ -265,6 +268,7 @@ fun SearchOverlay(
                 UserSettings.remove(RECENT_KEY)
             },
             formFactor = formFactor,
+            keyboardShown = keyboardShown,
         )
     }
 
@@ -349,7 +353,7 @@ private fun SearchContent(
     scope: SearchScope,
     scopes: List<SearchScope>,
     onScopeChange: (SearchScope) -> Unit,
-    sections: List<SearchSection>,
+    layout: SearchLayout,
     loading: Boolean,
     libraryLoading: Boolean,
     discoverLoading: Boolean,
@@ -367,13 +371,14 @@ private fun SearchContent(
     onPickRecent: (String) -> Unit,
     onClearRecents: () -> Unit,
     formFactor: FormFactor,
+    keyboardShown: Boolean,
 ) {
     val colors = KobappTheme.colors
     val phone = formFactor == FormFactor.Phone
     val tv = formFactor == FormFactor.TV
 
-    val nothing = !loading && sections.isEmpty() && query.isNotBlank()
-    val jumps = if (query.isBlank()) emptyList() else searchJumps(sections, expandedSections)
+    val nothing = !loading && layout.top.isEmpty() && layout.sections.isEmpty() && query.isNotBlank()
+    val jumps = if (query.isBlank()) emptyList() else searchJumps(layout, expandedSections)
     val coroutineScope = rememberCoroutineScope()
     val focusScope = LocalFocusScope.current
     val onJump: (SearchJump) -> Unit = { jump ->
@@ -397,6 +402,8 @@ private fun SearchContent(
             focusRequester = focusRequester,
             phone = phone,
             tv = tv,
+            keyboardSuggestions = if (tv) suggestions.map { it.title } else emptyList(),
+            onPickSuggestion = onPickRecent,
             placeholder = scope.placeholder,
             scopeChip = if (scopes.size > 1) {
                 { SearchScopeChip(scope = scope, scopes = scopes, onSelect = onScopeChange) }
@@ -404,7 +411,7 @@ private fun SearchContent(
                 null
             },
         )
-        if (!phone && suggestions.isNotEmpty()) {
+        if (formFactor == FormFactor.Desktop && suggestions.isNotEmpty()) {
             SearchSuggestionStrip(
                 suggestions = suggestions,
                 onPick = onPickRecent,
@@ -463,7 +470,7 @@ private fun SearchContent(
                 }
             } else {
                 searchResultSections(
-                    sections = sections,
+                    layout = layout,
                     expanded = expandedSections,
                     apiUrl = apiUrl,
                     colors = colors,
@@ -490,7 +497,7 @@ private fun SearchContent(
                 }
             }
         }
-        if (phone && suggestions.isNotEmpty()) {
+        if (phone && keyboardShown && suggestions.isNotEmpty()) {
             SearchSuggestionStrip(
                 suggestions = suggestions,
                 onPick = onPickRecent,
@@ -540,6 +547,8 @@ private fun SearchBar(
     focusRequester: FocusRequester,
     phone: Boolean,
     tv: Boolean,
+    keyboardSuggestions: List<String>,
+    onPickSuggestion: (String) -> Unit,
     placeholder: String,
     scopeChip: (@Composable () -> Unit)?,
 ) {
@@ -591,35 +600,37 @@ private fun SearchBar(
                             color = colors.textLo,
                         )
                     }
-                    BasicTextField(
-                        value = query,
-                        onValueChange = onQueryChange,
-                        singleLine = true,
-                        textStyle = KobappTheme.type.body.copy(color = colors.textHi),
-                        cursorBrush = SolidColor(KobappTheme.colors.accHome),
-                        // A single-line text field consumes DPAD down, which would
-                        // otherwise trap the remote in the query box.
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(SearchFieldTag)
-                            .focusRequester(focusRequester)
-                            .onPreviewKeyEvent { event ->
-                                event.type == KeyEventType.KeyDown &&
-                                    event.key == Key.DirectionDown &&
-                                    focusManager.moveFocus(FocusDirection.Down)
-                            },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-                        ),
-                        // The TV IME's tick only dismisses if something actually
-                        // handles the action.
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onAny = {
-                                onSubmit()
-                                keyboardController?.hide()
-                            },
-                        ),
-                    )
+                    KeyboardCompletions(keyboardSuggestions, onPickSuggestion) {
+                        BasicTextField(
+                            value = query,
+                            onValueChange = onQueryChange,
+                            singleLine = true,
+                            textStyle = KobappTheme.type.body.copy(color = colors.textHi),
+                            cursorBrush = SolidColor(KobappTheme.colors.accHome),
+                            // A single-line text field consumes DPAD down, which would
+                            // otherwise trap the remote in the query box.
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(SearchFieldTag)
+                                .focusRequester(focusRequester)
+                                .onPreviewKeyEvent { event ->
+                                    event.type == KeyEventType.KeyDown &&
+                                        event.key == Key.DirectionDown &&
+                                        focusManager.moveFocus(FocusDirection.Down)
+                                },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                            ),
+                            // The TV IME's tick only dismisses if something actually
+                            // handles the action.
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onAny = {
+                                    onSubmit()
+                                    keyboardController?.hide()
+                                },
+                            ),
+                        )
+                    }
                 }
                 if (query.isNotEmpty()) {
                     IconBubble(icon = Icons.Outlined.Close, onClick = onClear, tint = colors.textLo, key = "clear", size = 28.dp)

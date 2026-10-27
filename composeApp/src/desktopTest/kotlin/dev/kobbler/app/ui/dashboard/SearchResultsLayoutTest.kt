@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.kobbler.app.UiTimeoutMs
@@ -91,18 +92,22 @@ class SearchResultsLayoutTest {
     }
 
     @Test
-    fun `discover under a long library is one press away`() = eachFormFactor { ff ->
+    fun `the best of each section leads, and the rest of discover is one press away`() = eachFormFactor { ff ->
         runUiTest(width = 1280, height = 900) {
             StubServer(routes(longLibrary)).use { stub ->
                 showSearch(stub, ff)
-                waitUntil(timeoutMillis = UiTimeoutMs) { has("Blockbuster 1") && has("Discover") }
-                assertTrue(!has("Faraway 1"), "discover was already on screen, so the jump proves nothing")
-                onNodeWithText("Discover").performClick()
-                waitUntil(timeoutMillis = UiTimeoutMs) { has("Faraway 1") }
-                onNodeWithText("Faraway 1", substring = true).assertIsDisplayed()
+                waitUntil(timeoutMillis = UiTimeoutMs) { has("Faraway 1") && has("Discover · Movies") }
+                val tops = listOf("Blockbuster 1", "Blocky 1", "Blockchain 1", "Bloch 1", "Faraway 1")
+                    .map { onNodeWithText(it).fetchSemanticsNode().boundsInRoot.top }
+                assertTrue(tops.zipWithNext().all { (a, b) -> a <= b }, "top results out of order: $tops")
+                assertTrue(tops.last() < onNodeWithText("Blockbuster 2").fetchSemanticsNode().boundsInRoot.top, "top results are not above the sections")
+                assertTrue(!has("Faraway 2"), "the rest of discover was already on screen, so the jump proves nothing")
+                onAllNodesWithText("Discover · Movies").onFirst().performClick()
+                waitUntil(timeoutMillis = UiTimeoutMs) { has("Faraway 2") }
+                onNodeWithText("Faraway 2", substring = true).assertIsDisplayed()
                 if (ff == FormFactor.TV) {
                     waitUntil(timeoutMillis = UiTimeoutMs) {
-                        onAllNodes(hasText("Faraway 1", substring = true) and isFocused()).fetchSemanticsNodes().isNotEmpty()
+                        onAllNodes(hasText("Faraway 2", substring = true) and isFocused()).fetchSemanticsNodes().isNotEmpty()
                     }
                 }
             }
@@ -114,9 +119,9 @@ class SearchResultsLayoutTest {
         runUiTest(width = 1280, height = 900) {
             StubServer(routes(libraryHits("movie" to "Blockbuster", each = 4))).use { stub ->
                 showSearch(stub, ff)
-                waitUntil(timeoutMillis = UiTimeoutMs) { has("Blockbuster 2") }
-                val first = onNodeWithText("Blockbuster 1").fetchSemanticsNode().boundsInRoot
-                val second = onNodeWithText("Blockbuster 2").fetchSemanticsNode().boundsInRoot
+                waitUntil(timeoutMillis = UiTimeoutMs) { has("Blockbuster 3") }
+                val first = onNodeWithText("Blockbuster 2").fetchSemanticsNode().boundsInRoot
+                val second = onNodeWithText("Blockbuster 3").fetchSemanticsNode().boundsInRoot
                 val sideBySide = first.top == second.top && second.left > first.right
                 assertEquals(ff == FormFactor.TV, sideBySide, "first=$first second=$second")
             }

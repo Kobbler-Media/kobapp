@@ -13,8 +13,8 @@ import kotlin.test.assertTrue
  *
  * Discover, the guide and IPTV answer well after the library, so they are read after it:
  * anything that lands above rows already on screen pushes them away. The house this is
- * built for answers a two-word query with a section for every type it holds, so each of
- * those later groups is a jump away rather than a scroll.
+ * built for answers a two-word query with a section for every type it holds, so the best
+ * of each is read first and the rest of every section is a jump away rather than a scroll.
  */
 class SearchSectionsTest {
 
@@ -61,35 +61,95 @@ class SearchSectionsTest {
     }
 
     @Test
-    fun `each later-arriving group offers a jump to its first row`() {
-        val sections = searchSections(
-            libraryHits = listOf(hit("movie", "m1", "One"), hit("movie", "m2", "Two")) +
-                (1..7).map { hit("tv_show", "s$it", "Show $it") },
-            discover = DiscoverSearchResults(
-                movies = listOf(item("Elsewhere", 2020, id = "mv")),
-                tvShows = emptyList(),
-                books = emptyList(),
+    fun `the best of every section is read first, the library in the order it ranked them`() {
+        val layout = searchLayout(
+            searchSections(
+                libraryHits = listOf(
+                    hit("book", "b1", "Last Seen Wearing"),
+                    hit("movie", "m1", "Last Seen"),
+                    hit("book", "b2", "Last Seen Again"),
+                ),
+                discover = DiscoverSearchResults(
+                    movies = listOf(item("Last Seen Alive", 2020, id = "mv")),
+                    tvShows = emptyList(),
+                    books = emptyList(),
+                ),
             ),
-            iptv = listOf(IptvChannel(id = "i1", name = "Channel", iconUrl = null, category = null, language = null, country = null)),
         )
 
-        val collapsed = searchJumps(sections, expanded = emptyMap())
-        assertEquals(
-            listOf(SearchJump(SearchGroup.Discover, 11, "disc.tmdb.mv"), SearchJump(SearchGroup.Iptv, 13, "iptv.ch.i1")),
-            collapsed,
-        )
-        val expanded = searchJumps(sections, expanded = mapOf("lib:tv_show" to true))
-        assertEquals(listOf(13, 15), expanded.map { it.itemIndex })
+        assertEquals(listOf("lib:book", "lib:movie", "disc:movie"), labels(layout.top))
+        assertEquals(listOf("b1", "m1", "mv"), layout.top.map { it.firstRowKey?.substringAfterLast('.') })
+        assertEquals(listOf("lib:book"), labels(layout.sections), "a section with nothing left is dropped")
+        assertEquals(listOf("b2"), layout.sections.filterIsInstance<SearchSection.Library>().single().hits.map { it.id })
+        assertEquals("lib.book.b1", layout.firstRowKey)
     }
 
     @Test
-    fun `nothing to jump to when the later group is already at the top`() {
+    fun `a title the query names outright leads the top results, then titles it starts`() {
         val sections = searchSections(
-            libraryHits = emptyList(),
-            discover = DiscoverSearchResults(movies = listOf(item("Elsewhere", id = "mv")), tvShows = emptyList(), books = emptyList()),
+            libraryHits = listOf(
+                hit("book", "b1", "Breaking Waves"),
+                hit("tv_episode", "e1", "Star Trek: Enterprise S01E08 Breaking the Ice"),
+                hit("person", "p1", "Breaking Bad Wolf"),
+            ),
+            discover = DiscoverSearchResults(
+                movies = emptyList(),
+                tvShows = listOf(item("Breaking Bad", 2008, id = "bb")),
+                books = emptyList(),
+            ),
         )
 
-        assertEquals(emptyList(), searchJumps(sections, expanded = emptyMap()))
+        assertEquals(
+            listOf("disc:tv", "lib:person", "lib:book", "lib:tv_episode"),
+            labels(searchLayout(sections, query = "breaking  bad").top),
+        )
+        assertEquals(
+            listOf("lib:book", "lib:person", "disc:tv", "lib:tv_episode"),
+            labels(searchLayout(sections, query = "Breakin").top),
+        )
+    }
+
+    @Test
+    fun `every section below the top results is a jump away`() {
+        val layout = searchLayout(
+            searchSections(
+                libraryHits = listOf(hit("movie", "m1", "One"), hit("movie", "m2", "Two")) +
+                    (1..8).map { hit("tv_show", "s$it", "Show $it") },
+                discover = DiscoverSearchResults(
+                    movies = listOf(item("Elsewhere", 2020, id = "mv"), item("Further", 2021, id = "mv2")),
+                    tvShows = emptyList(),
+                    books = emptyList(),
+                ),
+                iptv = listOf(IptvChannel(id = "i1", name = "Channel", iconUrl = null, category = null, language = null, country = null)),
+            ),
+        )
+
+        val top = SearchLeadingItems + 1 + 4
+        val collapsed = searchJumps(layout, expanded = emptyMap())
+        assertEquals(
+            listOf(
+                SearchJump("Movies", top, "lib.movie.m2"),
+                SearchJump("TV Shows", top + 2, "lib.tv_show.s2"),
+                SearchJump("Discover · Movies", top + 2 + 7, "disc.tmdb.mv2"),
+            ),
+            collapsed,
+        )
+        val expanded = searchJumps(layout, expanded = mapOf("lib:tv_show" to true))
+        assertEquals(top + 2 + 9, expanded.last().itemIndex)
+    }
+
+    @Test
+    fun `a query that answers in one section has no top results to repeat it`() {
+        val layout = searchLayout(
+            searchSections(
+                libraryHits = emptyList(),
+                discover = DiscoverSearchResults(movies = listOf(item("Elsewhere", id = "mv")), tvShows = emptyList(), books = emptyList()),
+            ),
+        )
+
+        assertEquals(emptyList(), layout.top)
+        assertEquals(emptyList(), searchJumps(layout, expanded = emptyMap()))
+        assertEquals("disc.tmdb.mv", layout.firstRowKey)
     }
 
     @Test

@@ -876,10 +876,7 @@ fun FullscreenVideoPlayer(
                 state = state,
                 accent = sectionAccent,
                 inert = showSubtitleSearch || railOpen,
-                onCancel = {
-                    val onCancel = state.onPreparingCancel
-                    if (onCancel != null) onCancel() else state.stop(player, api, scope)
-                },
+                onCancel = { state.cancelStart(player, api, scope) },
             )
         }
 

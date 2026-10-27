@@ -1,6 +1,10 @@
 package dev.kobbler.kobplayer
 
+import dev.kobbler.kobplayer.ui.Branding
+import dev.kobbler.kobplayer.ui.LogoLoad
+import dev.kobbler.kobplayer.ui.branding
 import dev.kobbler.kobplayer.ui.playbackHasBegun
+import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -31,5 +35,18 @@ class BrandingOverlayTest {
     @Test
     fun `playing is enough on its own`() {
         assertTrue(playbackHasBegun(isPlaying = true, positionMs = 0))
+    }
+
+    @Test
+    fun `the title only stands in when there is no logo to show`() {
+        val cases = listOf(
+            Triple("no logo", null, LogoLoad.Loading) to Branding.Title,
+            Triple("loading", "logo.png", LogoLoad.Loading) to Branding.Nothing,
+            Triple("loaded", "logo.png", LogoLoad.Loaded) to Branding.Logo,
+            Triple("failed", "logo.png", LogoLoad.Failed) to Branding.Title,
+        )
+        cases.forEach { (case, expected) ->
+            assertEquals(expected, branding(case.second, case.third), case.first)
+        }
     }
 }

@@ -53,7 +53,7 @@ class SearchReturnTest {
 
     private val routes = mapOf<String, (com.sun.net.httpserver.HttpExchange) -> String>(
         "/api/v1/admin/search" to { _ -> searches.incrementAndGet(); hits },
-        "/api/v1/library/books/b3" to { _ -> """{"id":"b3","title":"Block Book 3"}""" },
+        "/api/v1/library/books/b1" to { _ -> """{"id":"b1","title":"Block Book 1"}""" },
     )
 
     @Test
@@ -78,12 +78,12 @@ class SearchReturnTest {
                     }
                 }
             }
-            val target = "Block Book 3"
+            val target = "Block Book 1"
             waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(target).fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText(target).requestFocus()
             waitForIdle()
             press(Key.Enter)
-            waitUntil(timeoutMillis = UiTimeoutMs) { nav.current == Destination.BookDetail("b3") }
+            waitUntil(timeoutMillis = UiTimeoutMs) { nav.current == Destination.BookDetail("b1") }
 
             press(Key.Back)
             waitUntil(timeoutMillis = UiTimeoutMs) { nav.searchOpen && focusedOn(target) }

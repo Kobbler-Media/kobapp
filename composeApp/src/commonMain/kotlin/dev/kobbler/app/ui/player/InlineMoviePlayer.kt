@@ -250,14 +250,12 @@ fun InlineMoviePlayer(
             var resolving: Job? = null
             // Same reason the episode path raises one: walking the option list is a
             // resolve round-trip each, and without the shell the tap sits there looking
-            // dead until one of them answers. It also gives the retry note somewhere to
-            // print — the note is only ever drawn while isPreparing.
+            // dead until one of them answers.
             gps.beginPreparing(
                 id = movie.id,
                 newTitle = movie.title,
                 newSubtitle = movie.year.takeIf { it > 0 }?.toString(),
                 newPosterUrl = movie.posterUrl,
-                note = "Not in your library — finding a stream.",
                 onCancel = {
                     resolving?.cancel()
                     gps.cancelPreparing()

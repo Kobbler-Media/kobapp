@@ -43,9 +43,9 @@ import dev.kobbler.kobfocus.focusKey
 internal fun LazyGridScope.fullWidthItem(key: Any, content: @Composable LazyGridItemScope.() -> Unit) =
     item(key = key, span = { GridItemSpan(maxLineSpan) }, content = content)
 
-/** Must emit exactly [SearchSection.itemCount] items per section, or [searchJumps] lands short. */
+/** Must emit exactly [SearchLayout.topItemCount] and [SearchSection.itemCount] items, or [searchJumps] lands short. */
 internal fun LazyGridScope.searchResultSections(
-    sections: List<SearchSection>,
+    layout: SearchLayout,
     expanded: SnapshotStateMap<String, Boolean>,
     apiUrl: String,
     colors: KobappColors,
@@ -54,32 +54,18 @@ internal fun LazyGridScope.searchResultSections(
     onLiveClick: (LiveChannel) -> Unit,
     onIptvClick: (IptvChannel) -> Unit,
 ) {
-    sections.forEach { section ->
+    val rows: LazyGridScope.(SearchSection) -> Unit = { section ->
+        sectionRows(section, apiUrl, colors, onResultClick, onDiscoverClick, onLiveClick, onIptvClick)
+    }
+    if (layout.top.isNotEmpty()) {
+        fullWidthItem(key = "top-results-head") { SectionHeader("Top results", colors.accHome, count = null) }
+        layout.top.forEach { rows(it) }
+    }
+    layout.sections.forEach { section ->
         val isExpanded = expanded[section.expandKey] == true
-        val visible = section.visibleCount(isExpanded)
-        val accent = when (section) {
-            is SearchSection.Library -> {
-                librarySubsection(section.type, section.hits.take(visible), section.size, apiUrl, onResultClick, colors)
-                typeAccent(section.type, colors)
-            }
-            is SearchSection.Discover -> {
-                val accent = discoverAccent(section.mediaType, colors)
-                discoverSubsection(section.mediaType, section.items.take(visible), section.size, accent, onDiscoverClick, colors)
-                accent
-            }
-            is SearchSection.LiveChannels -> {
-                liveChannelsSubsection(section.channels.take(visible), onLiveClick)
-                colors.accLive
-            }
-            is SearchSection.LiveAirings -> {
-                liveAiringsSubsection(section.airings.take(visible), section.size) { onLiveClick(it.channel) }
-                colors.accLive
-            }
-            is SearchSection.IptvChannels -> {
-                iptvChannelsSubsection(section.channels.take(visible), onIptvClick)
-                colors.accIptv
-            }
-        }
+        val accent = sectionAccent(section, colors)
+        fullWidthItem(key = "section-${section.expandKey}") { SectionHeader(section.title, accent, section.size) }
+        rows(section.slice(0, section.visibleCount(isExpanded)))
         if (section.hasMoreRow()) {
             fullWidthItem(key = "more-${section.expandKey}") {
                 MoreRow(
@@ -94,58 +80,52 @@ internal fun LazyGridScope.searchResultSections(
     }
 }
 
-private fun LazyGridScope.librarySubsection(
-    type: String,
-    visible: List<SearchHitDto>,
-    total: Int,
+private fun LazyGridScope.sectionRows(
+    section: SearchSection,
     apiUrl: String,
+    colors: KobappColors,
     onResultClick: (SearchHitDto) -> Unit,
-    colors: KobappColors,
+    onDiscoverClick: (DiscoverItem) -> Unit,
+    onLiveClick: (LiveChannel) -> Unit,
+    onIptvClick: (IptvChannel) -> Unit,
 ) {
-    fullWidthItem(key = "lib-section-$type") {
-        SectionHeader(sectionTitle(type), typeAccent(type, colors), total)
-    }
-    items(visible, key = { "lib-${it.type}-${it.id}" }) { hit ->
-        SearchResultRow(hit = hit, apiUrl = apiUrl, accent = typeAccent(hit.type, colors), key = "lib.${hit.type}.${hit.id}", onClick = { onResultClick(hit) })
+    when (section) {
+        is SearchSection.Library -> items(section.hits, key = { "lib-${it.type}-${it.id}" }) { hit ->
+            SearchResultRow(hit = hit, apiUrl = apiUrl, accent = typeAccent(hit.type, colors), key = "lib.${hit.type}.${hit.id}", onClick = { onResultClick(hit) })
+        }
+        is SearchSection.Discover -> {
+            val accent = sectionAccent(section, colors)
+            items(section.items, key = { "disc-${it.provider}-${it.providerId}" }) { item ->
+                DiscoverOverlayCard(item = item, accent = accent, key = "disc.${item.provider}.${item.providerId}", onClick = { onDiscoverClick(item) })
+            }
+        }
+        is SearchSection.LiveChannels -> liveChannelRows(section.channels, onLiveClick)
+        is SearchSection.LiveAirings -> liveAiringRows(section.airings) { onLiveClick(it.channel) }
+        is SearchSection.IptvChannels -> iptvChannelRows(section.channels, onIptvClick)
     }
 }
 
-private fun LazyGridScope.discoverSubsection(
-    mediaType: String,
-    visible: List<DiscoverItem>,
-    total: Int,
-    accent: Color,
-    onItemClick: (DiscoverItem) -> Unit,
-    colors: KobappColors,
-) {
-    val label = when (mediaType) {
-        "movie" -> "Discover · Movies"; "tv" -> "Discover · TV Shows"
-        "book" -> "Discover · Books"; else -> "Discover · $mediaType"
+private fun sectionAccent(section: SearchSection, colors: KobappColors): Color = when (section) {
+    is SearchSection.Library -> typeAccent(section.type, colors)
+    is SearchSection.Discover -> when (section.mediaType) {
+        "movie" -> colors.accMovies
+        "tv" -> colors.accTv
+        "book" -> colors.accBooks
+        else -> colors.textLo
     }
-    fullWidthItem(key = "disc-section-$mediaType") {
-        SectionHeader(label, accent, total)
-    }
-    items(visible, key = { "disc-${it.provider}-${it.providerId}" }) { item ->
-        DiscoverOverlayCard(item = item, accent = accent, key = "disc.${item.provider}.${item.providerId}", onClick = { onItemClick(item) })
-    }
-}
-
-private fun discoverAccent(mediaType: String, colors: KobappColors): Color = when (mediaType) {
-    "movie" -> colors.accMovies
-    "tv" -> colors.accTv
-    "book" -> colors.accBooks
-    else -> colors.textLo
+    is SearchSection.LiveChannels, is SearchSection.LiveAirings -> colors.accLive
+    is SearchSection.IptvChannels -> colors.accIptv
 }
 
 @Composable
-internal fun SectionHeader(title: String, accent: Color, count: Int) {
+internal fun SectionHeader(title: String, accent: Color, count: Int?) {
     val colors = KobappTheme.colors
     Column {
         Spacer(Modifier.height(14.dp))
         SectionHeading(
             title = title,
             accent = accent,
-            trailing = { Text("$count", style = KobappTheme.type.bodySm, color = colors.textLo) },
+            trailing = count?.let { { Text("$it", style = KobappTheme.type.bodySm, color = colors.textLo) } },
         )
         Spacer(Modifier.height(6.dp))
     }

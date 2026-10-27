@@ -169,7 +169,7 @@ private const val SESSION_HEARTBEAT_MS = 120_000L
  */
 private const val PREWARM_TOUCH_INTERVAL_MS = 90_000L
 
-private const val RECONNECTING_NOTE = "Lost the stream — reconnecting…"
+internal const val RECONNECTING_NOTE = "Lost the stream — reconnecting…"
 
 /**
  * How long a reconnect is allowed to take before it is worth mentioning.

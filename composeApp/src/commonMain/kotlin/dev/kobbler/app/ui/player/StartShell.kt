@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import dev.kobbler.app.ui.safeContentPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +37,7 @@ import dev.kobbler.kobfocus.focusInert
 
 internal const val START_BACKDROP_TAG = "start-backdrop"
 
+private const val SEARCHING_NOTE = "Searching…"
 private const val STARTING_NOTE = "Starting…"
 private val LiveTypes = setOf("livetv", "iptv")
 
@@ -99,6 +101,19 @@ internal fun PreparingShell(
 ) {
     val colors = KobappTheme.colors
     val dimens = KobappTheme.dimens
+    // Finding a stream takes seconds and back already calls it off; caching can take
+    // minutes and is where cancelling or picking another release is a real choice.
+    if (state.isStreamStart && !state.recoveryNotice && state.cachingProgress == null && state.mediaType !in LiveTypes) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Text(
+                text = SEARCHING_NOTE,
+                style = KobappTheme.type.bodySm,
+                color = colors.textMd,
+                modifier = Modifier.safeContentPadding().padding(bottom = dimens.s6),
+            )
+        }
+        return
+    }
     val hasArt = state.backdropUrl != null || state.posterUrl != null
     Box(
         Modifier

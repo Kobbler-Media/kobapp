@@ -34,8 +34,10 @@ import kotlin.test.assertTrue
 /**
  * Typing on a TV remote is slow, so search offers whole titles to pick, the way a keyboard's
  * suggestion strip does: before anything is typed, what is trending on TMDB; while typing,
- * titles, authors, channels and guide programmes that the query starts a word of. The strip
- * belongs to the field, never to the results, and picking one searches for it.
+ * titles, authors, channels and guide programmes that the query starts a word of. A TV hands
+ * them to its keyboard's own suggestion row; a phone keyboard takes none from apps, so the
+ * strip rides on top of it and goes with it; desktop keeps it under the field. It is never
+ * part of the results, and picking one searches for it.
  */
 @OptIn(ExperimentalTestApi::class)
 class SearchSuggestionsTest {
@@ -49,7 +51,7 @@ class SearchSuggestionsTest {
             if (query.startsWith("q=&")) {
                 """{"suggestions":[{"title":"The Last of Us","media_type":"tv","source":"tmdb"}]}"""
             } else {
-                """{"suggestions":[{"title":"Breaking Bad","media_type":"tv","source":"tmdb"},{"title":"Breakin'","media_type":"movie","source":"library"}]}"""
+                """{"suggestions":[{"title":"Breaking Chaos","media_type":"book","source":"library"},{"title":"Breaking Bad","media_type":"tv","source":"tmdb"},{"title":"Breakin'","media_type":"movie","source":"library"}]}"""
             }
         },
         "/api/v1/admin/search" to { _ -> """{"top_hits":[{"type":"movie","id":"m1","title":"Jailbreak"}],"remaining":[]}""" },
@@ -59,7 +61,8 @@ class SearchSuggestionsTest {
         query: String,
         scope: SearchScope,
         picked: MutableList<String>,
-        formFactor: FormFactor = FormFactor.TV,
+        formFactor: FormFactor = FormFactor.Desktop,
+        keyboardShown: Boolean = false,
         autoFocusQuery: Boolean = false,
         onFocusManager: (FocusManager) -> Unit = {},
         test: suspend DesktopComposeUiTest.() -> Unit,
@@ -79,6 +82,7 @@ class SearchSuggestionsTest {
                         onDismiss = {},
                         onResultClick = {},
                         formFactor = formFactor,
+                        keyboardShown = keyboardShown,
                         autoFocusQuery = autoFocusQuery,
                     )
                 }
@@ -101,26 +105,52 @@ class SearchSuggestionsTest {
     }
 
     @Test
-    fun `the strip sits on the field on a remote and desktop, and on the keyboard on a phone`() {
-        val failures = FormFactor.entries.mapNotNull { ff ->
+    fun `the strip sits on the field on desktop, on the keyboard on a phone, and in the keyboard on a TV`() {
+        val cases = listOf(
+            Triple(FormFactor.Desktop, false, "field"),
+            Triple(FormFactor.Phone, true, "keyboard"),
+            Triple(FormFactor.Phone, false, null),
+            Triple(FormFactor.TV, true, null),
+            Triple(FormFactor.TV, false, null),
+        )
+        val failures = cases.mapNotNull { (ff, keyboard, where) ->
             runCatching {
-                overlay("break", SearchScope.All, mutableListOf(), formFactor = ff) {
-                    awaitText("Breaking Bad")
+                overlay("break", SearchScope.All, mutableListOf(), formFactor = ff, keyboardShown = keyboard) {
                     awaitText("Jailbreak")
+                    waitUntil(timeoutMillis = UiTimeoutMs) { requests.isNotEmpty() }
+                    waitForIdle()
+                    if (where == null) {
+                        assertEquals(0, count(hasTestTag(SearchSuggestionStripTag)), "a strip is showing")
+                        assertEquals(0, count(hasText("Breaking Bad")), "a suggestion is showing")
+                        return@overlay
+                    }
+                    awaitText("Breaking Bad")
                     assertInStripOnly("Breaking Bad")
                     assertInStripOnly("Breakin'")
                     val field = bounds(SearchFieldTag)
                     val strip = bounds(SearchSuggestionStripTag)
                     val results = bounds(SearchResultsTag)
-                    if (ff == FormFactor.Phone) {
+                    if (where == "keyboard") {
                         assertTrue(strip.top >= results.bottom, "strip $strip is not under the results $results")
                     } else {
                         assertTrue(strip.top >= field.bottom && strip.bottom <= results.top, "strip $strip is not between field $field and results $results")
                     }
                 }
-            }.exceptionOrNull()?.let { "${ff.name}: ${it.message?.lineSequence()?.first()}" }
+            }.exceptionOrNull()?.let { "$ff keyboard=$keyboard: ${it.message?.lineSequence()?.first()}" }
         }
         assertEquals(emptyList(), failures)
+    }
+
+    @Test
+    fun `shows and movies are suggested before anything else`() {
+        overlay("break", SearchScope.All, mutableListOf()) {
+            awaitText("Breaking Chaos")
+            val order = listOf("Breaking Bad", "Breakin'", "Breaking Chaos").map { title ->
+                onAllNodes(hasText(title) and hasAnyAncestor(hasTestTag(SearchSuggestionStripTag)), useUnmergedTree = true)
+                    .fetchSemanticsNodes().single().boundsInRoot.left
+            }
+            assertEquals(order.sorted(), order, "strip order by x: $order")
+        }
     }
 
     @Test
@@ -137,7 +167,7 @@ class SearchSuggestionsTest {
     }
 
     @Test
-    fun `the remote walks from the field through the strip to the results`() {
+    fun `the arrow keys walk from the field through the strip to the results`() {
         var focus: FocusManager? = null
         overlay("break", SearchScope.All, mutableListOf(), autoFocusQuery = true, onFocusManager = { focus = it }) {
             awaitText("Breaking Bad")

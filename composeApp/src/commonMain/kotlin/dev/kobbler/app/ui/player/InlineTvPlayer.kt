@@ -121,7 +121,8 @@ fun InlineTvPlayer(
 
         // The position on `show` is from a cached payload — wherever this device last saw
         // the episode — so it only seeds the rebase; the server says where to resume.
-        val (episodeId, cachedSec) = resolveStartEpisode(show, api)
+        val (episodeId, cachedSec) = show.continueEpisode?.let { it.episodeId to it.positionSeconds }
+            ?: show.unstartedFirstEpisode()?.let { it to 0 }
             ?: run {
                 gps.cancelPreparing()
                 return@LaunchedEffect
@@ -289,7 +290,6 @@ fun InlineTvPlayer(
             newTitle = show.title,
             newSubtitle = "S${season.number} E${episode.number} • ${episode.title}",
             newPosterUrl = show.posterUrl,
-            note = "Not in your library — searching for a stream.",
             onCancel = {
                 search?.cancel()
                 streamLoading = false
@@ -433,14 +433,11 @@ fun InlineTvPlayer(
     }
 }
 
-private suspend fun resolveStartEpisode(show: TvShow, api: KobblerApi): Pair<String, Int>? {
-    val cont = show.continueEpisode
-    if (cont != null) return cont.episodeId to cont.positionSeconds
-
-    val (_, _, ep) = findLikelyNextEpisode(show, api) ?: return null
-    val epId = ep.id ?: return null
-    val pos = (api.getEpisodeProgress(epId) ?: 0)
-    return epId to pos
+/** Only for a show nobody has begun; once under way, where to go next is the server's call. */
+private fun TvShow.unstartedFirstEpisode(): String? {
+    val episodes = seasons.filter { it.number > 0 }.sortedBy { it.number }.flatMap { it.episodes }
+    if (episodes.any { it.isWatched || (it.watchProgress ?: 0f) > 0f }) return null
+    return episodes.firstOrNull()?.id
 }
 
 private fun findEpisode(show: TvShow, episodeId: String): Pair<dev.kobbler.app.data.Season?, Episode?> {
@@ -635,21 +632,3 @@ internal suspend fun tryPlayTvWithFallback(
     walk.start(option, resumeSec)
 }
 
-internal suspend fun findLikelyNextEpisode(
-    show: TvShow,
-    api: KobblerApi,
-): Triple<Int, Int, Episode>? {
-    val candidates = show.seasons.flatMapIndexed { sIdx, season ->
-        season.episodes.mapIndexedNotNull { eIdx, ep ->
-            if (ep.filePath != null && ep.id != null) Triple(sIdx, eIdx, ep) else null
-        }
-    }
-    if (candidates.isEmpty()) return null
-
-    for (candidate in candidates.takeLast(3).reversed()) {
-        val progressSec = api.getEpisodeProgress(candidate.third.id!!)
-        if (progressSec != null && progressSec > 5) return candidate
-    }
-
-    return candidates.first()
-}

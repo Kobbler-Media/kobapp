@@ -991,38 +991,45 @@ private fun BrandingOverlay(
             .graphicsLayer { alpha = brandingAlpha.value * breath.value },
         contentAlignment = Alignment.Center,
     ) {
-        // The logo is fetched like any other image, so "has one" is not the same
-        // as "has one on screen" — and while it is in flight this is the only
-        // thing being shown. The title holds the space until the artwork lands,
-        // and stands in for good if it never does.
-        // Crossfaded in place: swapping them on the frame the image decodes read
-        // as a glitch rather than the artwork arriving.
-        var logoShown by remember(logoUrl) { mutableStateOf(false) }
-        val logoAlpha = animateFloatAsState(
-            targetValue = if (logoShown) 1f else 0f,
-            animationSpec = tween(durationMillis = 500),
-        )
-        if (logoUrl != null) {
+        // The title held the space while the logo loaded and faded out under it, so it
+        // flashed up on every start; it now only stands in for a logo there isn't.
+        var load by remember(logoUrl) { mutableStateOf(LogoLoad.Loading) }
+        val shows = branding(logoUrl, load)
+        if (logoUrl != null && load != LogoLoad.Failed) {
             AsyncImage(
                 model = logoUrl, contentDescription = title,
                 contentScale = ContentScale.Fit,
-                onState = { logoShown = it is AsyncImagePainter.State.Success },
-                modifier = Modifier.widthIn(max = 320.dp).heightIn(max = 120.dp)
-                    .graphicsLayer { alpha = logoAlpha.value },
+                onState = {
+                    load = when (it) {
+                        is AsyncImagePainter.State.Success -> LogoLoad.Loaded
+                        is AsyncImagePainter.State.Error -> LogoLoad.Failed
+                        else -> LogoLoad.Loading
+                    }
+                },
+                modifier = Modifier.widthIn(max = 320.dp).heightIn(max = 120.dp),
             )
         }
-        val titleShown by remember { derivedStateOf { logoAlpha.value < 1f } }
-        if (titleShown) {
+        if (shows == Branding.Title) {
             Text(
                 title,
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
                 ),
                 color = colors.primary, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 48.dp).graphicsLayer { alpha = 1f - logoAlpha.value },
+                modifier = Modifier.padding(horizontal = 48.dp),
             )
         }
     }
+}
+
+internal enum class LogoLoad { Loading, Loaded, Failed }
+
+internal enum class Branding { Nothing, Logo, Title }
+
+internal fun branding(logoUrl: String?, load: LogoLoad): Branding = when {
+    logoUrl == null || load == LogoLoad.Failed -> Branding.Title
+    load == LogoLoad.Loaded -> Branding.Logo
+    else -> Branding.Nothing
 }
 
 // -- Helper composables --

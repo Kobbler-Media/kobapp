@@ -138,9 +138,40 @@ class StartShellTest {
     }
 
     @Test
-    fun `the search shows the title over its artwork with a quiet note`() = shell(finding()) {
+    fun `the search is a quiet word over the artwork, not a dialog`() = shell(finding()) {
         onNodeWithTag(START_BACKDROP_TAG).assertExists()
-        onNodeWithText("Finding a stream…").assertIsDisplayed()
+        onNodeWithText("Searching…").assertIsDisplayed()
+        onNodeWithText("Finding a stream…").assertDoesNotExist()
+        onNodeWithText("Cancel").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a stream that drops mid-play still says it is reconnecting`() {
+        val state = starting().apply {
+            isStarting = false
+            recoveryNotice = true
+            isPreparing = true
+            preparingNote = RECONNECTING_NOTE
+        }
+        shell(state) {
+            onNodeWithText(RECONNECTING_NOTE).assertIsDisplayed()
+            onNodeWithText("Searching…").assertDoesNotExist()
+        }
+    }
+
+    @Test
+    fun `back while a stream is being found stops the search, not just the shell`() {
+        var cancelled = false
+        val state = finding().apply { onPreparingCancel = { cancelled = true } }
+        state.back(FakePlayer(), KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"), FormFactor.TV, kotlinx.coroutines.MainScope())
+        assertTrue(cancelled, "back left the search running")
+    }
+
+    @Test
+    fun `back with no search hook still takes the shell down`() {
+        val state = finding()
+        state.back(FakePlayer(), KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"), FormFactor.TV, kotlinx.coroutines.MainScope())
+        assertTrue(!state.isPreparing && !state.isFullscreen, "the shell stayed up")
     }
 
     @Test
