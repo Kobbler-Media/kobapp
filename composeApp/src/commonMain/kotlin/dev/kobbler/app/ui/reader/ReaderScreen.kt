@@ -54,6 +54,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.kobbler.app.data.Book
@@ -72,9 +74,9 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.ui.reader.epub.TtsWordHighlight
 import dev.kobbler.kobplayer.Player
-import dev.kobbler.kobplayer.PlayerConfig
 import dev.kobbler.kobplayer.PlayerState
-import dev.kobbler.kobplayer.createPlayer
+import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
+import dev.kobbler.app.ui.player.SharedAudioPlayer
 import kotlin.math.abs
 import kotlin.time.Clock
 import io.ktor.client.request.get
@@ -143,6 +145,13 @@ fun ReaderScreen(
             } ?: ReaderFontFamily.Default
         )
     }
+    var pageFit by remember {
+        mutableStateOf(
+            UserSettings.getString("reader_page_fit")?.let {
+                try { ReaderPageFit.valueOf(it) } catch (_: Exception) { null }
+            } ?: ReaderPageFit.Spread
+        )
+    }
     fun saveSettings() {
         UserSettings.putString("reader_theme", themeMode.name)
         UserSettings.putString("reader_font_size", fontSize.toString())
@@ -150,8 +159,9 @@ fun ReaderScreen(
         UserSettings.putString("reader_h_padding", horizontalPadding.toString())
         UserSettings.putString("reader_font_family", readerFontFamily.name)
         UserSettings.putString("reader_brightness", brightness.toString())
+        UserSettings.putString("reader_page_fit", pageFit.name)
     }
-    SaveWhenSettled(listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness)) {
+    SaveWhenSettled(listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness, pageFit)) {
         saveSettings()
     }
 
@@ -270,7 +280,7 @@ fun ReaderScreen(
             readerExitScope.launch { persistProgress() }
             ttsController.stop()
             syncController.stop()
-            syncPlayer.value?.release()
+            syncPlayer.value?.stop()
         }
     }
 
@@ -349,6 +359,7 @@ fun ReaderScreen(
                 lineHeightMultiplier = lineHeightMultiplier,
                 horizontalPadding = horizontalPadding,
                 readerFontFamily = readerFontFamily,
+                pageFit = pageFit,
                 brightness = brightness,
                 ttsController = ttsController,
                 ttsState = ttsState,
@@ -363,6 +374,7 @@ fun ReaderScreen(
                 syncController = syncController,
                 syncMode = syncMode,
                 syncPlayer = syncPlayer,
+                audio = LocalSharedAudioPlayer.current,
                 activeHighlight = activeHighlight,
                 currentChapter = currentChapter,
                 onChapterChange = { currentChapter = it },
@@ -385,6 +397,7 @@ fun ReaderScreen(
                 onLineHeightChange = { lineHeightMultiplier = it },
                 onPaddingChange = { horizontalPadding = it },
                 onFontFamilyChange = { readerFontFamily = it },
+                onPageFitChange = { pageFit = it },
                 onBrightnessChange = { brightness = it },
             )
         }
@@ -441,6 +454,7 @@ private fun ReaderLoaded(
     lineHeightMultiplier: Float,
     horizontalPadding: Int,
     readerFontFamily: ReaderFontFamily,
+    pageFit: ReaderPageFit,
     brightness: Float,
     ttsController: TtsController,
     ttsState: TtsState,
@@ -454,6 +468,7 @@ private fun ReaderLoaded(
     syncController: AudiobookSyncController,
     syncMode: SyncMode,
     syncPlayer: MutableState<Player?>,
+    audio: SharedAudioPlayer,
     activeHighlight: String?,
     currentChapter: Int,
     onChapterChange: (Int) -> Unit,
@@ -476,12 +491,17 @@ private fun ReaderLoaded(
     onLineHeightChange: (Float) -> Unit,
     onPaddingChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
+    onPageFitChange: (ReaderPageFit) -> Unit,
     onBrightnessChange: (Float) -> Unit,
 ) {
     val panelOpen = showToc || showSearch || showSettings
     val nav = rememberReaderNavState(keyNav = keyNav, immersive = immersive, holdChrome = panelOpen)
 
     val chapterView = rememberChapterView(epub, currentChapter)
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    val fitted = rememberFittedChapters(epub, chapterView, currentChapter, pageFit, IntSize(viewportWidth, viewportHeight))
+    val shownChapters = fitted?.takeIf { it.isNotEmpty() }?.map { it.chapterIndex }
+        ?.let { it.min()..it.max() } ?: currentChapter..currentChapter
     val activeWordHighlight = remember(chapterView, synthStartWordIndex) {
         derivedStateOf {
             val index = ttsWordIndex()
@@ -529,8 +549,8 @@ private fun ReaderLoaded(
         cursor?.followPageTurn(cursorBlock, target)
         if (target != null) {
             scrollTo(target)
-        } else if (currentChapter < epub.chapters.lastIndex) {
-            onChapterChange(currentChapter + 1)
+        } else if (shownChapters.last < epub.chapters.lastIndex) {
+            onChapterChange(shownChapters.last + 1)
         }
     }
 
@@ -540,9 +560,9 @@ private fun ReaderLoaded(
         cursor?.followPageTurn(cursorBlock, target)
         if (target != null) {
             scrollTo(target)
-        } else if (currentChapter > 0) {
+        } else if (shownChapters.first > 0) {
             pendingScroll = PendingScroll.Bottom
-            onChapterChange(currentChapter - 1)
+            onChapterChange(shownChapters.first - 1)
         }
     }
 
@@ -596,7 +616,7 @@ private fun ReaderLoaded(
                 onBack = {
                     ttsController.stop()
                     syncController.stop()
-                    syncPlayer.value?.release()
+                    syncPlayer.value?.stop()
                     syncPlayer.value = null
                     onBack()
                 },
@@ -615,11 +635,11 @@ private fun ReaderLoaded(
                     if (!book.hasAudiobook) return@ReaderTopBar
                     if (syncMode == SyncMode.SYNCING) {
                         syncController.stop()
-                        syncPlayer.value?.release()
+                        syncPlayer.value?.stop()
                         syncPlayer.value = null
                     } else {
                         ttsController.stop()
-                        val player = createPlayer(PlayerConfig(audioOnly = true))
+                        val player = audio.get()
                         syncPlayer.value = player
                         scope.launch {
                             syncController.start(book.id, player, epub.chapters)
@@ -660,7 +680,7 @@ private fun ReaderLoaded(
                     theme = theme,
                     onStop = {
                         syncController.stop()
-                        syncPlayer.value?.release()
+                        syncPlayer.value?.stop()
                         syncPlayer.value = null
                     },
                 )
@@ -698,7 +718,10 @@ private fun ReaderLoaded(
             Box(
                 Modifier
                     .weight(1f)
-                    .onSizeChanged { onViewportHeightChange(it.height) }
+                    .onSizeChanged {
+                        onViewportHeightChange(it.height)
+                        viewportWidth = it.width
+                    }
                     .pointerInput(currentChapter, epub.chapters.size, viewportHeight) {
                         var cumDrag = 0f
                         val threshold = 80.dp.toPx()
@@ -720,7 +743,19 @@ private fun ReaderLoaded(
                         .clipToBounds()
                         .verticalScroll(scrollState)
                 ) {
-                    if (chapterView != null) {
+                    if (fitted != null) {
+                        FittedPages(
+                            views = fitted,
+                            theme = theme,
+                            fillWidth = pageFit == ReaderPageFit.Width,
+                            viewportHeight = with(LocalDensity.current) { viewportHeight.toDp() },
+                            modifier = Modifier.onSizeChanged { onContentHeightChange(it.height) },
+                        )
+                        val page = chapterView?.page
+                        LaunchedEffect(page, contentHeight) {
+                            if (page != null && contentHeight > 0) blockBounds[page.blockIndex] = 0..<contentHeight
+                        }
+                    } else if (chapterView != null) {
                         val imageResolver = remember(chapterView) {
                             { src: String -> chapterView.images[src] }
                         }
@@ -736,6 +771,7 @@ private fun ReaderLoaded(
                                 wordHighlight = { activeWordHighlight.value },
                                 imageResolver = imageResolver,
                                 pageHeight = viewportHeight,
+                                imageMaxHeight = if (pageFit == ReaderPageFit.Width) 0 else viewportHeight,
                                 onActiveBlockY = { y ->
                                     if (viewportHeight > 0) {
                                         val targetPage = y / viewportHeight
@@ -810,11 +846,13 @@ private fun ReaderLoaded(
                         lineHeightMultiplier = lineHeightMultiplier,
                         horizontalPadding = horizontalPadding,
                         readerFontFamily = readerFontFamily,
+                        pageFit = pageFit,
                         onThemeChange = onThemeModeChange,
                         onFontSizeChange = onFontSizeChange,
                         onLineHeightChange = onLineHeightChange,
                         onPaddingChange = onPaddingChange,
                         onFontFamilyChange = onFontFamilyChange,
+                        onPageFitChange = onPageFitChange,
                         brightness = brightness,
                         onBrightnessChange = onBrightnessChange,
                         ttsController = ttsController,

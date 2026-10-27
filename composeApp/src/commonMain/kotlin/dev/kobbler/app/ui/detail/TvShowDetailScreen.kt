@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.rememberArtTone
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -64,6 +65,7 @@ fun TvShowDetailScreen(
         if (point != null) selectedSeasonIdx = point.seasonIdx
     }
 
+    val artTone = rememberArtTone(shown.backdropUrl ?: shown.posterUrl, accent)
     ShowDetailLayout(
         show = shown,
         episodeTotal = shown.seasons.sumOf { it.episodes.size },
@@ -98,6 +100,7 @@ fun TvShowDetailScreen(
                 season = selectedSeason,
                 seasonIdx = selectedSeasonIdx,
                 accent = accent,
+                artTone = artTone,
                 currentEpisodeId = shown.continueEpisode?.episodeId,
                 api = api,
                 watchedOverrides = watchedOverrides,

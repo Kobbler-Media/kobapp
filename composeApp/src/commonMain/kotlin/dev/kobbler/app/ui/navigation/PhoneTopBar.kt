@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -18,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.platform.CastButton
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.rememberTopChromeShade
@@ -36,7 +36,6 @@ val phoneTopBarOverlap: Dp
 fun KobPhoneTopBar(
     modifier: Modifier = Modifier,
     onSearchClick: () -> Unit = {},
-    onCastClick: () -> Unit = {},
     onMenuClick: () -> Unit = {},
 ) {
     val colors = KobappTheme.colors
@@ -58,8 +57,6 @@ fun KobPhoneTopBar(
         IconButton(onClick = onSearchClick) {
             Icon(Icons.Outlined.Search, "Search", tint = colors.textHi)
         }
-        IconButton(onClick = onCastClick) {
-            Icon(Icons.Outlined.Cast, "Cast", tint = colors.textHi)
-        }
+        CastButton(tint = colors.textHi)
     }
 }

@@ -89,6 +89,31 @@ class TrackIntentTest {
             Case("no match keeps the default", italianFirst, null, "jpn", 1),
             Case("no preference keeps the default", italianFirst, null, null, 1),
             Case("no tracks, nothing to pick", emptyList(), null, "eng", null),
+            Case(
+                "an untagged track named English in its title",
+                listOf(
+                    AudioTrackDto(streamIndex = 1, language = "ita", title = "AC3 [Italiano]", isDefault = true),
+                    AudioTrackDto(streamIndex = 2, language = null, title = "AC3 [English]"),
+                ),
+                null, "eng", 2,
+            ),
+            Case(
+                "commentary is passed over for the feature audio",
+                listOf(
+                    AudioTrackDto(streamIndex = 1, language = "ita", isDefault = true),
+                    AudioTrackDto(streamIndex = 2, language = "eng", title = "Director's Commentary"),
+                    AudioTrackDto(streamIndex = 3, language = "eng", title = "English 5.1"),
+                ),
+                null, "eng", 3,
+            ),
+            Case(
+                "a default commentary track is not the fallback",
+                listOf(
+                    AudioTrackDto(streamIndex = 1, language = "eng", title = "Commentary", isDefault = true),
+                    AudioTrackDto(streamIndex = 2, language = "ita"),
+                ),
+                null, "jpn", 2,
+            ),
         ).forEach { c ->
             assertEquals(c.expected, startAudioIndex(c.tracks, c.server, c.preferred), c.name)
         }

@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.reader
 
+import dev.kobbler.app.platform.ZipArchive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -97,5 +98,70 @@ class EpubParserTest {
         assertEquals("Cover", result[0].title)
         assertNull(result[1].title)
         assertEquals("Chapter One", result[2].title)
+    }
+
+    private fun bookWithSpine(metadata: String, spineAttrs: String, itemrefProperties: List<String?>): EpubBook {
+        val ids = itemrefProperties.indices.map { "p$it" }
+        val opf = buildString {
+            append("""<package version="3.0"><metadata><dc:title>Book</dc:title>$metadata</metadata><manifest>""")
+            ids.forEach { append("""<item id="$it" href="$it.xhtml" media-type="application/xhtml+xml"/>""") }
+            append("</manifest><spine $spineAttrs>")
+            ids.zip(itemrefProperties).forEach { (id, props) ->
+                append("""<itemref idref="$id"${props?.let { " properties=\"$it\"" } ?: ""}/>""")
+            }
+            append("</spine></package>")
+        }
+        val pages = ids.map { "OEBPS/$it.xhtml" to "<html><body><p>$it</p></body></html>".encodeToByteArray() }
+        return parseEpub(
+            ZipArchive(
+                storedZip(
+                    "META-INF/container.xml" to
+                        """<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>""".encodeToByteArray(),
+                    "OEBPS/content.opf" to opf.encodeToByteArray(),
+                    *pages.toTypedArray(),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun prePaginatedBookCarriesSpreadHintsAndDirection() {
+        val book = bookWithSpine(
+            metadata = """<meta property="rendition:layout">pre-paginated</meta><meta property="rendition:spread">auto</meta>""",
+            spineAttrs = """page-progression-direction="rtl"""",
+            itemrefProperties = listOf("page-spread-left", "rendition:page-spread-center", "rendition:spread-none", null, "rendition:page-spread-right"),
+        )
+        assertEquals(true, book.rtl)
+        assertEquals(
+            listOf(
+                FixedLayout(PageSpreadSide.Left),
+                FixedLayout(PageSpreadSide.Center),
+                FixedLayout(PageSpreadSide.Auto, spreads = false),
+                FixedLayout(PageSpreadSide.Auto),
+                FixedLayout(PageSpreadSide.Right),
+            ),
+            book.chapters.map { it.fixedLayout },
+        )
+    }
+
+    @Test
+    fun reflowableBookOnlyFixesTheItemsThatAskForIt() {
+        val book = bookWithSpine(
+            metadata = """<meta property="rendition:spread">none</meta>""",
+            spineAttrs = "",
+            itemrefProperties = listOf(null, "rendition:layout-pre-paginated page-spread-right"),
+        )
+        assertEquals(false, book.rtl)
+        assertEquals(listOf(null, FixedLayout(PageSpreadSide.Right, spreads = false)), book.chapters.map { it.fixedLayout })
+    }
+
+    @Test
+    fun aPrePaginatedBookCanReflowSingleItems() {
+        val book = bookWithSpine(
+            metadata = """<meta property="rendition:layout">pre-paginated</meta>""",
+            spineAttrs = "",
+            itemrefProperties = listOf("rendition:layout-reflowable", null),
+        )
+        assertEquals(listOf(null, FixedLayout()), book.chapters.map { it.fixedLayout })
     }
 }

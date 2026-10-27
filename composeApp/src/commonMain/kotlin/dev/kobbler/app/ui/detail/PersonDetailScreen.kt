@@ -91,7 +91,7 @@ fun PersonDetailScreen(
                 .scrollWhenFocusIsStuck(pageScroll.asPageScroll())
                 .verticalScroll(pageScroll)
                 .padding(
-                    top = kobTopInset + 72.dp,
+                    top = if (stacked) detailStackedTop else kobTopInset + 72.dp,
                     bottom = 64.dp,
                 ),
         ) {

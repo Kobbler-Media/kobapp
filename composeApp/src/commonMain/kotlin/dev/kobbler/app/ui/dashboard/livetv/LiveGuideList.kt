@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard.livetv
 
+import dev.kobbler.app.ui.components.listTopFocusRoom
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,7 +90,7 @@ fun LiveGuideList(
         LazyColumn(
             state = listState,
             modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
-            contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, bottom = dimens.s6),
+            contentPadding = PaddingValues(top = LocalTopChromeOverlap.current + listTopFocusRoom(), bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(if (wide) dimens.s1 else 2.dp),
         ) {
             if (showForYou) {

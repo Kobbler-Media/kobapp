@@ -204,6 +204,7 @@ fun LazyListScope.episodeList(
     season: Season?,
     seasonIdx: Int,
     accent: Color,
+    artTone: Color,
     currentEpisodeId: String?,
     api: KobblerApi?,
     watchedOverrides: SnapshotStateMap<String, Boolean>,
@@ -237,6 +238,7 @@ fun LazyListScope.episodeList(
             // Toggling watched clears the saved position, which `ep` cannot know.
             episode = if (ep.id != null && ep.id in watchedOverrides) ep.copy(watchProgress = null) else ep,
             accent = accent,
+            artTone = artTone,
             isCurrent = currentEpisodeId != null && ep.id == currentEpisodeId,
             watched = ep.isWatchedNow(watchedOverrides),
             canPlayLocal = canPlayLocal,
@@ -279,6 +281,7 @@ fun LazyListScope.episodeList(
 private fun EpisodeRow(
     episode: Episode,
     accent: Color,
+    artTone: Color,
     isCurrent: Boolean,
     watched: Boolean,
     canPlayLocal: Boolean,
@@ -377,7 +380,7 @@ private fun EpisodeRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Thumbnail(episode = episode, accent = accent, watched = watched, airsSoon = airsSoon, width = 104.dp)
+                Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, width = 104.dp)
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -435,7 +438,7 @@ private fun EpisodeRow(
                 modifier = Modifier.width(36.dp),
             )
 
-            Thumbnail(episode = episode, accent = accent, watched = watched, airsSoon = airsSoon)
+            Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon)
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -478,6 +481,7 @@ private fun EpisodeRow(
 private fun Thumbnail(
     episode: Episode,
     accent: Color,
+    artTone: Color,
     watched: Boolean,
     airsSoon: Boolean,
     width: Dp = 150.dp,
@@ -490,7 +494,7 @@ private fun Thumbnail(
             .clip(KobappTheme.shapes.small)
             .border(1.dp, colors.lineSoft, KobappTheme.shapes.small),
     ) {
-        StripedArt(episode.thumbnailUrl, accent, Modifier.fillMaxSize(), opacity = 0.45f)
+        StripedArt(episode.thumbnailUrl, accent, Modifier.fillMaxSize(), tone = artTone)
         val progress = episode.watchProgress
         if (progress != null && progress > 0f && progress < 1f) {
             Box(

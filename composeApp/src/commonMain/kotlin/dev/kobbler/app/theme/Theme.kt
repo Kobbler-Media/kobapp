@@ -21,9 +21,9 @@ val KobappShapesDefault = KobappShapes()
 
 val cardShape = RoundedCornerShape(8.dp)
 
-fun ratingColor(rating: Float, colors: KobappColors = KobappColorsDefault): Color = when {
-    rating >= 3.5f -> colors.ok
-    rating >= 2.5f -> colors.warn
+fun ratingColor(rating: Float, outOf: Int, colors: KobappColors = KobappColorsDefault): Color = when {
+    rating >= outOf * 0.7f -> colors.ok
+    rating >= outOf * 0.5f -> colors.warn
     else -> colors.err
 }
 

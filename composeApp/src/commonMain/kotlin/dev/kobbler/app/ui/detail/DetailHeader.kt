@@ -119,4 +119,4 @@ internal fun metaText(text: String?, color: Color? = null): (@Composable () -> U
         { Text(value, style = KobappTheme.type.bodySm, color = color ?: KobappTheme.colors.textMd) }
     }
 
-internal fun metaRating(rating: Float?): (@Composable () -> Unit)? = rating?.let { { RatingBadge(it) } }
+internal fun metaRating(rating: Float?): (@Composable () -> Unit)? = rating?.let { { RatingBadge(it, VIDEO_RATING_OUT_OF) } }

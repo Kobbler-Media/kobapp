@@ -1,6 +1,8 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
@@ -122,9 +124,6 @@ expect fun castManager(): CastSender
  */
 expect fun saveCastAppId(appId: String?)
 
-/**
- * Composable that shows the Cast button (route selector) if casting is available.
- * No-op on platforms without Cast support.
- */
+/** Draws nothing where this device cannot send to a receiver. */
 @Composable
-expect fun CastButton()
+expect fun CastButton(modifier: Modifier = Modifier, tint: Color = Color.Unspecified)

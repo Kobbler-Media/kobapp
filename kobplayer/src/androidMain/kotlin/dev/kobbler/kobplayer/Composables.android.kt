@@ -38,8 +38,11 @@ actual fun rememberPlayer(config: PlayerConfig): Player {
     return player
 }
 
-actual fun createPlayer(config: PlayerConfig, parentContext: kotlin.coroutines.CoroutineContext): Player {
-    throw UnsupportedOperationException("Use rememberPlayer() in Compose or platform-specific APIs on Android")
+@Composable
+actual fun rememberPlayerFactory(): (PlayerConfig) -> Player {
+    val appContext = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    return remember(appContext) { { config -> AndroidPlayer(appContext, scope.coroutineContext, config) } }
 }
 
 @Composable

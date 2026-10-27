@@ -70,8 +70,20 @@ private val DenseLiveTvMaxHeight = 620.dp
 private const val GuideWindowMinutes = 240
 private const val FavouriteFacet = "favourite"
 
-private enum class LiveTvTab(val label: String) {
+internal enum class LiveTvTab(val label: String) {
     OnNow("On now"), Guide("Guide"), Channels("Channels"), Recordings("Recordings"),
+}
+
+private const val LiveTvTabKey = "livetv.tab"
+
+/**
+ * On now is the better front door, but only with suggestions in it; while they are still
+ * loading it is held rather than opening the guide and jumping away from it.
+ */
+internal fun liveTvStartTab(remembered: LiveTvTab?, onNowFilled: Boolean?): LiveTvTab = when {
+    remembered != null && remembered != LiveTvTab.OnNow -> remembered
+    onNowFilled == false -> LiveTvTab.Guide
+    else -> LiveTvTab.OnNow
 }
 
 private val LiveTvTabLabels = LiveTvTab.entries.map { it.label }
@@ -100,7 +112,8 @@ fun LiveTvScreen(
 ) {
     val scope = rememberCoroutineScope()
     val focusScope = LocalFocusScope.current
-    var tabIdx by remember { mutableIntStateOf(LiveTvTab.Guide.ordinal) }
+    val rememberedTab = remember { LiveTvTab.entries.firstOrNull { it.name == UserSettings.getString(LiveTvTabKey) } }
+    var pickedTab by remember { mutableStateOf<LiveTvTab?>(null) }
 
     val (headerState, headerRetry) = rememberCached("livetv-header") {
         coroutineScope {
@@ -123,6 +136,13 @@ fun LiveTvScreen(
         }
     }
     val (onNowState, onNowRetry) = rememberCached(LiveOnNowCacheKey) { api.getLiveOnNow() }
+    val onNowFilled = when (onNowState) {
+        is Async.Ready -> onNowState.value.groups.any { it.items.isNotEmpty() }
+        is Async.Loading -> null
+        is Async.Error -> false
+    }
+    // A pick made here is kept even when On now turns out empty: the viewer asked for it.
+    val tabIdx = (pickedTab ?: liveTvStartTab(rememberedTab, onNowFilled)).ordinal
 
     // A tab the viewer has stepped away from and come back to is the one moment worth
     // re-reading the tuner, and what is usually on has moved with the clock.
@@ -306,7 +326,11 @@ fun LiveTvScreen(
                 accent = accent,
                 fillWidth = compact,
                 modifier = tabsModifier,
-                onSelected = { tabIdx = it },
+                onSelected = {
+                    val tab = LiveTvTab.entries[it]
+                    pickedTab = tab
+                    UserSettings.putString(LiveTvTabKey, tab.name)
+                },
             )
         }
 

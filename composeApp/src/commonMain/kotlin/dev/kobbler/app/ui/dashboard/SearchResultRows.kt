@@ -46,6 +46,7 @@ import dev.kobbler.app.ui.components.PillStatus
 import dev.kobbler.app.ui.components.StatusPill
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.detail.RatingBadge
+import dev.kobbler.app.ui.detail.ratingOutOf
 import dev.kobbler.kobfocus.focusKey
 
 @Composable
@@ -144,7 +145,7 @@ internal fun DiscoverOverlayCard(item: DiscoverItem, accent: Color, key: String,
                         maxLines = 1,
                     )
                 }
-                if (item.rating != null) RatingBadge(item.rating)
+                if (item.rating != null) RatingBadge(item.rating, ratingOutOf(item.mediaType))
             }
         }
         StatusPill(status = if (item.isInLibrary) PillStatus.InLibrary else PillStatus.NotInLibrary)

@@ -6,7 +6,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +29,7 @@ import io.ktor.client.HttpClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import androidx.compose.ui.unit.dp
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 
@@ -62,7 +68,11 @@ class IptvPageTest {
 
     private val sizes = mapOf(FormFactor.Phone to (400 to 820), FormFactor.Desktop to (1280 to 800), FormFactor.TV to (1280 to 720))
 
-    private fun page(formFactor: FormFactor, body: DesktopComposeUiTest.(Outcome, StubServer) -> Unit) {
+    private fun page(
+        formFactor: FormFactor,
+        routes: Map<String, (com.sun.net.httpserver.HttpExchange) -> String> = this.routes,
+        body: DesktopComposeUiTest.(Outcome, StubServer) -> Unit,
+    ) {
         val (w, h) = sizes.getValue(formFactor)
         val outcome = Outcome()
         runUiTest(width = w, height = h) {
@@ -134,6 +144,18 @@ class IptvPageTest {
         onNodeWithContentDescription("Sky Sport schedule").performClick()
         waitForIdle()
         assertEquals(listOf("i1"), outcome.opened)
+    }
+
+    /** A focus ring is drawn outside its row, and the list clips at its own top edge. */
+    @Test
+    fun `the first row leaves room above it for its focus ring`() = page(
+        FormFactor.TV,
+        routes + ("/api/v1/admin/iptv/watches/matches" to { _ -> "[]" }),
+    ) { _, _ ->
+        val list = onNodeWithTag(IptvGuideListTag).getUnclippedBoundsInRoot()
+        val first = onAllNodes(hasClickAction() and (hasText("Derby Day", substring = true) or hasAnyDescendant(hasText("Derby Day", substring = true))))
+            .fetchSemanticsNodes().minOf { it.boundsInRoot.top } / density.density
+        assertTrue(first.dp - list.top >= 8.dp, "the first row sits ${first.dp - list.top} under the list's clip")
     }
 
     /** The favourites feed carries no favourite id, so un-favouriting from it used to add it again. */

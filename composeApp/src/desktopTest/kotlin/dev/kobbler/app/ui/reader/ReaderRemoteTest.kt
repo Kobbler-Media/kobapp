@@ -37,11 +37,8 @@ import dev.kobbler.app.runUiTest
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -233,35 +230,13 @@ class ReaderRemoteTest {
     }
 
     private fun epub(chapters: Int): ByteArray {
-        val out = ByteArrayOutputStream()
-        ZipOutputStream(out).use { zip ->
-            fun put(path: String, text: String) {
-                zip.putNextEntry(ZipEntry(path))
-                zip.write(text.encodeToByteArray())
-                zip.closeEntry()
-            }
-            put(
-                "META-INF/container.xml",
-                """<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>""",
-            )
-            val ids = (1..chapters).map { "ch$it" }
-            put(
-                "OEBPS/content.opf",
-                buildString {
-                    append("<package><metadata><dc:title>Remote Book</dc:title></metadata><manifest>")
-                    ids.forEach { append("""<item id="$it" href="$it.xhtml" media-type="application/xhtml+xml"/>""") }
-                    append("</manifest><spine>")
-                    ids.forEach { append("""<itemref idref="$it"/>""") }
-                    append("</spine></package>")
-                },
-            )
-            for (n in 1..chapters) {
-                put(
-                    "OEBPS/ch$n.xhtml",
-                    "<html><head><title>Chapter $n</title></head><body><p>Words of chapter $n.</p></body></html>",
-                )
-            }
-        }
-        return out.toByteArray()
+        val ids = (1..chapters).map { "ch$it" }
+        return epubZip(
+            opf(ids),
+            (1..chapters).map { n ->
+                "ch$n.xhtml" to
+                    "<html><head><title>Chapter $n</title></head><body><p>Words of chapter $n.</p></body></html>".encodeToByteArray()
+            },
+        )
     }
 }

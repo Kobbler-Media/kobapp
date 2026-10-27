@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.rememberArtTone
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
@@ -74,6 +75,7 @@ internal fun DiscoverShowPage(
         show.seasons.getOrNull(s)?.let { season -> season.episodes.getOrNull(e)?.let { DiscoverEpisodeRef(season.number, it.number) } }
     }
 
+    val artTone = rememberArtTone(show.backdropUrl ?: show.posterUrl, accent)
     ShowDetailLayout(
         show = show,
         episodeTotal = detail.episodeTotal(),
@@ -107,6 +109,7 @@ internal fun DiscoverShowPage(
                     season = show.seasons[selectedSeasonIdx],
                     seasonIdx = selectedSeasonIdx,
                     accent = accent,
+                    artTone = artTone,
                     currentEpisodeId = null,
                     api = null,
                     watchedOverrides = noOverrides,

@@ -65,7 +65,7 @@ internal fun MovieDetailLayout(
         CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
         Column(Modifier.fillMaxSize().scrollWhenFocusIsStuck(pageScroll.asPageScroll()).verticalScroll(pageScroll)) {
             if (stacked) {
-                Spacer(Modifier.height(kobTopInset + 72.dp))
+                Spacer(Modifier.height(detailStackedTop))
                 Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
                         DetailPoster(movie.posterUrl, accent, Modifier.width(120.dp))

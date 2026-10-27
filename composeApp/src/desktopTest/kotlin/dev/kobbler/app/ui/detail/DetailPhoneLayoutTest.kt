@@ -4,6 +4,7 @@ import dev.kobbler.app.runUiTest
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.unit.Dp
@@ -106,6 +107,21 @@ class DetailPhoneLayoutTest {
         for ((name, screen) in screens) {
             val w = proseWidth(screen, width = 900, height = 400)
             assertTrue(w <= 720.dp, "$name prose spans $w of a 900dp screen, as if nothing sat beside it")
+        }
+    }
+
+    /** The back button floats over the poster's corner; a header row of its own was a band of nothing. */
+    @Test
+    fun `portrait phone starts the page beside the back button, not below it`() {
+        val titles = mapOf("movie" to "Movie", "show" to "Show", "discover" to "Found", "discover show" to "Found")
+        for ((name, title) in titles) {
+            runUiTest(width = 412, height = 900) {
+                setContent { KobappTheme(formFactor = FormFactor.Phone) { screens.getValue(name)() } }
+                waitForIdle()
+                val back = onAllNodesWithContentDescription("Back").onFirst().getUnclippedBoundsInRoot()
+                val heading = onAllNodesWithText(title, substring = true, useUnmergedTree = true).onFirst().getUnclippedBoundsInRoot()
+                assertTrue(heading.top < back.bottom, "$name title starts at ${heading.top}, under a back button ending at ${back.bottom}")
+            }
         }
     }
 

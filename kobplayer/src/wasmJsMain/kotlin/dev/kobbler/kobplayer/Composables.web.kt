@@ -25,8 +25,10 @@ actual fun rememberPlayer(config: PlayerConfig): Player {
     return player
 }
 
-actual fun createPlayer(config: PlayerConfig, parentContext: kotlin.coroutines.CoroutineContext): Player {
-    return WebPlayer(parentContext, config)
+@Composable
+actual fun rememberPlayerFactory(): (PlayerConfig) -> Player {
+    val scope = rememberCoroutineScope()
+    return remember { { config -> WebPlayer(scope.coroutineContext, config) } }
 }
 
 @Composable

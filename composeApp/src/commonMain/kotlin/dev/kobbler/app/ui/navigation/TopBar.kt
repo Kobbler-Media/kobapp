@@ -1,12 +1,13 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.ui.components.Edge
+import dev.kobbler.app.ui.components.edgeLine
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Notifications
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.platform.CastButton
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.TvFocusScale
 import dev.kobbler.app.ui.components.tvAutoGlow
@@ -41,7 +43,6 @@ fun KobTopBar(
     isFullscreen: Boolean = false,
     modifier: Modifier = Modifier,
     onSearchClick: () -> Unit = {},
-    onCastClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onToggleFullscreen: (() -> Unit)? = null,
 ) {
@@ -59,7 +60,7 @@ fun KobTopBar(
                 } else {
                     Modifier
                         .background(colors.bg.copy(alpha = 0.92f))
-                        .border(width = 1.dp, color = colors.lineSoft, shape = RoundedCornerShape(0.dp))
+                        .edgeLine(Edge.Bottom, colors.lineSoft)
                 },
             )
             .padding(horizontal = if (dense) 20.dp else 28.dp, vertical = if (dense) 12.dp else 16.dp),
@@ -108,9 +109,7 @@ fun KobTopBar(
             }
         }
         if (showCast) {
-            IconButton(onClick = onCastClick, modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)) {
-                Icon(Icons.Outlined.Cast, "Cast", tint = colors.textMd)
-            }
+            CastButton(Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None), colors.textMd)
         }
         Box {
             IconButton(onClick = onNotificationsClick, modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)) {

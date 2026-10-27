@@ -49,17 +49,22 @@ internal fun ReaderTopBar(
     theme: ReaderTheme,
     entryFocus: FocusRequester,
 ) {
+    val tv = LocalFormFactor.current == FormFactor.TV
+    val dimens = KobappTheme.dimens
     Row(
         modifier = Modifier
             .focusKeyGroup("topbar")
             .fillMaxWidth()
             .background(theme.backgroundColor)
             .safeTopPadding()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(
+                horizontal = if (tv) dimens.pageGutterTv else 4.dp,
+                vertical = if (tv) dimens.focusBleed else 2.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // A remote has its own BACK, so on a TV the bar starts at its first action instead.
-        val showBack = LocalFormFactor.current != FormFactor.TV
+        val showBack = !tv
         val firstAction = if (showBack) remember { FocusRequester() } else entryFocus
         if (showBack) {
             IconButton(

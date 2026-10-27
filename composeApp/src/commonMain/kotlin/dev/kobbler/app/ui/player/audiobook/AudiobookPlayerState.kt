@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.player.audiobook
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
@@ -23,9 +24,8 @@ import dev.kobbler.app.data.UnifiedChapterDto
 import dev.kobbler.app.platform.PlaybackTimeline
 import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.Player
-import dev.kobbler.kobplayer.PlayerConfig
 import dev.kobbler.kobplayer.PlayerState
-import dev.kobbler.kobplayer.rememberPlayer
+import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
 import dev.kobbler.app.ui.player.RESUME_MIN_SECONDS
 import dev.kobbler.app.ui.player.settleAt
 import kotlinx.coroutines.CoroutineScope
@@ -289,10 +289,12 @@ class AudiobookPlayerState internal constructor(
 fun rememberAudiobookState(
     book: Book,
     api: KobblerApi,
-    player: Player = rememberPlayer(PlayerConfig(audioOnly = true)),
+    player: Player = LocalSharedAudioPlayer.current.get(),
 ): AudiobookPlayerState {
     val scope = rememberCoroutineScope()
     val state = remember(book.id) { AudiobookPlayerState(book, api, player, scope) }
+    // The player is the app's, not the screen's: leaving stops the book but keeps the player.
+    DisposableEffect(player) { onDispose { player.stop() } }
 
     LaunchedEffect(state) {
         launch { player.state.collect { state.playerState = it } }

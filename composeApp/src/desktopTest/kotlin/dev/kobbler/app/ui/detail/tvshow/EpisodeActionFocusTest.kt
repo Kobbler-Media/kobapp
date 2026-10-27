@@ -43,6 +43,7 @@ class EpisodeActionFocusTest {
                         season = target,
                         seasonIdx = 0,
                         accent = accent,
+                        artTone = accent,
                         currentEpisodeId = null,
                         api = null,
                         watchedOverrides = mutableStateMapOf(),

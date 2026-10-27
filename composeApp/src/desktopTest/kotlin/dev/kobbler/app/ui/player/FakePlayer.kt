@@ -161,7 +161,8 @@ class FakePlayer(private val clock: CoroutineScope = CoroutineScope(Dispatchers.
     override fun setMatchDisplayRefresh(enabled: Boolean) { calls += "matchDisplayRefresh:$enabled" }
     override fun setChapter(chapter: Chapter) { currentChapter.value = chapter }
     override suspend fun takeScreenshot(path: String) { }
-    override fun release() { }
+    var released = false
+    override fun release() { released = true }
     override val native: NativePlayer get() = throw UnsupportedOperationException()
 }
 

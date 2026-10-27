@@ -55,3 +55,9 @@ fun pageGutter(): Dp = with(KobappTheme.dimens) {
         FormFactor.Desktop -> pageGutter
     }
 }
+
+/** Room at the top of a list for its first row's focus ring, which the list would clip. */
+@Composable
+fun listTopFocusRoom(): Dp = with(KobappTheme.dimens) {
+    if (LocalFormFactor.current == FormFactor.Phone) 0.dp else focusBleed
+}

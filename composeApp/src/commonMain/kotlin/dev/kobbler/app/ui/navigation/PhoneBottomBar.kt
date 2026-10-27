@@ -1,10 +1,10 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.ui.components.Edge
+import dev.kobbler.app.ui.components.edgeLine
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +32,7 @@ fun KobPhoneBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .background(colors.bg.copy(alpha = 0.92f))
-            .border(width = 1.dp, color = colors.lineSoft, shape = RoundedCornerShape(0.dp))
+            .edgeLine(Edge.Top, colors.lineSoft)
             .safeBottomPadding()
             .height(KobPhoneBottomBarHeight)
             .padding(horizontal = 6.dp, vertical = 6.dp),

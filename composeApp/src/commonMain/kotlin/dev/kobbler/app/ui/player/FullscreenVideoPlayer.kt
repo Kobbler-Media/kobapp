@@ -682,7 +682,10 @@ fun FullscreenVideoPlayer(
                     // A TV is a cast target, not a sender, and live has no receiver-side
                     // story — the channel is this device's tuner.
                     if (formFactor != FormFactor.TV && !isLiveTv) {
-                        dev.kobbler.app.platform.CastButton()
+                        dev.kobbler.app.platform.CastButton(
+                            Modifier.focusKey("ctrl.cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+                            colors.textHi,
+                        )
                     }
                     val skipPrevious = state.onSkipPrevious
                     if (skipPrevious != null) {

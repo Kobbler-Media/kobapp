@@ -19,12 +19,14 @@ data class EpubBook(
     val coverImagePath: String?,
     val zip: ZipArchive,
     val basePath: String,
+    val rtl: Boolean = false,
 )
 
 data class EpubChapter(
     val title: String?,
     val href: String, // path within ZIP
     val xhtml: String,
+    val fixedLayout: FixedLayout? = null,
 )
 
 data class TocEntry(
@@ -78,10 +80,12 @@ fun parseEpub(zip: ZipArchive): EpubBook {
     val coverImagePath = coverMeta?.attr("content")?.let { manifest[it] }?.let { "$basePath$it" }
 
     // Spine: ordered list of manifest IDs
-    val spineIds = opfDoc.select("spine > itemref").map { it.attr("idref") }.filter { it.isNotBlank() }
+    val rendition = opfRendition(opfDoc)
+    val spine = opfDoc.select("spine > itemref").filter { it.attr("idref").isNotBlank() }
 
     // 3. Load chapters in spine order
-    val rawChapters = spineIds.mapNotNull { id ->
+    val rawChapters = spine.mapNotNull { itemref ->
+        val id = itemref.attr("idref")
         val href = manifest[id] ?: return@mapNotNull null
         val fullPath = "$basePath$href"
         // Try exact path first, then case-insensitive fallback
@@ -90,7 +94,12 @@ fun parseEpub(zip: ZipArchive): EpubBook {
         val chapterTitle = try {
             Ksoup.parse(xhtml).title().ifBlank { null }
         } catch (_: Exception) { null }
-        EpubChapter(title = chapterTitle, href = resolvedPath, xhtml = xhtml)
+        EpubChapter(
+            title = chapterTitle,
+            href = resolvedPath,
+            xhtml = xhtml,
+            fixedLayout = rendition.layoutFor(itemref.attr("properties")),
+        )
     }
 
     // 4. Overlay NCX titles. Calibre and similar tools often emit <title>BookTitle</title>
@@ -105,6 +114,7 @@ fun parseEpub(zip: ZipArchive): EpubBook {
         coverImagePath = coverImagePath,
         zip = zip,
         basePath = basePath,
+        rtl = rendition.rtl,
     )
 }
 

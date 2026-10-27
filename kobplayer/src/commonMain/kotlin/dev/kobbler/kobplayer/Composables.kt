@@ -32,10 +32,12 @@ expect fun rememberPlayer(config: PlayerConfig = PlayerConfig()): Player
 expect fun rememberPlayerAsync(config: PlayerConfig = PlayerConfig()): Player?
 
 /**
- * Create a [Player] outside of Compose (for non-UI use like TTS chunk playback).
- * Caller is responsible for calling [Player.release] when done.
+ * Makes players on demand, for a screen that only sometimes needs one. Each belongs to the
+ * caller, who must [Player.release] it. Taken from a composition because that is the only
+ * place Android has the Context a player is built from.
  */
-expect fun createPlayer(config: PlayerConfig = PlayerConfig(), parentContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Main): Player
+@Composable
+expect fun rememberPlayerFactory(): (PlayerConfig) -> Player
 
 /**
  * Render the video surface for a [Player].

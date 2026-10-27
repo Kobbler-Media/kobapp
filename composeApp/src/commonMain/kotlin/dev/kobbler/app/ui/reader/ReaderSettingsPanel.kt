@@ -63,11 +63,13 @@ internal fun ReaderSettingsPanel(
     lineHeightMultiplier: Float,
     horizontalPadding: Int,
     readerFontFamily: ReaderFontFamily,
+    pageFit: ReaderPageFit,
     onThemeChange: (ReaderThemeMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onLineHeightChange: (Float) -> Unit,
     onPaddingChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
+    onPageFitChange: (ReaderPageFit) -> Unit,
     brightness: Float,
     onBrightnessChange: (Float) -> Unit,
     ttsController: TtsController,
@@ -113,21 +115,12 @@ internal fun ReaderSettingsPanel(
 
             SettingsLabel("Font", theme)
             Spacer(Modifier.height(6.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                for (family in ReaderFontFamily.entries) {
-                    val isSelected = family == readerFontFamily
-                    KobChip(
-                        text = family.label,
-                        style = if (isSelected) KobChipStyle.AccentTint else KobChipStyle.Default,
-                        accent = theme.linkColor,
-                        onClick = { onFontFamilyChange(family) },
-                        modifier = Modifier.focusKey("font.${family.name}").weight(1f),
-                    )
-                }
-            }
+            ChoiceChips(ReaderFontFamily.entries, readerFontFamily, { it.label }, onFontFamilyChange, theme, key = "font")
+            Spacer(Modifier.height(12.dp))
+
+            SettingsLabel("Page fit", theme)
+            Spacer(Modifier.height(6.dp))
+            ChoiceChips(ReaderPageFit.entries, pageFit, { it.label }, onPageFitChange, theme, key = "pagefit")
             Spacer(Modifier.height(12.dp))
 
             SettingsLabel("Line Spacing: ${((lineHeightMultiplier * 10).toInt() / 10.0)}x", theme)
@@ -267,6 +260,31 @@ internal fun ReaderSettingsPanel(
                     key = "ttsspeed",
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun <T : Enum<T>> ChoiceChips(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    theme: ReaderTheme,
+    key: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        for (option in options) {
+            KobChip(
+                text = label(option),
+                style = if (option == selected) KobChipStyle.AccentTint else KobChipStyle.Default,
+                accent = theme.linkColor,
+                onClick = { onSelect(option) },
+                modifier = Modifier.focusKey("$key.${option.name}").weight(1f),
+            )
         }
     }
 }

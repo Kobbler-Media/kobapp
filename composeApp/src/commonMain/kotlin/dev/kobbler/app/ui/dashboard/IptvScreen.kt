@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.ui.components.listTopFocusRoom
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -310,6 +312,8 @@ fun IptvScreen(
 
 private fun iptvRowKey(channelId: String) = "irow.$channelId"
 
+internal const val IptvGuideListTag = "iptv.guide"
+
 @Composable
 private fun IptvGuideList(
     rows: List<IptvChannel>,
@@ -358,8 +362,8 @@ private fun IptvGuideList(
         }
         LazyColumn(
             state = listState,
-            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
-            contentPadding = PaddingValues(top = LocalTopChromeOverlap.current, bottom = dimens.s6),
+            modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize().testTag(IptvGuideListTag),
+            contentPadding = PaddingValues(top = LocalTopChromeOverlap.current + listTopFocusRoom(), bottom = dimens.s6),
             verticalArrangement = Arrangement.spacedBy(if (wide) dimens.s1 else 2.dp),
         ) {
             if (matches.isNotEmpty()) {

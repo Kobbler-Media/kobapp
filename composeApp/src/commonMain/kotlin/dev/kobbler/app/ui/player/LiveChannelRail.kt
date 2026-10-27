@@ -1,5 +1,9 @@
 package dev.kobbler.app.ui.player
 
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -52,6 +56,7 @@ import dev.kobbler.app.ui.components.Async
 private val PanelWidth = 420.dp
 private val PanelRowHeight = 92.dp
 private val SheetRowHeight = 68.dp
+private val SheetMaxHeight = 360.dp
 
 /**
  * The channel switcher over a live stream: OK switches on the same surface, and nothing
@@ -171,15 +176,22 @@ fun LiveChannelRail(
         }
 
         CenterFocusedItem(listState, focusedIndex, topRow = 0)
+        BoxWithConstraints(if (phone) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().weight(1f)) {
+        val viewport = if (phone) minOf(maxHeight, SheetMaxHeight) else maxHeight
+        val rowHeight = if (phone) SheetRowHeight else PanelRowHeight
+        val centreOffsetPx = with(LocalDensity.current) { ((viewport - rowHeight) / 2).coerceAtLeast(0.dp).roundToPx() }
+        // Placed before the first measure rather than scrolled to after it: every frame the
+        // list spent getting there was the rail visibly jumping each time it opened.
+        val placedFor = remember(listState) { mutableStateOf<Pair<List<LiveChannel>, Int>?>(null) }
+        if (currentIndex != null && placedFor.value != (channels to currentIndex)) {
+            placedFor.value = channels to currentIndex
+            listState.requestScrollToItem(currentIndex, -centreOffsetPx)
+        }
         LazyColumn(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(if (phone) dimens.s1 else dimens.s2),
             contentPadding = PaddingValues(vertical = KobappTheme.dimens.focusBleed),
-            modifier = if (phone) {
-                Modifier.fillMaxWidth().heightIn(max = 360.dp)
-            } else {
-                Modifier.fillMaxWidth().weight(1f)
-            },
+            modifier = if (phone) Modifier.fillMaxWidth().heightIn(max = SheetMaxHeight) else Modifier.fillMaxSize(),
         ) {
             itemsIndexed(channels, key = { _, it -> it.id }) { index, channel ->
                 ChannelRow(
@@ -193,12 +205,12 @@ fun LiveChannelRail(
                 )
             }
         }
+        }
         // The player's entry pass only sees rows already composed, and a lazy column far
         // from the top has not composed the current one yet, so it fell to the first row.
         val focusScope = LocalFocusScope.current
         LaunchedEffect(currentIndex) {
             val index = currentIndex ?: return@LaunchedEffect
-            listState.scrollToItem(index)
             focusScope.restore("channelrail.ch.${channels[index].id}")
         }
     }

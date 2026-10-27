@@ -23,7 +23,10 @@ sealed interface XhtmlBlock {
     data class FixedPage(
         val image: Image,
         val fragments: List<OverlayFragment>,
-    ) : XhtmlBlock
+    ) : XhtmlBlock {
+        val pageWidth: Int get() = image.width?.takeIf { it > 0 } ?: 600
+        val pageHeight: Int get() = image.height?.takeIf { it > 0 } ?: 914
+    }
     data class ListBlock(val items: List<ListItem>, val ordered: Boolean) : XhtmlBlock
     data class CodeBlock(val text: String) : XhtmlBlock
     data object Divider : XhtmlBlock

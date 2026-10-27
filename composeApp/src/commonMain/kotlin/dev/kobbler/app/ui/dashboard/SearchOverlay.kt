@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
@@ -88,6 +89,8 @@ import dev.kobbler.app.ui.imePaddingUnlessTv
 
 private const val RECENT_MAX = 8
 private const val RECENT_KEY = "search_recents"
+internal const val SearchFieldTag = "search-field"
+internal const val SearchResultsTag = "search-results"
 
 @Composable
 fun SearchOverlay(
@@ -401,14 +404,15 @@ private fun SearchContent(
                 null
             },
         )
-        if (query.isNotBlank() && suggestions.isNotEmpty()) {
-            SearchSuggestionChips(
+        if (!phone && suggestions.isNotEmpty()) {
+            SearchSuggestionStrip(
                 suggestions = suggestions,
                 onPick = onPickRecent,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = if (phone) 16.dp else 18.dp)
-                    .padding(bottom = 6.dp),
+                    .padding(horizontal = 18.dp)
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(12.dp)),
             )
         }
         if (jumps.isNotEmpty()) {
@@ -425,7 +429,7 @@ private fun SearchContent(
         LazyVerticalGrid(
             columns = GridCells.Fixed(if (tv) 2 else 1),
             state = gridState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().weight(1f).testTag(SearchResultsTag),
             horizontalArrangement = Arrangement.spacedBy(if (tv) 24.dp else 0.dp),
             contentPadding = PaddingValues(
                 start = if (phone) 16.dp else 14.dp,
@@ -448,7 +452,6 @@ private fun SearchContent(
                 } else {
                     fullWidthItem(key = "empty-hint") { EmptyHint() }
                 }
-                trendingSuggestions(suggestions, onPick = onPickRecent)
             } else if (nothing) {
                 fullWidthItem(key = "no-results") {
                     Box(
@@ -486,6 +489,16 @@ private fun SearchContent(
                     fullWidthItem(key = "bottom-spacer") { Spacer(Modifier.height(32.dp).navigationBarsPadding()) }
                 }
             }
+        }
+        if (phone && suggestions.isNotEmpty()) {
+            SearchSuggestionStrip(
+                suggestions = suggestions,
+                onPick = onPickRecent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(width = 1.dp, color = colors.lineSoft)
+                    .navigationBarsPadding(),
+            )
         }
     }
 }
@@ -588,6 +601,7 @@ private fun SearchBar(
                         // otherwise trap the remote in the query box.
                         modifier = Modifier
                             .fillMaxWidth()
+                            .testTag(SearchFieldTag)
                             .focusRequester(focusRequester)
                             .onPreviewKeyEvent { event ->
                                 event.type == KeyEventType.KeyDown &&

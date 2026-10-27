@@ -59,12 +59,18 @@ fun trackIntent(
 /**
  * The audio track a stream should open on. A debrid release is handed over whole and
  * unprobed for preferences, so without the viewer's language here it opens on whatever
- * the release marked default — often a dub.
+ * the release marked default — often a dub. Commentary and description tracks are never
+ * the feature audio, even when a release flags one as its default.
  */
 fun startAudioIndex(
     audioTracks: List<AudioTrackDto>,
     serverPick: Int?,
     preferredLanguage: String?,
-): Int? = serverPick
-    ?: audioTracks.firstOrNull { sameLanguage(it.language, preferredLanguage) }?.streamIndex
-    ?: audioTracks.firstOrNull { it.isDefault }?.streamIndex
+): Int? {
+    val feature = audioTracks.filterNot { it.isCommentary }
+    val default = audioTracks.firstOrNull { it.isDefault }
+        ?.let { if (it.isCommentary) feature.firstOrNull() ?: it else it }
+    return serverPick
+        ?: feature.firstOrNull { it.speaks(preferredLanguage) }?.streamIndex
+        ?: default?.streamIndex
+}

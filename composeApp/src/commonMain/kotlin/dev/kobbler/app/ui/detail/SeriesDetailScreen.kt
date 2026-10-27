@@ -165,7 +165,7 @@ private fun SeriesHero(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = gutter, end = gutter, top = kobTopInset + 72.dp, bottom = 20.dp),
+                    .padding(start = gutter, end = gutter, top = detailStackedTop, bottom = 20.dp),
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 if (heroCovers.isNotEmpty()) {

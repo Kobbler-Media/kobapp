@@ -95,7 +95,7 @@ internal fun DiscoverDetailsPanel(detail: DiscoverDetail, formFactor: FormFactor
             val h = detail.runtime / 60; val m = detail.runtime % 60
             InfoLine("Runtime", if (h > 0) "${h}h ${m}m" else "${m}m", formFactor)
         }
-        if (detail.rating != null) InfoLine("Rating", "${formatRating(detail.rating)} / 10", formFactor)
+        if (detail.rating != null) InfoLine("Rating", formatRatingOutOf(detail.rating, ratingOutOf(detail.mediaType)), formFactor)
         if (detail.network != null) InfoLine("Network", detail.network, formFactor)
         if (detail.authors.isNotEmpty()) InfoLine("Author", detail.authors.joinToString(", "), formFactor)
         if (detail.genres.isNotEmpty()) InfoLine("Genres", detail.genres.take(4).joinToString(" · "), formFactor)

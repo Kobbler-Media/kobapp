@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -45,6 +46,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +68,7 @@ fun EpubContent(
     wordHighlight: () -> TtsWordHighlight? = { null },
     imageResolver: ((String) -> Any?)? = null,
     pageHeight: Int = 0,
+    imageMaxHeight: Int = 0,
     onActiveBlockY: ((Int) -> Unit)? = null,
     onBlockPositioned: ((blockIndex: Int, topY: Int, height: Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -73,6 +77,7 @@ fun EpubContent(
     val sentenceIndex = remember(blocks, highlightedText) { findActiveBlockIndex(blocks, highlightedText) }
     val activeIndex = word?.blockIndex ?: sentenceIndex
     val contentModifier = modifier.padding(horizontal = theme.horizontalPadding.dp)
+    val imageCap = with(LocalDensity.current) { if (imageMaxHeight > 0) imageMaxHeight.toDp() else Dp.Unspecified }
 
     var placedYs by remember { mutableStateOf(IntArray(0)) }
     var highlightLocalY by remember { mutableStateOf(IndexedY(-1, 0)) }
@@ -102,7 +107,7 @@ fun EpubContent(
             val blockWordRange = if (i == word?.blockIndex) word.charRange else null
             Box(Modifier.fillMaxWidth()) {
                 RenderBlock(
-                    block, theme, if (i == activeIndex) highlightedText else null, blockWordRange, imageResolver,
+                    block, theme, if (i == activeIndex) highlightedText else null, blockWordRange, imageResolver, imageCap,
                     onHighlightLocalY = if (isActive) onActiveHighlightY else null,
                 )
             }
@@ -156,6 +161,7 @@ private fun RenderBlock(
     highlightedText: String?,
     wordCharRange: IntRange?,
     imageResolver: ((String) -> Any?)?,
+    imageCap: Dp,
     onHighlightLocalY: ((Int) -> Unit)? = null,
 ) {
     val reportsOwnY = block is XhtmlBlock.Paragraph ||
@@ -168,9 +174,9 @@ private fun RenderBlock(
     when (block) {
         is XhtmlBlock.Paragraph -> ParagraphBlock(block, theme, highlightedText, wordCharRange, onHighlightLocalY)
         is XhtmlBlock.Heading -> HeadingBlock(block, theme, highlightedText, wordCharRange, onHighlightLocalY)
-        is XhtmlBlock.Image -> ImageBlock(block, imageResolver)
-        is XhtmlBlock.FixedPage -> FixedPageBlock(block, theme, imageResolver)
-        is XhtmlBlock.BlockQuote -> BlockQuoteBlock(block, theme, highlightedText, imageResolver, onHighlightLocalY)
+        is XhtmlBlock.Image -> ImageBlock(block, imageResolver, imageCap)
+        is XhtmlBlock.FixedPage -> FixedPageBlock(block, theme, imageResolver, imageCap)
+        is XhtmlBlock.BlockQuote -> BlockQuoteBlock(block, theme, highlightedText, imageResolver, imageCap, onHighlightLocalY)
         is XhtmlBlock.ListBlock -> ListBlockRenderer(block, theme, highlightedText, onHighlightLocalY)
         is XhtmlBlock.CodeBlock -> CodeBlockRenderer(block, theme)
         is XhtmlBlock.Divider -> HorizontalDivider(
@@ -231,16 +237,19 @@ private fun HeadingBlock(
 }
 
 @Composable
-private fun ImageBlock(block: XhtmlBlock.Image, imageResolver: ((String) -> Any?)?) {
+private fun ImageBlock(block: XhtmlBlock.Image, imageResolver: ((String) -> Any?)?, imageCap: Dp) {
     val model = imageResolver?.invoke(block.src) ?: block.src
-    val imgModifier = if (block.width != null && block.height != null && block.height > 0) {
-        Modifier
-            .widthIn(max = block.width.dp)
-            .aspectRatio(block.width.toFloat() / block.height.toFloat())
-    } else Modifier
+    val capModifier = if (imageCap.isSpecified) Modifier.heightIn(max = imageCap - ImageVerticalPadding * 2) else Modifier
+    val imgModifier = capModifier.then(
+        if (block.width != null && block.height != null && block.height > 0) {
+            Modifier
+                .widthIn(max = block.width.dp)
+                .aspectRatio(block.width.toFloat() / block.height.toFloat())
+        } else Modifier
+    )
     val alignmentModifier = if (block.align == TextAlign.Center) Modifier.fillMaxWidth() else Modifier
     Box(
-        modifier = alignmentModifier.padding(vertical = 8.dp),
+        modifier = alignmentModifier.padding(vertical = ImageVerticalPadding),
         contentAlignment = if (block.align == TextAlign.Center) Alignment.Center else Alignment.TopStart,
     ) {
         AsyncImage(
@@ -252,27 +261,54 @@ private fun ImageBlock(block: XhtmlBlock.Image, imageResolver: ((String) -> Any?
     }
 }
 
-/** Fixed-layout page: artwork fills the page box; story-text fragments are positioned
- *  over it in page coordinates, scaled by the rendered box width. Font sizes follow the
- *  book's stylesheet (page px), not the user's theme — the text must stay registered
- *  with the artwork. */
 @Composable
 private fun FixedPageBlock(
     block: XhtmlBlock.FixedPage,
     theme: ReaderTheme,
     imageResolver: ((String) -> Any?)?,
+    imageCap: Dp,
 ) {
-    val pageW = block.image.width?.takeIf { it > 0 } ?: 600
-    val pageH = block.image.height?.takeIf { it > 0 } ?: 914
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        FixedPageArt(
+            block, theme, imageResolver,
+            Modifier
+                .heightIn(max = imageCap)
+                .aspectRatio(block.pageWidth.toFloat() / block.pageHeight)
+                .clip(RoundedCornerShape(4.dp)),
+        )
+    }
+}
+
+@Composable
+internal fun PageArt(block: XhtmlBlock, theme: ReaderTheme, imageResolver: (String) -> Any?, modifier: Modifier) {
+    when (block) {
+        is XhtmlBlock.FixedPage -> FixedPageArt(block, theme, imageResolver, modifier)
+        is XhtmlBlock.Image -> AsyncImage(
+            model = imageResolver(block.src) ?: block.src,
+            contentDescription = block.alt,
+            contentScale = ContentScale.Fit,
+            modifier = modifier,
+        )
+        else -> {}
+    }
+}
+
+/** Fixed-layout page: artwork fills the page box; story-text fragments are positioned
+ *  over it in page coordinates, scaled by the rendered box width. Font sizes follow the
+ *  book's stylesheet (page px), not the user's theme — the text must stay registered
+ *  with the artwork. */
+@Composable
+private fun FixedPageArt(
+    block: XhtmlBlock.FixedPage,
+    theme: ReaderTheme,
+    imageResolver: ((String) -> Any?)?,
+    modifier: Modifier,
+) {
+    val pageW = block.pageWidth
+    val pageH = block.pageHeight
     val model = imageResolver?.invoke(block.image.src) ?: block.image.src
     var boxWidthPx by remember { mutableIntStateOf(0) }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(pageW.toFloat() / pageH.toFloat())
-            .onSizeChanged { boxWidthPx = it.width }
-            .clip(RoundedCornerShape(4.dp)),
-    ) {
+    Box(modifier = modifier.onSizeChanged { boxWidthPx = it.width }) {
         AsyncImage(
             model = model,
             contentDescription = block.image.alt,
@@ -307,12 +343,14 @@ private fun FixedPageBlock(
         }
     }
 }
+
 @Composable
 private fun BlockQuoteBlock(
     block: XhtmlBlock.BlockQuote,
     theme: ReaderTheme,
     highlightedText: String?,
     imageResolver: ((String) -> Any?)?,
+    imageCap: Dp,
     onHighlightLocalY: ((Int) -> Unit)?,
 ) {
     val activeInnerIdx = if (onHighlightLocalY != null) findActiveBlockIndex(block.blocks, highlightedText) else -1
@@ -337,7 +375,7 @@ private fun BlockQuoteBlock(
                 } else Modifier
                 Box(innerMod) {
                     RenderBlock(
-                        inner, theme, highlightedText, null, imageResolver,
+                        inner, theme, highlightedText, null, imageResolver, imageCap,
                         onHighlightLocalY = if (isActiveInner) { y -> innerHighlightY = y } else null,
                     )
                 }
@@ -406,6 +444,8 @@ private fun bodyTextStyle(theme: ReaderTheme, textAlign: TextAlign = TextAlign.S
         textAlign = textAlign,
         fontFamily = theme.fontFamily,
     )
+
+private val ImageVerticalPadding = 8.dp
 
 private data class IndexedY(val index: Int, val y: Int)
 

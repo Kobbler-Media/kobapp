@@ -119,9 +119,8 @@ class PhoneTopBarOverlapTest {
             if ("channel_ids" in (ex.requestURI.rawQuery ?: "")) """{"channels":[{"channel":${channel(1)},"entries":[${(1..30).joinToString(",") { entry(it, 1) }}]}]}"""
             else list(30, key = "channels") { """{"channel":${channel(it)},"entries":[${entry(it)}]}""" }
         },
-        "/api/v1/admin/livetv/on-now" to { _ ->
-            list(8, key = "groups") { g -> """{"key":"k$g","title":"Group $g","items":[{"channel":${channel(g)},"guide":${entry(g)}}]}""" }
-        },
+        // Nothing to suggest, so the page opens on the guide whose pinned header this checks.
+        "/api/v1/admin/livetv/on-now" to { _ -> """{"generated_at":"","groups":[]}""" },
         "/api/v1/admin/livetv/series-rules" to { _ -> list(12) { """{"id":"r$it","title":"Rule $it"}""" } },
         "/api/v1/admin/livetv/recordings/r1" to { _ ->
             """{"id":"r1","title":"Recorded show","status":"completed","synopsis":"${"A long synopsis that runs on. ".repeat(80)}"}"""

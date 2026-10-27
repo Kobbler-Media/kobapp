@@ -1,6 +1,8 @@
 package dev.kobbler.app.platform
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,4 +28,4 @@ class CastManager : CastSender {
 actual fun saveCastAppId(appId: String?) {}
 
 @Composable
-actual fun CastButton() {}
+actual fun CastButton(modifier: Modifier, tint: Color) {}

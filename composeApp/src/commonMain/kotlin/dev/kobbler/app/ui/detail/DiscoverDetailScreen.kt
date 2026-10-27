@@ -440,7 +440,7 @@ private fun StatRow(detail: DiscoverDetail, formFactor: FormFactor) {
                     color = colors.textLo,
                 )
                 Spacer(Modifier.height(4.dp))
-                RatingBadge(detail.rating)
+                RatingBadge(detail.rating, ratingOutOf(detail.mediaType))
             }
         }
     }

@@ -182,7 +182,7 @@ private fun PhoneBookLayout(
     onAuthorClick: (String) -> Unit,
     onSeriesClick: (String) -> Unit,
 ) {
-    Spacer(Modifier.height(kobTopInset + 72.dp))
+    Spacer(Modifier.height(detailStackedTop))
     Box(Modifier.fillMaxWidth().padding(horizontal = 40.dp), contentAlignment = Alignment.Center) {
         BookPoster(book.coverUrl, accent, posterWidth = 200.dp)
     }
@@ -305,7 +305,7 @@ private fun RightPanel(book: Book, accent: Color, formFactor: FormFactor, modifi
             InfoLine("Author", book.author, formFactor)
         }
         if (book.narrator != null) InfoLine("Narrator", book.narrator, formFactor)
-        if (book.rating != null) InfoLine("Rating", "${formatRating(book.rating)} / 5", formFactor)
+        if (book.rating != null) InfoLine("Rating", formatRatingOutOf(book.rating, BOOK_RATING_OUT_OF), formFactor)
         if (book.formats.isNotEmpty()) InfoLine("Formats", book.formats.joinToString(" · ") { it.uppercase() }, formFactor)
         if (book.hasAudiobook) InfoLine("Audiobook", "available", formFactor)
         if (book.durationSeconds != null) InfoLine("Duration", formatDuration(book.durationSeconds), formFactor)

@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.kobTopInset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -441,8 +442,8 @@ fun GenreChips(
 }
 
 @Composable
-fun RatingBadge(rating: Float, modifier: Modifier = Modifier) {
-    val color = ratingColor(rating, KobappTheme.colors)
+fun RatingBadge(rating: Float, outOf: Int, modifier: Modifier = Modifier) {
+    val color = ratingColor(rating, outOf, KobappTheme.colors)
     Row(
         modifier = modifier
             .clip(KobappTheme.shapes.small)
@@ -472,10 +473,22 @@ fun formatRating(rating: Float): String {
     return if (rounded == rounded.toInt().toFloat()) "${rounded.toInt()}.0" else rounded.toString()
 }
 
+const val BOOK_RATING_OUT_OF = 5
+const val VIDEO_RATING_OUT_OF = 10
+
+fun ratingOutOf(mediaType: String): Int = if (mediaType == "book") BOOK_RATING_OUT_OF else VIDEO_RATING_OUT_OF
+
+fun formatRatingOutOf(rating: Float, outOf: Int): String = "${formatRating(rating)} / $outOf"
+
 // Upright, a phone stacks its detail page. Turned sideways it has the width to set the
 // text beside the art, and none of the height a stacked hero spends.
 internal fun detailStacked(formFactor: FormFactor, width: androidx.compose.ui.unit.Dp): Boolean =
     formFactor == FormFactor.Phone && width < 600.dp
+
+// Stacked, the back button floats over the art's corner instead of taking a header band
+// of its own, which on a phone was most of a screen's worth of nothing above the poster.
+internal val detailStackedTop: androidx.compose.ui.unit.Dp
+    @Composable get() = kobTopInset + 8.dp
 
 internal fun gutterFor(formFactor: FormFactor): androidx.compose.ui.unit.Dp = when (formFactor) {
     FormFactor.TV -> 48.dp

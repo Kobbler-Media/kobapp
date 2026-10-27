@@ -75,13 +75,12 @@ private fun extractFixedPage(body: Element, styles: Map<String, CssProperties>):
         width = img.attr("width").toIntOrNull(),
         height = img.attr("height").toIntOrNull(),
     )
-    val pageW = image.width?.takeIf { it > 0 } ?: 600
-    val pageH = image.height?.takeIf { it > 0 } ?: 914
-    val fragments = extractFragments(textLayer, styles, pageW.toFloat(), pageH.toFloat())
+    val page = XhtmlBlock.FixedPage(image, emptyList())
+    val fragments = extractFragments(textLayer, styles, page.pageWidth.toFloat(), page.pageHeight.toFloat())
     if (fragments.isEmpty()) return null
     fullpage.remove()
     textLayer.remove()
-    return XhtmlBlock.FixedPage(image, fragments)
+    return page.copy(fragments = fragments)
 }
 
 /** Collect the absolutely-positioned text fragments of a `kobo-page-text` layer, in DOM

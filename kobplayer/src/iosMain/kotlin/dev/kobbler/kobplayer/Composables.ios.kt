@@ -30,8 +30,10 @@ actual fun rememberPlayer(config: PlayerConfig): Player {
     return player
 }
 
-actual fun createPlayer(config: PlayerConfig, parentContext: kotlin.coroutines.CoroutineContext): Player {
-    return IosPlayer(parentContext, config)
+@Composable
+actual fun rememberPlayerFactory(): (PlayerConfig) -> Player {
+    val scope = rememberCoroutineScope()
+    return remember { { config -> IosPlayer(scope.coroutineContext, config) } }
 }
 
 @OptIn(ExperimentalForeignApi::class)

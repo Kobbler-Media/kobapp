@@ -282,6 +282,8 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     // Global player — one instance for the entire app
     val player = if (dev.kobbler.app.platform.supportsVideoPlayback) dev.kobbler.kobplayer.rememberPlayerAsync() else null
     val gps = remember { GlobalPlayerState() }
+    val audio = dev.kobbler.app.ui.player.rememberSharedAudioPlayer()
+    dev.kobbler.app.ui.player.ExclusiveAudio(player, audio)
     val scope = rememberCoroutineScope()
     if (api != null) dev.kobbler.app.ui.player.LiveSessionHeartbeat(gps, api, player)
     // One sender for the app: a cast session outlives the screen that started it, and
@@ -348,7 +350,9 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         val scaffoldCovered = gps.isFullscreen || gps.loadingError != null
         if (isNonVideoPlayerScreen) {
             FocusScopeHost(id = nav.current) {
-                PlayerContent(nav, api, formFactor, onToggleFullscreen, isFullscreen)
+                CompositionLocalProvider(dev.kobbler.app.ui.player.LocalSharedAudioPlayer provides audio) {
+                    PlayerContent(nav, api, formFactor, onToggleFullscreen, isFullscreen)
+                }
             }
         } else {
             // Composed but unpainted under the player: anything it repaints holds an
@@ -1589,7 +1593,6 @@ internal fun TabScreenWithTopBar(
         }
         KobPhoneTopBar(
             onSearchClick = { onSearchClick?.invoke() },
-            onCastClick = {},
             onMenuClick = onMenuClick,
         )
     }

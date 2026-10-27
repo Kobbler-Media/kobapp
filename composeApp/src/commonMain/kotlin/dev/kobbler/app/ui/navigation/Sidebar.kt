@@ -1,9 +1,10 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.ui.components.Edge
+import dev.kobbler.app.ui.components.edgeLine
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -106,7 +107,7 @@ fun KobSidebar(
         modifier = modifier
             .fillMaxHeight()
             .background(colors.elev1)
-            .border(1.dp, colors.lineSoft, RoundedCornerShape(0.dp))
+            .edgeLine(Edge.End, colors.lineSoft)
             // Insets are consumed inside the surface but outside the width, so an edge
             // cutout widens the rail instead of squeezing its rows.
             .windowInsetsPadding(windowInsets)

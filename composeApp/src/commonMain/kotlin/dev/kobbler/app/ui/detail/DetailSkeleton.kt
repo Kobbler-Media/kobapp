@@ -43,7 +43,7 @@ fun DetailSkeleton(modifier: Modifier = Modifier) {
             if (detailStacked(formFactor, maxWidth)) {
                 Column(Modifier.fillMaxWidth()) {
                     Row(
-                        Modifier.safeTopPadding().padding(start = gutter, end = gutter, top = 64.dp, bottom = 24.dp),
+                        Modifier.padding(start = gutter, end = gutter, top = detailStackedTop, bottom = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(20.dp),
                         verticalAlignment = Alignment.Bottom,
                     ) {

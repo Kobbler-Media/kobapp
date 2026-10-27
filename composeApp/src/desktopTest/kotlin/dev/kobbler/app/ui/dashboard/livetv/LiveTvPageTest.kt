@@ -84,7 +84,7 @@ class LiveTvPageTest {
 
     private val sizes = mapOf(FormFactor.Phone to (400 to 820), FormFactor.Desktop to (1280 to 800), FormFactor.TV to (1280 to 720))
 
-    private fun page(formFactor: FormFactor, body: DesktopComposeUiTest.(Outcome, StubServer) -> Unit) {
+    private fun page(formFactor: FormFactor, tab: String? = "Guide", body: DesktopComposeUiTest.(Outcome, StubServer) -> Unit) {
         val (w, h) = sizes.getValue(formFactor)
         val outcome = Outcome()
         runUiTest(width = w, height = h) {
@@ -108,6 +108,11 @@ class LiveTvPageTest {
                 }
                 waitUntil(timeoutMillis = UiTimeoutMs) { has("Morning News") }
                 waitForIdle()
+                if (tab != null) {
+                    onNodeWithText(tab).performClick()
+                    waitUntil(timeoutMillis = UiTimeoutMs) { has("Midday Movie") || tab != "Guide" }
+                    waitForIdle()
+                }
                 body(outcome, stub)
             }
         }
@@ -168,6 +173,19 @@ class LiveTvPageTest {
         waitForIdle()
         assertEquals(emptyList(), outcome.watched, "a programme that has not started was played")
         assertEquals(listOf("c1"), outcome.opened)
+    }
+
+    @Test
+    fun `it opens on on now when there is something to suggest`() {
+        val failures = FormFactor.entries.mapNotNull { ff ->
+            runCatching {
+                page(ff, tab = null) { _, _ ->
+                    assertTrue(has("Because you watch it"), "the page did not open on On now")
+                    assertTrue(!has("Midday Movie"), "the page opened on the guide")
+                }
+            }.exceptionOrNull()?.let { "$ff: ${it.message?.lineSequence()?.first()}" }
+        }
+        assertEquals(emptyList(), failures)
     }
 
     @Test

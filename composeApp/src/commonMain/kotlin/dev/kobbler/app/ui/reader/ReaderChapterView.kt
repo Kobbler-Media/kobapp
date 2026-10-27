@@ -24,6 +24,7 @@ internal class ChapterView(
     val blocks: List<XhtmlBlock>,
     val tts: ChapterTtsView,
     val images: Map<String, ByteArray>,
+    val page: FittedPage?,
 )
 
 @Composable
@@ -56,6 +57,7 @@ internal suspend fun buildChapterView(epub: EpubBook, chapterIndex: Int): Chapte
                 },
             ),
             images = images,
+            page = fittedPageOf(blocks, images, fixedLayout = chapter.fixedLayout != null),
         )
     }
 

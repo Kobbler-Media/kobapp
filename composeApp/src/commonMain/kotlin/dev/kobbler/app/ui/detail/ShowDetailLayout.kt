@@ -108,7 +108,7 @@ internal fun ShowDetailLayout(
                 contentPadding = PaddingValues(
                     start = gutter,
                     end = gutter,
-                    top = kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp,
+                    top = if (stacked) detailStackedTop else kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp,
                     bottom = 64.dp,
                 ),
             ) {

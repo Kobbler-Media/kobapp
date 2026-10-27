@@ -114,6 +114,8 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.play.services.cast.framework)
             implementation(libs.mediarouter)
+            // The route dialogs extend AppCompatDialog, which mediarouter does not expose.
+            implementation(libs.appcompat)
         }
 
         val desktopMain by getting {

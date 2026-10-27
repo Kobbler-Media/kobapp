@@ -1,9 +1,23 @@
 package dev.kobbler.app.ui.dashboard
 
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.platform.LocalFocusManager
 import dev.kobbler.app.UiTimeoutMs
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.UserSettings
@@ -18,9 +32,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Typing on a TV remote is slow, so search offers whole titles to pick: before anything is
- * typed, what is trending on TMDB; while typing, titles, authors, channels and guide
- * programmes that the query starts a word of. Picking one searches for it.
+ * Typing on a TV remote is slow, so search offers whole titles to pick, the way a keyboard's
+ * suggestion strip does: before anything is typed, what is trending on TMDB; while typing,
+ * titles, authors, channels and guide programmes that the query starts a word of. The strip
+ * belongs to the field, never to the results, and picking one searches for it.
  */
 @OptIn(ExperimentalTestApi::class)
 class SearchSuggestionsTest {
@@ -34,44 +49,86 @@ class SearchSuggestionsTest {
             if (query.startsWith("q=&")) {
                 """{"suggestions":[{"title":"The Last of Us","media_type":"tv","source":"tmdb"}]}"""
             } else {
-                """{"suggestions":[{"title":"Breakin'","media_type":"movie","source":"library"},{"title":"Breaking Bad","media_type":"tv","source":"tmdb"}]}"""
+                """{"suggestions":[{"title":"Breaking Bad","media_type":"tv","source":"tmdb"},{"title":"Breakin'","media_type":"movie","source":"library"}]}"""
             }
         },
-        "/api/v1/admin/search" to { _ -> """{"top_hits":[],"remaining":[]}""" },
+        "/api/v1/admin/search" to { _ -> """{"top_hits":[{"type":"movie","id":"m1","title":"Jailbreak"}],"remaining":[]}""" },
     )
 
-    private fun overlay(query: String, scope: SearchScope, picked: MutableList<String>, test: suspend androidx.compose.ui.test.DesktopComposeUiTest.() -> Unit) =
-        runUiTest(width = 1280, height = 900) {
-            UserSettings.remove("search_recents")
-            requests.clear()
-            StubServer(routes).use { stub ->
-                setContent {
-                    KobappTheme(formFactor = FormFactor.TV) {
-                        SearchOverlay(
-                            api = KobblerApi(HttpClient(), stub.url, "token"),
-                            scope = scope,
-                            onScopeChange = {},
-                            query = query,
-                            onQueryChange = { picked += it },
-                            onDismiss = {},
-                            onResultClick = {},
-                            formFactor = FormFactor.TV,
-                            autoFocusQuery = false,
-                        )
-                    }
+    private fun overlay(
+        query: String,
+        scope: SearchScope,
+        picked: MutableList<String>,
+        formFactor: FormFactor = FormFactor.TV,
+        autoFocusQuery: Boolean = false,
+        onFocusManager: (FocusManager) -> Unit = {},
+        test: suspend DesktopComposeUiTest.() -> Unit,
+    ) = runUiTest(width = 1280, height = 900) {
+        UserSettings.remove("search_recents")
+        requests.clear()
+        StubServer(routes).use { stub ->
+            setContent {
+                KobappTheme(formFactor = formFactor) {
+                    onFocusManager(LocalFocusManager.current)
+                    SearchOverlay(
+                        api = KobblerApi(HttpClient(), stub.url, "token"),
+                        scope = scope,
+                        onScopeChange = {},
+                        query = query,
+                        onQueryChange = { picked += it },
+                        onDismiss = {},
+                        onResultClick = {},
+                        formFactor = formFactor,
+                        autoFocusQuery = autoFocusQuery,
+                    )
                 }
-                test()
             }
+            test()
         }
+    }
 
-    private fun androidx.compose.ui.test.DesktopComposeUiTest.awaitText(text: String) =
+    private fun DesktopComposeUiTest.awaitText(text: String) =
         waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
 
+    private fun DesktopComposeUiTest.bounds(tag: String): Rect = onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+
+    private fun DesktopComposeUiTest.count(matcher: SemanticsMatcher) =
+        onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().size
+
+    private fun DesktopComposeUiTest.assertInStripOnly(title: String) {
+        assertEquals(1, count(hasText(title) and hasAnyAncestor(hasTestTag(SearchSuggestionStripTag))), "$title in the strip")
+        assertEquals(0, count(hasText(title) and hasAnyAncestor(hasTestTag(SearchResultsTag))), "$title in the results")
+    }
+
     @Test
-    fun `an empty query offers trending titles`() {
+    fun `the strip sits on the field on a remote and desktop, and on the keyboard on a phone`() {
+        val failures = FormFactor.entries.mapNotNull { ff ->
+            runCatching {
+                overlay("break", SearchScope.All, mutableListOf(), formFactor = ff) {
+                    awaitText("Breaking Bad")
+                    awaitText("Jailbreak")
+                    assertInStripOnly("Breaking Bad")
+                    assertInStripOnly("Breakin'")
+                    val field = bounds(SearchFieldTag)
+                    val strip = bounds(SearchSuggestionStripTag)
+                    val results = bounds(SearchResultsTag)
+                    if (ff == FormFactor.Phone) {
+                        assertTrue(strip.top >= results.bottom, "strip $strip is not under the results $results")
+                    } else {
+                        assertTrue(strip.top >= field.bottom && strip.bottom <= results.top, "strip $strip is not between field $field and results $results")
+                    }
+                }
+            }.exceptionOrNull()?.let { "${ff.name}: ${it.message?.lineSequence()?.first()}" }
+        }
+        assertEquals(emptyList(), failures)
+    }
+
+    @Test
+    fun `an empty query offers trending titles in the strip`() {
         val picked = mutableListOf<String>()
         overlay("", SearchScope.All, picked) {
             awaitText("The Last of Us")
+            assertInStripOnly("The Last of Us")
             onNodeWithText("The Last of Us").performClick()
             waitForIdle()
         }
@@ -80,19 +137,29 @@ class SearchSuggestionsTest {
     }
 
     @Test
-    fun `a partial query offers titles it completes`() {
-        val picked = mutableListOf<String>()
-        overlay("break", SearchScope.Movies, picked) {
+    fun `the remote walks from the field through the strip to the results`() {
+        var focus: FocusManager? = null
+        overlay("break", SearchScope.All, mutableListOf(), autoFocusQuery = true, onFocusManager = { focus = it }) {
             awaitText("Breaking Bad")
-            onNodeWithText("Breaking Bad").performClick()
-            waitForIdle()
+            awaitText("Jailbreak")
+            waitUntil(timeoutMillis = UiTimeoutMs) { count(hasTestTag(SearchFieldTag) and isFocused()) == 1 }
+            onNodeWithTag(SearchFieldTag, useUnmergedTree = true).performKeyInput { pressKey(Key.DirectionDown) }
+            waitUntil(timeoutMillis = UiTimeoutMs) {
+                count(isFocused() and hasAnyAncestor(hasTestTag(SearchSuggestionStripTag))) == 1
+            }
+            runOnIdle { focus!!.moveFocus(FocusDirection.Down) }
+            waitUntil(timeoutMillis = UiTimeoutMs) {
+                count(isFocused() and hasAnyAncestor(hasTestTag(SearchResultsTag))) == 1
+            }
+            runOnIdle { focus!!.moveFocus(FocusDirection.Up) }
+            waitUntil(timeoutMillis = UiTimeoutMs) {
+                count(isFocused() and hasAnyAncestor(hasTestTag(SearchSuggestionStripTag))) == 1
+            }
         }
-        assertEquals(listOf("Breaking Bad"), picked)
-        assertTrue(requests.all { it == "q=break&media=movie&limit=8" }, "requests: $requests")
     }
 
     @Test
-    fun `every scope asks for suggestions of what it searches`() {
+    fun `every scope asks for suggestions of what it searches, and picking one fills the query`() {
         val expected = mapOf(
             SearchScope.All to "movie,tv,book",
             SearchScope.Movies to "movie",
