@@ -713,6 +713,7 @@ data class StreamOption(
     val fileName: String? = null,
     val playback: String? = null,
     val availability: String? = null,
+    val group: String? = null,
     val audioLanguages: List<String> = emptyList(),
 )
 

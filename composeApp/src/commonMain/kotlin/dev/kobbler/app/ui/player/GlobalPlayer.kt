@@ -599,6 +599,10 @@ class GlobalPlayerState {
 
     /** Stop playback and clean up. */
     fun stop(player: dev.kobbler.kobplayer.Player, api: KobblerApi, scope: CoroutineScope) {
+        // Ends any start still being supervised and any fallback walk, which would otherwise
+        // run on and report a failure over whatever screen the viewer went to.
+        startSerial++
+        debridPlayback?.abandon()
         player.stop()
         player.setMuted(false)
         mutedForPreload = false

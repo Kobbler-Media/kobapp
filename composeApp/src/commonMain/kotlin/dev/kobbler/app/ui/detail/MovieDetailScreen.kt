@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.PrefetchToDisk
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
@@ -47,6 +48,8 @@ fun MovieDetailScreen(
 ) {
     val accent = KobappTheme.colors.accMovies
     val toast = rememberToastState()
+    // The player opens on the logo; fetched only then, it was the last thing to appear.
+    PrefetchToDisk(listOfNotNull(movie.logoUrl))
     MovieDetailLayout(
         movie = movie,
         formFactor = formFactor,

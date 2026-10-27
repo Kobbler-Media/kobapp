@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.PrefetchToDisk
 import dev.kobbler.app.ui.components.rememberArtTone
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -40,6 +41,8 @@ fun TvShowDetailScreen(
     val shown = restartFrom?.let { fetched.copy(continueEpisode = it) } ?: fetched
     val accent = colors.accTv
     val toast = rememberToastState()
+    // The player opens on the logo; fetched only then, it was the last thing to appear.
+    PrefetchToDisk(listOfNotNull(show.logoUrl))
 
     // The season you are part-way through beats the newest one you own: the action stack
     // offers Resume from it, and the tab strip has to agree with the button next to it.

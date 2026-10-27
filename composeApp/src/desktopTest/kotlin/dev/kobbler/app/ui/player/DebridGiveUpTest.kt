@@ -93,4 +93,38 @@ class DebridGiveUpTest {
         assertEquals("That stream wouldn't play.", help.summary)
         assertNotNull(help.want)
     }
+
+    /** Leaving the player mid-walk used to let the walk finish and raise its dialog over whatever came next. */
+    @Test
+    fun `a walk the viewer left does not end in a dialog`() = runBlocking {
+        val second = only.copy(id = "o2", infoHash = "h2")
+        val resolves = java.util.concurrent.atomic.AtomicInteger()
+        val walkRoutes = routes + ("/api/v1/admin/stream/resolve" to { _: HttpExchange ->
+            if (resolves.incrementAndGet() > 1) Thread.sleep(1_500)
+            """{"session_id":"s1","method":"direct_play","direct_url":"/api/v1/admin/stream/s1/play","duration_seconds":0}"""
+        })
+        val player = FakePlayer().apply { failsToOpen = { it.contains("/s1/") } }
+        StubServer(walkRoutes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val gps = GlobalPlayerState()
+            val watcher = launch { gps.watchPlayback(player, api) }
+            try {
+                withTimeout(20_000) {
+                    tryPlayTvWithFallback(
+                        api = api, player = player, gps = gps, show = show,
+                        episodeId = "ep-17", seasonIdx = 0, episodeIdx = 0,
+                        search = { found(listOf(only, second)) }, option = only,
+                        onCaching = { _, _ -> error("nothing here needs caching") },
+                    )
+                    while (resolves.get() < 2) delay(20)
+                    gps.stop(player, api, this)
+                    delay(3_000)
+                    assertEquals(null, gps.loadingError, "a dialog came up after the viewer left")
+                    assertEquals(null, gps.failureHelp)
+                }
+            } finally {
+                watcher.cancel()
+            }
+        }
+    }
 }

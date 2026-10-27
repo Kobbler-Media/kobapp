@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.player
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import dev.kobbler.kobplayer.PlayerState
@@ -208,6 +209,32 @@ class StartSupervisionTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             assertEquals(StartOutcome.Abandoned, gps.superviseStart(player, api, probeIntervalMs = 50))
+        }
+    }
+
+    /**
+     * Leaving the player stops it but used to leave this wait running to the ceiling,
+     * which then raised "Nothing played within 45s" over whatever screen came next.
+     */
+    @Test
+    fun `a start the viewer walked away from is abandoned rather than called lost`() = runTest {
+        val gps = watching()
+        val player = stalled()
+        val routes = mapOf(
+            "/api/v1/admin/playback/sessions/s1/status" to { _: HttpExchange ->
+                status("preparing")
+            },
+        )
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val supervised = backgroundScope.async { gps.superviseStart(player, api, probeIntervalMs = 50) }
+            testScheduler.advanceTimeBy(1_000)
+            gps.stop(player, api, backgroundScope)
+            assertEquals(StartOutcome.Abandoned, supervised.await())
+            assertTrue(
+                testScheduler.currentTime < START_CEILING_MS,
+                "a stopped start was waited out to the ceiling",
+            )
         }
     }
 

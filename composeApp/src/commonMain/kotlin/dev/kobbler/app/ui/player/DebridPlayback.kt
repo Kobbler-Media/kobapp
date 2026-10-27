@@ -58,6 +58,7 @@ internal class DebridPlayback(
     private val failedSessions = mutableSetOf<String>()
     private val reopenedMidway = mutableSetOf<String>()
     private val reloadedStalls = mutableSetOf<String>()
+    private var abandoned = false
     private var current: StreamOption? = null
     private var currentSession: KobblerApi.StreamSession? = null
     private var playedSession: String? = null
@@ -216,8 +217,15 @@ internal class DebridPlayback(
     private fun resumeSecondsNow(player: Player): Int =
         (gps.timeline.toAbsoluteMs(player.currentMs.value).coerceAtLeast(gps.pendingSeekMs) / 1000).toInt()
 
+    /** The viewer left: nothing this walk finds out afterwards is theirs to see. */
+    fun abandon() {
+        abandoned = true
+        retry?.cancel()
+    }
+
     /** End the walk in the dialog, offering what was not tried and a download. */
     fun giveUp(cause: Throwable?, lostMidway: Boolean = false) {
+        if (abandoned) return
         switchingMidway = false
         val left = options.filter { it.id !in tried }
         gps.failWith(

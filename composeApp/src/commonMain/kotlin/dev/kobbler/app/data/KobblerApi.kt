@@ -510,6 +510,7 @@ data class StreamOptionDto(
     @SerialName("publish_date") val publishDate: String? = null,
     val playback: String? = null,
     val availability: String? = null,
+    val group: String? = null,
     @SerialName("audio_languages") val audioLanguages: List<String> = emptyList(),
 )
 
@@ -3601,6 +3602,7 @@ class KobblerApi(
             fileName = file?.path?.substringAfterLast('/')?.takeIf { it.isNotBlank() },
             playback = playback,
             availability = availability,
+            group = group,
             audioLanguages = audioLanguages,
         )
     }

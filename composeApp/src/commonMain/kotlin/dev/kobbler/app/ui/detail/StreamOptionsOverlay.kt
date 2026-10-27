@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -243,17 +242,34 @@ private fun StreamList(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        itemsIndexed(options, key = { _, item -> item.id }) { idx, option ->
-            StreamRow(
-                option = option,
-                accent = accent,
-                modifier = Modifier
-                    .focusKey("option.${option.id}")
-                    .then(if (idx == 0) Modifier.focusRequester(firstStreamFocus) else Modifier),
-                onSelect = { onSelect(option) },
-            )
+        val first = options.firstOrNull()?.id
+        streamSections(options).forEach { section ->
+            section.title?.let { title ->
+                item(key = "section.$title") { SectionHeader(title) }
+            }
+            items(section.options, key = { it.id }) { option ->
+                StreamRow(
+                    option = option,
+                    accent = accent,
+                    modifier = Modifier
+                        .focusKey("option.${option.id}")
+                        .then(if (option.id == first) Modifier.focusRequester(firstStreamFocus) else Modifier),
+                    onSelect = { onSelect(option) },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    val colors = KobappTheme.colors
+    Text(
+        title,
+        style = KobappTheme.type.bodySm.copy(fontWeight = FontWeight.Medium),
+        color = colors.textLo,
+        modifier = Modifier.padding(start = 14.dp, top = 10.dp, bottom = 2.dp),
+    )
 }
 
 @Composable
