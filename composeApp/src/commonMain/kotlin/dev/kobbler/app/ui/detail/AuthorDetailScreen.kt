@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButtonPinned
 import dev.kobbler.app.ui.components.Spotlight
 
 import androidx.compose.foundation.background
@@ -121,7 +122,7 @@ fun AuthorDetailScreen(
             }
         }
 
-        DetailBackButton(onBack, formFactor, accent = accent)
+        KobBackButtonPinned(onBack, formFactor, accent = accent)
     }
 }
 

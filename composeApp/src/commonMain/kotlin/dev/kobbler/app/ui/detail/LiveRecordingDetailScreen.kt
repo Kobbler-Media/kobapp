@@ -7,11 +7,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,8 +24,8 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LiveRecording
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonStyle
+import dev.kobbler.app.ui.components.BackButtonGutter
+import dev.kobbler.app.ui.components.KobBackButton
 import dev.kobbler.app.ui.dashboard.livetv.LiveBadge
 import dev.kobbler.app.ui.dashboard.livetv.LiveThumb
 import dev.kobbler.app.ui.dashboard.livetv.RecordingDot
@@ -86,12 +84,11 @@ fun LiveRecordingDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                 modifier = Modifier.fillMaxWidth().focusKeyGroup("rechead"),
             ) {
-                KobButton(
-                    onClick = onBack,
-                    style = KobButtonStyle.Ghost,
-                    modifier = Modifier.focusKey("back", entryEligible = false),
-                ) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", modifier = Modifier.size(20.dp))
+                Box(Modifier.offset(x = BackButtonGutter(formFactor, gutter) - gutter)) {
+                    KobBackButton(
+                        onBack,
+                        modifier = Modifier.focusKey("back", entryEligible = false),
+                    )
                 }
                 LiveThumb(current.imageUrl, width = 112.dp, height = 64.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

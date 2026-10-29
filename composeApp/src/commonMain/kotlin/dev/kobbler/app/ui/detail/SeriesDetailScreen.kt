@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButtonPinned
 import dev.kobbler.app.ui.kobTopInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -114,7 +115,7 @@ fun SeriesDetailScreen(
             item { Spacer(Modifier.height(48.dp)) }
         }
 
-        DetailBackButton(onBack, formFactor, accent = accent)
+        KobBackButtonPinned(onBack, formFactor, accent = accent)
     }
 }
 

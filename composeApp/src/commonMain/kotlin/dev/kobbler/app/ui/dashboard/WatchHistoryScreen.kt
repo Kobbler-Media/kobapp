@@ -48,11 +48,14 @@ import dev.kobbler.app.ui.components.EmptyState
 import dev.kobbler.app.ui.components.FadeInImage
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
+import dev.kobbler.app.ui.components.KobBackHeader
 import dev.kobbler.app.ui.components.ListSkeleton
 import dev.kobbler.app.ui.components.SegmentedFilter
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
+import dev.kobbler.app.ui.safeBottomPadding
+import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
 
@@ -69,6 +72,7 @@ private fun WatchHistoryEntry.key() = "$mediaType.${tmdbId ?: title}"
 @Composable
 fun WatchHistoryScreen(
     api: KobblerApi,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
 ) {
@@ -135,17 +139,14 @@ fun WatchHistoryScreen(
         }
     }
 
-    Column(modifier.fillMaxSize()) {
-        Box(Modifier.padding(horizontal = gutter, vertical = dimens.s4)) {
+    // Not a tab, so no app bar or bottom bar pads it clear of the system bars.
+    Column(modifier.fillMaxSize().safeTopPadding().safeBottomPadding()) {
+        val phone = formFactor == FormFactor.Phone
+        KobBackHeader(onBack, formFactor, gutter) {
             BrowseHeader(
-                title = "Watch history",
+                title = if (phone) "Watched" else "Watch history",
                 accent = accent,
-                countLine = when {
-                    chosen.isNotEmpty() -> "${chosen.size} selected"
-                    total > 0 -> "$total titles"
-                    else -> null
-                },
-                compact = formFactor == FormFactor.Phone,
+                compact = phone,
                 trailing = {
                     SegmentedFilter(
                         options = Sources.map { it.first },
@@ -155,7 +156,14 @@ fun WatchHistoryScreen(
                     )
                 },
                 secondaryRow = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    ) {
+                        if (chosen.isNotEmpty()) {
+                            Text("(${chosen.size})", color = colors.textLo, style = KobappTheme.type.label)
+                        }
                         val allChosen = entries.isNotEmpty() && chosen.size == entries.size
                         KobButton(
                             onClick = {
@@ -164,7 +172,7 @@ fun WatchHistoryScreen(
                             },
                             style = KobButtonStyle.Ghost,
                             modifier = Modifier.focusKey("select-all"),
-                        ) { Text(if (allChosen) "Select none" else "Select all", style = KobappTheme.type.caption) }
+                        ) { Text(if (allChosen) "Select none" else "Select all", style = KobappTheme.type.caption, maxLines = 1) }
                         if (chosen.isNotEmpty()) {
                             val unhide = chosen.all { it.excluded }
                             KobButton(
@@ -173,15 +181,27 @@ fun WatchHistoryScreen(
                                 modifier = Modifier.focusKey("hide"),
                             ) {
                                 Text(
-                                    if (unhide) "Use for recommendations" else "Hide from recommendations",
+                                    when {
+                                        phone -> if (unhide) "Unhide" else "Hide"
+                                        unhide -> "Use for recommendations"
+                                        else -> "Hide from recommendations"
+                                    },
                                     style = KobappTheme.type.caption,
+                                    maxLines = 1,
                                 )
                             }
                             KobButton(
                                 onClick = { confirmRemove = true },
                                 style = KobButtonStyle.Ghost,
                                 modifier = Modifier.focusKey("remove"),
-                            ) { Text("Remove from history", style = KobappTheme.type.caption, color = colors.err) }
+                            ) {
+                                Text(
+                                    if (phone) "Remove" else "Remove from history",
+                                    style = KobappTheme.type.caption,
+                                    color = colors.err,
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                 },

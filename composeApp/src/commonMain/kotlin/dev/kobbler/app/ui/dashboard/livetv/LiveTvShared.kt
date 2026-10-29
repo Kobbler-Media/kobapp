@@ -251,7 +251,7 @@ internal fun LiveBadge(text: String, tint: Color, modifier: Modifier = Modifier)
             .background(tint)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
-        Text(text, style = KobappTheme.type.labelSm, color = KobappTheme.colors.bg)
+        Text(text, style = KobappTheme.type.labelSm, color = KobappTheme.colors.bg, maxLines = 1, softWrap = false)
     }
 }
 

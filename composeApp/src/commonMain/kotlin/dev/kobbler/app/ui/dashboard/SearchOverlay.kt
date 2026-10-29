@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Mic
@@ -63,6 +62,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import dev.kobbler.kobfocus.FocusScopeHost
 import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
@@ -79,6 +79,7 @@ import dev.kobbler.app.platform.BackHandler
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.KeyboardCompletions
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.components.KobBackButton
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.tvAutoGlow
@@ -566,12 +567,7 @@ private fun SearchBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (phone) 8.dp else 12.dp),
     ) {
-        IconBubble(
-            icon = Icons.AutoMirrored.Outlined.ArrowBack,
-            onClick = onDismiss,
-            tint = colors.textHi,
-            key = "back",
-        )
+        KobBackButton(onDismiss, modifier = Modifier.focusKey("back"))
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -596,8 +592,11 @@ private fun SearchBar(
                     if (query.isEmpty()) {
                         Text(
                             placeholder,
-                            style = KobappTheme.type.body,
+                            style = KobappTheme.type.bodySm,
                             color = colors.textLo,
+                            softWrap = false,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
                         )
                     }
                     KeyboardCompletions(keyboardSuggestions, onPickSuggestion) {

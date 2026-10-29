@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +83,10 @@ fun BrowseGridHeading(title: String, count: String, accent: Color, modifier: Mod
     )
 }
 
+// Set by KobBackHeader so the title line centres on the back arrow beside it whether or not
+// a trailing control makes the line taller.
+internal val LocalBrowseTitleLineHeight = staticCompositionLocalOf { 0.dp }
+
 @Composable
 fun BrowseHeader(
     title: String,
@@ -104,28 +110,30 @@ fun BrowseHeader(
             verticalArrangement = Arrangement.spacedBy(gap),
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(gap),
-            ) {
-                Text(
-                    title,
-                    color = colors.textHi,
-                    // A page title is a headline, not a display role — M3 reserves display
-                    // for hero moments, and the sidebar already says which screen this is.
-                    style = if (compact) KobappTheme.type.h2 else KobappTheme.type.h1,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (countLine != null) {
+            Box(Modifier.heightIn(min = LocalBrowseTitleLineHeight.current), contentAlignment = Alignment.CenterStart) {
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                ) {
                     Text(
-                        countLine,
-                        color = if (compact) colors.textXlo else colors.textLo,
-                        style = if (compact) KobappTheme.type.caption else KobappTheme.type.body,
+                        title,
+                        color = colors.textHi,
+                        // A page title is a headline, not a display role — M3 reserves display
+                        // for hero moments, and the sidebar already says which screen this is.
+                        style = if (compact) KobappTheme.type.h2 else KobappTheme.type.h1,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(bottom = if (compact) 2.dp else 8.dp),
                     )
+                    if (countLine != null) {
+                        Text(
+                            countLine,
+                            color = if (compact) colors.textXlo else colors.textLo,
+                            style = if (compact) KobappTheme.type.caption else KobappTheme.type.body,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(bottom = if (compact) 2.dp else 8.dp),
+                        )
+                    }
                 }
             }
             if (onSearch != null) {

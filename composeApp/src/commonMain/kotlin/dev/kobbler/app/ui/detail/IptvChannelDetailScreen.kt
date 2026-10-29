@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButtonPinned
 import dev.kobbler.app.ui.kobTopInset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -126,7 +127,7 @@ fun IptvChannelDetailScreen(
             )
         }
 
-        DetailBackButton(onBack = onBack, formFactor = formFactor, accent = accent)
+        KobBackButtonPinned(onBack, formFactor, accent = accent)
     }
 }
 

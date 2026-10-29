@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButtonPinned
 import dev.kobbler.app.ui.components.Spotlight
 
 import dev.kobbler.app.ui.kobTopInset
@@ -91,7 +92,7 @@ fun PersonDetailScreen(
                 .scrollWhenFocusIsStuck(pageScroll.asPageScroll())
                 .verticalScroll(pageScroll)
                 .padding(
-                    top = if (stacked) detailStackedTop else kobTopInset + 72.dp,
+                    top = if (stacked) detailStackedTop else kobTopInset + detailWideTop(formFactor),
                     bottom = 64.dp,
                 ),
         ) {
@@ -145,7 +146,7 @@ fun PersonDetailScreen(
             }
         }
 
-        DetailBackButton(onBack, formFactor, accent = accent)
+        KobBackButtonPinned(onBack, formFactor, accent = accent)
     }
 }
 

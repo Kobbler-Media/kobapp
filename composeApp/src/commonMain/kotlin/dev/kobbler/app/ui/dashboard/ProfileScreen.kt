@@ -26,7 +26,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Edit
@@ -76,10 +75,13 @@ import dev.kobbler.app.ui.auth.isPinComplete
 import dev.kobbler.app.ui.auth.isPinInputAllowed
 import dev.kobbler.app.ui.auth.ProfileAvatar
 import dev.kobbler.app.ui.components.BrowseHeader
+import dev.kobbler.app.ui.components.KobBackHeader
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.kobFocusRing
 import kotlinx.coroutines.launch
+import dev.kobbler.app.ui.safeBottomPadding
+import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.app.ui.imePaddingUnlessTv
 
 @Composable
@@ -104,129 +106,116 @@ fun ProfileScreen(
     val profile = auth.currentProfile
     var pinDialog by remember { mutableStateOf<ProfilePinMode?>(null) }
 
+    // Not a tab, so no app bar or bottom bar pads it clear of the system bars.
     Column(
         modifier = modifier
             .fillMaxSize()
             .imePaddingUnlessTv()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = gutter),
+            .safeTopPadding()
+            .safeBottomPadding()
+            .verticalScroll(rememberScrollState()),
     ) {
-        Spacer(Modifier.height(dimens.s4))
-
-        BrowseHeader(
-            title = "Profile",
-            accent = accent,
-            countLine = profile?.email,
-            compact = compact,
-            trailing = {
-                KobButton(
-                    onClick = onBack,
-                    style = KobButtonStyle.Ghost,
-                    modifier = Modifier.focusKey("back"),
-                    leading = {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = "Back",
-                            tint = colors.textHi,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
-                    text = "Back",
-                )
-            },
-        )
-
-        Spacer(Modifier.height(if (compact) dimens.s4 else dimens.s5))
-
-        if (profile == null) {
-            Text(
-                "No active profile.",
-                color = colors.textMd,
-                style = KobappTheme.type.body,
+        KobBackHeader(onBack, formFactor, gutter) {
+            BrowseHeader(
+                title = "Profile",
+                accent = accent,
+                compact = compact,
             )
-            Spacer(Modifier.height(dimens.s7))
-            return@Column
         }
 
-        val contentModifier = if (compact) Modifier.fillMaxWidth()
-        else Modifier.fillMaxWidth().widthIn(max = 720.dp)
+        Column(Modifier.padding(horizontal = gutter)) {
+            Spacer(Modifier.height(if (compact) dimens.s4 else dimens.s5))
 
-        Box(modifier = contentModifier) {
-            Column(Modifier.fillMaxWidth()) {
-                ProfileHeroCardLarge(
-                    displayName = profile.displayName,
-                    email = profile.email,
-                    role = profile.role,
-                    canWant = auth.canWant,
-                    avatar = { ProfileAvatar(profile, size = 96.dp) },
+            if (profile == null) {
+                Text(
+                    "No active profile.",
+                    color = colors.textMd,
+                    style = KobappTheme.type.body,
                 )
+                Spacer(Modifier.height(dimens.s7))
+                return@Column
+            }
 
-                Spacer(Modifier.height(dimens.s5))
+            val contentModifier = if (compact) Modifier.fillMaxWidth()
+            else Modifier.fillMaxWidth().widthIn(max = 720.dp)
 
-                ProfileSectionGroup(label = "Editable") {
-                    ProfileTextInputRow(
-                        icon = Icons.Outlined.Person,
-                        title = "Display name",
-                        // The stored name, not `displayName` — showing the email-derived
-                        // fallback in the editor would save that guess as a real name the
-                        // first time anyone opened the field.
-                        value = profile.name.orEmpty(),
-                        placeholder = profile.displayName,
-                        readOnly = false,
-                        readOnlyHint = null,
-                        onSave = { newName ->
-                            scope.launch {
-                                runCatching { api.setDisplayName(newName) }
-                                    .onSuccess { auth.refreshCurrentProfile() }
-                            }
-                        },
+            Box(modifier = contentModifier) {
+                Column(Modifier.fillMaxWidth()) {
+                    ProfileHeroCardLarge(
+                        displayName = profile.displayName,
+                        email = profile.email,
+                        role = profile.role,
+                        canWant = auth.canWant,
+                        avatar = { ProfileAvatar(profile, size = 96.dp) },
                     )
-                    ProfileDivider()
-                    ProfileTextInputRow(
-                        icon = Icons.Outlined.Image,
-                        title = "Avatar URL",
-                        value = profile.avatarUrl.orEmpty(),
-                        placeholder = "https://...",
-                        keyboardType = KeyboardType.Uri,
-                        readOnly = true,
-                        readOnlyHint = "Server-managed",
-                        onSave = {},
-                    )
-                    ProfileDivider()
-                    ProfileRow(
-                        icon = Icons.Outlined.Mail,
-                        title = "Email",
-                        key = "email",
-                        value = profile.email ?: "—",
-                    )
-                }
 
-                Spacer(Modifier.height(dimens.s5))
+                    Spacer(Modifier.height(dimens.s5))
 
-                ProfileSectionGroup(label = "Security") {
-                    ProfileRow(
-                        icon = Icons.Outlined.Lock,
-                        title = if (profile.hasPin) "Change profile PIN" else "Set profile PIN",
-                        key = "set-pin",
-                        value = if (profile.hasPin) "PIN required" else "Optional",
-                        onClick = { pinDialog = ProfilePinMode.Set },
-                    )
-                    if (profile.hasPin) {
+                    ProfileSectionGroup(label = "Editable") {
+                        ProfileTextInputRow(
+                            icon = Icons.Outlined.Person,
+                            title = "Display name",
+                            // The stored name, not `displayName` — showing the email-derived
+                            // fallback in the editor would save that guess as a real name the
+                            // first time anyone opened the field.
+                            value = profile.name.orEmpty(),
+                            placeholder = profile.displayName,
+                            readOnly = false,
+                            readOnlyHint = null,
+                            onSave = { newName ->
+                                scope.launch {
+                                    runCatching { api.setDisplayName(newName) }
+                                        .onSuccess { auth.refreshCurrentProfile() }
+                                }
+                            },
+                        )
+                        ProfileDivider()
+                        ProfileTextInputRow(
+                            icon = Icons.Outlined.Image,
+                            title = "Avatar URL",
+                            value = profile.avatarUrl.orEmpty(),
+                            placeholder = "https://...",
+                            keyboardType = KeyboardType.Uri,
+                            readOnly = true,
+                            readOnlyHint = "Server-managed",
+                            onSave = {},
+                        )
                         ProfileDivider()
                         ProfileRow(
-                            icon = Icons.Outlined.LockOpen,
-                            title = "Remove profile PIN",
-                            key = "clear-pin",
-                            onClick = { pinDialog = ProfilePinMode.Clear },
+                            icon = Icons.Outlined.Mail,
+                            title = "Email",
+                            key = "email",
+                            value = profile.email ?: "—",
                         )
                     }
+
+                    Spacer(Modifier.height(dimens.s5))
+
+                    ProfileSectionGroup(label = "Security") {
+                        ProfileRow(
+                            icon = Icons.Outlined.Lock,
+                            title = if (profile.hasPin) "Change profile PIN" else "Set profile PIN",
+                            key = "set-pin",
+                            value = if (profile.hasPin) "PIN required" else "Optional",
+                            onClick = { pinDialog = ProfilePinMode.Set },
+                        )
+                        if (profile.hasPin) {
+                            ProfileDivider()
+                            ProfileRow(
+                                icon = Icons.Outlined.LockOpen,
+                                title = "Remove profile PIN",
+                                key = "clear-pin",
+                                onClick = { pinDialog = ProfilePinMode.Clear },
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(dimens.s5))
+
+                    ManagedByAdminNotice()
+
+                    Spacer(Modifier.height(dimens.s7))
                 }
-
-                Spacer(Modifier.height(dimens.s5))
-
-                ManagedByAdminNotice()
-
-                Spacer(Modifier.height(dimens.s7))
             }
         }
     }

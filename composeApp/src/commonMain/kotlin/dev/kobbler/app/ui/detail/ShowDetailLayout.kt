@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButton
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,8 @@ import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.CastRow
+import dev.kobbler.app.ui.components.BackButtonGutter
+import dev.kobbler.app.ui.components.BackButtonTop
 import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.components.spotlight
 import dev.kobbler.app.ui.detail.tvshow.SeasonTabs
@@ -108,7 +111,7 @@ internal fun ShowDetailLayout(
                 contentPadding = PaddingValues(
                     start = gutter,
                     end = gutter,
-                    top = if (stacked) detailStackedTop else kobTopInset + if (formFactor == FormFactor.TV) 56.dp else 72.dp,
+                    top = if (stacked) detailStackedTop else kobTopInset + if (formFactor == FormFactor.TV) 56.dp else detailWideTop(formFactor),
                     bottom = 64.dp,
                 ),
             ) {
@@ -287,14 +290,14 @@ private fun TopBar(
             .fillMaxWidth()
             .detailTopScrim(scroll)
             .safeTopPadding()
-            .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
+            .padding(start = BackButtonGutter(formFactor, gutter), end = gutter, top = BackButtonTop, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (showBack) {
             val contentScope = LocalFocusScope.current
             val barScope = rememberCoroutineScope()
-            CircleBackButton(
+            KobBackButton(
                 onBack = onBack,
                 accent = accent,
                 modifier = Modifier

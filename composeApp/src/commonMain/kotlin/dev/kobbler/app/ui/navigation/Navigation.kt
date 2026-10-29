@@ -1534,7 +1534,12 @@ private fun DetailContent(
             )
         }
         is Destination.WatchHistory -> {
-            dev.kobbler.app.ui.dashboard.WatchHistoryScreen(api = api, modifier = modifier, formFactor = formFactor)
+            dev.kobbler.app.ui.dashboard.WatchHistoryScreen(
+                api = api,
+                onBack = { nav.goBack() },
+                modifier = modifier,
+                formFactor = formFactor,
+            )
         }
         is Destination.Profile -> {
             dev.kobbler.app.ui.dashboard.ProfileScreen(

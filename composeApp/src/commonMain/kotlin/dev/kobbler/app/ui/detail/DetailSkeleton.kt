@@ -27,6 +27,9 @@ import dev.kobbler.app.ui.components.SectionHeadingSkeleton
 import dev.kobbler.app.ui.components.ShimmerBox
 import dev.kobbler.app.ui.components.SkeletonLine
 import dev.kobbler.app.ui.components.SkeletonPage
+import dev.kobbler.app.ui.components.BackButtonGutter
+import dev.kobbler.app.ui.components.BackButtonSize
+import dev.kobbler.app.ui.components.BackButtonTop
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.safeTopPadding
 
@@ -78,14 +81,17 @@ fun DetailSkeleton(modifier: Modifier = Modifier) {
                         }
                     }
                 }
-                ShimmerBox(Modifier.safeTopPadding().padding(start = gutter, top = 8.dp).size(44.dp), cornerRadius = 22.dp)
+                ShimmerBox(
+                    Modifier.safeTopPadding().padding(start = BackButtonGutter(formFactor, gutter), top = BackButtonTop).size(BackButtonSize),
+                    cornerRadius = BackButtonSize / 2,
+                )
             } else {
                 SkeletonLine(
                     KobappTheme.type.bodySm,
                     Modifier.safeTopPadding().padding(start = gutter, top = 14.dp).width(240.dp),
                 )
                 Row(
-                    Modifier.fillMaxWidth().padding(start = gutter, end = gutter, top = kobTopInset + 72.dp),
+                    Modifier.fillMaxWidth().padding(start = gutter, end = gutter, top = kobTopInset + detailWideTop(formFactor)),
                     horizontalArrangement = Arrangement.spacedBy(36.dp),
                 ) {
                     ShimmerBox(

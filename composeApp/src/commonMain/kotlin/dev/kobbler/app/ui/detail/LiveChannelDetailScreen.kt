@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Close
@@ -39,6 +38,9 @@ import dev.kobbler.app.data.LiveChannel
 import dev.kobbler.app.data.LiveGuideEntry
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.LocalFormFactor
+import dev.kobbler.app.ui.components.BackButtonGutter
+import dev.kobbler.app.ui.components.KobBackButton
 import dev.kobbler.app.ui.components.EmptyState
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
@@ -101,12 +103,11 @@ fun LiveChannelDetailScreen(
         PinnedHeader(
             header = {
                 val identity: @Composable RowScope.() -> Unit = {
-                    KobButton(
-                        onClick = onBack,
-                        style = KobButtonStyle.Ghost,
-                        modifier = Modifier.focusKey("back", entryEligible = false),
-                    ) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", modifier = Modifier.size(20.dp))
+                    Box(Modifier.offset(x = BackButtonGutter(formFactor, gutter) - gutter)) {
+                        KobBackButton(
+                            onBack,
+                            modifier = Modifier.focusKey("back", entryEligible = false),
+                        )
                     }
                     ChannelLogo(channel, accent, if (compact) 48.dp else 64.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -250,6 +251,7 @@ private fun GuideEntryRow(
     val dimens = KobappTheme.dimens
     val focusState = rememberTvFocusState()
     val onAir = entry.isAiringAt(clock.now)
+    val phone = LocalFormFactor.current == FormFactor.Phone
     // Record is a sibling of the row body, not a child: a focusable ancestor swallows a
     // D-pad press aimed at its own descendants.
     Row(
@@ -277,8 +279,10 @@ private fun GuideEntryRow(
         ) {
             GuideWhen(entry, clock.now, accent)
             Spacer(Modifier.width(dimens.s3))
-            LiveThumb(entry.imageUrl ?: entry.posterUrl, width = 76.dp, height = 44.dp)
-            Spacer(Modifier.width(dimens.s3))
+            if (!phone) {
+                LiveThumb(entry.imageUrl ?: entry.posterUrl, width = 76.dp, height = 44.dp)
+                Spacer(Modifier.width(dimens.s3))
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -290,11 +294,9 @@ private fun GuideEntryRow(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     if (onAir) LiveBadge("NOW", accent)
-                    if (entry.repeatCount > 0) {
-                        Text("+${entry.repeatCount} airings", style = KobappTheme.type.labelSm, color = colors.textXlo)
-                    }
                 }
                 val sub = listOfNotNull(
+                    "+${entry.repeatCount} airings".takeIf { entry.repeatCount > 0 },
                     entry.episodeNumber,
                     entry.episodeTitle,
                     entry.genres.firstOrNull(),
@@ -307,21 +309,30 @@ private fun GuideEntryRow(
             }
         }
         Spacer(Modifier.width(dimens.s3))
-        KobButton(
-            text = if (recorded) "Cancel" else "Record",
-            onClick = if (recorded) onCancel else onRecord,
-            style = KobButtonStyle.Default,
-            enabled = !busy,
-            leading = {
-                Icon(
-                    if (recorded) Icons.Outlined.Close else Icons.Outlined.FiberManualRecord,
-                    null,
-                    tint = if (recorded) colors.textMd else colors.err,
-                    modifier = Modifier.size(14.dp),
-                )
-            },
-            modifier = Modifier.focusKey("record"),
-        )
+        val recordIcon = if (recorded) Icons.Outlined.Close else Icons.Outlined.FiberManualRecord
+        val recordTint = if (recorded) colors.textMd else colors.err
+        // A phone row can't spare the label: with it the title and NOW badge got a word's width.
+        if (phone) {
+            IconAction(
+                icon = recordIcon,
+                label = if (recorded) "Cancel recording" else "Record",
+                tint = recordTint,
+                accent = accent,
+                onClick = if (recorded) onCancel else onRecord,
+                captioned = false,
+                enabled = !busy,
+                modifier = Modifier.focusKey("record"),
+            )
+        } else {
+            KobButton(
+                text = if (recorded) "Cancel" else "Record",
+                onClick = if (recorded) onCancel else onRecord,
+                style = KobButtonStyle.Default,
+                enabled = !busy,
+                leading = { Icon(recordIcon, null, tint = recordTint, modifier = Modifier.size(14.dp)) },
+                modifier = Modifier.focusKey("record"),
+            )
+        }
         if (onSeriesRule != null) {
             Spacer(Modifier.width(dimens.s2))
             IconAction(

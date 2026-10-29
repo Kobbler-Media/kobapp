@@ -1,7 +1,10 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButton
 import androidx.compose.foundation.ScrollState
 import dev.kobbler.app.ui.components.spotlight
+import dev.kobbler.app.ui.components.BackButtonGutter
+import dev.kobbler.app.ui.components.BackButtonTop
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -93,7 +96,7 @@ internal fun MovieDetailLayout(
                     CreditLines(movie, formFactor)
                 }
             } else {
-                Spacer(Modifier.height(kobTopInset + 72.dp))
+                Spacer(Modifier.height(kobTopInset + detailWideTop(formFactor)))
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = gutter),
                     horizontalArrangement = Arrangement.spacedBy(36.dp),
@@ -242,14 +245,14 @@ private fun TopBar(
             .fillMaxWidth()
             .detailTopScrim(scroll.asPageScroll())
             .safeTopPadding()
-            .padding(start = gutter, end = gutter, top = 14.dp, bottom = 14.dp),
+            .padding(start = BackButtonGutter(formFactor, gutter), end = gutter, top = BackButtonTop, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // Not on TV: nothing in the D-pad graph reaches this pinned bar, and the
         // remote's BACK already unwinds the detail destination.
         if (formFactor != FormFactor.TV) {
-            CircleBackButton(onBack, accent)
+            KobBackButton(onBack, accent = accent)
         }
 
         if (formFactor != FormFactor.Phone) {

@@ -35,7 +35,10 @@ class WatchHistoryScreenTest {
             ).use { stub ->
                 setContent {
                     KobappTheme(formFactor = FormFactor.Desktop) {
-                        WatchHistoryScreen(api = KobblerApi(HttpClient(), stub.url, "token"))
+                        WatchHistoryScreen(
+                            api = KobblerApi(HttpClient(), stub.url, "token"),
+                            onBack = {},
+                        )
                     }
                 }
                 waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Bluey", substring = true).fetchSemanticsNodes().isNotEmpty() }

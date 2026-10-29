@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.KobBackButtonPinned
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -275,7 +276,7 @@ private fun DiscoverHeroPage(
         }
 
         Box(Modifier.focusInert(inert)) {
-            DetailBackButton(onBack, formFactor, accent = accent)
+            KobBackButtonPinned(onBack, formFactor, accent = accent)
         }
     }
 }

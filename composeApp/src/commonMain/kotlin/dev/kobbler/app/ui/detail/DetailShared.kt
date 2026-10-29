@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.onFocusedBoundsChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -67,9 +66,6 @@ import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.rememberTopChromeShade
 import dev.kobbler.app.theme.ratingColor
 import dev.kobbler.app.ui.components.FocusEdgeMargin
-import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.KobButtonSize
-import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
 import dev.kobbler.app.ui.components.StripedArt
@@ -180,52 +176,10 @@ fun DetailPoster(posterUrl: String?, accent: Color, modifier: Modifier = Modifie
     }
 }
 
-@Composable
-fun DetailBackButton(
-    onBack: () -> Unit,
-    formFactor: FormFactor,
-    accent: Color = Color.Unspecified,
-) {
-    // TV has no way in: this floats over the content, outside the D-pad graph, and the
-    // remote's BACK already unwinds the detail destination.
-    if (formFactor == FormFactor.TV) return
-    Box(
-        modifier = Modifier
-            .safeTopPadding()
-            .padding(14.dp),
-    ) {
-        CircleBackButton(onBack, accent = if (accent != Color.Unspecified) accent else KobappTheme.accent)
-    }
-}
-
-@Composable
-fun CircleBackButton(
-    onBack: () -> Unit,
-    accent: Color,
-    modifier: Modifier = Modifier,
-) {
-    val colors = KobappTheme.colors
-    KobButton(
-        onClick = onBack,
-        style = KobButtonStyle.Ghost,
-        size = KobButtonSize.Icon,
-        accent = accent,
-        // Circular, and no .clip here — a clip ahead of KobButton's ring modifier
-        // crops the focus ring away and leaves the button looking unfocusable.
-        cornerRadiusDp = 20f,
-        modifier = modifier
-            .size(40.dp)
-            .background(colors.bg.copy(alpha = 0.55f), CircleShape)
-            .border(1.dp, colors.lineSoft, CircleShape),
-    ) {
-        Icon(
-            Icons.AutoMirrored.Outlined.ArrowBack,
-            contentDescription = "Back",
-            tint = colors.textHi,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+// A landscape phone has no more height to spare than a stacked one, so its wide head starts
+// just as high and the back button floats over the poster's corner the same way.
+internal fun detailWideTop(formFactor: FormFactor): Dp =
+    if (formFactor == FormFactor.Phone) 8.dp else 72.dp
 
 /**
  * Keeps a detail page pinned to the top while its action block holds focus.
