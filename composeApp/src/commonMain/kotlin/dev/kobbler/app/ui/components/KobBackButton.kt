@@ -16,14 +16,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
 
 val BackButtonSize: Dp = 36.dp
+
+private val BackButtonTouchTarget: Dp = 48.dp
 
 // Where the search bar's row centres its back button against the query field, so leaving
 // search for a page that pins its own never moves the button under the thumb.
@@ -47,16 +52,19 @@ fun KobBackButton(
         // No .clip here — a clip ahead of KobButton's ring modifier crops the focus ring away.
         cornerRadiusDp = BackButtonSize.value / 2f,
         modifier = modifier
-            .size(BackButtonSize)
+            .overhang(footprint = BackButtonSize, reach = if (LocalFormFactor.current == FormFactor.TV) BackButtonSize else BackButtonTouchTarget)
             // Edgeless, so it reads as shade on a poster rather than a plate, but keeps a white
             // arrow legible over pale art.
             .drawBehind {
+                val radius = (BackButtonSize / 2).toPx()
                 drawCircle(
                     Brush.radialGradient(
                         0f to Color.Black.copy(alpha = 0.5f),
                         0.6f to Color.Black.copy(alpha = 0.3f),
                         1f to Color.Transparent,
+                        radius = radius,
                     ),
+                    radius = radius,
                 )
             },
     ) {
@@ -67,6 +75,16 @@ fun KobBackButton(
             modifier = Modifier.size(22.dp),
         )
     }
+}
+
+// Lays out at [footprint] so every placement lines up with the search bar's, while the node
+// inside reaches [reach]: Compose's own touch-target expansion loses to any closer tappable,
+// such as the search field beside it.
+private fun Modifier.overhang(footprint: Dp, reach: Dp): Modifier = layout { measurable, _ ->
+    val outer = footprint.roundToPx()
+    val inner = reach.roundToPx()
+    val placeable = measurable.measure(Constraints.fixed(inner, inner))
+    layout(outer, outer) { placeable.place((outer - inner) / 2, (outer - inner) / 2) }
 }
 
 // TV has none: it would float outside the D-pad graph, and the remote's BACK already unwinds.
