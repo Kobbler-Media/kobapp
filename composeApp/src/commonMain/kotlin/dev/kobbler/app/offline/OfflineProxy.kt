@@ -3,6 +3,8 @@ package dev.kobbler.app.offline
 sealed interface ProxyResponse {
     data object NotFound : ProxyResponse
 
+    class Unsatisfiable(val totalSize: Long) : ProxyResponse
+
     class Content(
         val contentType: String?,
         val totalSize: Long,
@@ -38,6 +40,7 @@ class OfflineRoutes(
         if (item.file(file) != null) {
             val source = media(key, file) ?: return ProxyResponse.NotFound
             val size = runCatching { source.size() }.getOrElse { return ProxyResponse.NotFound }
+            if (rangeStart != null && rangeStart >= size) return ProxyResponse.Unsatisfiable(size)
             val start = (rangeStart ?: 0).coerceIn(0, size)
             val end = ((rangeEnd ?: (size - 1)) + 1).coerceIn(start, size)
             return ProxyResponse.Content(source.contentType, size, start, end, partial = rangeStart != null) { sink ->
@@ -46,6 +49,7 @@ class OfflineRoutes(
         }
         val bytes = store.readWhole(key, file) ?: return ProxyResponse.NotFound
         val size = bytes.size.toLong()
+        if (rangeStart != null && rangeStart >= size) return ProxyResponse.Unsatisfiable(size)
         val start = (rangeStart ?: 0).coerceIn(0, size)
         val end = ((rangeEnd ?: (size - 1)) + 1).coerceIn(start, size)
         return ProxyResponse.Content(contentTypeFor(file), size, start, end, partial = rangeStart != null) { sink ->

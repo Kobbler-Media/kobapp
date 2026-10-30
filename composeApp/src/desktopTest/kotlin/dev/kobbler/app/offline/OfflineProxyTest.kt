@@ -122,4 +122,13 @@ class OfflineProxyTest {
             assertEquals(404, conn.responseCode, url)
         }
     }
+
+    @Test
+    fun aRangeStartingPastTheEndIsUnsatisfiable() {
+        get("bytes=0-0")
+        val conn = URI(offlineUrl(port, key, MediaFilePath)).toURL().openConnection() as HttpURLConnection
+        conn.setRequestProperty("Range", "bytes=${data.size}-")
+        assertEquals(416, conn.responseCode)
+        assertEquals("bytes */${data.size}", conn.getHeaderField("Content-Range"))
+    }
 }

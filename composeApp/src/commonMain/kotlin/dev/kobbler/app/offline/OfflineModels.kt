@@ -100,6 +100,12 @@ data class OfflineIndex(
     val pendingWrites: List<PendingWrite> = emptyList(),
 )
 
+fun OfflineIndex.completeKeys(): Set<String> =
+    items.values.filter { it.state == OfflineState.Complete }.mapTo(HashSet()) { it.key }
+
+fun OfflineIndex.completeShows(): Set<String> =
+    items.values.filter { it.state == OfflineState.Complete }.mapNotNullTo(HashSet()) { it.showId }
+
 const val MediaFilePath = "media"
 const val ThumbnailsVttPath = "thumbnails.vtt"
 const val ThumbnailsDir = "thumbnails"

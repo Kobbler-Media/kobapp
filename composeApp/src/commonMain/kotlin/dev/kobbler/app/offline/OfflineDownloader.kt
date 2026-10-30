@@ -73,6 +73,6 @@ class OfflineDownloader(private val engine: OfflineEngine, private val scope: Co
 
     internal companion object {
         val Runnable = setOf(OfflineState.Queued, OfflineState.Downloading, OfflineState.Waiting)
-        const val FillChunkBytes = 8L * 1024 * 1024
+        const val FillChunkBytes = 32L * 1024 * 1024
     }
 }

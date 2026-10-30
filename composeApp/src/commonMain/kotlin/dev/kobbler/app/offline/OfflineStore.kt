@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -15,12 +17,23 @@ import kotlinx.serialization.json.Json
 class OfflineStore(private val fs: OfflineFs, scope: CoroutineScope) {
     private val _index = MutableStateFlow(load())
     val index: StateFlow<OfflineIndex> = _index.asStateFlow()
-    private val dirty = Channel<Unit>(Channel.CONFLATED)
+    // Two kinds of change: one the index must not lose (a download added, finished,
+    // removed) and progress, which at worst is fetched again. Rewriting the whole index for
+    // every megabyte was most of a download's CPU on a TV.
+    private val urgent = Channel<Unit>(Channel.CONFLATED)
+    private val lazy = Channel<Unit>(Channel.CONFLATED)
+    private val persistLock = Mutex()
     private val files = mutableMapOf<String, RandomFile>()
 
     init {
         scope.launch {
-            for (signal in dirty) {
+            while (true) {
+                select {
+                    urgent.onReceive {}
+                    lazy.onReceive { withTimeoutOrNull(ProgressPersistMs) { urgent.receive() } }
+                }
+                urgent.tryReceive()
+                lazy.tryReceive()
                 persist()
                 delay(PersistSpacingMs)
             }
@@ -31,21 +44,24 @@ class OfflineStore(private val fs: OfflineFs, scope: CoroutineScope) {
         fs.read(IndexPath)?.let { runCatching { StoreJson.decodeFromString<OfflineIndex>(it.decodeToString()) }.getOrNull() }
             ?: OfflineIndex()
 
-    private fun persist() = fs.write(IndexPath, StoreJson.encodeToString(OfflineIndex.serializer(), _index.value).encodeToByteArray())
-
-    fun update(transform: (OfflineIndex) -> OfflineIndex) {
-        _index.update(transform)
-        dirty.trySend(Unit)
+    private suspend fun persist() = persistLock.withLock {
+        fs.write(IndexPath, StoreJson.encodeToString(OfflineIndex.serializer(), _index.value).encodeToByteArray())
     }
 
-    fun updateItem(key: String, transform: (OfflineItem) -> OfflineItem) = update { idx ->
+    fun update(progressOnly: Boolean = false, transform: (OfflineIndex) -> OfflineIndex) {
+        _index.update(transform)
+        (if (progressOnly) lazy else urgent).trySend(Unit)
+    }
+
+    fun updateItem(key: String, progressOnly: Boolean = false, transform: (OfflineItem) -> OfflineItem) = update(progressOnly) { idx ->
         val item = idx.items[key] ?: return@update idx
         idx.copy(items = idx.items + (key to transform(item)))
     }
 
-    fun updateFile(key: String, path: String, transform: (OfflineFile) -> OfflineFile) = updateItem(key) { item ->
-        item.copy(files = item.files.map { if (it.path == path) transform(it) else it })
-    }
+    fun updateFile(key: String, path: String, progressOnly: Boolean = false, transform: (OfflineFile) -> OfflineFile) =
+        updateItem(key, progressOnly) { item ->
+            item.copy(files = item.files.map { if (it.path == path) transform(it) else it })
+        }
 
     fun item(key: String): OfflineItem? = _index.value.items[key]
 
@@ -108,7 +124,6 @@ class OfflineStore(private val fs: OfflineFs, scope: CoroutineScope) {
         fs.delete("$ItemsDir/$key")
         (before.responses.keys - _index.value.responses.keys).forEach { fs.delete(responsePath(it)) }
         (before.images.keys - _index.value.images.keys).forEach { fs.delete(imagePath(it)) }
-        dirty.trySend(Unit)
     }
 
     fun usedBytes() = fs.usedBytes()
@@ -126,7 +141,8 @@ class OfflineStore(private val fs: OfflineFs, scope: CoroutineScope) {
         const val ItemsDir = "items"
         const val ResponsesDir = "responses"
         const val ImagesDir = "images"
-        const val PersistSpacingMs = 1_000L
+        const val PersistSpacingMs = 250L
+        const val ProgressPersistMs = 5_000L
     }
 }
 

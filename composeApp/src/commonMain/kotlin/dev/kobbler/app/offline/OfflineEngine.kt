@@ -9,7 +9,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -50,6 +54,23 @@ class OfflineEngine(
             reachability.online.drop(1).filter { it }.collect { replayWrites() }
         }
     }
+
+    /**
+     * What is finished, as its own flow: a library grid marks cards from this, and it only
+     * changes when a download completes or goes, not on every progress tick.
+     */
+    val completeKeys: StateFlow<Set<String>> = store.index
+        .map { it.completeKeys() }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, store.index.value.completeKeys())
+
+    val completeShows: StateFlow<Set<String>> = store.index
+        .map { it.completeShows() }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, store.index.value.completeShows())
+
+    /** One download's state, changing only when that download does. */
+    fun item(key: String): kotlinx.coroutines.flow.Flow<OfflineItem?> = store.index.map { it.items[key] }.distinctUntilChanged()
 
     /** Whether there is a download the connection would let run now. */
     val hasPendingWork: kotlinx.coroutines.flow.Flow<Boolean> =
@@ -115,7 +136,7 @@ class OfflineEngine(
         var quietSince = now()
         while (!export.ready) {
             if (export.failed) throw UpstreamUnavailable("The server could not make a ${quality} copy of ${item.title}: ${export.error ?: "unknown error"}")
-            store.updateItem(item.key) { it.copy(serverProgress = export.progress.toFloat().coerceIn(0f, 1f)) }
+            store.updateItem(item.key, progressOnly = true) { it.copy(serverProgress = export.progress.toFloat().coerceIn(0f, 1f)) }
             delay(ExportPollMs)
             if (export.progress != lastProgress) {
                 lastProgress = export.progress
@@ -290,8 +311,16 @@ class OfflineEngine(
         return true
     }
 
+    /**
+     * A finished file goes to the player as a file: no proxy hop, and libVLC keeps no
+     * network read-ahead for a source it can seek itself. Only a download still being
+     * filled has to come through the proxy, which is what writes down what the player reads.
+     */
+    private fun mediaUrl(item: OfflineItem, path: String, port: Int): String =
+        if (item.file(path)?.complete == true) fileUri(store.absolutePath(item.key, path)) else offlineUrl(port, item.key, path)
+
     private fun localize(session: KobblerApi.StreamSession, item: OfflineItem, port: Int) = session.copy(
-        url = offlineUrl(port, item.key, MediaFilePath),
+        url = mediaUrl(item, MediaFilePath, port),
         subtitles = session.subtitles.map { sub ->
             val local = subtitlePath(sub)
             if (local != null && local in item.extras) sub.copy(url = offlineUrl(port, item.key, local)) else sub
@@ -299,7 +328,8 @@ class OfflineEngine(
         thumbnailsUrl = if (ThumbnailsVttPath in item.extras) offlineUrl(port, item.key, ThumbnailsVttPath) else session.thumbnailsUrl,
     )
 
-    override fun servesLocally(url: String): Boolean = port != null && url.startsWith(offlineBase(port))
+    override fun servesLocally(url: String): Boolean =
+        url.startsWith("file://") || port != null && url.startsWith(offlineBase(port))
 
     override fun isLocalSession(sessionId: String): Boolean = sessionId.startsWith(OfflineSessionPrefix)
 
@@ -307,7 +337,7 @@ class OfflineEngine(
         val item = store.item(OfflineKind.Audiobook, bookId) ?: return null
         val path = "$AudioDir$fileId"
         if (item.file(path) == null) return null
-        return offlineUrl(port ?: return null, item.key, path)
+        return mediaUrl(item, path, port ?: return null)
     }
 
     override fun bookFilePath(bookId: String, formats: List<String>): String? {

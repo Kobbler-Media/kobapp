@@ -8,6 +8,8 @@ import io.ktor.http.HttpHeaders
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 data class Upstream(val url: String, val headers: Map<String, String> = emptyMap())
 
@@ -99,11 +101,13 @@ class OfflineMedia(
     private suspend fun fetch(from: Long, to: Long, disk: RandomFile, sink: suspend (ByteArray, Int) -> Unit): Long {
         var pos = from
         var committedFrom = from
+        var committedAt = TimeSource.Monotonic.markNow()
         fun commit() {
             if (pos > committedFrom) {
                 val span = committedFrom until pos
-                store.updateFile(key, path) { it.copy(ranges = it.ranges + span) }
+                store.updateFile(key, path, progressOnly = true) { it.copy(ranges = it.ranges + span) }
                 committedFrom = pos
+                committedAt = TimeSource.Monotonic.markNow()
             }
         }
         try {
@@ -114,7 +118,9 @@ class OfflineMedia(
                         if (usable <= 0) return@body false
                         disk.write(pos, bytes, usable)
                         pos += usable
-                        if (pos - committedFrom >= CommitBytes) commit()
+                        // Each commit copies the index and wakes everything watching it: often
+                        // enough for a progress bar and for the player to read back, no more.
+                        if (pos - committedFrom >= CommitBytes || committedAt.elapsedNow() >= CommitInterval) commit()
                         sink(bytes, usable)
                         pos < to
                     }
@@ -184,6 +190,7 @@ class OfflineMedia(
 
     private companion object {
         const val ChunkBytes = 64 * 1024
-        const val CommitBytes = 1024 * 1024L
+        const val CommitBytes = 8L * 1024 * 1024
+        val CommitInterval = 1.seconds
     }
 }

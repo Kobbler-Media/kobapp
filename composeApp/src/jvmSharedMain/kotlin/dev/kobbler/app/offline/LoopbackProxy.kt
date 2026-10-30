@@ -7,6 +7,7 @@ import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.Semaphore
 import kotlin.concurrent.thread
 
 /**
@@ -15,10 +16,22 @@ import kotlin.concurrent.thread
  */
 actual fun startOfflineProxy(handler: ProxyHandler): Int? = runCatching {
     val server = ServerSocket(0, 16, InetAddress.getLoopbackAddress())
+    // A player holds one or two connections; anything past this is not a player.
+    val slots = Semaphore(MaxConnections)
     thread(name = "offline-proxy", isDaemon = true) {
         while (!server.isClosed) {
             val socket = runCatching { server.accept() }.getOrNull() ?: continue
-            thread(name = "offline-proxy-conn", isDaemon = true) { serve(socket, handler) }
+            if (!slots.tryAcquire()) {
+                runCatching { socket.close() }
+                continue
+            }
+            thread(name = "offline-proxy-conn", isDaemon = true) {
+                try {
+                    serve(socket, handler)
+                } finally {
+                    slots.release()
+                }
+            }
         }
     }
     server.localPort
@@ -26,6 +39,9 @@ actual fun startOfflineProxy(handler: ProxyHandler): Int? = runCatching {
 
 private fun serve(socket: Socket, handler: ProxyHandler): Unit = socket.use {
     socket.tcpNoDelay = true
+    // An idle keep-alive connection would otherwise hold its thread for as long as the
+    // player stays paused; libVLC simply reconnects for its next read.
+    socket.soTimeout = IdleTimeoutMs
     val input = BufferedInputStream(socket.getInputStream())
     val output = BufferedOutputStream(socket.getOutputStream(), 64 * 1024)
     try {
@@ -33,7 +49,7 @@ private fun serve(socket: Socket, handler: ProxyHandler): Unit = socket.use {
             val requestLine = input.readLine() ?: return
             if (requestLine.isBlank()) continue
             val (method, target) = requestLine.split(' ').let { (it.getOrNull(0) ?: "") to (it.getOrNull(1) ?: "/") }
-            val headers = generateSequence { input.readLine()?.takeIf { it.isNotEmpty() } }
+            val headers = generateSequence { input.readLine()?.takeIf { it.isNotEmpty() } }.take(MaxHeaders)
                 .associate { it.substringBefore(':').trim().lowercase() to it.substringAfter(':').trim() }
             val keepAlive = !headers["connection"].equals("close", ignoreCase = true)
             val (rangeStart, rangeEnd) = parseRange(headers["range"])
@@ -41,6 +57,14 @@ private fun serve(socket: Socket, handler: ProxyHandler): Unit = socket.use {
             when (response) {
                 ProxyResponse.NotFound -> {
                     output.writeHead("404 Not Found", listOf("Content-Length" to "0"), keepAlive)
+                    output.flush()
+                }
+                is ProxyResponse.Unsatisfiable -> {
+                    output.writeHead(
+                        "416 Range Not Satisfiable",
+                        listOf("Content-Range" to "bytes */${response.totalSize}", "Content-Length" to "0"),
+                        keepAlive,
+                    )
                     output.flush()
                 }
                 is ProxyResponse.Content -> {
@@ -68,6 +92,11 @@ private fun serve(socket: Socket, handler: ProxyHandler): Unit = socket.use {
     }
 }
 
+private const val MaxConnections = 16
+private const val MaxLineBytes = 8 * 1024
+private const val MaxHeaders = 64
+private const val IdleTimeoutMs = 60_000
+
 private fun parseRange(header: String?): Pair<Long?, Long?> {
     val spec = header?.removePrefix("bytes=")?.substringBefore(',') ?: return null to null
     val start = spec.substringBefore('-').toLongOrNull() ?: return null to null
@@ -89,6 +118,7 @@ private fun InputStream.readLine(): String? {
         val c = read()
         if (c < 0) return if (line.isEmpty()) null else line.toString()
         if (c == '\n'.code) return line.toString().trimEnd('\r')
+        if (line.length >= MaxLineBytes) throw java.io.IOException("request line too long")
         line.append(c.toChar())
     }
 }

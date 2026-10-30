@@ -60,8 +60,18 @@ fun rememberOfflineIndex(): OfflineIndex? {
 
 @Composable
 fun rememberOfflineItem(kind: OfflineKind, mediaId: String?): OfflineItem? {
-    val index = rememberOfflineIndex() ?: return null
-    return mediaId?.let { index.items[OfflineItem.keyOf(kind, it)] }
+    val engine = LocalOfflineEngine.current ?: return null
+    val key = mediaId?.let { OfflineItem.keyOf(kind, it) } ?: return null
+    val flow = remember(engine, key) { engine.item(key) }
+    val item by flow.collectAsState(engine.store.item(key))
+    return item
+}
+
+@Composable
+private fun rememberCompleteKeys(): Set<String> {
+    val engine = LocalOfflineEngine.current ?: return emptySet()
+    val keys by engine.completeKeys.collectAsState()
+    return keys
 }
 
 @Composable
@@ -167,13 +177,14 @@ fun OfflineAction(
 
 @Composable
 fun isAvailableOffline(kind: OfflineKind, mediaId: String?): Boolean =
-    rememberOfflineItem(kind, mediaId)?.state == OfflineState.Complete
+    mediaId != null && OfflineItem.keyOf(kind, mediaId) in rememberCompleteKeys()
 
 /** A show is marked once any of its episodes can be played offline. */
 @Composable
 fun showAvailableOffline(showId: String?): Boolean {
-    val index = rememberOfflineIndex() ?: return false
-    return showId != null && index.items.values.any { it.showId == showId && it.state == OfflineState.Complete }
+    val engine = LocalOfflineEngine.current ?: return false
+    val shows by engine.completeShows.collectAsState()
+    return showId != null && showId in shows
 }
 
 /** A book is marked once its text or its audio is downloaded. */

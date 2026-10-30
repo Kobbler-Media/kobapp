@@ -8,7 +8,6 @@ import dev.kobbler.app.offline.Offline
 import dev.kobbler.app.offline.OfflineItem
 import dev.kobbler.app.offline.OfflineKind
 import dev.kobbler.app.offline.OfflineState
-import dev.kobbler.app.offline.offlineBase
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
 import kotlinx.coroutines.flow.combine
@@ -23,7 +22,6 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun RouteDownloadsThroughProxy(gps: GlobalPlayerState, player: Player, api: KobblerApi) {
     val engine = Offline.engine ?: return
-    val proxied = engine.port?.let(::offlineBase) ?: return
     LaunchedEffect(gps, player, api) {
         combine(engine.store.index, snapshotFlow { Triple(gps.mediaType, gps.mediaId, gps.lastStreamUrl) }) { index, (type, id, url) ->
             val kind = when (type) {
@@ -31,7 +29,7 @@ internal fun RouteDownloadsThroughProxy(gps: GlobalPlayerState, player: Player, 
                 "episode" -> OfflineKind.Episode
                 else -> return@combine null
             }
-            if (id == null || url == null || url.startsWith(proxied) || gps.isDebrid) return@combine null
+            if (id == null || url == null || engine.servesLocally(url) || gps.isDebrid) return@combine null
             val item = index.items[OfflineItem.keyOf(kind, id)] ?: return@combine null
             if (item.state == OfflineState.Failed || !item.playsLocally) null else type to id
         }.distinctUntilChanged().collect { target ->

@@ -103,6 +103,9 @@ class OfflineEngineTest {
         engine.store.item(key)!!
     }
 
+    private suspend fun read(url: String): ByteArray =
+        if (url.startsWith("file://")) java.io.File(java.net.URI(url)).readBytes() else probe.get(url).readRawBytes()
+
     private suspend fun goOffline() {
         serverUp = false
         engine.reachability.check()
@@ -123,10 +126,10 @@ class OfflineEngineTest {
         goOffline()
         assertEquals("Film", kobbler.getMovie("m1").title)
         val session = kobbler.getMovieStreamSession("m1")!!
-        assertTrue(session.url.startsWith("http://127.0.0.1:"))
+        assertTrue(session.url.startsWith("file://"), session.url)
         assertNotEquals("s1", session.sessionId)
         val served = files.bytesServed.get()
-        assertContentEquals(film, probe.get(session.url).readRawBytes())
+        assertContentEquals(film, read(session.url))
         assertEquals(served, files.bytesServed.get())
         assertEquals(vtt, probe.get(session.subtitles.single().url!!).bodyAsText())
     }
@@ -135,7 +138,7 @@ class OfflineEngineTest {
     fun onlinePlaybackOfADownloadStillReadsThroughTheProxy() = runBlocking {
         downloaded()
         val session = kobbler.getMovieStreamSession("m1")!!
-        assertTrue(session.url.startsWith("http://127.0.0.1:"))
+        assertTrue(session.url.startsWith("file://"), session.url)
         assertEquals("s1", session.sessionId)
     }
 
@@ -201,8 +204,8 @@ class OfflineEngineTest {
         downloadedFrom(filesApi, OfflineItem.keyOf(OfflineKind.Audiobook, "b1")) { engine.downloadAudiobook(book()) }
         goOffline()
         val source = filesApi.audioSource("b1", "f1")
-        assertTrue(source.url.startsWith("http://127.0.0.1:"))
-        assertContentEquals(chapterOne, probe.get(source.url).readRawBytes())
+        assertTrue(source.url.startsWith("file://"), source.url)
+        assertContentEquals(chapterOne, read(source.url))
     }
 
     @Test
@@ -230,7 +233,7 @@ class OfflineEngineTest {
         assertEquals(1, item.extras.count { it.startsWith("subs/") })
         goOffline()
         val session = kobbler.getMovieStreamSession("m1")!!
-        assertContentEquals(copy720, probe.get(session.url).readRawBytes())
+        assertContentEquals(copy720, read(session.url))
     }
 
     @Test
@@ -288,5 +291,27 @@ class OfflineEngineTest {
         kotlinx.coroutines.delay(500)
         assertEquals(1, engine.store.index.value.pendingWrites.size)
         assertFalse(api.requestBodies.containsKey("/api/v1/admin/movies/m1/watch-state/position"))
+    }
+
+    @Test
+    fun aDownloadStillBeingFilledPlaysThroughTheProxyThatKeepsWhatItReads() = runBlocking {
+        engine.store.update {
+            it.copy(items = mapOf(key to OfflineItem(OfflineKind.Movie, "m1", "Film", files = listOf(OfflineFile(MediaFilePath)), state = OfflineState.Failed)))
+        }
+        val session = kobbler.getMovieStreamSession("m1")!!
+        assertTrue(session.url.startsWith("http://127.0.0.1:"), session.url)
+        assertContentEquals(film, read(session.url))
+        assertTrue(engine.store.item(key)!!.file(MediaFilePath)!!.complete)
+    }
+
+    @Test
+    fun progressDoesNotDisturbWhatIsMarkedAvailable() = runBlocking {
+        downloaded()
+        val before = withTimeout(5_000) { engine.completeKeys.first { key in it } }
+        engine.store.update { idx -> idx.copy(items = idx.items + ("movie-other" to OfflineItem(OfflineKind.Movie, "other", "Other", files = listOf(OfflineFile(MediaFilePath))))) }
+        engine.store.updateFile("movie-other", MediaFilePath, progressOnly = true) { it.copy(ranges = it.ranges + (0L until 10L)) }
+        kotlinx.coroutines.delay(100)
+        assertTrue(before === engine.completeKeys.value)
+        assertEquals(setOf(key), before)
     }
 }

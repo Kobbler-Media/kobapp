@@ -5,6 +5,8 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.Season
 import dev.kobbler.app.data.TvShow
@@ -70,9 +72,9 @@ fun seasonHasDownloadActions(season: Season): Boolean =
 /** "3 episodes offline" for a show's meta line. */
 @Composable
 fun metaShowOffline(show: TvShow): (@Composable () -> Unit)? {
-    val index = rememberOfflineIndex() ?: return null
-    val ids = show.seasons.flatMap { it.episodes }.mapNotNull { it.id }.toSet()
-    val count = index.items.values.count { it.kind == OfflineKind.Episode && it.mediaId in ids && it.state == dev.kobbler.app.offline.OfflineState.Complete }
+    val engine = LocalOfflineEngine.current ?: return null
+    val complete by engine.completeKeys.collectAsState()
+    val count = show.seasons.sumOf { s -> s.episodes.count { it.id != null && OfflineItem.keyOf(OfflineKind.Episode, it.id) in complete } }
     if (count == 0) return null
     return { OfflineBadge(label = if (count == 1) "1 episode offline" else "$count episodes offline") }
 }
