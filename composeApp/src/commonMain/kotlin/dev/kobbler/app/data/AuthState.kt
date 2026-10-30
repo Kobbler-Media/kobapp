@@ -30,6 +30,18 @@ private const val LEGACY_KEY_API_URL = "kobbler_api_url"
 private const val LEGACY_KEY_TOKEN = "kobbler_token"
 private const val KEY_PROFILES = "kobbler_profiles_v1"
 private const val KEY_CURRENT_PROFILE = "kobbler_current_profile_id"
+private const val KEY_OFFLINE_PIN_PREFIX = "kobbler_offline_pin_"
+
+/** The profile last signed in, read without a UI: what background work acts as. */
+fun storedActiveProfile(store: KeyValueStore = PlatformKeyValueStore): Profile? {
+    val profiles = store.getString(KEY_PROFILES)
+        ?.let { runCatching { Json { ignoreUnknownKeys = true }.decodeFromString<List<Profile>>(it) }.getOrNull() }
+        ?: return null
+    val id = store.getString(KEY_CURRENT_PROFILE) ?: return null
+    return profiles.firstOrNull { it.id == id && !it.needsRelink }
+}
+
+private fun offlinePinDigest(profileId: String, pin: String) = dev.kobbler.app.offline.stableHash("$profileId:$pin")
 private const val KEY_SHOW_PICKER_ON_LAUNCH = "kobbler_show_picker_on_launch"
 private const val KEY_SESSION_TOUCHED_PREFIX = "kobbler_session_touched_"
 
@@ -569,11 +581,15 @@ class AuthState(
                 contentType(ContentType.Application.Json)
                 setBody("""{"pin":${Json.encodeToString(pin)}}""")
             }
-            resp.status == HttpStatusCode.NoContent || resp.status == HttpStatusCode.OK
+            val ok = resp.status == HttpStatusCode.NoContent || resp.status == HttpStatusCode.OK
+            if (ok) store.putString(KEY_OFFLINE_PIN_PREFIX + profileId, offlinePinDigest(profileId, pin))
+            ok
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            false
+            // With no server to ask, only the PIN it last accepted opens the profile, so its
+            // downloads can still be reached.
+            store.getString(KEY_OFFLINE_PIN_PREFIX + profileId) == offlinePinDigest(profileId, pin)
         }
     }
 

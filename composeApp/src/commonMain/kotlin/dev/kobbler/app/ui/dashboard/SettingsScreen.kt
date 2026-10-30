@@ -413,6 +413,8 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(dimens.s5))
 
+        dev.kobbler.app.ui.offline.OfflineSettings()
+
         SettingsGroup(label = "Reader & TTS") {
             SettingsTextInputRow(
                 icon = Icons.Outlined.RecordVoiceOver,
@@ -603,7 +605,7 @@ private fun ProfileHeroCard(
 }
 
 @Composable
-private fun SettingsGroup(
+internal fun SettingsGroup(
     label: String,
     content: @Composable () -> Unit,
 ) {
@@ -631,7 +633,7 @@ private fun SettingsGroup(
 }
 
 @Composable
-private fun SettingsDivider() {
+internal fun SettingsDivider() {
     val colors = KobappTheme.colors
     Box(
         Modifier
@@ -643,7 +645,7 @@ private fun SettingsDivider() {
 }
 
 @Composable
-private fun SettingsRow(
+internal fun SettingsRow(
     icon: ImageVector,
     title: String,
     key: String,
@@ -697,7 +699,7 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun SettingsToggleRow(
+internal fun SettingsToggleRow(
     icon: ImageVector,
     title: String,
     key: String,
@@ -741,7 +743,7 @@ private fun SettingsToggleRow(
 }
 
 @Composable
-private fun SettingsDropdownRow(
+internal fun SettingsDropdownRow(
     icon: ImageVector,
     title: String,
     key: String,

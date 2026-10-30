@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.Color
 
 enum class Section {
     Home, Movies, Tv, Sports, Books, Audio, LiveTv, Iptv,
-    Downloads, Calendar, Settings,
+    Downloads, Offline, Calendar, Settings,
     Activity,
 }
 
@@ -19,6 +19,7 @@ fun KobappColors.accentFor(section: Section): Color = when (section) {
     Section.LiveTv -> accLive
     Section.Iptv -> accIptv
     Section.Downloads -> accDown
+    Section.Offline -> ok
     Section.Calendar -> accCal
     Section.Settings -> accSet
     Section.Activity -> accNotif

@@ -1,5 +1,8 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.offline.ShowDownloadItems
+import dev.kobbler.app.ui.offline.offlineSupported
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
@@ -180,7 +183,8 @@ internal fun ShowActions(
         )
     val kids = rememberShowKidsAccess(show, api, toast)
 
-    val hasOverflow = api != null && (canWantShow || canWatchlist || canRewatch || kids != null || keep != null)
+    val hasOverflow = api != null && (canWantShow || canWatchlist || canRewatch || kids != null || keep != null ||
+        (offlineSupported && show.seasons.any { s -> s.episodes.any { it.filePath != null } }))
     val overflowButton: @Composable () -> Unit = {
         if (api != null && hasOverflow) {
             OverflowActions(accent = accent) { close ->
@@ -224,6 +228,7 @@ internal fun ShowActions(
                     )
                 }
 
+                ShowDownloadItems(show, accent, close)
                 if (keep != null) KeepItem(keep, accent, close)
                 if (kids != null) KidsAccessItem(kids, accent, close)
             }

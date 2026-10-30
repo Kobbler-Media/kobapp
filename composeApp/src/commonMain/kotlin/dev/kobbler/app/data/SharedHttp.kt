@@ -30,6 +30,14 @@ object SharedHttp {
         socketTimeoutMillis = BookFetchTimeoutMs
     }
 
+    // A film read through the offline proxy is one response for as long as the player wants it,
+    // so only a socket that stops moving counts as hung.
+    fun mediaClient(): HttpClient = client {
+        requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+        connectTimeoutMillis = CONNECT_TIMEOUT_MS
+        socketTimeoutMillis = MediaSocketTimeoutMs
+    }
+
     // An idle event stream is the normal state, not a hung one.
     fun eventClient(): HttpClient = client {
         requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
@@ -54,3 +62,5 @@ object SharedHttp {
 
     private const val CONNECT_TIMEOUT_MS = 15_000L
 }
+
+private const val MediaSocketTimeoutMs = 30_000L

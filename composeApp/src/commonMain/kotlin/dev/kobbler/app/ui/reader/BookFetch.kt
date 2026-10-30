@@ -31,6 +31,7 @@ internal suspend fun fetchBookFile(
     cacheKey: String,
     formats: List<String>,
 ): BookPayload = withContext(ioDispatcher) {
+    api.offline?.bookFilePath(bookId, formats)?.let { return@withContext BookPayload(it, null) }
     FileCache.pathFor(cacheKey)?.let { return@withContext BookPayload(it, null) }
     FileCache.get(cacheKey)?.let { return@withContext BookPayload(null, it) }
 

@@ -20,6 +20,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import dev.kobbler.app.offline.OfflineException
+import dev.kobbler.app.offline.OfflineHooks
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
@@ -434,6 +436,19 @@ sealed interface SessionStatus {
 
     /** The server has no record of this session. */
     data object Missing : SessionStatus
+}
+
+@Serializable
+data class OfflineExport(
+    @SerialName("export_id") val exportId: String,
+    val state: String,
+    val progress: Double = 0.0,
+    @SerialName("size_bytes") val sizeBytes: Long? = null,
+    val error: String? = null,
+    @SerialName("file_url") val fileUrl: String,
+) {
+    val ready: Boolean get() = state == "ready"
+    val failed: Boolean get() = state == "failed"
 }
 
 @Serializable
@@ -2044,6 +2059,7 @@ class KobblerApi(
     val canManageKids: Boolean = false,
     private val originProfiles: OriginProfiles = OriginProfiles.Persistent,
     private val decodesInterlaced: () -> Boolean = ::deviceDecodesInterlaced,
+    internal val offline: OfflineHooks? = null,
 ) {
     /** True if kobload/debrid streaming is configured on the server. Set during initial load. */
     var canStream: Boolean = false
@@ -2072,7 +2088,7 @@ class KobblerApi(
      * credential in a log. See [dev.kobbler.app.ui.player.GlobalPlayerState.lastStreamUrl].
      */
     suspend fun playerUrl(url: String): String {
-        if (!playerUrlNeedsToken(url)) return url
+        if (!playerUrlNeedsToken(url) || offline?.servesLocally(url) == true) return url
         val token = mintedPlaybackToken() ?: return url
         return withPlaybackToken(url, token)
     }
@@ -2198,15 +2214,88 @@ class KobblerApi(
         return result
     }
 
-    private suspend fun get(path: String): String = timed {
-        val resp = httpClient.get("$apiUrl$path") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-        }
-        resp.checkedBody()
+    private suspend fun get(path: String): String {
+        val offline = offline ?: return timed { httpClient.get("$apiUrl$path") { header(HttpHeaders.Authorization, "Bearer $token") }.checkedBody() }
+        // Waiting out a connect timeout to learn what the last failure already said is the
+        // whole cost of opening a downloaded title with no network.
+        if (offline.isOffline) offline.cachedResponse(path)?.let { return it }
+        val body = overNetwork(offline) {
+            timed { httpClient.get("$apiUrl$path") { header(HttpHeaders.Authorization, "Bearer $token") }.checkedBody() }
+        } ?: return offline.cachedResponse(path) ?: throw OfflineException()
+        offline.onResponse(path, body)
+        return body
     }
 
-    private suspend fun post(path: String, body: String): String = timed {
-        val resp = httpClient.post("$apiUrl$path") {
+    /** Null when the request never reached the server; a server that answered with an error still throws. */
+    private suspend fun <T> overNetwork(offline: OfflineHooks, block: suspend () -> T): T? = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ApiException) {
+        throw e
+    } catch (e: Exception) {
+        offline.onNetworkFailure()
+        null
+    }
+
+    private suspend fun post(path: String, body: String): String = write("POST", path, body) {
+        timed {
+            httpClient.post("$apiUrl$path") {
+                header(HttpHeaders.Authorization, "Bearer $token")
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }.checkedBody()
+        }
+    }
+
+    private suspend fun put(path: String, body: String): String = write("PUT", path, body) {
+        httpClient.put("$apiUrl$path") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.checkedBody()
+    }
+
+    private suspend fun patch(path: String, body: String): String = write("PATCH", path, body) {
+        httpClient.patch("$apiUrl$path") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.checkedBody()
+    }
+
+    /**
+     * A progress write made with no network is kept and sent on reconnect rather than lost:
+     * watching a download on a plane is exactly when it cannot reach the server.
+     */
+    private suspend fun write(method: String, path: String, body: String, send: suspend () -> String): String {
+        val offline = offline ?: return send()
+        if (offline.isOffline && offline.queueWrite(offlineOwner, method, path, body)) {
+            offline.onWrite(path, body)
+            return ""
+        }
+        val result = try {
+            send()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ApiException) {
+            throw e
+        } catch (e: Exception) {
+            offline.onNetworkFailure()
+            if (!offline.queueWrite(offlineOwner, method, path, body)) throw e
+            ""
+        }
+        offline.onWrite(path, body)
+        return result
+    }
+
+    /** Whose progress a kept write is: sent later, it must go to the same server as the same user. */
+    internal val offlineOwner: String by lazy { dev.kobbler.app.offline.stableHash("$apiUrl|$token") }
+
+    /** Sends a write [OfflineHooks.queueWrite] kept, bypassing the queue it came from. */
+    internal suspend fun replayWrite(method: String, path: String, body: String) {
+        val resp = httpClient.request("$apiUrl$path") {
+            this.method = HttpMethod.parse(method)
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
             setBody(body)
@@ -2214,23 +2303,8 @@ class KobblerApi(
         resp.checkedBody()
     }
 
-    private suspend fun put(path: String, body: String): String {
-        val resp = httpClient.put("$apiUrl$path") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(body)
-        }
-        return resp.checkedBody()
-    }
-
-    private suspend fun patch(path: String, body: String): String {
-        val resp = httpClient.patch("$apiUrl$path") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            contentType(ContentType.Application.Json)
-            setBody(body)
-        }
-        return resp.checkedBody()
-    }
+    internal suspend fun isReachable(): Boolean =
+        httpClient.get("$apiUrl/health").status.isSuccess()
 
     private suspend fun delete(path: String): String {
         val resp = httpClient.delete("$apiUrl$path") {
@@ -2450,12 +2524,18 @@ class KobblerApi(
     private fun watchStateBody(watched: Boolean) = """{"watched":$watched,"position_seconds":0}"""
 
     // Null when the server could not say, so a caller can fall back to what it already has.
-    suspend fun getMovieProgress(movieId: String): Int? = quiet(null) {
-        decode<PositionResponse>(get("/api/v1/admin/movies/$movieId/watch-state")).resumeSeconds
-    }
+    suspend fun getMovieProgress(movieId: String): Int? = progress("/api/v1/admin/movies/$movieId/watch-state")
 
-    suspend fun getEpisodeProgress(episodeId: String): Int? = quiet(null) {
-        decode<PositionResponse>(get("/api/v1/admin/tv/episodes/$episodeId/watch-state")).resumeSeconds
+    suspend fun getEpisodeProgress(episodeId: String): Int? = progress("/api/v1/admin/tv/episodes/$episodeId/watch-state")
+
+    private suspend fun progress(watchStatePath: String): Int? =
+        offline?.pendingResumeSeconds(offlineOwner, watchStatePath)
+            ?: quiet(null) { decode<PositionResponse>(get(watchStatePath)).resumeSeconds }
+
+    /** Null when the server could not be asked. */
+    suspend fun isWatched(mediaType: String, mediaId: String): Boolean? = quiet(null) {
+        val path = if (mediaType == "movie") "/api/v1/admin/movies/$mediaId/watch-state" else "/api/v1/admin/tv/episodes/$mediaId/watch-state"
+        decode<PositionResponse>(get(path)).watched
     }
 
     // -- Books --
@@ -2674,7 +2754,8 @@ class KobblerApi(
         decode(get("/api/v1/admin/books/$bookId/chapters"))
 
     suspend fun getAudioPosition(bookId: String): AudioPositionDto = quiet(AudioPositionDto()) {
-        decode<AudioPositionDto>(get("/api/v1/admin/books/$bookId/audio-position"))
+        val path = "/api/v1/admin/books/$bookId/audio-position"
+        decode<AudioPositionDto>(offline?.pendingWriteBody(offlineOwner, path) ?: get(path))
     }
 
     suspend fun saveAudioPosition(bookId: String, fileId: String, positionSeconds: Double, progressPercent: Double) {
@@ -2707,6 +2788,9 @@ class KobblerApi(
      * chances for one of them to be forgotten.
      */
     fun audioSource(bookId: String, fileId: String): dev.kobbler.kobplayer.MediaSource.Url {
+        offline?.audioUrl(bookId, fileId)?.let {
+            return dev.kobbler.kobplayer.MediaSource.Url(url = it, networkCacheMs = LanNetworkCacheMs)
+        }
         val url = audioStreamUrl(bookId, fileId)
         return dev.kobbler.kobplayer.MediaSource.Url(
             url = withHeldPlaybackToken(url),
@@ -2724,7 +2808,8 @@ class KobblerApi(
     /** Null when the state could not be read, which callers that echo the stored CFI back
      *  must not confuse with "the server has no CFI". */
     suspend fun readerProgressOrNull(bookId: String): ReaderProgressDto? = quiet<ReaderProgressDto?>(null) {
-        decode<ReaderProgressDto>(get("/api/v1/admin/books/$bookId/reader-progress"))
+        val path = "/api/v1/admin/books/$bookId/reader-progress"
+        decode<ReaderProgressDto>(offline?.pendingWriteBody(offlineOwner, path) ?: get(path))
     }
 
     suspend fun getReaderProgress(bookId: String): ReaderProgressDto =
@@ -4138,6 +4223,7 @@ class KobblerApi(
     }
 
     /** Result of creating a streaming session — includes session ID, enrichment data. */
+    @Serializable
     data class StreamSession(
         val url: String,
         val sessionId: String,
@@ -4184,11 +4270,35 @@ class KobblerApi(
      * A media with no available file comes back 404, which is the null.
      */
     suspend fun getMovieStreamSession(movieId: String, startTimeSec: Int? = null): StreamSession? =
-        createDirectSession("movie", movieId, startTimeSec)
+        offline?.playbackSession("movie", movieId) { createDownloadSession("movie", movieId) }
+            ?: createDirectSession("movie", movieId, startTimeSec)
 
     /** Get a streaming session for an episode. See [getMovieStreamSession]. */
     suspend fun getEpisodeStreamSession(episodeId: String, startTimeSec: Int? = null): StreamSession? =
-        createDirectSession("episode", episodeId, startTimeSec)
+        offline?.playbackSession("episode", episodeId) { createDownloadSession("episode", episodeId) }
+            ?: createDirectSession("episode", episodeId, startTimeSec)
+
+    /**
+     * A session onto the title's own file, whatever the quality setting says: a download is
+     * the original, and its bytes have to be the same ones on every session it is resumed with.
+     */
+    internal suspend fun createDownloadSession(mediaType: String, mediaId: String): StreamSession? {
+        val prefs = TrackPrefs.current()
+        val reqBody = json.encodeToString(CreateSessionRequest.serializer(), CreateSessionRequest(
+            mediaType = mediaType,
+            mediaId = mediaId,
+            capabilities = capabilities(),
+            preferredAudioLanguage = prefs.audioLanguage,
+            preferredSubtitleLanguage = prefs.subtitleLanguage,
+            subtitlesEnabled = prefs.subtitlesEnabled,
+        ))
+        val respJson = try {
+            post("/api/v1/admin/playback/sessions", reqBody)
+        } catch (e: ApiException) {
+            if (e.statusCode == 404) return null else throw e
+        }
+        return decode<SessionResponse>(respJson).toStreamSession()
+    }
 
     /** Decode a `watch_progress` event, or null for one in an unexpected shape. */
     fun decodeWatchProgress(data: JsonObject): WatchProgress? =
@@ -4231,7 +4341,7 @@ class KobblerApi(
      * play — so asking is the only way to find out while a player is idle. Only a 404
      * says so: a request that never arrived is the network, not the session.
      */
-    suspend fun sessionGone(sessionId: String): Boolean = quiet(false) {
+    suspend fun sessionGone(sessionId: String): Boolean = offline?.isLocalSession(sessionId) != true && quiet(false) {
         httpClient.get("$apiUrl/api/v1/admin/playback/sessions/$sessionId/heartbeat") {
             header(HttpHeaders.Authorization, "Bearer $token")
         }.status == HttpStatusCode.NotFound
@@ -4245,6 +4355,7 @@ class KobblerApi(
      * says nothing about the session and must not be read as one that died.
      */
     suspend fun sessionStatus(sessionId: String): SessionStatus {
+        if (offline?.isLocalSession(sessionId) == true) return SessionStatus.Unknown
         val resp = try {
             httpClient.get("$apiUrl/api/v1/admin/playback/sessions/$sessionId/status") {
                 header(HttpHeaders.Authorization, "Bearer $token")
@@ -4261,6 +4372,7 @@ class KobblerApi(
 
     /** Close a streaming session, cleaning up server-side resources. */
     suspend fun closeSession(sessionId: String) {
+        if (offline?.isLocalSession(sessionId) == true) return
         quiet(Unit) {
             httpClient.delete("$apiUrl/api/v1/admin/playback/sessions/$sessionId") {
                 header(HttpHeaders.Authorization, "Bearer $token")
@@ -4306,6 +4418,31 @@ class KobblerApi(
         }
         return decode<SessionResponse>(respJson).toStreamSession()
     }
+
+    /** Asks the server for a copy of the title's file at [quality], or the one it already has. Null when it has no file. */
+    internal suspend fun createOfflineExport(mediaType: String, mediaId: String, quality: String): OfflineExport? {
+        val body = buildJsonObject {
+            put("media_type", mediaType)
+            put("media_id", mediaId)
+            put("quality", quality)
+            put("preferred_audio_language", TrackPrefs.current().audioLanguage?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
+        val text = try {
+            post("/api/v1/admin/offline/exports", body.toString())
+        } catch (e: ApiException) {
+            if (e.statusCode == 404) return null else throw e
+        }
+        return decode<OfflineExport>(text).resolved()
+    }
+
+    /** Null once the server no longer has it. */
+    internal suspend fun offlineExport(exportId: String): OfflineExport? = try {
+        decode<OfflineExport>(get("/api/v1/admin/offline/exports/$exportId")).resolved()
+    } catch (e: ApiException) {
+        if (e.statusCode == 404) null else throw e
+    }
+
+    private fun OfflineExport.resolved() = copy(fileUrl = resolveUrl(apiUrl, fileUrl))
 
     /** Switch audio track for a playback session. Returns updated session. */
     suspend fun switchAudioTrack(

@@ -101,6 +101,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.media3.session)
+    implementation(libs.work.runtime)
     implementation(libs.play.services.cast.framework)
     // Present transitively already, but the profile only installs on API 28-30 if the
     // installer is a direct dependency the app can initialise.

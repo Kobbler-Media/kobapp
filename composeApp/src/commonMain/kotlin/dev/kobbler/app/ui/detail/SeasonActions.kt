@@ -1,5 +1,8 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.offline.SeasonDownloadItems
+import dev.kobbler.app.ui.offline.seasonHasDownloadActions
+
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
@@ -35,9 +38,11 @@ internal fun seasonMenu(
     if (api == null || season == null) return null
     val canMark = season.episodes.any { it.id != null && !it.isWatchedNow(watchedOverrides) }
     val canWant = season.id != null && season.episodes.any { it.canBeWanted(api.canWant) && !it.isWantedNow(wantOverrides) }
-    if (!canMark && !canWant) return null
+    val canDownload = seasonHasDownloadActions(season)
+    if (!canMark && !canWant && !canDownload) return null
 
     return { close ->
+        if (canDownload) SeasonDownloadItems(show, season, accent, scope, close)
         if (canMark) {
             OverflowItem(
                 key = "markSeasonWatched",

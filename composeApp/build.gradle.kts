@@ -84,6 +84,21 @@ kotlin {
         }
     }
 
+    // Android and desktop share a JVM: java.io for offline storage and a socket for its proxy.
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmShared") {
+                withCompilations {
+                    it.target.platformType in setOf(
+                        org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.jvm,
+                        org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.androidJvm,
+                    )
+                }
+            }
+        }
+    }
+
     sourceSets {
         commonMain {
             kotlin.srcDir(pinServiceSource)
@@ -170,6 +185,8 @@ tasks.withType<JavaExec>().matching { it.name.startsWith("hotRun") }.configureEa
 // minute is not always enough for a test that loads a page twice.
 tasks.named<Test>("desktopTest") {
     systemProperty("kotlinx.coroutines.test.default_timeout", "5m")
+    // The app's offline store lives under XDG_DATA_HOME; a test must never write into the real one.
+    environment("XDG_DATA_HOME", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
 }
 
 // Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. install-desktop.sh trains

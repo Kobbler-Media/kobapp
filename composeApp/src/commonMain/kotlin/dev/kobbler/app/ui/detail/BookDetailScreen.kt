@@ -1,5 +1,11 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.offline.OfflineState
+import dev.kobbler.app.ui.offline.BookDownloadActions
+import dev.kobbler.app.ui.offline.OfflineBadge
+import dev.kobbler.app.ui.offline.rememberOfflineItem
+
 import dev.kobbler.app.ui.components.KobBackButton
 import androidx.compose.foundation.ScrollState
 import dev.kobbler.app.ui.components.spotlight
@@ -471,6 +477,11 @@ private fun FormatChips(book: Book, accent: Color, centered: Boolean) {
         if (book.hasAudiobook) {
             KobChip(text = "AUDIO", style = KobChipStyle.AccentTint, accent = audioAccent)
         }
+        val ebook = rememberOfflineItem(OfflineKind.Book, book.id)?.state == OfflineState.Complete
+        val audio = rememberOfflineItem(OfflineKind.Audiobook, book.id)?.state == OfflineState.Complete
+        if (ebook || audio) {
+            OfflineBadge(label = if (ebook && audio && book.hasAudiobook) "Book and audio offline" else "Available offline")
+        }
     }
 }
 
@@ -512,6 +523,7 @@ private fun ActionRow(
                 modifier = Modifier.focusKey(action.key),
             )
         }
+        BookDownloadActions(book, accent)
     }
 }
 

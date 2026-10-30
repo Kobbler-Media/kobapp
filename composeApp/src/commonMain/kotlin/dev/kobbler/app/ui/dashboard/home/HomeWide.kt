@@ -1,5 +1,8 @@
 package dev.kobbler.app.ui.dashboard.home
 
+import dev.kobbler.app.ui.offline.continueAvailableOffline
+import dev.kobbler.app.ui.offline.recentAvailableOffline
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -182,6 +185,7 @@ fun HomeWide(
                                         imageUrl = item.imageUrl,
                                         subtitle = item.subtitle,
                                         accentColor = colors.accentForRecentlyAdded(item.itemType),
+                                        offline = recentAvailableOffline(item.itemType, item.id),
                                         onClick = { onRecentClick(item) },
                                         modifier = Modifier
                                             .testTag("$RecentCardTag.$c")
@@ -385,6 +389,7 @@ private fun UpNextStrip(
                             backdropUrl = item.backdropUrl,
                             progress = item.progress ?: 0f,
                             accentColor = colors.accentForMediaType(item.mediaType),
+                            offline = continueAvailableOffline(item.mediaType, item.mediaId),
                             aspectRatio = 3f / 2f,
                             onClick = { onClick(i) },
                             modifier = Modifier

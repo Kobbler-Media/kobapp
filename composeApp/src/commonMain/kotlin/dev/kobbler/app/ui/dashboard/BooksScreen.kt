@@ -1,5 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.ui.offline.bookAvailableOffline
+import dev.kobbler.app.ui.offline.continueAvailableOffline
+
 import androidx.compose.foundation.background
 import dev.kobbler.app.ui.scrollsUnderTopChrome
 import dev.kobbler.app.ui.LocalTopChromeOverlap
@@ -338,7 +341,7 @@ private fun AllBooksGrid(
                             modifier = Modifier.focusKeyGroup("readnext"),
                         ) {
                             itemsIndexed(readNext, key = { _, item -> item.id }) { idx, item ->
-                                dev.kobbler.app.ui.components.WideCard(title = item.title, subtitle = item.subtitle, imageUrl = item.imageUrl, progress = item.progress, onClick = { onContinueClick(item) }, modifier = Modifier.spotlightOn(pointer) { item.spotlight() }.showingBadge(swiper, item.spotlight()).focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = readNextIndex; focus.rowKey = "readnext" } })
+                                dev.kobbler.app.ui.components.WideCard(title = item.title, subtitle = item.subtitle, imageUrl = item.imageUrl, progress = item.progress, offline = continueAvailableOffline(item.mediaType, item.id), onClick = { onContinueClick(item) }, modifier = Modifier.spotlightOn(pointer) { item.spotlight() }.showingBadge(swiper, item.spotlight()).focusKey("item.${item.id}", preferredEntry = continueIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = readNextIndex; focus.rowKey = "readnext" } })
                             }
                         }
                     }
@@ -356,7 +359,7 @@ private fun AllBooksGrid(
                             modifier = Modifier.focusKeyGroup("recent"),
                         ) {
                             itemsIndexed(recentBooks, key = { _, b -> b.id }) { idx, b ->
-                                dev.kobbler.app.ui.components.PosterCard(title = b.title, imageUrl = b.coverUrl, subtitle = b.author, accentColor = accentColor, onClick = { onBookClick(b) }, modifier = Modifier.spotlightOn(pointer) { b.spotlight() }.showingBadge(swiper, b.spotlight()).focusKey("book.${b.id}", preferredEntry = recentIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } })
+                                dev.kobbler.app.ui.components.PosterCard(title = b.title, imageUrl = b.coverUrl, subtitle = b.author, accentColor = accentColor, offline = bookAvailableOffline(b.id), onClick = { onBookClick(b) }, modifier = Modifier.spotlightOn(pointer) { b.spotlight() }.showingBadge(swiper, b.spotlight()).focusKey("book.${b.id}", preferredEntry = recentIsEntry && idx == 0).onFocusChanged { if (it.isFocused) { focus.lazyIndex = recentIndex; focus.rowKey = "recent" } })
                             }
                         }
                     }
@@ -379,6 +382,7 @@ private fun AllBooksGrid(
                         imageUrl = book.coverUrl,
                         subtitle = book.author,
                         accentColor = accentColor,
+                        offline = bookAvailableOffline(book.id),
                         onClick = { onBookClick(book) },
                         onLongClick = { progressBook = book },
                         modifier = Modifier

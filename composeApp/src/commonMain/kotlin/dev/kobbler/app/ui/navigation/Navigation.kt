@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.navigation
 
 import androidx.compose.foundation.clickable
+import dev.kobbler.app.offline.Offline
 import dev.kobbler.app.ui.components.ComicSkeleton
 import dev.kobbler.app.ui.components.ReaderSkeleton
 import dev.kobbler.app.ui.components.PlayerSkeleton
@@ -99,6 +100,7 @@ sealed interface Destination {
         data object LiveTv : Tab("Live TV", Icons.Outlined.Tv, KobappColorsDefault.accLive)
         data object Iptv : Tab("IPTV", Icons.Outlined.LiveTv, KobappColorsDefault.accIptv)
         data object Downloads : Tab("Downloads", Icons.Outlined.Download, KobappColorsDefault.accMovies)
+        data object Offline : Tab("Offline", Icons.Outlined.DownloadForOffline, KobappColorsDefault.ok)
         data object Calendar : Tab("Calendar", Icons.Outlined.CalendarMonth, KobappColorsDefault.accCal)
         data object Settings : Tab("Settings", Icons.Outlined.Settings, KobappColorsDefault.accSet)
         data object Activity : Tab("Activity", Icons.Outlined.History, KobappColorsDefault.accNotif)
@@ -157,6 +159,7 @@ val defaultNavConfig = NavConfig(
         Destination.Tab.Iptv,
         Destination.Tab.Audiobooks,
         Destination.Tab.Books,
+        Destination.Tab.Offline,
         Destination.Tab.Downloads,
         Destination.Tab.Calendar,
         Destination.Tab.Activity,
@@ -166,7 +169,7 @@ val defaultNavConfig = NavConfig(
         Destination.Tab.Home,
         Destination.Tab.Movies, Destination.Tab.TvShows,
         Destination.Tab.Sports, Destination.Tab.LiveTv, Destination.Tab.Iptv,
-        Destination.Tab.Audiobooks, Destination.Tab.Books,
+        Destination.Tab.Audiobooks, Destination.Tab.Books, Destination.Tab.Offline,
         Destination.Tab.Downloads, Destination.Tab.Calendar, Destination.Tab.Activity,
     ),
 )
@@ -176,13 +179,14 @@ val defaultNavConfig = NavConfig(
 private val kidsHiddenTabs =
     setOf(Destination.Tab.LiveTv, Destination.Tab.Iptv, Destination.Tab.Sports)
 
-fun navConfigFor(isKids: Boolean): NavConfig =
-    if (!isKids) defaultNavConfig
-    else defaultNavConfig.copy(
-        bottomBarTabs = defaultNavConfig.bottomBarTabs - kidsHiddenTabs,
-        drawerTabs = defaultNavConfig.drawerTabs - kidsHiddenTabs,
-        sidebarTabs = defaultNavConfig.sidebarTabs - kidsHiddenTabs,
+fun navConfigFor(isKids: Boolean, offline: Boolean = Offline.engine != null): NavConfig {
+    val hidden = (if (isKids) kidsHiddenTabs else emptySet()) + (if (offline) emptySet() else setOf(Destination.Tab.Offline))
+    return defaultNavConfig.copy(
+        bottomBarTabs = defaultNavConfig.bottomBarTabs - hidden,
+        drawerTabs = defaultNavConfig.drawerTabs - hidden,
+        sidebarTabs = defaultNavConfig.sidebarTabs - hidden,
     )
+}
 
 fun searchScopesFor(config: NavConfig): List<SearchScope> {
     val tabs = config.drawerTabs + config.sidebarTabs
@@ -276,7 +280,15 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     val api = remember(auth.apiUrl, auth.token, canWant, isAdmin) {
         val url = auth.apiUrl ?: return@remember null
         val tok = auth.token ?: return@remember null
-        KobblerApi(auth.httpClient, url, tok, canWant = canWant, canManageKids = isAdmin)
+        KobblerApi(auth.httpClient, url, tok, canWant = canWant, canManageKids = isAdmin, offline = Offline.engine)
+    }
+    LaunchedEffect(api) {
+        val engine = Offline.engine ?: return@LaunchedEffect
+        engine.attach(api ?: return@LaunchedEffect, kids = auth.isKids)
+        // Opened with no way to reach the server, the app starts where everything still works.
+        if (nav.current == Destination.Tab.Home && engine.store.index.value.items.isNotEmpty() && !engine.reachability.check()) {
+            nav.navigate(Destination.Tab.Offline)
+        }
     }
 
     // Global player — one instance for the entire app
@@ -298,6 +310,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     if (player != null && api != null) {
         LaunchedEffect(player, api) { gps.watchPlayback(player, api) }
         PlaybackSessionHeartbeat(gps, player, api)
+        dev.kobbler.app.ui.player.RouteDownloadsThroughProxy(gps, player, api)
     }
 
     // Report it without being asked: by the time somebody thinks to press a
@@ -458,6 +471,7 @@ internal val Destination.Tab.section: Section get() = when (this) {
     Destination.Tab.LiveTv -> Section.LiveTv
     Destination.Tab.Iptv -> Section.Iptv
     Destination.Tab.Downloads -> Section.Downloads
+    Destination.Tab.Offline -> Section.Offline
     Destination.Tab.Calendar -> Section.Calendar
     Destination.Tab.Settings -> Section.Settings
     Destination.Tab.Activity -> Section.Activity
@@ -473,6 +487,7 @@ internal fun tabForSection(section: Section): Destination.Tab = when (section) {
     Section.LiveTv -> Destination.Tab.LiveTv
     Section.Iptv -> Destination.Tab.Iptv
     Section.Downloads -> Destination.Tab.Downloads
+    Section.Offline -> Destination.Tab.Offline
     Section.Calendar -> Destination.Tab.Calendar
     Section.Settings -> Destination.Tab.Settings
     Section.Activity -> Destination.Tab.Activity
@@ -1250,6 +1265,16 @@ private fun SingleTabContent(
                             else -> nav.navigate(Destination.BookDetail(target.id))
                         }
                     },
+                )
+            }
+        }
+        is Destination.Tab.Offline -> {
+            TabScreenWithTopBar(onMenuClick, onSearchClick, formFactor) {
+                dev.kobbler.app.ui.offline.OfflineScreen(
+                    onOpenMovie = { nav.navigate(Destination.MovieDetail(it)) },
+                    onOpenShow = { nav.navigate(Destination.TvShowDetail(it)) },
+                    onOpenBook = { nav.navigate(Destination.BookDetail(it)) },
+                    modifier = modifier,
                 )
             }
         }

@@ -1,5 +1,12 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.offline.LocalOfflineEngine
+
+import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.offline.downloadMovie
+import dev.kobbler.app.ui.offline.OfflineAction
+import dev.kobbler.app.ui.offline.rememberOfflineItem
+
 import dev.kobbler.app.ui.components.PrefetchToDisk
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -136,6 +143,15 @@ private fun ActionRow(
                 accent = accent,
                 onClick = onStreamPick,
                 modifier = Modifier.focusKey("streams"),
+            )
+        }
+
+        val offline = LocalOfflineEngine.current
+        if (offline != null && movie.filePath != null && supportsVideoPlayback) {
+            OfflineAction(
+                item = rememberOfflineItem(OfflineKind.Movie, movie.id),
+                accent = accent,
+                onDownload = { offline.downloadMovie(movie) },
             )
         }
 

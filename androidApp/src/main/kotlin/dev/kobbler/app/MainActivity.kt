@@ -33,6 +33,15 @@ import dev.kobbler.app.platform.FileCache
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.PlaybackBridge
 import dev.kobbler.app.platform.Settings
+import dev.kobbler.app.offline.DownloadService
+import dev.kobbler.app.offline.NewEpisodesWorker
+import dev.kobbler.app.offline.Offline
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var isFullscreen by mutableStateOf(false)
@@ -40,6 +49,18 @@ class MainActivity : ComponentActivity() {
     private var isVideoPlaying = false
     /** Set true on PiP exit; cleared on resume. If onStop fires while true, the user dismissed PiP via X. */
     private var pipJustExited = false
+
+    // Started from here because only a foreground app may start a foreground service; once
+    // running it outlives the activity and stops itself when the queue is done.
+    private fun keepDownloadsRunning() {
+        val engine = Offline.engine ?: return
+        NewEpisodesWorker.schedule(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                engine.hasPendingWork.distinctUntilChanged().filter { it }.collect { DownloadService.start(this@MainActivity) }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +82,7 @@ class MainActivity : ComponentActivity() {
         Settings.init(this)
         FileCache.init(this)
         requestNotificationPermission()
+        keepDownloadsRunning()
 
         // Provide context for Cast SDK (actual init happens lazily after server config is fetched)
         if (!isTv()) {

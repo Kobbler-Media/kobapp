@@ -20,6 +20,7 @@ import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.SharedHttp
 import dev.kobbler.app.data.imageAuthToken
 import dev.kobbler.app.data.kobImageLoader
+import dev.kobbler.app.offline.Offline
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.defaultFormFactor
 import dev.kobbler.app.platform.imageCacheDir
@@ -49,7 +50,7 @@ fun App(
     }
 
     setSingletonImageLoaderFactory { context ->
-        kobImageLoader(context, imageHttpClient, imageCacheDir(context))
+        kobImageLoader(context, imageHttpClient, imageCacheDir(context)) { url -> Offline.engine?.store?.imageBytes(url) }
     }
 
     RefreshWatchStateOnFocus(LocalWindowInfo.current.isWindowFocused)

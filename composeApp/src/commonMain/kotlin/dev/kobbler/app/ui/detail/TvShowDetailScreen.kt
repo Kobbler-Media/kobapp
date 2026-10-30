@@ -1,5 +1,9 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.offline.LocalOfflineEngine
+
+import dev.kobbler.app.offline.downloadEpisodes
+
 import dev.kobbler.app.ui.components.PrefetchToDisk
 import dev.kobbler.app.ui.components.rememberArtTone
 import androidx.compose.runtime.getValue
@@ -40,6 +44,7 @@ fun TvShowDetailScreen(
     var restartFrom by remember(fetched) { mutableStateOf<ContinueEpisode?>(null) }
     val shown = restartFrom?.let { fetched.copy(continueEpisode = it) } ?: fetched
     val accent = colors.accTv
+    val offline = LocalOfflineEngine.current
     val toast = rememberToastState()
     // The player opens on the logo; fetched only then, it was the last thing to appear.
     PrefetchToDisk(listOfNotNull(show.logoUrl))
@@ -112,6 +117,7 @@ fun TvShowDetailScreen(
                 onStreamEpisode = onStreamEpisode,
                 onStreamEpisodePick = onStreamEpisodePick,
                 seasonEntry = seasonEntry,
+                onDownload = offline?.let { engine -> { ep -> engine.downloadEpisodes(shown, listOf(ep)) } },
             )
         },
         topBarStatus = { WatchedCount(shown, watchedOverrides) },

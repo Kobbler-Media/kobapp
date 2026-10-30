@@ -1,5 +1,8 @@
 package dev.kobbler.app.ui.dashboard.home
 
+import dev.kobbler.app.ui.offline.continueAvailableOffline
+import dev.kobbler.app.ui.offline.recentAvailableOffline
+
 import androidx.compose.foundation.background
 import dev.kobbler.app.ui.scrollsUnderTopChrome
 import dev.kobbler.app.ui.LocalTopChromeOverlap
@@ -174,6 +177,7 @@ fun HomePhone(
                                         backdropUrl = item.backdropUrl,
                                         progress = item.progress ?: 0f,
                                         accentColor = colors.accentForMediaType(item.mediaType),
+                                        offline = continueAvailableOffline(item.mediaType, item.mediaId),
                                         onClick = { onContinueClick(i + 1) },
                                         modifier = Modifier.width(cardWidth).showingBadge(spotlight, item.spotlight()),
                                     )
@@ -198,6 +202,7 @@ fun HomePhone(
                             imageUrl = item.imageUrl,
                             subtitle = item.subtitle,
                             accentColor = colors.accentForRecentlyAdded(item.itemType),
+                            offline = recentAvailableOffline(item.itemType, item.id),
                             onClick = { onRecentClick(item) },
                             width = cardWidth,
                             modifier = Modifier.showingBadge(spotlight, item.spotlight()),

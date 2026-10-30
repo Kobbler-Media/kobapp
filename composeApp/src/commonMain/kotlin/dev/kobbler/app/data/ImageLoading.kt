@@ -17,12 +17,30 @@ import okio.Buffer
 import okio.IOException
 import okio.Path
 
-fun kobImageLoader(context: PlatformContext, httpClient: HttpClient, cacheDir: Path?): ImageLoader =
+fun kobImageLoader(
+    context: PlatformContext,
+    httpClient: HttpClient,
+    cacheDir: Path?,
+    keptImage: (url: String) -> ByteArray? = { null },
+): ImageLoader =
     ImageLoader.Builder(context)
-        .components { add(NetworkFetcher.Factory(networkClient = { CompleteBodyNetworkClient(httpClient.asNetworkClient()) })) }
+        .components {
+            add(NetworkFetcher.Factory(networkClient = { KeptFirstNetworkClient(CompleteBodyNetworkClient(httpClient.asNetworkClient()), keptImage) }))
+        }
         .apply { cacheDir?.let { dir -> diskCache { DiskCache.Builder().directory(dir).build() } } }
         .applyPlatformImageOptions()
         .build()
+
+// Art kept with a download is answered from disk, so its pages look the same with no network.
+private class KeptFirstNetworkClient(
+    private val delegate: NetworkClient,
+    private val kept: (String) -> ByteArray?,
+) : NetworkClient {
+    override suspend fun <T> executeRequest(request: NetworkRequest, block: suspend (NetworkResponse) -> T): T {
+        val bytes = kept(request.url) ?: return delegate.executeRequest(request, block)
+        return block(NetworkResponse(code = 200, body = NetworkResponseBody(Buffer().write(bytes))))
+    }
+}
 
 // Ktor's OkHttp engine stops pumping a body once its call is cancelled and closes the channel
 // cleanly instead of with an error, and Coil commits whatever arrived to the disk cache as the

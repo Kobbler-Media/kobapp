@@ -1,5 +1,9 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.ui.offline.continueAvailableOffline
+import dev.kobbler.app.ui.offline.isAvailableOffline
+
 import androidx.compose.foundation.layout.*
 import dev.kobbler.app.ui.scrollsUnderTopChrome
 import dev.kobbler.app.ui.LocalTopChromeOverlap
@@ -275,6 +279,7 @@ fun MoviesScreen(
                                     imageUrl = item.imageUrl, backdropUrl = item.backdropUrl,
                                     progress = item.progress,
                                     accentColor = accent,
+                                    offline = continueAvailableOffline(item.mediaType, item.id),
                                     onClick = { onContinueClick(item) },
                                     modifier = Modifier
                                         .spotlightOn(pointer) { item.spotlight() }.showingBadge(swiper, item.spotlight())
@@ -304,6 +309,7 @@ fun MoviesScreen(
                                     imageUrl = movie.posterUrl,
                                     subtitle = if (movie.year != 0) movie.year.toString() else null,
                                     accentColor = accent,
+                                    offline = isAvailableOffline(OfflineKind.Movie, movie.id),
                                     onClick = { onMovieClick(movie) },
                                     modifier = Modifier
                                         .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
@@ -344,6 +350,7 @@ fun MoviesScreen(
                         imageUrl = movie.posterUrl,
                         subtitle = if (movie.year != 0) movie.year.toString() else null,
                         accentColor = accent,
+                        offline = isAvailableOffline(OfflineKind.Movie, movie.id),
                         onClick = { onMovieClick(movie) },
                         modifier = Modifier
                             .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())

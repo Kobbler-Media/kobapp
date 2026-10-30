@@ -1,5 +1,9 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.ui.offline.metaOffline
+import dev.kobbler.app.ui.offline.rememberOfflineItem
+
 import dev.kobbler.app.ui.components.KobBackButton
 import androidx.compose.foundation.ScrollState
 import dev.kobbler.app.ui.components.spotlight
@@ -186,6 +190,7 @@ private fun Tagline(text: String) {
 @Composable
 private fun MovieMeta(movie: Movie) {
     DetailMeta(
+        metaOffline(rememberOfflineItem(OfflineKind.Movie, movie.id)),
         metaText(movie.duration),
         metaText(movie.contentRating),
         metaRating(movie.rating),

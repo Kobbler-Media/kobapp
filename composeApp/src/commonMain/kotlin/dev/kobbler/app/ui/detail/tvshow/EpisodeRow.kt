@@ -1,5 +1,12 @@
 package dev.kobbler.app.ui.detail.tvshow
 
+import dev.kobbler.app.offline.OfflineItem
+import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.offline.OfflineState
+import dev.kobbler.app.ui.offline.EpisodeDownloadButton
+import dev.kobbler.app.ui.offline.OfflineBadge
+import dev.kobbler.app.ui.offline.rememberOfflineItem
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
@@ -214,6 +221,7 @@ fun LazyListScope.episodeList(
     wantOverrides: SnapshotStateMap<String, Boolean>,
     seasonEntry: FocusRequester? = null,
     isUpcoming: ((Episode) -> Boolean)? = null,
+    onDownload: ((Episode) -> Unit)? = null,
 ) {
     if (season == null) return
     // Above the first row is the tab strip, and a geometric search up out of the list
@@ -252,6 +260,8 @@ fun LazyListScope.episodeList(
                 { onStreamEpisodePick(seasonIdx, idx) }
             } else null,
             wanted = ep.isWantedNow(wantOverrides),
+            offline = rememberOfflineItem(OfflineKind.Episode, ep.id),
+            onDownload = if (onDownload != null && canPlayLocal && ep.id != null) { { onDownload(ep) } } else null,
             onWant = if (api != null && ep.id != null && ep.canBeWanted(api.canWant) && !ep.isWantedNow(wantOverrides)) {
                 {
                     // Optimistic like the watched toggle: the round-trip enqueues a
@@ -288,6 +298,8 @@ private fun EpisodeRow(
     canStream: Boolean,
     airsSoon: Boolean,
     wanted: Boolean,
+    offline: OfflineItem?,
+    onDownload: (() -> Unit)?,
     onClick: () -> Unit,
     onStreamPick: (() -> Unit)?,
     onWant: (suspend () -> Unit)?,
@@ -343,6 +355,8 @@ private fun EpisodeRow(
             }
         }
 
+        if (onDownload != null) EpisodeDownloadButton(offline, accent, onDownload)
+
         if (onStreamPick != null) {
             IconBtn(
                 icon = Icons.Outlined.Tune,
@@ -380,7 +394,7 @@ private fun EpisodeRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, width = 104.dp)
+                Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, offline = offline?.state == OfflineState.Complete, width = 104.dp)
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -438,7 +452,7 @@ private fun EpisodeRow(
                 modifier = Modifier.width(36.dp),
             )
 
-            Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon)
+            Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, offline = offline?.state == OfflineState.Complete)
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -484,6 +498,7 @@ private fun Thumbnail(
     artTone: Color,
     watched: Boolean,
     airsSoon: Boolean,
+    offline: Boolean,
     width: Dp = 150.dp,
 ) {
     val colors = KobappTheme.colors
@@ -495,6 +510,7 @@ private fun Thumbnail(
             .border(1.dp, colors.lineSoft, KobappTheme.shapes.small),
     ) {
         StripedArt(episode.thumbnailUrl, accent, Modifier.fillMaxSize(), tone = artTone)
+        if (offline) OfflineBadge(Modifier.align(Alignment.TopStart).padding(4.dp), label = null)
         val progress = episode.watchProgress
         if (progress != null && progress > 0f && progress < 1f) {
             Box(
@@ -552,9 +568,10 @@ internal fun IconBtn(
     focusKey: String,
     tint: Color,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(36.dp)
             .focusKey(focusKey)
             .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f)

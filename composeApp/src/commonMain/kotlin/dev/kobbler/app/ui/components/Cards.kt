@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.components
 
+import dev.kobbler.app.ui.offline.OfflineBadge
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -57,6 +59,7 @@ fun PosterCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
     width: Dp? = null,
+    offline: Boolean = false,
 ) {
     val dimens = KobappTheme.dimens
     val colors = KobappTheme.colors
@@ -115,19 +118,20 @@ fun PosterCard(
                         .background(BottomScrim),
                 )
             }
-            // top-left external badge (e.g. "NEW")
-            if (badge != null) {
-                Box(
-                    modifier = Modifier
-                        .padding(6.dp)
-                        .align(Alignment.TopStart)
-                        .clip(KobappTheme.shapes.pill)
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), KobappTheme.shapes.pill)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                ) {
-                    Text(badge.uppercase(), color = colors.textHi, style = KobappTheme.type.caption)
+            // top-left external badge (e.g. "NEW"), with the offline mark under it
+            Column(Modifier.padding(6.dp).align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (badge != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(KobappTheme.shapes.pill)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), KobappTheme.shapes.pill)
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        Text(badge.uppercase(), color = colors.textHi, style = KobappTheme.type.caption)
+                    }
                 }
+                if (offline) OfflineBadge(label = null)
             }
             // top-right library status pill
             if (statusBadge != null) {
@@ -187,6 +191,7 @@ fun WideCard(
     modifier: Modifier = Modifier,
     aspectRatio: Float = 16f / 9f,
     onClick: () -> Unit = {},
+    offline: Boolean = false,
 ) {
     val dimens = KobappTheme.dimens
     val colors = KobappTheme.colors
@@ -239,6 +244,7 @@ fun WideCard(
                 Modifier.fillMaxWidth().fillMaxHeight(0.5f).align(Alignment.BottomCenter)
                     .background(BottomScrim),
             )
+            if (offline) OfflineBadge(Modifier.padding(6.dp).align(Alignment.TopStart), label = null)
             Column(Modifier.align(Alignment.BottomStart).padding(dimens.s3)) {
                 MarqueeLine(title, KobappTheme.type.bodySm, Color.White, focus)
                 if (subtitle != null) {

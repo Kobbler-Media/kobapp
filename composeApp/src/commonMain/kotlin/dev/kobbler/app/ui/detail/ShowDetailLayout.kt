@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.offline.metaShowOffline
+
 import dev.kobbler.app.ui.components.KobBackButton
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
@@ -263,6 +265,7 @@ private fun PhoneHead(body: ShowBody, actionsAnchor: Modifier) {
 @Composable
 private fun MetaRow(show: TvShow, episodeTotal: Int) {
     DetailMeta(
+        metaShowOffline(show),
         metaText(show.network),
         metaRating(show.rating),
         metaText(show.contentRating),

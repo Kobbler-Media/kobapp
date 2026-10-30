@@ -1,5 +1,8 @@
 package dev.kobbler.app.ui.dashboard
 
+import dev.kobbler.app.ui.offline.continueAvailableOffline
+import dev.kobbler.app.ui.offline.showAvailableOffline
+
 import androidx.compose.foundation.layout.*
 import dev.kobbler.app.ui.scrollsUnderTopChrome
 import dev.kobbler.app.ui.LocalTopChromeOverlap
@@ -319,6 +322,7 @@ fun TvShowsScreen(
                                     imageUrl = item.imageUrl, backdropUrl = item.backdropUrl,
                                     progress = item.progress,
                                     accentColor = accentColor,
+                                    offline = continueAvailableOffline(item.mediaType, item.id),
                                     onClick = { onContinueClick(item) },
                                     modifier = Modifier
                                         .spotlightOn(pointer) { item.spotlight() }.showingBadge(swiper, item.spotlight())
@@ -347,6 +351,7 @@ fun TvShowsScreen(
                                     imageUrl = show.posterUrl,
                                     subtitle = show.network ?: "",
                                     accentColor = accentColor,
+                                    offline = showAvailableOffline(show.id),
                                     onClick = { onShowClick(show) },
                                     modifier = Modifier
                                         .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
@@ -395,6 +400,7 @@ fun TvShowsScreen(
                         subtitle = show.network,
                         imageUrl = show.posterUrl,
                         accentColor = accentColor,
+                        offline = showAvailableOffline(show.id),
                         onClick = { onShowClick(show) },
                         modifier = Modifier
                             .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
