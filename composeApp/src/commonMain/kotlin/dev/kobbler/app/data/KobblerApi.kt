@@ -440,13 +440,15 @@ sealed interface SessionStatus {
 
 @Serializable
 data class OfflineExport(
-    @SerialName("export_id") val exportId: String,
+    @SerialName("export_id") val exportId: String = "",
     val state: String,
     val progress: Double = 0.0,
     @SerialName("size_bytes") val sizeBytes: Long? = null,
     val error: String? = null,
-    @SerialName("file_url") val fileUrl: String,
+    @SerialName("file_url") val fileUrl: String = "",
 ) {
+    /** The server judged a copy at that quality no smaller than the title's own file. */
+    val original: Boolean get() = state == "original"
     val ready: Boolean get() = state == "ready"
     val failed: Boolean get() = state == "failed"
 }

@@ -6,7 +6,6 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import dev.kobbler.app.data.SharedHttp
 import dev.kobbler.app.offline.ByteRanges
 import dev.kobbler.app.offline.JvmOfflineFs
 import dev.kobbler.app.offline.OfflineEngine
@@ -32,7 +31,7 @@ import kotlin.test.assertEquals
 class OfflineScreenTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val root = Files.createTempDirectory("offline-ui").toFile()
-    private val engine = OfflineEngine(OfflineStore(JvmOfflineFs(root), scope), SharedHttp.mediaClient(), Reachability(scope), scope, startProxy = { null })
+    private val engine = OfflineEngine(OfflineStore(JvmOfflineFs(root), scope), Reachability(scope), scope, startProxy = { null })
 
     @AfterTest
     fun tearDown() {

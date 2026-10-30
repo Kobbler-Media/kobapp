@@ -2,7 +2,6 @@ package dev.kobbler.app.offline
 
 import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.KobblerApi
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -29,7 +28,6 @@ class OfflineCapture(val owner: String) : AbstractCoroutineContextElement(Offlin
 
 class OfflineEngine(
     val store: OfflineStore,
-    private val mediaClient: HttpClient,
     val reachability: Reachability,
     private val scope: CoroutineScope,
     startProxy: (ProxyHandler) -> Int? = ::startOfflineProxy,
@@ -95,20 +93,12 @@ class OfflineEngine(
         val item = store.item(key) ?: return null
         if (item.file(path) == null) return null
         return mediaLock.withLock {
-            media.getOrPut("$key/$path") { OfflineMedia(store, mediaClient, key, path, upstreamFor(item, path)) }
+            media.getOrPut("$key/$path") { OfflineMedia(store, key, path, upstreamFor(item, path)) }
         }
     }
 
     private fun upstreamFor(item: OfflineItem, path: String): UpstreamSource = when (item.kind) {
-        OfflineKind.Movie, OfflineKind.Episode -> UpstreamSource { refresh ->
-            val current = store.item(item.key) ?: return@UpstreamSource null
-            if (current.exportQuality != null) return@UpstreamSource exportUpstream(current, refresh)
-            if (!refresh) mediaLock.withLock { directUrls[item.key] }?.let { return@UpstreamSource Upstream(it) }
-            if (_api.value == null) return@UpstreamSource null
-            openDownloadSession(current)
-            mediaLock.withLock { directUrls[item.key] }?.let(::Upstream)
-                ?: throw UpstreamUnavailable("The server can only stream ${item.title}, not send its file")
-        }
+        OfflineKind.Movie, OfflineKind.Episode -> UpstreamSource { refresh -> videoUpstream(item.key, refresh) }
         OfflineKind.Audiobook -> UpstreamSource {
             val api = _api.value ?: return@UpstreamSource null
             Upstream(api.audioStreamUrl(item.mediaId, path.removePrefix(AudioDir)), api.authHeaders)
@@ -117,6 +107,16 @@ class OfflineEngine(
             val api = _api.value ?: return@UpstreamSource null
             Upstream(api.bookFileUrl(item.mediaId, item.bookFormat), api.authHeaders)
         }
+    }
+
+    private suspend fun videoUpstream(key: String, refresh: Boolean): Upstream? {
+        val item = store.item(key) ?: return null
+        if (item.exportQuality != null) return exportUpstream(item, refresh)
+        if (!refresh) mediaLock.withLock { directUrls[key] }?.let { return Upstream(it) }
+        if (_api.value == null) return null
+        openDownloadSession(item)
+        return mediaLock.withLock { directUrls[key] }?.let(::Upstream)
+            ?: throw UpstreamUnavailable("The server can only stream ${item.title}, not send its file")
     }
 
     /**
@@ -129,7 +129,14 @@ class OfflineEngine(
         val type = mediaTypeOf(item.kind)
         suspend fun create() = api.createOfflineExport(type, item.mediaId, quality)
             ?: throw UpstreamUnavailable("The server has no file for ${item.title}")
+        suspend fun original(): Upstream? {
+            val playable = DownloadQuality.Original.wire.takeIf { item.session?.method != DirectPlay }
+            if (playable == quality) throw UpstreamUnavailable("The server would not make a playable copy of ${item.title}")
+            store.updateItem(item.key) { it.copy(exportQuality = playable, exportId = null) }
+            return videoUpstream(item.key, refresh = true)
+        }
         var export = (if (refresh) null else item.exportId?.let { api.offlineExport(it) }) ?: create()
+        if (export.original) return original()
         adoptSource(item.key, "export:${export.exportId}")
         store.updateItem(item.key) { it.copy(exportId = export.exportId) }
         var lastProgress = -1.0
@@ -146,6 +153,7 @@ class OfflineEngine(
             val quiet = now() - quietSince > ExportQuietMs
             export = (if (quiet) null else api.offlineExport(export.exportId)) ?: create()
             if (quiet) quietSince = now()
+            if (export.original) return original()
             adoptSource(item.key, "export:${export.exportId}")
         }
         store.updateItem(item.key) { it.copy(exportId = export.exportId, exportReady = true, serverProgress = null) }

@@ -1,11 +1,6 @@
 package dev.kobbler.app.offline
 
-import io.ktor.client.HttpClient
-import io.ktor.client.request.header
-import io.ktor.client.request.prepareGet
-import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
-import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration.Companion.seconds
@@ -32,7 +27,6 @@ private class UpstreamGone(status: Int) : Exception("upstream answered $status")
  */
 class OfflineMedia(
     private val store: OfflineStore,
-    private val client: HttpClient,
     val key: String,
     val path: String,
     private val source: UpstreamSource,
@@ -156,14 +150,11 @@ class OfflineMedia(
             body: suspend (suspend (ByteArray, Int) -> Boolean) -> Unit,
         ) -> Unit,
     ) {
-        client.prepareGet(up.url) {
-            up.headers.forEach { (k, v) -> header(k, v) }
-            header(HttpHeaders.Range, "bytes=$from-${to - 1}")
-        }.execute { response ->
-            val status = response.status.value
+        fetchMedia(up.url, up.headers + (HttpHeaders.Range to "bytes=$from-${to - 1}")) { response ->
+            val status = response.status
             if (status !in 200..299) throw UpstreamGone(status)
-            val total = response.headers[HttpHeaders.ContentRange]?.substringAfter('/')?.toLongOrNull()
-                ?: response.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.takeIf { status == 200 }
+            val total = response.header(HttpHeaders.ContentRange)?.substringAfter('/')?.toLongOrNull()
+                ?: response.header(HttpHeaders.ContentLength)?.toLongOrNull()?.takeIf { status == 200 }
             val known = store.item(key)?.file(path)?.size
             if (known != null && total != null && total != known) {
                 store.updateFile(key, path) { OfflineFile(it.path) }
@@ -171,11 +162,10 @@ class OfflineMedia(
             }
             // A server that ignores the Range header sends the file from its head.
             var skip = if (status == 200) from else 0L
-            onResponse(total, response.headers[HttpHeaders.ContentType]) { consume ->
-                val channel = response.bodyAsChannel()
+            onResponse(total, response.header(HttpHeaders.ContentType)) { consume ->
                 val buffer = ByteArray(ChunkBytes)
                 while (true) {
-                    val read = channel.readAvailable(buffer, 0, buffer.size)
+                    val read = response.read(buffer)
                     if (read < 0) break
                     if (read == 0) continue
                     if (skip >= read) { skip -= read; continue }

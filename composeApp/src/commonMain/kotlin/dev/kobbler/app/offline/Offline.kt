@@ -11,7 +11,7 @@ object Offline {
 
     val engine: OfflineEngine? by lazy {
         val fs = platformOfflineFs() ?: return@lazy null
-        OfflineEngine(OfflineStore(fs, scope), SharedHttp.mediaClient(), Reachability(scope), scope)
+        OfflineEngine(OfflineStore(fs, scope), Reachability(scope), scope)
             .also { it.downloader.start() }
     }
 }

@@ -1,6 +1,5 @@
 package dev.kobbler.app.offline
 
-import dev.kobbler.app.data.SharedHttp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +23,7 @@ class OfflineProxyTest {
     private val store = OfflineStore(JvmOfflineFs(root), scope)
     private val key = OfflineItem.keyOf(OfflineKind.Movie, "m1")
     private var refreshes = 0
-    private val media = OfflineMedia(store, SharedHttp.mediaClient(), key, MediaFilePath) { refresh ->
+    private val media = OfflineMedia(store, key, MediaFilePath) { refresh ->
         if (refresh) refreshes++
         Upstream(upstream.url("/direct"))
     }

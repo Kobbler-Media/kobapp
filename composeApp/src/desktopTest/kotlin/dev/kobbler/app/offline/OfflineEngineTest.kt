@@ -1,7 +1,6 @@
 package dev.kobbler.app.offline
 
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.SharedHttp
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -31,6 +30,7 @@ class OfflineEngineTest {
     private val exportPath = "/api/v1/admin/offline/exports/x1/file"
     private val exportPolls = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var sessionMethod = "direct_play"
+    @Volatile private var copiesShrink = true
     private val epub = Random(5).nextBytes(300_000)
     private val chapterOne = Random(9).nextBytes(400_000)
     private val files = RangeServer(
@@ -57,7 +57,9 @@ class OfflineEngineTest {
             "/api/v1/admin/movies/m1" to { _ -> """{"id":"m1","title":"Film","year":2020,"runtime":100}""" },
             "/api/v1/admin/movies/m1/watch-state" to { _ -> """{"position_seconds":30,"watched":false}""" },
             "/api/v1/admin/movies/m1/watch-state/position" to { _ -> "{}" },
-            "/api/v1/admin/offline/exports" to { _ -> exportJson("queued", 0.0) },
+            "/api/v1/admin/offline/exports" to { _ ->
+                if (copiesShrink || api.requestBodies.getValue("/api/v1/admin/offline/exports").contains("\"original\"")) exportJson("queued", 0.0) else """{"state":"original"}"""
+            },
             "/api/v1/admin/offline/exports/x1" to { _ ->
                 if (exportPolls.incrementAndGet() < 2) exportJson("running", 0.5) else exportJson("ready", 1.0)
             },
@@ -75,7 +77,7 @@ class OfflineEngineTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val root = Files.createTempDirectory("offline").toFile()
-    private val engine = OfflineEngine(OfflineStore(JvmOfflineFs(root), scope), SharedHttp.mediaClient(), Reachability(scope), scope)
+    private val engine = OfflineEngine(OfflineStore(JvmOfflineFs(root), scope), Reachability(scope), scope)
     private val kobbler = KobblerApi(HttpClient(), api.url, "token", offline = engine)
     private val filesApi = KobblerApi(HttpClient(), files.url(""), "token", offline = engine)
     @Volatile private var serverUp = true
@@ -242,6 +244,23 @@ class OfflineEngineTest {
         val item = downloadedVideo(OfflineItem(OfflineKind.Movie, "m1", "Film", files = listOf(OfflineFile(MediaFilePath))))
         assertEquals("original", item.exportQuality)
         assertContentEquals(copy720, engine.store.readWhole(key, MediaFilePath))
+    }
+
+    @Test
+    fun aQualityThatWouldNotShrinkTheTitleDownloadsTheOriginalOrACopyTheDeviceCanPlay() {
+        for ((method, expectedQuality, expected) in listOf(
+            Triple("direct_play", null, film),
+            Triple("video_transcode", "original", copy720),
+        )) {
+            sessionMethod = method
+            copiesShrink = false
+            runBlocking { engine.remove(key) }
+            val item = downloadedVideo(
+                OfflineItem(OfflineKind.Movie, "m1", "Film", files = listOf(OfflineFile(MediaFilePath)), quality = "720p", exportQuality = "720p"),
+            )
+            assertEquals(expectedQuality, item.exportQuality, method)
+            assertContentEquals(expected, engine.store.readWhole(key, MediaFilePath), method)
+        }
     }
 
     @Test
