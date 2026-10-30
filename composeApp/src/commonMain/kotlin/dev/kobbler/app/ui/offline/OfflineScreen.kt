@@ -122,7 +122,7 @@ fun OfflineScreen(
             }
         }
         items(rows, key = { it.title }) { row ->
-            MediaCarousel(title = row.title, accentColor = row.accent, modifier = Modifier.focusKeyGroup("offline.${row.title}")) {
+            MediaCarousel(title = row.title, accentColor = row.accent, modifier = Modifier.padding(horizontal = gutter).focusKeyGroup("offline.${row.title}")) {
                 items(row.cards, key = { it.key }) { card ->
                     PosterCard(
                         title = card.title,

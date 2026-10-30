@@ -29,6 +29,7 @@ class OfflineEngineTest {
     private val copy720 = Random(11).nextBytes(700_000)
     private val exportPath = "/api/v1/admin/offline/exports/x1/file"
     private val exportPolls = java.util.concurrent.atomic.AtomicInteger()
+    private val sessionsOpened = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var sessionMethod = "direct_play"
     @Volatile private var copiesShrink = true
     private val epub = Random(5).nextBytes(300_000)
@@ -64,6 +65,7 @@ class OfflineEngineTest {
                 if (exportPolls.incrementAndGet() < 2) exportJson("running", 0.5) else exportJson("ready", 1.0)
             },
             "/api/v1/admin/playback/sessions" to { _ ->
+                sessionsOpened.incrementAndGet()
                 """{"session_id":"s1","method":"$sessionMethod",
                    ${if (sessionMethod == "direct_play") "\"direct_url\":\"${files.url(directPath)}\"" else "\"playlist_url\":\"/master.m3u8\""},
                    "subtitles":[{"track_id":"t1","language":"en","format":"vtt","url":"/subs/en.vtt"}]}"""
@@ -255,11 +257,13 @@ class OfflineEngineTest {
             sessionMethod = method
             copiesShrink = false
             runBlocking { engine.remove(key) }
+            sessionsOpened.set(0)
             val item = downloadedVideo(
                 OfflineItem(OfflineKind.Movie, "m1", "Film", files = listOf(OfflineFile(MediaFilePath)), quality = "720p", exportQuality = "720p"),
             )
             assertEquals(expectedQuality, item.exportQuality, method)
             assertContentEquals(expected, engine.store.readWhole(key, MediaFilePath), method)
+            assertEquals(1, sessionsOpened.get(), method)
         }
     }
 

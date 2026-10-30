@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.ui.offline.LocalOfflineEngine
+import dev.kobbler.app.ui.offline.episodesPlayableOffline
 
 import dev.kobbler.app.offline.downloadEpisodes
 
@@ -40,7 +41,8 @@ fun TvShowDetailScreen(
     val colors = KobappTheme.colors
     // `show` is a fetched snapshot. Starting a show over moves Resume back to its first
     // episode, which the snapshot cannot know until the next fetch replaces it.
-    val fetched = show
+    val onDevice = episodesPlayableOffline()
+    val fetched = remember(show, onDevice) { show.resumingAmong(onDevice) }
     var restartFrom by remember(fetched) { mutableStateOf<ContinueEpisode?>(null) }
     val shown = restartFrom?.let { fetched.copy(continueEpisode = it) } ?: fetched
     val accent = colors.accTv
@@ -139,3 +141,12 @@ internal fun Episode.isWatchedNow(overrides: Map<String, Boolean>): Boolean =
 
 internal fun Episode.isWantedNow(overrides: Map<String, Boolean>): Boolean =
     id?.let { overrides[it] } ?: isWanted
+
+/** Offline, Resume can only offer an episode this device holds: the one it was on, else the first it has. */
+internal fun TvShow.resumingAmong(episodeIds: Set<String>?): TvShow {
+    if (episodeIds == null || continueEpisode?.episodeId in episodeIds) return this
+    val held = seasons.flatMapIndexed { s, season ->
+        season.episodes.mapIndexedNotNull { e, ep -> ep.id?.takeIf { it in episodeIds }?.let { ContinueEpisode(s, e, it) to ep } }
+    }
+    return copy(continueEpisode = (held.firstOrNull { !it.second.isWatched } ?: held.firstOrNull())?.first)
+}

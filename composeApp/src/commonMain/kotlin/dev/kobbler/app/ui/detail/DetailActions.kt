@@ -209,10 +209,13 @@ internal fun DetailActionRow(
             secondary()
         }
     } else {
-        Row(
+        // A flow, so icons that leave the lead pill less than its own name wrap below it
+        // instead of squeezing its label out; the pill still takes whatever its line has left.
+        FlowRow(
             modifier = group,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
             if (primary != null) Box(Modifier.weight(1f)) { primary(Modifier.fillMaxWidth()) }
             secondary()

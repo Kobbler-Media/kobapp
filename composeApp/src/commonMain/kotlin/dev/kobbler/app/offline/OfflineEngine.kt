@@ -133,7 +133,7 @@ class OfflineEngine(
             val playable = DownloadQuality.Original.wire.takeIf { item.session?.method != DirectPlay }
             if (playable == quality) throw UpstreamUnavailable("The server would not make a playable copy of ${item.title}")
             store.updateItem(item.key) { it.copy(exportQuality = playable, exportId = null) }
-            return videoUpstream(item.key, refresh = true)
+            return videoUpstream(item.key, refresh)
         }
         var export = (if (refresh) null else item.exportId?.let { api.offlineExport(it) }) ?: create()
         if (export.original) return original()

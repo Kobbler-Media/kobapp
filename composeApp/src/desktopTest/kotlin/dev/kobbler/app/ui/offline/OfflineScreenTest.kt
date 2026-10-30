@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.offline
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -71,6 +72,20 @@ class OfflineScreenTest {
         onNodeWithText("Show", useUnmergedTree = true).performClick()
         waitForIdle()
         assertEquals("s1", opened)
+    }
+
+    @Test
+    fun rowsLineUpWithThePageHeading() = runUiTest {
+        have(done(OfflineKind.Movie, "m1", "Film"))
+        setContent {
+            KobappTheme {
+                CompositionLocalProvider(LocalOfflineEngine provides engine) {
+                    OfflineScreen(onOpenMovie = {}, onOpenShow = {}, onOpenBook = {})
+                }
+            }
+        }
+        val heading = onNodeWithText("Offline", useUnmergedTree = true).getUnclippedBoundsInRoot().left
+        assertEquals(heading.value, onNodeWithText("Film", useUnmergedTree = true).getUnclippedBoundsInRoot().left.value, absoluteTolerance = 4f)
     }
 
     @Test

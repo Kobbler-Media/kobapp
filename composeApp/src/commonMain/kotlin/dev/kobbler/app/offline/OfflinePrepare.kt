@@ -129,8 +129,9 @@ private class Kept(private val engine: OfflineEngine, private val api: KobblerAp
         }
         // The title's own file goes down as is only when the server would send it so; anything
         // else is a copy the server makes, and holding a transcode open for it would be waste.
+        // A direct session stays: the server may answer that the original is the copy to take.
         val exportQuality = item.exportQuality ?: DownloadQuality.Original.wire.takeIf { session.method != OfflineEngine.DirectPlay }
-        if (exportQuality != null) engine.releaseDownloadSession(key)
+        if (session.method != OfflineEngine.DirectPlay) engine.releaseDownloadSession(key)
         engine.store.updateItem(key) { it.copy(session = session, extras = it.extras + extras, exportQuality = exportQuality) }
     }
 

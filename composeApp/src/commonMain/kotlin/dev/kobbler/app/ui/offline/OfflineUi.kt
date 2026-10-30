@@ -81,6 +81,15 @@ fun rememberOnline(): Boolean {
     return online
 }
 
+/** The episodes this device can play while the server is out of reach; null while it is reachable. */
+@Composable
+fun episodesPlayableOffline(): Set<String>? {
+    if (rememberOnline()) return null
+    val prefix = OfflineItem.keyOf(OfflineKind.Episode, "")
+    val keys = rememberCompleteKeys()
+    return remember(keys) { keys.filter { it.startsWith(prefix) }.mapTo(HashSet()) { it.removePrefix(prefix) } }
+}
+
 /** The mark a title carries everywhere once it can be played with no network. */
 @Composable
 fun OfflineBadge(modifier: Modifier = Modifier, label: String? = "Offline") {

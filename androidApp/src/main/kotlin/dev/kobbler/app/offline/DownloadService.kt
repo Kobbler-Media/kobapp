@@ -1,5 +1,6 @@
 package dev.kobbler.app.offline
 
+import androidx.core.content.ContextCompat
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
@@ -65,7 +66,7 @@ class DownloadService : Service() {
 
         /** Only from the foreground: Android refuses a foreground service started from behind. */
         fun start(context: Context) {
-            runCatching { context.startForegroundService(Intent(context, DownloadService::class.java)) }
+            runCatching { ContextCompat.startForegroundService(context, Intent(context, DownloadService::class.java)) }
         }
     }
 }

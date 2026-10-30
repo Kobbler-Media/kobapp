@@ -18,6 +18,20 @@ import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.kobbler.app.offline.JvmOfflineFs
+import dev.kobbler.app.offline.OfflineEngine
+import dev.kobbler.app.offline.OfflineItem
+import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.offline.OfflineState
+import dev.kobbler.app.offline.OfflineStore
+import dev.kobbler.app.offline.Reachability
+import dev.kobbler.app.ui.offline.LocalOfflineEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import java.nio.file.Files
 import kotlin.test.assertTrue
 
 private const val SHOW_STATE = "$SHOW_PATH/watch-state"
@@ -25,14 +39,16 @@ private const val SHOW_STATE = "$SHOW_PATH/watch-state"
 @OptIn(ExperimentalTestApi::class)
 class ShowActionsTest {
 
-    private fun showPage(test: DesktopComposeUiTest.(StubServer) -> Unit) =
+    private fun showPage(engine: OfflineEngine? = null, test: DesktopComposeUiTest.(StubServer) -> Unit) =
         runUiTest(width = 1280, height = 900) {
             StubServer(mapOf(SHOW_PATH to { _ -> showJson() }, SHOW_STATE to { _ -> """{"updated_count":6}""" })).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 val show = runBlocking { api.getShow("show-1") }
                 setContent {
                     KobappTheme(formFactor = FormFactor.Desktop) {
-                        TvShowDetailScreen(show = show, formFactor = FormFactor.Desktop, onBack = {}, onPlayEpisode = { _, _, _ -> }, api = api)
+                        CompositionLocalProvider(LocalOfflineEngine provides engine) {
+                            TvShowDetailScreen(show = show, formFactor = FormFactor.Desktop, onBack = {}, onPlayEpisode = { _, _, _ -> }, api = api)
+                        }
                     }
                 }
                 waitForIdle()
@@ -65,4 +81,36 @@ class ShowActionsTest {
         onNodeWithContentDescription("Season 3 options").performClick()
         onNodeWithText("Mark season 3 watched").assertExists()
     }
+
+    @Test
+    fun `offline, the show plays an episode that is on this device`() {
+        for ((downloaded, online, label, tag) in listOf(
+            Quad(listOf("e1-1", "e3-3", "e4-1"), false, "Play", "S03 E03"),
+            Quad(listOf("e1-1"), false, "Play", "S01 E01"),
+            Quad(listOf("e3-2", "e4-1"), false, "Resume", "S03 E02"),
+            Quad(listOf("e3-3"), true, "Resume", "S03 E02"),
+        )) {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val root = Files.createTempDirectory("offline-show").toFile()
+            val engine = OfflineEngine(OfflineStore(JvmOfflineFs(root), scope), Reachability(scope), scope, startProxy = { null })
+            engine.store.update { idx ->
+                idx.copy(items = downloaded.associate { id ->
+                    OfflineItem.keyOf(OfflineKind.Episode, id) to OfflineItem(OfflineKind.Episode, id, id, showId = "show-1", state = OfflineState.Complete)
+                })
+            }
+            engine.reachability.attach { online }
+            runBlocking { engine.reachability.check() }
+            try {
+                showPage(engine) {
+                    onNodeWithText(label, useUnmergedTree = true).assertExists("$downloaded")
+                    onAllNodesWithText(tag, substring = true, useUnmergedTree = true).fetchSemanticsNodes().let { assertTrue(it.isNotEmpty(), "$downloaded $tag") }
+                }
+            } finally {
+                scope.cancel()
+                root.deleteRecursively()
+            }
+        }
+    }
+
+    private data class Quad(val downloaded: List<String>, val online: Boolean, val label: String, val tag: String)
 }
