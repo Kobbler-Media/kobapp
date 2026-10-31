@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.*
@@ -585,20 +584,13 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
     }
 
     CompositionLocalProvider(LocalSection provides currentSection) {
-        ModalNavigationDrawer(
+        PhoneDrawer(
             drawerState = drawerState,
             gesturesEnabled = isTabScreen,
             drawerContent = {
-                ModalDrawerSheet(
-                    drawerContainerColor = Color.Transparent,
-                    drawerShape = RoundedCornerShape(0.dp),
-                    drawerTonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0, 0, 0, 0),
-                ) {
-                    DrawerContent(navConfig, nav.currentTab) { tab ->
-                        nav.navigate(tab)
-                        scope.launch { drawerState.close() }
-                    }
+                DrawerContent(navConfig, nav.currentTab) { tab ->
+                    nav.navigate(tab)
+                    scope.launch { drawerState.close() }
                 }
             },
         ) {

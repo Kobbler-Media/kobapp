@@ -231,6 +231,7 @@ fun VideoPlayerOverlay(
      */
     offer: (@Composable BoxScope.(focus: Modifier) -> Unit)? = null,
     extraControls: @Composable RowScope.() -> Unit = {},
+    topEndControls: @Composable RowScope.() -> Unit = {},
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
     var interactionTick by remember { mutableLongStateOf(0L) }
@@ -324,12 +325,13 @@ fun VideoPlayerOverlay(
                     }
                     Spacer(Modifier.width(8.dp))
                 }
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(title, style = titleStyle, color = colors.primary)
                     if (subtitle != null) {
                         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.primaryDim)
                     }
                 }
+                topEndControls()
             }
         }
     }

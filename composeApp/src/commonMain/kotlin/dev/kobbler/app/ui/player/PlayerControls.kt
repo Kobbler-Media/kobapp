@@ -58,6 +58,7 @@ fun PlayerOverlay(
     overlaid: Boolean = false,
     offer: (@Composable BoxScope.(focus: Modifier) -> Unit)? = null,
     extraControls: @Composable RowScope.() -> Unit = {},
+    topEndControls: @Composable RowScope.() -> Unit = {},
 ) {
     val k = KobappTheme.colors
     val accent = KobappTheme.accent
@@ -115,5 +116,6 @@ fun PlayerOverlay(
         },
         offer = offer,
         extraControls = extraControls,
+        topEndControls = topEndControls,
     )
 }
