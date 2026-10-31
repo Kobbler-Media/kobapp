@@ -90,3 +90,9 @@ fun formatWatchTime(totalSeconds: Int): String {
     return if (h > 0) "$h:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
     else "$m:${s.toString().padStart(2, '0')}"
 }
+
+fun remainingLabel(seconds: Int): String? {
+    if (seconds < 60) return null
+    val minutes = seconds / 60
+    return if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m left" else "${minutes}m left"
+}

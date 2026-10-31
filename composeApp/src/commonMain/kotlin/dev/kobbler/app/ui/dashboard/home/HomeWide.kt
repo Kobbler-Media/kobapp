@@ -30,9 +30,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
@@ -89,16 +92,23 @@ fun HomeWide(
     onContinueClick: (Int) -> Unit,
     onRecentClick: (RecentlyAddedItem) -> Unit,
     onDiscoverItemClick: (DiscoverItem) -> Unit,
+    onContinueDetails: (Int) -> Unit = {},
     topBar: (@Composable (transparent: Boolean) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     val tv = LocalFormFactor.current == FormFactor.TV
     val upNext = remember(homeData) { homeData.watchNext.map { it.toUpNextItem() } }
 
+    // By id, not position: returning to the page refetches and can reorder Up Next while
+    // focus is restored to a hero button, which must still act on the same item. Like the
+    // spotlight, read only inside the hero item so a D-pad press doesn't recompose the page.
+    val heroId = rememberSaveable { mutableStateOf<String?>(null) }
+    val restoredHero = Snapshot.withoutReadObservation { upNext.firstOrNull { it.mediaId == heroId.value } }
+
     // Read only inside the composables below that need it: as a value here, one D-pad
     // press recomposes the page and every card on it.
     val spotlight = rememberSpotlightState(
-        upNext.firstOrNull()?.spotlight() ?: homeData.recentlyAdded.firstOrNull()?.spotlight(),
+        (restoredHero ?: upNext.firstOrNull())?.spotlight() ?: homeData.recentlyAdded.firstOrNull()?.spotlight(),
     )
     val hasSpotlight by remember(spotlight) { derivedStateOf { spotlight.shown != null } }
     val focusedRow = remember { mutableIntStateOf(-1) }
@@ -157,13 +167,28 @@ fun HomeWide(
                 if (upNext.isNotEmpty()) {
                     item(key = "hero") {
                         Column(Modifier.testTag(HomeHeroTag)) {
-                            Spacer(Modifier.height(heroHeight(viewportPx, stripPx, recentPx, density)))
+                            val heroIndex = upNext.indexOfFirst { it.mediaId == heroId.value }.coerceAtLeast(0)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(heroHeight(viewportPx, stripPx, recentPx, density))
+                                    .padding(start = pageGutter(), end = pageGutter(), bottom = 12.dp),
+                                contentAlignment = Alignment.BottomStart,
+                            ) {
+                                HomeBillboard(
+                                    item = upNext[heroIndex],
+                                    onPlay = { onContinueClick(heroIndex) },
+                                    onDetails = { onContinueDetails(heroIndex) },
+                                    // The page-top hold covers the billboard too: it describes Up Next.
+                                    onFocused = { focusedRow.intValue = upNextRow },
+                                )
+                            }
                             Box(Modifier.onSizeChanged { stripPx = it.height }) {
                                 UpNextStrip(
                                     items = upNext,
                                     onClick = { idx -> onContinueClick(idx) },
                                     spotlight = spotlight,
-                                    onFocused = { focusedRow.intValue = upNextRow },
+                                    onFocused = { i -> heroId.value = upNext[i].mediaId; focusedRow.intValue = upNextRow },
                                 )
                             }
                         }
@@ -315,9 +340,10 @@ fun HomeWide(
     }
 }
 
-// The open stretch of backdrop above Up Next: what the screen has left once Up Next and
-// the first rail are on it, bounded so the page never turns into a poster.
-internal val HeroMinHeight = 120.dp
+// The stretch of backdrop above Up Next that holds the billboard: what the screen has left
+// once Up Next and the first rail are on it, never less than the billboard needs and bounded
+// so the page never turns into a poster.
+internal val HeroMinHeight = 160.dp
 internal val HeroMaxHeight = 300.dp
 
 private fun heroHeight(viewportPx: Int, stripPx: Int, recentPx: Int, density: Density): Dp {
@@ -356,7 +382,7 @@ private fun UpNextStrip(
     items: List<UpNextItem>,
     spotlight: SpotlightState,
     onClick: (Int) -> Unit,
-    onFocused: () -> Unit,
+    onFocused: (Int) -> Unit,
 ) {
     val colors = KobappTheme.colors
     val gutter = pageGutter()
@@ -400,7 +426,7 @@ private fun UpNextStrip(
                                 .focusKey("item.$i", preferredEntry = i == 0)
                                 .spotlightOn(spotlight) { item.spotlight() }
                                 .onFocusChanged {
-                                    if (it.isFocused) { rail.focused = i; onFocused() }
+                                    if (it.isFocused) { rail.focused = i; onFocused(i) }
                                 },
                         )
                     }

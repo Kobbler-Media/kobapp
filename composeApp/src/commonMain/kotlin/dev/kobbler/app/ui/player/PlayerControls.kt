@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.player
 
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ fun PlayerOverlay(
     sideGestures: SideGestureConfig? = null,
     onSeekPastEnd: (() -> Unit)? = null,
     overlaid: Boolean = false,
+    offer: (@Composable BoxScope.(focus: Modifier) -> Unit)? = null,
     extraControls: @Composable RowScope.() -> Unit = {},
 ) {
     val k = KobappTheme.colors
@@ -111,6 +113,7 @@ fun PlayerOverlay(
                 else -> Modifier.focusKey(key).tvAutoGlow(cornerRadiusDp = cornerRadiusDp, scale = scale)
             }
         },
+        offer = offer,
         extraControls = extraControls,
     )
 }

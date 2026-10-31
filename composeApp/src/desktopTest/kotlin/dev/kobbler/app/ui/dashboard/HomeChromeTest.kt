@@ -13,7 +13,7 @@ import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import kotlin.test.Test
 
-/** Home carries the art and the titles; the progress bar says what was started, and nothing else is spelled out. */
+/** Home carries the art and the titles; the progress bar says what was started, and no status is spelled out as a label. */
 @OptIn(ExperimentalTestApi::class)
 class HomeChromeTest {
 
@@ -49,8 +49,6 @@ class HomeChromeTest {
                     for (mark in listOf("Wanted", "In library")) {
                         check(onAllNodesWithContentDescription(mark).fetchSemanticsNodes().isNotEmpty()) { "$formFactor: no '$mark' mark" }
                     }
-                    // The focused card's title is on the card; the backdrop is only its picture.
-                    check(onAllNodesWithText("Started").fetchSemanticsNodes().size == 1) { "$formFactor: the focused title is repeated" }
                 }
             }
         }

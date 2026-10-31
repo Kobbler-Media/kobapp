@@ -8,6 +8,7 @@ import dev.kobbler.app.ui.offline.OfflineAction
 import dev.kobbler.app.ui.offline.rememberOfflineItem
 
 import dev.kobbler.app.ui.components.PrefetchToDisk
+import dev.kobbler.app.ui.components.remainingLabel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons

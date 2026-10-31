@@ -617,6 +617,8 @@ fun FullscreenVideoPlayer(
         else VideoSurface(player, Modifier.fillMaxSize())
         StartBackdrop(state)
 
+        val skip = activeSkip?.takeIf { state.handoff == null }
+        val adShadeOnly = skip?.segmentType == "ad_break" && state.adPosture != LiveAdPostureButton
         if (!isInPip) {
             PlayerOverlay(
                 title = state.title,
@@ -678,6 +680,20 @@ fun FullscreenVideoPlayer(
                 // reaches for mid-programme.
                 onSeekPastEnd = openChannelPanel.takeIf { isLiveTv },
                 overlaid = overlaid,
+                offer = if (skip != null && !adShadeOnly) { focus ->
+                    KobButton(
+                        text = skipLabel(skip.segmentType),
+                        onClick = { skipPast(skip) },
+                        style = KobButtonStyle.Accent,
+                        accent = sectionAccent,
+                        leading = { Icon(Icons.Outlined.FastForward, contentDescription = null, tint = colors.bg) },
+                        modifier = focus
+                            .focusKey("ctrl.skip")
+                            .align(Alignment.BottomEnd)
+                            .safeContentPadding()
+                            .padding(end = dimens.s5, bottom = 80.dp),
+                    )
+                } else null,
                 extraControls = {
                     // A TV is a cast target, not a sender, and live has no receiver-side
                     // story — the channel is this device's tuner.
@@ -786,44 +802,16 @@ fun FullscreenVideoPlayer(
                 Modifier.align(Alignment.TopCenter).safeContentPadding().padding(top = dimens.s6),
             )
 
-            val skip = activeSkip
-            val adShadeOnly = skip?.segmentType == "ad_break" && state.adPosture != LiveAdPostureButton
-            val offer = state.handoff
-            if (offer != null) {
+            val handoff = state.handoff
+            if (handoff != null) {
                 HandoffCard(
-                    progress = offer,
-                    otherEpisode = offer.mediaId != mediaId,
+                    progress = handoff,
+                    otherEpisode = handoff.mediaId != mediaId,
                     stayCountdown = state.handoffStayCountdown,
                     accent = sectionAccent,
                     onJump = { state.followHandoff(seekToMs = seekTo, play = { player.play() }) },
                     onStay = { state.stayHere() },
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .safeContentPadding()
-                        .padding(end = dimens.s5, bottom = 80.dp),
-                )
-            } else if (skip != null && !adShadeOnly) {
-                val label = when (skip.segmentType) {
-                    "intro" -> "Skip Intro"
-                    "credits" -> "Skip Credits"
-                    "recap" -> "Skip Recap"
-                    "ad_break" -> "Skip Ads"
-                    else -> "Skip"
-                }
-                KobButton(
-                    text = label,
-                    onClick = { skipPast(skip) },
-                    style = KobButtonStyle.Accent,
-                    accent = sectionAccent,
-                    leading = {
-                        Icon(
-                            Icons.Outlined.FastForward,
-                            contentDescription = null,
-                            tint = colors.bg,
-                        )
-                    },
-                    modifier = Modifier
-                        .focusKey("ctrl.skip")
                         .align(Alignment.BottomEnd)
                         .safeContentPadding()
                         .padding(end = dimens.s5, bottom = 80.dp),
@@ -959,3 +947,10 @@ internal suspend fun switchAudioAndResume(
     state.playUnmuted(player)
 }
 
+private fun skipLabel(segmentType: String) = when (segmentType) {
+    "intro" -> "Skip Intro"
+    "credits" -> "Skip Credits"
+    "recap" -> "Skip Recap"
+    "ad_break" -> "Skip Ads"
+    else -> "Skip"
+}

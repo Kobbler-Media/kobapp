@@ -54,9 +54,6 @@ class HomeLiveTest {
         val upNextTop = listOf(FormFactor.TV, FormFactor.Desktop).associateWith { formFactor ->
             var top = 0f
             home(formFactor) {
-                for (action in listOf("Details", "Resume")) {
-                    assertTrue(onAllNodesWithText(action).fetchSemanticsNodes().isEmpty(), "$formFactor: hero still has '$action'")
-                }
                 top = onNodeWithText("Up Next").getUnclippedBoundsInRoot().top.value
             }
             top

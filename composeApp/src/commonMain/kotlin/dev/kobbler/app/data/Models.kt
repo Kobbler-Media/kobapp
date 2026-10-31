@@ -16,6 +16,7 @@ data class ContinueItem(
     val progress: Float,
     val link: String? = null,
     val started: Boolean = false,
+    val remainingSeconds: Int? = null,
 )
 
 @Immutable

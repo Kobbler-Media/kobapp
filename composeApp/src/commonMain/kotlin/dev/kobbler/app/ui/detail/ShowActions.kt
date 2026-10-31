@@ -31,6 +31,7 @@ import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
+import dev.kobbler.app.ui.components.remainingLabel
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.player.KeepAction
 import dev.kobbler.app.ui.player.resumeRequestSeconds
@@ -343,12 +344,6 @@ internal fun TvShow.restartPoint(): ContinueEpisode? {
     val episodeIdx = season.episodes.indexOfFirst { it.filePath != null }.takeIf { it >= 0 } ?: 0
     val id = season.episodes[episodeIdx].id ?: return null
     return ContinueEpisode(seasonIdx = seasonIdx, episodeIdx = episodeIdx, episodeId = id)
-}
-
-internal fun remainingLabel(seconds: Int): String? {
-    if (seconds < 60) return null
-    val minutes = seconds / 60
-    return if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m left" else "${minutes}m left"
 }
 
 internal fun episodeTag(season: Int, episode: Int) = "S${season.pad2()} E${episode.pad2()}"

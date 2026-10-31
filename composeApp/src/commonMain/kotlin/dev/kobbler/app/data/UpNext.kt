@@ -18,6 +18,7 @@ data class UpNextItem(
     val backdropUrl: String? = null,
     val link: String? = null,
     val tail: String? = null,
+    val remainingSeconds: Int? = null,
     val source: ContinueItem? = null,
 )
 
@@ -37,6 +38,7 @@ fun ContinueItem.toUpNextItem(): UpNextItem {
         mediaArtUrl = imageUrl,
         backdropUrl = backdropUrl,
         link = link,
+        remainingSeconds = remainingSeconds,
         source = this,
     )
 }

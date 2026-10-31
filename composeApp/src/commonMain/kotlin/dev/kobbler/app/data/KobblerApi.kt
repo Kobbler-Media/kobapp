@@ -2030,6 +2030,7 @@ private fun InProgressItem.toContinueItem(base: String): ContinueItem = Continue
     progress = (progressPercent?.div(100.0))?.toFloat() ?: 0f,
     link = link,
     started = (positionSeconds ?: 0) > 0 || (progressPercent ?: 0.0) > 0.0,
+    remainingSeconds = durationSeconds?.let { (it - (positionSeconds ?: 0)).toInt() }?.takeIf { it > 0 },
 )
 
 private fun RecentItem.toRecentlyAddedItem(base: String): RecentlyAddedItem = RecentlyAddedItem(

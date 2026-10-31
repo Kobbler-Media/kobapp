@@ -169,9 +169,11 @@ class FocusScope {
      * does not end up with a dead D-pad.
      *
      * Only the content and chrome passes are held for the full [maxFrames], and a pass
-     * with no candidates while other targets are already registered gives up at once
-     * rather than spinning. At mount that is almost always the entry pass: nothing has
-     * opted in, and holding it open buys a third of a second of dead D-pad.
+     * with no candidates while content is already registered gives up at once rather
+     * than spinning. At mount that is almost always the entry pass: nothing has opted
+     * in, and holding it open buys a third of a second of dead D-pad. Registered chrome
+     * alone does not count — it composes before a lazy rail below it registers — so a
+     * screen that really is nothing but chrome waits out both earlier passes first.
      */
     suspend fun focusFirst(maxFrames: Int = 24): Boolean {
         if (focusFrom({ preferred.toList() }, PREFERRED_ENTRY_FRAMES)) return true
@@ -182,10 +184,11 @@ class FocusScope {
     private suspend fun focusFrom(keys: () -> List<String>, maxFrames: Int): Boolean {
         repeat(maxFrames) {
             val candidates = keys()
-            // Nothing this pass can ever hit, but targets exist — waiting only delays the
-            // pass that can. An empty registry instead means composition has not produced
-            // its targets yet (lazy rails register during measure), so that keeps waiting.
-            if (candidates.isEmpty() && requesters.isNotEmpty()) return false
+            // Nothing this pass can ever hit, but content exists — waiting only delays the
+            // pass that can. A registry of nothing but chrome instead means the content has
+            // not registered yet (lazy rails register during measure), so that keeps
+            // waiting rather than handing entry to the chrome composed above it.
+            if (candidates.isEmpty() && requesters.keys.any { it !in chrome }) return false
             for (key in candidates) {
                 if (requesters[key]?.takesFocus(key) == true) return true
             }

@@ -220,6 +220,12 @@ fun VideoPlayerOverlay(
      */
     onSeekPastEnd: (() -> Unit)? = null,
     focusDecoration: ControlFocus = { _, _, _ -> Modifier },
+    /**
+     * A one-press action the host is offering right now — Skip Intro, Skip Credits. Drawn
+     * over the picture whether or not the controls are up; apply the given modifier to the
+     * button, which is how the overlay hands it the D-pad.
+     */
+    offer: (@Composable BoxScope.(focus: Modifier) -> Unit)? = null,
     extraControls: @Composable RowScope.() -> Unit = {},
 ) {
     var controlsVisible by remember { mutableStateOf(false) }
@@ -238,6 +244,8 @@ fun VideoPlayerOverlay(
         tvPicker = if (open) picker else tvPicker.takeUnless { it == picker }
     }
     var overlayFocused by remember { mutableStateOf(false) }
+    val offerFocus = remember { FocusRequester() }
+    var offerFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val playPauseFocus = remember { FocusRequester() }
     val seekBarFocus = remember { FocusRequester() }
@@ -371,8 +379,19 @@ fun VideoPlayerOverlay(
     // them, and the fade back in restores no one — a remote was left pressing keys at a
     // player that had stopped listening. Park focus on the root while they are away and
     // hand it back when they return.
-    LaunchedEffect(controlsVisible, loading, seekBarTakesDpad) {
+    // An offer — Skip Credits — takes that parked focus instead, so OK on the picture is
+    // the skip the viewer is looking at. It composes on the frame it appears, so the request
+    // is repeated until it lands, the same way the controls' entry is.
+    val offered = offer != null && !loading
+    LaunchedEffect(controlsVisible, loading, seekBarTakesDpad, offered) {
         if (!controlsVisible || loading) {
+            if (offered) {
+                repeat(EntryFocusFrames) {
+                    runCatching { offerFocus.requestFocus() }
+                    withFrameNanos { }
+                    if (offerFocused) return@LaunchedEffect
+                }
+            }
             runCatching { focusRequester.requestFocus() }
             return@LaunchedEffect
         }
@@ -484,7 +503,9 @@ fun VideoPlayerOverlay(
                             onBack(); true
                         }
                     }
-                    !overlayFocused -> false
+                    // The offer stands in for the picture while it holds the parked focus:
+                    // its own OK is the skip, and the arrows still seek.
+                    !overlayFocused && !offerFocused -> false
                     event.key == Key.Enter -> { onPlayPause(); true }
                     event.key == Key.DirectionLeft -> { onSeekState((positionNow.value - 10_000).coerceAtLeast(0)); true }
                     event.key == Key.DirectionRight -> {
@@ -933,6 +954,10 @@ fun VideoPlayerOverlay(
             modifier = Modifier.fillMaxSize(),
         ) {
             Box(Modifier.fillMaxSize()) { TopBar(Modifier.align(Alignment.TopCenter)) }
+        }
+
+        if (offered) {
+            offer?.invoke(this, Modifier.focusRequester(offerFocus).onFocusChanged { offerFocused = it.hasFocus })
         }
     }
 }
