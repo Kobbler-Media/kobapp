@@ -7,17 +7,13 @@ import dev.kobbler.app.ui.offline.EpisodeDownloadButton
 import dev.kobbler.app.ui.offline.OfflineBadge
 import dev.kobbler.app.ui.offline.rememberOfflineItem
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -29,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,8 +36,6 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -51,8 +44,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -73,139 +64,14 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
-import dev.kobbler.app.ui.detail.OverflowActions
-import dev.kobbler.app.ui.detail.OverflowMenu
 import dev.kobbler.app.ui.detail.isWantedNow
 import dev.kobbler.app.ui.detail.isWatchedNow
-import dev.kobbler.app.ui.components.FocusEdgeSlack
-import dev.kobbler.app.ui.components.bleedHorizontally
-import dev.kobbler.app.ui.components.rowEdgeBleed
 import dev.kobbler.app.ui.components.StripedArt
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-private const val SeasonFocusSelectDelayMs = 180L
-
-@Composable
-fun SeasonTabs(
-    seasons: List<Season>,
-    selectedIdx: Int,
-    accent: Color,
-    formFactor: FormFactor,
-    onSelected: (Int) -> Unit,
-    entryFocus: FocusRequester? = null,
-    menu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null,
-) {
-    val colors = KobappTheme.colors
-    val bleed = rowEdgeBleed()
-    val scrollState = rememberScrollState()
-    // Focus alone switches season on a remote, so browsing costs one keypress instead
-    // of two. Driven by focus rather than hover so a mouse pointer never triggers it.
-    val focusSelects = formFactor == FormFactor.TV
-    var focusedIdx by remember { mutableStateOf(-1) }
-    var menuIdx by remember { mutableStateOf(-1) }
-    if (focusSelects) {
-        // Keyed on the focused tab, so scrubbing past a season cancels its pending
-        // commit instead of tearing the episode list down once per keypress.
-        LaunchedEffect(focusedIdx) {
-            if (focusedIdx < 0) return@LaunchedEffect
-            delay(SeasonFocusSelectDelayMs)
-            onSelected(focusedIdx)
-        }
-    }
-    Box(Modifier.fillMaxWidth()) {
-        // Behind the row, not after it: the focus ring bleeds a few dp past the tab's
-        // bounds and a following sibling painted this rule straight across it.
-        Box(
-            Modifier
-                .align(Alignment.BottomStart)
-                .bleedHorizontally(bleed)
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(colors.lineSoft),
-        )
-        // Its own slack, and its own spec: the page above installs a vertical bring-into-view
-        // rule that would otherwise be applied to this strip's horizontal axis.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f, fill = false)) {
-        FocusEdgeSlack {
-        Row(
-            modifier = Modifier
-                // Out to the page edge on the left only: on the right the season menu
-                // follows the strip, and bleeding under it drew the last tab beneath it.
-                .bleedHorizontally(start = bleed, end = 0.dp)
-                .horizontalScroll(scrollState)
-                .padding(horizontal = bleed),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            seasons.forEachIndexed { idx, season ->
-                val active = idx == selectedIdx
-                val focusState = rememberTvFocusState()
-                val anchor = remember { FocusRequester() }
-                Box {
-                Column(
-                    modifier = Modifier
-                        .focusKey("season.${season.number}")
-                        .focusRequester(anchor)
-                        // Entry lands on the selected season rather than whichever tab is
-                        // geometrically nearest, which on a remote is always season one.
-                        .then(if (active && entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
-                        .tvFocusGlow(focusState, cornerRadiusDp = 8f, scale = 1.02f)
-                        .clip(KobappTheme.shapes.small)
-                        .pointerHoverIcon(PointerIcon.Hand)
-                        .onFocusChanged { if (it.isFocused) focusedIdx = idx }
-                        .tvClickable(focusState) {
-                            onSelected(idx)
-                            // Focus already selects on a remote, which leaves OK free to
-                            // open the season's own menu without stepping off the tab.
-                            if (focusSelects && menu != null) menuIdx = idx
-                        }
-                        // No bottom inset: the active rule sits on the strip's own line, and
-                        // the space above the label matches the 6 + 2 below it.
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                ) {
-                    // Weight is fixed across states on purpose: selection follows focus on
-                    // TV, and a bolder active label re-measures the row and shunts every
-                    // tab after it sideways on each keypress. Colour and rule carry it.
-                    Text(
-                        "Season ${season.number}",
-                        style = KobappTheme.type.bodySm.copy(fontWeight = FontWeight.Medium),
-                        color = if (active) colors.textHi else colors.textLo,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(2.dp)
-                            .background(if (active) accent else Color.Transparent),
-                    )
-                }
-                if (menu != null && menuIdx == idx) {
-                    OverflowMenu(expanded = true, anchor = anchor, onClose = { menuIdx = -1 }, content = menu)
-                }
-                }
-            }
-        }
-        }
-        }
-        // A pointer selects by clicking, so the menu needs a control of its own there.
-        if (!focusSelects && menu != null) {
-            OverflowActions(
-                accent = accent,
-                label = "Season ${seasons.getOrNull(selectedIdx)?.number} options",
-                focusKeyName = "season.more",
-                quiet = true,
-                content = menu,
-            )
-        }
-        }
-    }
-}
 
 fun LazyListScope.episodeList(
     season: Season?,

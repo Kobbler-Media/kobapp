@@ -128,10 +128,14 @@ internal enum class DragSide { Left, Right }
  * search field is the one that does it — leaves an inset behind that the player then
  * treats as furniture to avoid, and the bar sits a third of the way up the picture with
  * the film still playing underneath it.
+ *
+ * Mirrored, so the chrome sits the same distance in from opposite edges: a phone held
+ * with its cutout at the top pushed the title bar down by the notch while the transport
+ * sat flush on the bottom edge, which reads as off-centre.
  */
 private val playerChromeInsets: WindowInsets
     @Composable
-    get() = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+    get() = WindowInsets.systemBars.union(WindowInsets.displayCutout).mirrored()
 
 /**
  * Room inside a dropdown for a focused item's ring to draw into.

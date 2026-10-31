@@ -9,7 +9,6 @@ import dev.kobbler.app.ui.LocalTopChromeOverlap
 import dev.kobbler.app.ui.components.BrowseSkeleton
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -25,11 +24,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.*
 import dev.kobbler.app.platform.FormFactor
@@ -267,6 +261,7 @@ fun TvShowsScreen(
                 }
             }
             val gridFocus = remember { FocusRequester() }
+            FocusEdgeSlack {
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.FixedSize(spacing.posterWidth),
@@ -405,9 +400,10 @@ fun TvShowsScreen(
                         modifier = Modifier
                             .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
                             .focusKey("grid.${show.id}", preferredEntry = gridIsEntry && index == 0)
-                            .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(show.title); focus.lazyIndex = lazyIndex; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lazyIndex }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
+                            .browseCell(focus, show.id, show.title, lazyIndex, gridState),
                     )
                 }
+            }
             }
 
             if (pickingCategory) {
@@ -427,7 +423,7 @@ fun TvShowsScreen(
             if (showAlphabet) {
                 BrowseAlphabetBar(
                     letters = letters,
-                    exitLeft = gridFocus,
+                    grid = gridFocus,
                     focus = focus,
                     onLetterClick = { letter ->
                         scope.launch {
@@ -443,7 +439,7 @@ fun TvShowsScreen(
                                 nextCursor = result.nextCursor
                                 prevCursor = result.prevCursor
                                 val target = items.indexOfFirst { it.id == firstByLetter.id }.coerceAtLeast(0)
-                                gridState.scrollToItem(headerCount + 1 + target)
+                                items.getOrNull(target)?.let { focus.letterJump = LetterJump(headerCount + 1 + target, it.id) }
                             } catch (_: Exception) {}
                         }
                     },
@@ -453,47 +449,4 @@ fun TvShowsScreen(
             LoadingMoreIndicator({ isLoadingMore }, accentColor)
         }
     }
-}
-
-/**
- * The focused cell, held off the screen's own composition. Shared by the three browse
- * screens in this package.
- *
- * Written from `onFocusChanged`, so anything that reads it as a value in a screen body
- * recomposes that whole grid on every D-pad press. Every reader below takes the holder
- * and reads inside its own scope instead.
- */
-@Stable
-internal class BrowseFocus {
-    var lazyIndex by mutableIntStateOf(-1)
-    var rowKey by mutableStateOf<Any?>(null)
-    var letter by mutableStateOf<String?>(null)
-}
-
-@Composable
-internal fun CenterFocusedGridRow(state: LazyGridState, focus: BrowseFocus) {
-    CenterFocusedItem(state, focus.lazyIndex, focus.rowKey)
-}
-
-internal fun Modifier.swallowUpAtTop(focus: BrowseFocus, topRowKey: () -> Any?): Modifier =
-    onPreviewKeyEvent { event ->
-        event.type == KeyEventType.KeyDown &&
-            event.key == Key.DirectionUp &&
-            swallowsUp(focus.rowKey, topRowKey())
-    }
-
-@Composable
-internal fun BoxScope.BrowseAlphabetBar(
-    letters: List<String>,
-    exitLeft: FocusRequester,
-    focus: BrowseFocus,
-    onLetterClick: (String) -> Unit,
-) {
-    AlphabetBar(
-        letters = letters,
-        exitLeft = exitLeft,
-        currentLetter = focus.letter,
-        onLetterClick = onLetterClick,
-        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-    )
 }

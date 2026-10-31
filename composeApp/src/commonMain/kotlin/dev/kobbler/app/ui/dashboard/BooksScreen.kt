@@ -43,12 +43,11 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.ClaimEntryFocus
 import dev.kobbler.app.ui.components.Async
 import dev.kobbler.app.ui.components.AlphabetBarWidth
-import dev.kobbler.app.ui.components.alphabetLetterOf
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import dev.kobbler.app.ui.components.AsyncContent
 import dev.kobbler.app.ui.PinnedHeader
 import dev.kobbler.app.ui.components.BrowseHeader
 import dev.kobbler.app.ui.components.CachedPage
-import dev.kobbler.app.ui.components.rowKeyFor
 import dev.kobbler.app.ui.components.DataCache
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.SegmentedFilter
@@ -317,6 +316,7 @@ private fun AllBooksGrid(
                 }
             }
             val gridFocus = remember { FocusRequester() }
+            FocusEdgeSlack {
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.FixedSize(dimens.posterWidth),
@@ -388,15 +388,16 @@ private fun AllBooksGrid(
                         modifier = Modifier
                             .spotlightOn(pointer) { book.spotlight() }.showingBadge(swiper, book.spotlight())
                             .focusKey("book.${book.id}", preferredEntry = gridIsEntry && bookIdx == 0)
-                            .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(book.title); focus.lazyIndex = bookIdx + headerCount; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == bookIdx + headerCount }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
+                            .browseCell(focus, book.id, book.title, bookIdx + headerCount, gridState),
                     )
                 }
+            }
             }
 
             if (showAlphabet) {
                 BrowseAlphabetBar(
                     letters = letters,
-                    exitLeft = gridFocus,
+                    grid = gridFocus,
                     focus = focus,
                     onLetterClick = { letter ->
                         scope.launch {
@@ -412,7 +413,7 @@ private fun AllBooksGrid(
                                 nextCursor = result.nextCursor
                                 prevCursor = result.prevCursor
                                 val target = newBooks.indexOfFirst { it.id == firstByLetter.id }.coerceAtLeast(0)
-                                gridState.scrollToItem(headerCount + target)
+                                newBooks.getOrNull(target)?.let { focus.letterJump = LetterJump(headerCount + target, it.id) }
                             } catch (_: Exception) {}
                         }
                     },

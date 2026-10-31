@@ -631,9 +631,10 @@ fun FullscreenVideoPlayer(
                 onPlayPause = { state.togglePlayback(player, api, scope) },
                 onSeek = overlaySeek,
                 onBack = saveAndBack,
-                // A TV player has no windowed mode to toggle into, so the control is a
-                // dead end that still costs a D-pad stop on the way to the real ones.
-                onToggleFullscreen = onToggleFullscreen.takeIf { formFactor != FormFactor.TV },
+                // Only a desktop window has a windowed mode worth toggling into. On a TV the
+                // control is a dead end that costs a D-pad stop; on a phone, leaving
+                // fullscreen also released the landscape lock and let the player turn portrait.
+                onToggleFullscreen = onToggleFullscreen.takeIf { formFactor == FormFactor.Desktop },
                 isFullscreen = isFullscreen,
                 audioTracks = audioTracks,
                 selectedAudioTrack = selectedAudioTrack,

@@ -225,6 +225,7 @@ fun MoviesScreen(
                 }
             }
             val gridFocus = remember { FocusRequester() }
+            FocusEdgeSlack {
             LazyVerticalGrid(
                 modifier = Modifier.scrollsUnderTopChrome(gridState).onSizeChanged { gridWidthPx = it.width }.focusRequester(gridFocus).swallowUpAtTop(focus, topRowKey),
                 state = gridState,
@@ -355,15 +356,16 @@ fun MoviesScreen(
                         modifier = Modifier
                             .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
                             .focusKey("grid.${movie.id}", preferredEntry = gridIsEntry && index == 0)
-                            .onFocusChanged { if (it.isFocused) { focus.letter = alphabetLetterOf(movie.title); focus.lazyIndex = lazyIndex; focus.rowKey = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == lazyIndex }?.row.let { row -> rowKeyFor(row, focus.rowKey) } } },
+                            .browseCell(focus, movie.id, movie.title, lazyIndex, gridState),
                     )
                 }
+            }
             }
 
             if (showAlphabet) {
                 BrowseAlphabetBar(
                     letters = letters,
-                    exitLeft = gridFocus,
+                    grid = gridFocus,
                     focus = focus,
                     onLetterClick = { letter ->
                         scope.launch {
@@ -379,7 +381,7 @@ fun MoviesScreen(
                                 nextCursor = result.nextCursor
                                 prevCursor = result.prevCursor
                                 val target = items.indexOfFirst { it.id == firstByLetter.id }.coerceAtLeast(0)
-                                gridState.scrollToItem(headerCount + 1 + target)
+                                items.getOrNull(target)?.let { focus.letterJump = LetterJump(headerCount + 1 + target, it.id) }
                             } catch (_: Exception) {}
                         }
                     },
