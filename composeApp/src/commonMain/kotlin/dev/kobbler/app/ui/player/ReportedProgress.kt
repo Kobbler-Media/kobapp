@@ -55,12 +55,21 @@ suspend fun GlobalPlayerState.reportProgress(
     val known = lastSaved?.takeIf { it.first == mediaId }?.second
     if (!finished && known != null && abs(known - seconds) <= 1) return
     lastSaved = mediaId to seconds
-    try {
+    val watched = try {
         when (mediaType) {
             "movie" -> api.reportMovieProgress(mediaId, seconds)
             "episode" -> api.reportEpisodeProgress(mediaId, seconds)
+            else -> null
         }
-    } catch (_: Exception) {}
+    } catch (_: Exception) {
+        null
+    } ?: return
+    // The server finishes a title at its credits or 90% in, not only at its end. A change
+    // of verdict is written even on a mid-play save: it happens once a title, and skipping
+    // to the next episode leaves nothing but a mid-play save behind.
+    if (mirror || watched != (reportedPositions[mediaId]?.finished ?: false)) {
+        reportedPositions[mediaId] = WatchedPoint(seconds, finished || watched)
+    }
 }
 
 /** Marking a title watched or not clears its saved position server-side; mirror that here. */

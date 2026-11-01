@@ -618,6 +618,7 @@ fun FullscreenVideoPlayer(
         StartBackdrop(state)
 
         val skip = activeSkip?.takeIf { state.handoff == null }
+        val resumeOffer = state.resumeOffer?.takeIf { state.handoff == null }
         val adShadeOnly = skip?.segmentType == "ad_break" && state.adPosture != LiveAdPostureButton
         if (!isInPip) {
             PlayerOverlay(
@@ -681,7 +682,23 @@ fun FullscreenVideoPlayer(
                 // reaches for mid-programme.
                 onSeekPastEnd = openChannelPanel.takeIf { isLiveTv },
                 overlaid = overlaid,
-                offer = if (skip != null && !adShadeOnly) { focus ->
+                offer = if (resumeOffer != null) { focus ->
+                    ResumeOfferCard(
+                        atSeconds = resumeOffer,
+                        countdown = state.resumeOfferCountdown,
+                        accent = sectionAccent,
+                        thumbnail = if (thumbnailCues.isNotEmpty()) {
+                            { ThumbnailFrame(cues = thumbnailCues, atMs = resumeOffer * 1000L, width = 160.dp) }
+                        } else null,
+                        onResume = { state.acceptResumeOffer(seekTo) },
+                        onCancel = { state.dismissResumeOffer() },
+                        resumeModifier = focus,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .safeContentPadding()
+                            .padding(end = dimens.s5, bottom = 80.dp),
+                    )
+                } else if (skip != null && !adShadeOnly) { focus ->
                     KobButton(
                         text = skipLabel(skip.segmentType),
                         onClick = { skipPast(skip) },

@@ -118,7 +118,7 @@ fun GlobalPlayerState.followHandoff(seekToMs: (Long) -> Unit, play: () -> Unit) 
     open(p.mediaId)
 }
 
-private fun clock(totalSeconds: Int): String {
+internal fun playbackClock(totalSeconds: Int): String {
     val s = totalSeconds.coerceAtLeast(0)
     val h = s / 3600
     val m = (s % 3600) / 60
@@ -147,8 +147,8 @@ fun HandoffCard(
         ep != null -> ep.title ?: "Episode ${ep.episodeIdentifier}"
         else -> progress.movieTitle ?: "This movie"
     }
-    val where = if (progress.watched) "Finished" else "Stopped at ${clock(progress.positionSeconds)}"
-    val jumpLabel = if (otherEpisode && code != null) "Go to $code" else "Jump to ${clock(progress.positionSeconds)}"
+    val where = if (progress.watched) "Finished" else "Stopped at ${playbackClock(progress.positionSeconds)}"
+    val jumpLabel = if (otherEpisode && code != null) "Go to $code" else "Jump to ${playbackClock(progress.positionSeconds)}"
     val shape = RoundedCornerShape(10.dp)
 
     Row(

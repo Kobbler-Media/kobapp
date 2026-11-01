@@ -380,6 +380,9 @@ class GlobalPlayerState {
     var handoffScopeId: String? = null
     var handoffSince: kotlin.time.Instant? = null
     var handoffStayCountdown by mutableStateOf<Int?>(null)
+    /** A watched title's saved position short of its ending, offered on a play from the top. See ResumeOffer.kt. */
+    var resumeOffer by mutableStateOf<Int?>(null)
+    var resumeOfferCountdown by mutableStateOf<Int?>(null)
     // Media id to absolute seconds the server is known to hold for it, so a save that would
     // only repeat it — a player left paused while another device moved on — is not written
     // back over the newer one. Keyed rather than tied to mediaId: a close saves after the
@@ -441,6 +444,7 @@ class GlobalPlayerState {
             }
             // Answered by switching titles, or overtaken by the viewer picking another.
             handoff = null
+            resumeOffer = null
         }
         preparingFor = null
         isPreparing = false
@@ -670,6 +674,7 @@ class GlobalPlayerState {
         onSkipNext = null
         onSkipPrevious = null
         onPlayEpisode = null
+        resumeOffer = null
         loadingError = null
         pendingSeekMs = 0L
         isRecovering = false

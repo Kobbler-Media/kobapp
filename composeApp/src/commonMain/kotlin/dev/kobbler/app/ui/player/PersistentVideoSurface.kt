@@ -38,6 +38,7 @@ import dev.kobbler.kobplayer.VideoSurface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 private const val SNAP_MS = 250
 
@@ -164,6 +165,26 @@ fun PersistentVideoSurface(
         }
         state.handoffStayCountdown = null
         state.stayHere()
+    }
+
+    LaunchedEffect(activeMediaId, activeMediaType) {
+        if (activeMediaType != "movie" && activeMediaType != "episode") return@LaunchedEffect
+        player.isPlaying.first { it }
+        val durationMs = player.durationMs.first { it > 0 }
+        if (state.timeline.toAbsoluteMs(player.currentMs.value) > RESUME_OFFER_START_WINDOW_MS) return@LaunchedEffect
+        state.considerResumeOffer(api, state.timeline.absoluteDurationMs(durationMs))
+    }
+
+    // Another device's newer save outranks this one; the handoff card answers first.
+    LaunchedEffect(state.resumeOffer, state.handoff, isPlayingNow) {
+        state.resumeOfferCountdown = null
+        if (state.resumeOffer == null || state.handoff != null || !isPlayingNow) return@LaunchedEffect
+        for (left in RESUME_OFFER_SECONDS downTo 1) {
+            state.resumeOfferCountdown = left
+            kotlinx.coroutines.delay(1000)
+        }
+        state.resumeOfferCountdown = null
+        state.acceptResumeOffer { ms -> player.seekTo(state.timeline.toPlayerMs(ms)) }
     }
 
     val useServerSubs = state.renderableServerSubtitles.isNotEmpty()

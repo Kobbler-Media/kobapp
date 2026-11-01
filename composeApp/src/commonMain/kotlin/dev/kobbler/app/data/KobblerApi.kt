@@ -335,6 +335,9 @@ data class EpisodeDto(
 )
 
 @Serializable
+data class PositionSaved(val watched: Boolean? = null)
+
+@Serializable
 data class PositionResponse(
     @SerialName("position_seconds") val positionSeconds: Int? = null,
     val watched: Boolean = false,
@@ -2468,15 +2471,16 @@ class KobblerApi(
         invalidateBooks()
     }
 
-    /** Report playback position for a movie. */
-    suspend fun reportMovieProgress(movieId: String, positionSeconds: Int) {
-        patch("/api/v1/admin/movies/$movieId/watch-state/position", positionBody(positionSeconds))
-    }
+    /** Whether the server now counts the movie watched; null when it did not say, or the save was queued offline. */
+    suspend fun reportMovieProgress(movieId: String, positionSeconds: Int): Boolean? =
+        savedVerdict(patch("/api/v1/admin/movies/$movieId/watch-state/position", positionBody(positionSeconds)))
 
-    /** Report playback position for an episode. */
-    suspend fun reportEpisodeProgress(episodeId: String, positionSeconds: Int) {
-        patch("/api/v1/admin/tv/episodes/$episodeId/watch-state/position", positionBody(positionSeconds))
-    }
+    /** Whether the server now counts the episode watched; null when it did not say, or the save was queued offline. */
+    suspend fun reportEpisodeProgress(episodeId: String, positionSeconds: Int): Boolean? =
+        savedVerdict(patch("/api/v1/admin/tv/episodes/$episodeId/watch-state/position", positionBody(positionSeconds)))
+
+    private suspend fun savedVerdict(body: String): Boolean? =
+        body.takeIf { it.isNotBlank() }?.let { quiet(null) { decode<PositionSaved>(it).watched } }
 
     /**
      * A position save names the device it came from, so the server can offer it to this
@@ -2536,9 +2540,11 @@ class KobblerApi(
             ?: quiet(null) { decode<PositionResponse>(get(watchStatePath)).resumeSeconds }
 
     /** Null when the server could not be asked. */
-    suspend fun isWatched(mediaType: String, mediaId: String): Boolean? = quiet(null) {
+    suspend fun isWatched(mediaType: String, mediaId: String): Boolean? = getWatchState(mediaType, mediaId)?.watched
+
+    suspend fun getWatchState(mediaType: String, mediaId: String): PositionResponse? = quiet(null) {
         val path = if (mediaType == "movie") "/api/v1/admin/movies/$mediaId/watch-state" else "/api/v1/admin/tv/episodes/$mediaId/watch-state"
-        decode<PositionResponse>(get(path)).watched
+        decode<PositionResponse>(get(path))
     }
 
     // -- Books --
