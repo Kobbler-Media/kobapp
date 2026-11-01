@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.data.BufferClass
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.ui.navigation.Destination
 import kotlinx.coroutines.CancellationException
 import dev.kobbler.app.platform.AppVersion
@@ -370,6 +371,7 @@ class GlobalPlayerState {
 
     /** Play an episode of the loaded show by id. Set alongside [onSkipNext]. */
     var onPlayEpisode by mutableStateOf<((String) -> Unit)?>(null)
+    var episodeShow by mutableStateOf<TvShow?>(null)
 
     /**
      * Another device's newer save of this title, offered and not yet answered. While it
@@ -674,6 +676,7 @@ class GlobalPlayerState {
         onSkipNext = null
         onSkipPrevious = null
         onPlayEpisode = null
+        episodeShow = null
         resumeOffer = null
         loadingError = null
         pendingSeekMs = 0L

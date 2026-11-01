@@ -260,7 +260,7 @@ private fun EpisodeRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, offline = offline?.state == OfflineState.Complete, width = 104.dp)
+                EpisodeThumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, offline = offline?.state == OfflineState.Complete, width = 104.dp)
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -318,7 +318,7 @@ private fun EpisodeRow(
                 modifier = Modifier.width(36.dp),
             )
 
-            Thumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, offline = offline?.state == OfflineState.Complete)
+            EpisodeThumbnail(episode = episode, accent = accent, artTone = artTone, watched = watched, airsSoon = airsSoon, offline = offline?.state == OfflineState.Complete)
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -358,7 +358,7 @@ private fun EpisodeRow(
 }
 
 @Composable
-private fun Thumbnail(
+internal fun EpisodeThumbnail(
     episode: Episode,
     accent: Color,
     artTone: Color,

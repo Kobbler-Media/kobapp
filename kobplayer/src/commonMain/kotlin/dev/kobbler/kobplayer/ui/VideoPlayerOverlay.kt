@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Toc
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.*
@@ -1449,8 +1450,7 @@ internal fun ChapterListButton(
             },
             modifier = Modifier.size(36.dp).focusRequester(triggerFocus).then(focusDecoration("chapters", 999f, 1.08f)),
         ) {
-            @Suppress("DEPRECATION")
-            Icon(Icons.Outlined.List, "Chapters", tint = colors.primary, modifier = Modifier.size(20.dp))
+            Icon(Icons.AutoMirrored.Outlined.Toc, "Chapters", tint = colors.primary, modifier = Modifier.size(20.dp))
         }
         DropdownMenu(
             expanded = !tv && expandedLocal, onDismissRequest = { expandedLocal = false; onMenuToggle(false) },

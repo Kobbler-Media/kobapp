@@ -318,7 +318,7 @@ private fun ChannelRow(
 }
 
 @Composable
-private fun WatchingTag(accent: Color) {
+internal fun WatchingTag(accent: Color) {
     Box(
         Modifier
             .clip(RoundedCornerShape(4.dp))

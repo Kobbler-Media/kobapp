@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.FastForward
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -540,24 +541,31 @@ fun FullscreenVideoPlayer(
     }
 
     var showSubtitleSearch by remember { mutableStateOf(false) }
-    var railOpen by remember { mutableStateOf(false) }
+    var sidePanel by remember { mutableStateOf<SidePanel?>(null) }
     val focusScope = LocalFocusScope.current
 
     // Every layer the app draws over the player. Each owns the D-pad while it is up, so
     // the chrome underneath leaves focus traversal ([focusInert]) and stays put rather
     // than timing out — the control a layer was opened from has to still be there when it
     // closes. A tune's own preparing shell counts: it covers the player too.
-    val overlaid = showSubtitleSearch || state.isPreparing || railOpen
+    val overlaid = showSubtitleSearch || state.isPreparing || sidePanel != null
 
-    // The rail registers into this same scope rather than hosting its own, so entry focus
-    // for it is this scope's preferred pass — which lands on the current channel's card.
-    LaunchedEffect(railOpen) { if (railOpen) focusScope.focusFirst() }
+    // A panel registers into this same scope rather than hosting its own, so entry focus
+    // for it is this scope's preferred pass — which lands on the current channel's or
+    // episode's card.
+    LaunchedEffect(sidePanel) { if (sidePanel != null) focusScope.focusFirst() }
 
     val isLiveTv = mediaType == "livetv"
-    LaunchedEffect(isLiveTv) { if (!isLiveTv) railOpen = false }
-    InterceptBack(enabled = railOpen, onBack = { railOpen = false })
+    val episodeShow = state.episodeShow
+    val playEpisode = state.onPlayEpisode
+    val canPickEpisode = episodeShow != null && playEpisode != null && mediaType == "episode"
+    LaunchedEffect(isLiveTv, canPickEpisode) {
+        if (sidePanel == SidePanel.Channels && !isLiveTv) sidePanel = null
+        if (sidePanel == SidePanel.Episodes && !canPickEpisode) sidePanel = null
+    }
+    InterceptBack(enabled = sidePanel != null, onBack = { sidePanel = null })
 
-    val openChannelPanel = { railOpen = true }
+    val openChannelPanel = { sidePanel = SidePanel.Channels }
 
     var recordRequested by remember(state.liveSessionId) { mutableStateOf(false) }
     if (isLiveTv) {
@@ -742,6 +750,16 @@ fun FullscreenVideoPlayer(
                             Icon(Icons.Outlined.SkipNext, "Next episode", tint = colors.textHi)
                         }
                     }
+                    if (canPickEpisode) {
+                        IconButton(
+                            onClick = { sidePanel = SidePanel.Episodes },
+                            modifier = Modifier
+                                .focusKey("ctrl.episodes")
+                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+                        ) {
+                            Icon(Icons.AutoMirrored.Outlined.PlaylistPlay, "Episodes", tint = colors.textHi)
+                        }
+                    }
                     if (isLiveTv) {
                         LiveEdgeIndicator(
                             state = state,
@@ -837,7 +855,7 @@ fun FullscreenVideoPlayer(
         }
       }
 
-        if (railOpen) {
+        if (sidePanel == SidePanel.Channels) {
             LiveChannelRail(
                 api = api,
                 currentChannelId = state.mediaId,
@@ -849,8 +867,20 @@ fun FullscreenVideoPlayer(
                     .align(if (formFactor == FormFactor.Phone) Alignment.BottomCenter else Alignment.CenterEnd)
                     .safeContentPadding(),
                 onPick = { channel -> scope.launch { switchLiveChannel(channel, player, state, api) } },
-                onOpenGuide = onOpenGuide?.let { open -> { railOpen = false; open() } },
-                onDismiss = { railOpen = false },
+                onOpenGuide = onOpenGuide?.let { open -> { sidePanel = null; open() } },
+                onDismiss = { sidePanel = null },
+            )
+        }
+        if (sidePanel == SidePanel.Episodes && episodeShow != null && playEpisode != null) {
+            EpisodePanel(
+                show = episodeShow,
+                currentEpisodeId = mediaId,
+                accent = sectionAccent,
+                formFactor = formFactor,
+                canStream = api.canStream,
+                modifier = Modifier.align(Alignment.CenterEnd).safeContentPadding(),
+                onPick = { episodeId -> sidePanel = null; playEpisode(episodeId) },
+                onDismiss = { sidePanel = null },
             )
         }
 
@@ -880,7 +910,7 @@ fun FullscreenVideoPlayer(
             PreparingShell(
                 state = state,
                 accent = sectionAccent,
-                inert = showSubtitleSearch || railOpen,
+                inert = showSubtitleSearch || sidePanel != null,
                 onCancel = { state.cancelStart(player, api, scope) },
             )
         }
@@ -904,6 +934,8 @@ fun FullscreenVideoPlayer(
         }
     }
 }
+
+private enum class SidePanel { Channels, Episodes }
 
 private fun AudioTrackDto.toTrackInfo(): TrackInfo {
     val label = buildString {

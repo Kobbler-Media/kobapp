@@ -264,10 +264,12 @@ fun InlineTvPlayer(
                 playNeighbourEpisode(scope, api, player, gps, show, target, startCachingAt)
             }
         }
+        gps.episodeShow = show
         onDispose {
             gps.onSkipNext = null
             gps.onSkipPrevious = null
             gps.onPlayEpisode = null
+            gps.episodeShow = null
         }
     }
 
