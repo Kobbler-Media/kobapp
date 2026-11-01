@@ -26,13 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.testTag
@@ -69,22 +66,7 @@ internal fun HomeBillboard(
     val colors = KobappTheme.colors
     // Every slot is laid out even when empty, and both buttons are a fixed width whatever
     // their label, so stepping between items never resizes the block and nothing shifts.
-    Column(
-        modifier
-            .widthIn(max = 720.dp)
-            .drawBehind {
-                drawRect(
-                    Brush.radialGradient(
-                        0f to Color.Black.copy(alpha = 0.45f),
-                        1f to Color.Transparent,
-                        center = Offset(size.width * 0.3f, size.height * 0.55f),
-                        radius = size.width * 0.75f,
-                    ),
-                    topLeft = Offset(-size.width * 0.3f, -size.height * 0.4f),
-                    size = Size(size.width * 1.6f, size.height * 1.8f),
-                )
-            },
-    ) {
+    Column(modifier.widthIn(max = 720.dp)) {
         Text(
             item.title,
             color = colors.textHi,
@@ -139,6 +121,9 @@ internal fun HomeBillboard(
                 cornerRadiusDp = ButtonRadius.value,
                 modifier = Modifier
                     .width(170.dp)
+                    // The backdrop's scrims fade out toward the right; a bright picture there
+                    // would swallow a bare outline.
+                    .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(ButtonRadius))
                     .border(1.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(ButtonRadius))
                     .testTag(HomeBillboardDetailsTag)
                     .focusKey("details", entryEligible = false)
