@@ -31,13 +31,11 @@ import androidx.compose.ui.test.requestFocus
 import dev.kobbler.app.UiTimeoutMs
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.platform.FileCache
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
-import java.io.File
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,6 +46,7 @@ import kotlin.test.assertTrue
 class ReaderRemoteTest {
 
     private val chapterCount = 40
+    private val chapters = (1..chapterCount).map { textChapter("Chapter $it", "Words of chapter $it.") }
     private val topBarButtons = listOf("Read Aloud", "Search", "Bookmark", "Contents", "Settings")
 
     private class Rig {
@@ -55,12 +54,10 @@ class ReaderRemoteTest {
     }
 
     private fun tvReader(progressPercent: Double = 0.0, test: ComposeUiTest.(Rig) -> Unit) {
-        val bytes = epub(chapterCount)
         val id = "remote-${UUID.randomUUID()}"
-        val key = "epub_$id"
-        FileCache.put(key, bytes)
         val server = StubServer(
-            mapOf("/api/v1/admin/books/$id/reader-progress" to { _ -> """{"progress_percent":$progressPercent}""" }),
+            packRoutes(id, chapters) +
+                ("/api/v1/admin/books/$id/reader-progress" to { _ -> """{"progress_percent":$progressPercent}""" }),
         )
         try {
             runUiTest(width = 1920, height = 1080) {
@@ -85,7 +82,6 @@ class ReaderRemoteTest {
             }
         } finally {
             server.close()
-            FileCache.pathFor(key)?.let { File(it).delete() }
         }
     }
 
@@ -164,8 +160,7 @@ class ReaderRemoteTest {
 
     @Test
     fun `down opens the chapters on the one being read, and the remote walks and picks them`() {
-        val chapters = parseEpub(epub(chapterCount)).chapters
-        val reading = chapterForProgressPercent(75.0, chapterWeights(chapters))
+        val reading = chapterForProgressPercent(75.0, List(chapterCount) { 100 })
         tvReader(progressPercent = 75.0) {
             assertTrue(isShownPart("Ch ${reading + 1}/$chapterCount"), "reader did not resume at chapter ${reading + 1}")
             press(Key.DirectionDown)
@@ -227,16 +222,5 @@ class ReaderRemoteTest {
                 event.type == KeyEventType.KeyDown && focus.moveFocus(direction)
             },
         ) { content() }
-    }
-
-    private fun epub(chapters: Int): ByteArray {
-        val ids = (1..chapters).map { "ch$it" }
-        return epubZip(
-            opf(ids),
-            (1..chapters).map { n ->
-                "ch$n.xhtml" to
-                    "<html><head><title>Chapter $n</title></head><body><p>Words of chapter $n.</p></body></html>".encodeToByteArray()
-            },
-        )
     }
 }

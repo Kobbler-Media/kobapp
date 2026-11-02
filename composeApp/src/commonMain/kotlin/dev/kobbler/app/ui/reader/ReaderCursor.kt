@@ -1,37 +1,66 @@
 package dev.kobbler.app.ui.reader
 
-/** Block the reading cursor should sit on when a page becomes current: the one under the
- *  page top, or the next one down when the top lands in pagination whitespace. */
-internal fun blockAtPageTop(bounds: Map<Int, IntRange>, scroll: Int): Int? =
-    blockAt(bounds, scroll)
-        ?: bounds.entries.asSequence()
-            .filter { it.value.first >= scroll }
-            .minByOrNull { it.value.first }
-            ?.key
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
-/** Next/previous measured block, or null at the ends of the chapter. */
-internal fun stepCursor(bounds: Map<Int, IntRange>, from: Int, forward: Boolean): Int? =
-    if (forward) bounds.keys.filter { it > from }.minOrNull()
-    else bounds.keys.filter { it < from }.maxOrNull()
+/** Blocks the reading cursor can sit on: those drawn on the pages now showing, in order. */
+internal fun blocksOnPages(paging: ReaderPaging): List<Int> {
+    paging.view?.page?.takeIf { paging.fitted != null }?.let { return listOf(it.blockIndex) }
+    val layout = paging.layout ?: return emptyList()
+    return paging.shownPages.flatMap { page -> layout.pages.getOrNull(page)?.slices.orEmpty().map { it.blockIndex } }.distinct()
+}
+
+/** The neighbour of [from] in [blocks], or null when the cursor would leave the page. */
+internal fun stepCursor(blocks: List<Int>, from: Int, forward: Boolean): Int? {
+    val at = blocks.indexOf(from)
+    if (at < 0) return blocks.firstOrNull()
+    return blocks.getOrNull(if (forward) at + 1 else at - 1)
+}
 
 /**
- * Page-grid-aligned scroll offset that brings [block] onto screen, or null when its top
- * is already visible or the block has not been measured.
- *
- * Must stay a multiple of [viewportHeight] — the transport is a plain scroll with paged
- * targets, so any offset landing off the grid permanently skews every later page turn.
- * Same rounding as the TTS follow snap in ReaderScreen so the two never disagree.
+ * The D-pad reading cursor: a block on the current page that Center starts reading
+ * aloud from. Stepping off either end of the page turns it and lands on the near edge of
+ * the new one, so the cursor walks the book block by block.
  */
-internal fun scrollToShow(
-    bounds: Map<Int, IntRange>,
-    block: Int,
-    scroll: Int,
-    viewportHeight: Int,
-    maxScroll: Int,
-): Int? {
-    if (viewportHeight <= 0) return null
-    val top = bounds[block]?.first ?: return null
-    if (top >= scroll && top < scroll + viewportHeight) return null
-    val target = ((top / viewportHeight) * viewportHeight).coerceIn(0, maxScroll.coerceAtLeast(0))
-    return if (target == scroll) null else target
+@Stable
+internal class PageCursor(private val paging: ReaderPaging, private val enabled: Boolean) {
+    var block by mutableStateOf<Int?>(null)
+    private var landOnLast = false
+
+    fun move(forward: Boolean, onTurn: (Int) -> Unit): Boolean {
+        if (!enabled) return false
+        val from = block ?: return false
+        stepCursor(blocksOnPages(paging), from, forward)?.let {
+            block = it
+            return true
+        }
+        landOnLast = !forward
+        onTurn(if (forward) 1 else -1)
+        return true
+    }
+
+    fun select(start: (Int) -> Unit): Boolean {
+        if (!enabled) return false
+        block?.let {
+            start(it)
+            return true
+        }
+        block = blocksOnPages(paging).firstOrNull() ?: return false
+        return true
+    }
+
+    fun followPage() {
+        val current = block ?: return
+        val blocks = blocksOnPages(paging)
+        if (current !in blocks) block = if (landOnLast) blocks.lastOrNull() else blocks.firstOrNull()
+        landOnLast = false
+    }
 }
+
+@Composable
+internal fun rememberPageCursor(paging: ReaderPaging, enabled: Boolean): PageCursor =
+    remember(paging, enabled) { PageCursor(paging, enabled) }

@@ -38,12 +38,27 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.Bookmark as BookmarkData
+import dev.kobbler.app.ui.reader.pack.Position
+import dev.kobbler.app.ui.reader.pack.TocNode
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 
 private const val LeadingEntries = 3
+
+data class TocEntry(val title: String, val chapterIndex: Int, val position: Position = Position(chapterIndex))
+
+internal fun tocEntries(book: ReaderBook): List<TocEntry> {
+    fun flatten(nodes: List<TocNode>): List<TocEntry> = nodes.flatMap { node ->
+        val own = node.target.takeIf { it.chapter in 0..book.lastChapter }
+            ?.let { listOf(TocEntry(node.title, it.chapter, it)) }.orEmpty()
+        own + flatten(node.children)
+    }
+    return flatten(book.manifest.toc).ifEmpty {
+        book.manifest.chapters.indices.map { TocEntry(book.title(it) ?: "Chapter ${it + 1}", it) }
+    }
+}
 
 internal fun activeTocEntry(entries: List<TocEntry>, currentChapter: Int): Int =
     entries.indexOfLast { it.chapterIndex <= currentChapter }.coerceAtLeast(0)
@@ -53,7 +68,7 @@ internal fun ReaderTocPanel(
     entries: List<TocEntry>,
     currentChapter: Int,
     bookmarks: List<BookmarkData>,
-    onChapterSelect: (Int) -> Unit,
+    onEntrySelect: (TocEntry) -> Unit,
     onBookmarkSelect: (BookmarkData) -> Unit,
     onBookmarkDelete: (BookmarkData) -> Unit,
     onDismiss: () -> Unit,
@@ -128,7 +143,7 @@ internal fun ReaderTocPanel(
                                     if (isActive) Modifier.background(theme.linkColor.copy(alpha = 0.1f))
                                     else Modifier
                                 )
-                                .clickable { onChapterSelect(entry.chapterIndex) }
+                                .clickable { onEntrySelect(entry) }
                                 .padding(vertical = 10.dp, horizontal = 12.dp),
                         )
                     }

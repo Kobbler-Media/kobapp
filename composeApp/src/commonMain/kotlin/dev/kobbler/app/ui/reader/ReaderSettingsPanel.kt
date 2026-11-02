@@ -64,12 +64,16 @@ internal fun ReaderSettingsPanel(
     horizontalPadding: Int,
     readerFontFamily: ReaderFontFamily,
     pageFit: ReaderPageFit,
+    styleMode: ReaderStyleMode,
+    alignment: ReaderAlignment,
     onThemeChange: (ReaderThemeMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onLineHeightChange: (Float) -> Unit,
     onPaddingChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
     onPageFitChange: (ReaderPageFit) -> Unit,
+    onStyleModeChange: (ReaderStyleMode) -> Unit,
+    onAlignmentChange: (ReaderAlignment) -> Unit,
     brightness: Float,
     onBrightnessChange: (Float) -> Unit,
     ttsController: TtsController,
@@ -121,6 +125,16 @@ internal fun ReaderSettingsPanel(
             SettingsLabel("Page fit", theme)
             Spacer(Modifier.height(6.dp))
             ChoiceChips(ReaderPageFit.entries, pageFit, { it.label }, onPageFitChange, theme, key = "pagefit")
+            Spacer(Modifier.height(12.dp))
+
+            SettingsLabel("Styling", theme)
+            Spacer(Modifier.height(6.dp))
+            ChoiceChips(ReaderStyleMode.entries, styleMode, { it.label }, onStyleModeChange, theme, key = "style")
+            Spacer(Modifier.height(12.dp))
+
+            SettingsLabel("Text alignment", theme)
+            Spacer(Modifier.height(6.dp))
+            ChoiceChips(ReaderAlignment.entries, alignment, { it.label }, onAlignmentChange, theme, key = "align")
             Spacer(Modifier.height(12.dp))
 
             SettingsLabel("Line Spacing: ${((lineHeightMultiplier * 10).toInt() / 10.0)}x", theme)

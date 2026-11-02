@@ -10,7 +10,7 @@ class ProgressSaverTest {
     @Test
     fun anUnchangedPositionIsNotSentAgain() = runTest {
         val sent = mutableListOf<Double>()
-        val saver = ProgressSaver { sent += it }
+        val saver = ProgressSaver<Double> { sent += it }
         saver.save(12.5)
         saver.save(12.5)
         saver.save(13.0)
@@ -22,7 +22,7 @@ class ProgressSaverTest {
     fun aFailedSaveIsRetriedNextTime() = runTest {
         var fail = true
         val sent = mutableListOf<Double>()
-        val saver = ProgressSaver {
+        val saver = ProgressSaver<Double> {
             if (fail) error("offline")
             sent += it
         }

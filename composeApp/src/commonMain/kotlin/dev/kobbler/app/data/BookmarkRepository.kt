@@ -15,7 +15,8 @@ data class Bookmark(
     val positionSeconds: Double? = null,
     // Reader fields
     val chapterIndex: Int? = null,
-    val scrollFraction: Float? = null,
+    val blockIndex: Int? = null,
+    val blockOffset: Int? = null,
 )
 
 object BookmarkRepository {

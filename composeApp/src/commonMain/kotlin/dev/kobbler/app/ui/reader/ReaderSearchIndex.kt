@@ -7,23 +7,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import dev.kobbler.app.ui.reader.epub.buildChapterTtsView
-import dev.kobbler.app.ui.reader.epub.parseXhtmlToBlocks
+import dev.kobbler.app.ui.reader.pack.Position
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 private const val SNIPPET_CONTEXT = 40
+private const val CONCURRENT_FETCHES = 4
 
 @Immutable
-internal data class SearchHit(val chapterIndex: Int, val chapterTitle: String, val snippet: String)
+internal data class SearchHit(val position: Position, val chapterTitle: String, val snippet: String)
 
 /** Whole-book plain text, folded to lower case once so a keystroke costs one `indexOf`
- *  per chapter instead of re-parsing every chapter's XHTML. */
+ *  per chapter. */
 @Immutable
-internal class EpubSearchIndex private constructor(private val chapters: List<Entry>) {
-    private class Entry(val index: Int, val title: String, val text: String, val folded: String)
+internal class BookSearchIndex private constructor(private val chapters: List<Entry>) {
+    private class Entry(val index: Int, val title: String, val tts: ChapterTtsView, val folded: String)
 
     suspend fun search(query: String): List<SearchHit> {
         val needle = fold(query)
@@ -31,22 +36,32 @@ internal class EpubSearchIndex private constructor(private val chapters: List<En
         return chapters.mapNotNull { chapter ->
             coroutineContext.ensureActive()
             val at = chapter.folded.indexOf(needle)
-            if (at < 0) null
-            else SearchHit(chapter.index, chapter.title, snippet(chapter.text, at, needle.length))
+            if (at < 0) return@mapNotNull null
+            val word = chapter.tts.words.lastOrNull { it.chapterCharOffset <= at }
+            val offset = word?.highlightCharRange?.first ?: 0
+            SearchHit(
+                Position(chapter.index, word?.blockIndex ?: 0, offset),
+                chapter.title,
+                snippet(chapter.tts.plainText, at, needle.length),
+            )
         }
     }
 
     companion object {
         const val MIN_QUERY_LENGTH = 2
 
-        suspend fun build(epub: EpubBook): EpubSearchIndex = withContext(Dispatchers.Default) {
-            EpubSearchIndex(
-                epub.chapters.mapIndexed { idx, chapter ->
-                    coroutineContext.ensureActive()
-                    val text = buildChapterTtsView(parseXhtmlToBlocks(chapter.xhtml, includeHidden = true)).plainText
-                    Entry(idx, chapter.title ?: "Chapter ${idx + 1}", text, fold(text))
+        suspend fun build(book: ReaderBook): BookSearchIndex = coroutineScope {
+            val permits = Semaphore(CONCURRENT_FETCHES)
+            val entries = book.manifest.chapters.indices.map { idx ->
+                async {
+                    val chapter = permits.withPermit { book.chapter(idx) }
+                    withContext(Dispatchers.Default) {
+                        val tts = buildChapterTtsView(chapter.blocks)
+                        Entry(idx, book.title(idx) ?: "Chapter ${idx + 1}", tts, fold(tts.plainText))
+                    }
                 }
-            )
+            }.awaitAll()
+            BookSearchIndex(entries)
         }
 
         /** Per-character folding: `String.lowercase()` can change length (e.g. `İ`), which
@@ -67,10 +82,10 @@ internal class EpubSearchIndex private constructor(private val chapters: List<En
 
 /** Builds the index the first time [active] goes true, then keeps it for the book's lifetime. */
 @Composable
-internal fun rememberEpubSearchIndex(epub: EpubBook, active: Boolean): EpubSearchIndex? {
-    var index by remember(epub) { mutableStateOf<EpubSearchIndex?>(null) }
-    LaunchedEffect(epub, active) {
-        if (active && index == null) index = EpubSearchIndex.build(epub)
+internal fun rememberBookSearchIndex(book: ReaderBook, active: Boolean): BookSearchIndex? {
+    var index by remember(book) { mutableStateOf<BookSearchIndex?>(null) }
+    LaunchedEffect(book, active) {
+        if (active && index == null) index = orNull { BookSearchIndex.build(book) }
     }
     return index
 }

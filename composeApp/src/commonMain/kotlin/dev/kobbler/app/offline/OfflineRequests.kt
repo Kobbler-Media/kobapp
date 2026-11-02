@@ -83,7 +83,9 @@ fun OfflineEngine.downloadBook(book: Book) {
             subtitle = book.author,
             posterUrl = book.coverUrl,
             bookFormat = format,
-            files = listOf(OfflineFile("book.${format.lowercase()}")),
+            // Ebooks are read from their reader pack, captured whole while preparing; only
+            // comics are still opened from the archive itself.
+            files = if (format.lowercase() in ComicFormats) listOf(OfflineFile("book.${format.lowercase()}")) else emptyList(),
         ),
     )
 }

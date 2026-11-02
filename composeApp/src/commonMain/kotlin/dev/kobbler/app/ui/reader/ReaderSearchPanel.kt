@@ -49,8 +49,8 @@ private const val SEARCH_DEBOUNCE_MS = 200L
 
 @Composable
 internal fun ReaderSearchPanel(
-    index: EpubSearchIndex?,
-    onResultSelect: (Int) -> Unit,
+    index: BookSearchIndex?,
+    onResultSelect: (SearchHit) -> Unit,
     onDismiss: () -> Unit,
     theme: ReaderTheme,
     modifier: Modifier = Modifier,
@@ -60,7 +60,7 @@ internal fun ReaderSearchPanel(
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(query, index) {
-        if (query.length < EpubSearchIndex.MIN_QUERY_LENGTH) {
+        if (query.length < BookSearchIndex.MIN_QUERY_LENGTH) {
             results = emptyList()
             busy = false
             return@LaunchedEffect
@@ -118,7 +118,7 @@ internal fun ReaderSearchPanel(
                 modifier = Modifier.focusKey("query", focusRequester = entryFocus).fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
-            if (query.length >= EpubSearchIndex.MIN_QUERY_LENGTH) {
+            if (query.length >= BookSearchIndex.MIN_QUERY_LENGTH) {
                 Text(
                     if (busy) "Searching..." else "${results.size} result${if (results.size != 1) "s" else ""}",
                     style = KobappTheme.type.caption.copy(color = theme.textColor.copy(alpha = 0.5f)),
@@ -126,14 +126,14 @@ internal fun ReaderSearchPanel(
             }
             Spacer(Modifier.height(8.dp))
             LazyColumn(Modifier.focusKeyGroup("results")) {
-                items(results, key = { it.chapterIndex }) { hit ->
+                items(results, key = { it.position.chapter }) { hit ->
                     Column(
                         Modifier
-                            .focusKey("result.${hit.chapterIndex}")
+                            .focusKey("result.${hit.position.chapter}")
                             .fillMaxWidth()
                             .tvAutoGlow(cornerRadiusDp = 4f, scale = 1.01f)
                             .clip(RoundedCornerShape(4.dp))
-                            .clickable { onResultSelect(hit.chapterIndex) }
+                            .clickable { onResultSelect(hit) }
                             .padding(vertical = 8.dp, horizontal = 8.dp)
                     ) {
                         Text(

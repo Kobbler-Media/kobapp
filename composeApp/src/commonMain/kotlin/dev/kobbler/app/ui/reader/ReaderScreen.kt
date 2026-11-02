@@ -1,47 +1,23 @@
 package dev.kobbler.app.ui.reader
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,38 +25,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.kobbler.app.data.Book
-import dev.kobbler.app.data.Bookmark
 import dev.kobbler.app.data.BookmarkRepository
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.TtsVoiceDto
 import dev.kobbler.app.data.UserSettings
-import dev.kobbler.app.platform.FileCache
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.tvAutoGlow
-import dev.kobbler.kobfocus.focusInert
+import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
+import dev.kobbler.app.ui.reader.layout.ReaderTypography
+import dev.kobbler.app.ui.reader.pack.Position
 import dev.kobbler.kobfocus.focusKey
-import dev.kobbler.kobfocus.focusKeyGroup
-import dev.kobbler.app.ui.reader.epub.TtsWordHighlight
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
-import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
-import dev.kobbler.app.ui.player.SharedAudioPlayer
-import kotlin.math.abs
-import kotlin.time.Clock
-import io.ktor.client.request.get
-import io.ktor.client.request.header
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,11 +48,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import dev.kobbler.app.platform.openZipArchive
 
 /** Outlives the reader composition so the exit save is not cancelled by navigation. */
 private val readerExitScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+internal data class ReadingSpot(val position: Position, val percent: Double)
+
+private inline fun <reified T : Enum<T>> storedEnum(key: String, default: T): T =
+    UserSettings.getString(key)?.let { stored -> enumValues<T>().firstOrNull { it.name == stored } } ?: default
 
 @Composable
 fun ReaderScreen(
@@ -103,29 +66,18 @@ fun ReaderScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    var epubBook by remember { mutableStateOf<EpubBook?>(null) }
-    var loading by remember { mutableStateOf(true) }
+    var readerBook by remember { mutableStateOf<ReaderBook?>(null) }
+    var paging by remember { mutableStateOf<ReaderPaging?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var currentChapter by remember { mutableIntStateOf(0) }
     var showToc by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var readerBookmarks by remember { mutableStateOf(BookmarkRepository.getBookmarks(book.id)) }
-    // The web reader writes a character-precise CFI to the same reading state; this app has
-    // no CFI machinery, so it echoes back whatever it fetched rather than nulling it out.
-    var savedCfi by remember { mutableStateOf<String?>(null) }
-    var readingStateLoaded by remember { mutableStateOf(false) }
 
     var brightness by remember {
         mutableStateOf(UserSettings.getString("reader_brightness")?.toFloatOrNull() ?: 1f)
     }
-    var themeMode by remember {
-        mutableStateOf(
-            UserSettings.getString("reader_theme")?.let {
-                try { ReaderThemeMode.valueOf(it) } catch (_: Exception) { null }
-            } ?: ReaderThemeMode.Dark
-        )
-    }
+    var themeMode by remember { mutableStateOf(storedEnum("reader_theme", ReaderThemeMode.Dark)) }
     // Only the first-run default is form-factor aware; a stored value always wins, so
     // changing this cannot fight a size the user already chose.
     val defaultFontSize = if (formFactor == FormFactor.TV) 28f else 16f
@@ -138,20 +90,10 @@ fun ReaderScreen(
     var horizontalPadding by remember {
         mutableStateOf(UserSettings.getString("reader_h_padding")?.toIntOrNull() ?: 20)
     }
-    var readerFontFamily by remember {
-        mutableStateOf(
-            UserSettings.getString("reader_font_family")?.let {
-                try { ReaderFontFamily.valueOf(it) } catch (_: Exception) { null }
-            } ?: ReaderFontFamily.Default
-        )
-    }
-    var pageFit by remember {
-        mutableStateOf(
-            UserSettings.getString("reader_page_fit")?.let {
-                try { ReaderPageFit.valueOf(it) } catch (_: Exception) { null }
-            } ?: ReaderPageFit.Spread
-        )
-    }
+    var readerFontFamily by remember { mutableStateOf(storedEnum("reader_font_family", ReaderFontFamily.Default)) }
+    var pageFit by remember { mutableStateOf(storedEnum("reader_page_fit", ReaderPageFit.Spread)) }
+    var styleMode by remember { mutableStateOf(storedEnum("reader_style_mode", ReaderStyleMode.Publisher)) }
+    var alignment by remember { mutableStateOf(storedEnum("reader_alignment", ReaderAlignment.Justified)) }
     fun saveSettings() {
         UserSettings.putString("reader_theme", themeMode.name)
         UserSettings.putString("reader_font_size", fontSize.toString())
@@ -160,31 +102,28 @@ fun ReaderScreen(
         UserSettings.putString("reader_font_family", readerFontFamily.name)
         UserSettings.putString("reader_brightness", brightness.toString())
         UserSettings.putString("reader_page_fit", pageFit.name)
+        UserSettings.putString("reader_style_mode", styleMode.name)
+        UserSettings.putString("reader_alignment", alignment.name)
     }
-    SaveWhenSettled(listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness, pageFit)) {
+    SaveWhenSettled(
+        listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness, pageFit, styleMode, alignment),
+    ) {
         saveSettings()
     }
 
-    val scrollState = rememberScrollState()
-    var contentHeight by remember { mutableIntStateOf(0) }
-    var viewportHeight by remember { mutableIntStateOf(0) }
-    val pages = remember(scrollState) {
-        derivedStateOf { pageCounter(scrollState.value, viewportHeight, scrollState.maxValue) }
+    val progressSaver = remember(book.id, api) {
+        ProgressSaver<ReadingSpot> { api.saveReaderProgress(book.id, it.position, it.percent) }
     }
-
-    val weights = remember(epubBook) { epubBook?.let { chapterWeights(it.chapters) } ?: emptyList() }
-
-    val progressSaver = remember(book.id, api) { ProgressSaver { api.saveReaderProgress(book.id, savedCfi, it) } }
     val persistProgress: suspend () -> Unit = persist@{
-        if (epubBook == null) return@persist
-        if (!readingStateLoaded) return@persist
+        val loaded = readerBook ?: return@persist
+        val at = paging ?: return@persist
         val percent = readingProgressPercent(
-            chapterIndex = currentChapter,
-            chapterWeights = weights,
-            scrollOffset = scrollState.value,
-            maxScroll = scrollState.maxValue,
+            chapterIndex = at.chapter,
+            chapterWeights = loaded.weights,
+            scrollOffset = at.page,
+            maxScroll = at.pageCount - 1,
         )
-        progressSaver.save(percent)
+        progressSaver.save(ReadingSpot(at.position, percent))
     }
 
     val ttsController = remember { TtsController(api, scope) }
@@ -213,8 +152,9 @@ fun ReaderScreen(
     val syncPlayer = remember { mutableStateOf<Player?>(null) }
 
     LaunchedEffect(syncSuggestedChapter) {
-        if (syncMode == SyncMode.SYNCING && syncSuggestedChapter >= 0 && syncSuggestedChapter != currentChapter) {
-            currentChapter = syncSuggestedChapter
+        val at = paging ?: return@LaunchedEffect
+        if (syncMode == SyncMode.SYNCING && syncSuggestedChapter >= 0 && syncSuggestedChapter != at.chapter) {
+            at.goToChapter(syncSuggestedChapter)
         }
     }
     val syncPlayerState = syncPlayer.value?.state?.collectAsState()
@@ -239,40 +179,38 @@ fun ReaderScreen(
      * the first few, or a book with a plate section between its parts spends a minute
      * in silence.
      */
-    suspend fun readAloudFrom(epub: EpubBook, from: Int) {
+    suspend fun readAloudFrom(loaded: ReaderBook, at: ReaderPaging, from: Int) {
         var dwelt = 0
         val next = nextSpokenChapter(
             from = from,
-            lastIndex = epub.chapters.lastIndex,
-            textAt = { chapterPlainText(epub, it) },
+            lastIndex = loaded.lastChapter,
+            textAt = { buildChapterView(loaded, it)?.tts?.plainText.orEmpty() },
             onSkip = { index ->
-                currentChapter = index
-                scrollState.scrollTo(0)
+                at.goToChapter(index)
                 if (dwelt++ < BlankChapterDwellCount) delay(BlankChapterDwellMs)
             },
         ) ?: return
         readAloudChapter = next.index
-        currentChapter = next.index
-        scrollState.scrollTo(0)
+        at.goToChapter(next.index)
         synthStartWordIndex = 0
         ttsController.start(next.text)
     }
 
     LaunchedEffect(ttsController) {
         ttsController.onFinished = onFinished@{
-            val epub = epubBook ?: return@onFinished
-            scope.launch { readAloudFrom(epub, currentChapter + 1) }
+            val loaded = readerBook ?: return@onFinished
+            val at = paging ?: return@onFinished
+            scope.launch { readAloudFrom(loaded, at, at.chapter + 1) }
         }
     }
+    val currentChapter = paging?.chapter ?: 0
     LaunchedEffect(currentChapter) {
         // The read advancing itself is not a reason to stop it; anyone else moving is.
         if (currentChapter == readAloudChapter) return@LaunchedEffect
         if (syncMode != SyncMode.SYNCING) ttsController.stop()
     }
-    LaunchedEffect(currentChapter, epubBook) {
-        val epub = epubBook
-        val chapterTitle = epub?.chapters?.getOrNull(currentChapter)?.title
-            ?: "Chapter ${currentChapter + 1}"
+    LaunchedEffect(currentChapter, readerBook) {
+        val chapterTitle = readerBook?.title(currentChapter) ?: "Chapter ${currentChapter + 1}"
         ttsController.setNowPlayingMetadata(book.title, chapterTitle, book.coverUrl)
     }
     DisposableEffect(Unit) {
@@ -292,82 +230,86 @@ fun ReaderScreen(
             fontFamily = readerFontFamily.compose,
         )
     }
+    val publisherFonts = rememberPublisherFonts(readerBook, enabled = styleMode == ReaderStyleMode.Publisher)
+    val typography = remember(theme, styleMode, alignment, publisherFonts) {
+        ReaderTypography(
+            theme = theme,
+            publisherStyles = styleMode == ReaderStyleMode.Publisher,
+            justify = alignment == ReaderAlignment.Justified,
+            publisherFonts = publisherFonts,
+        )
+    }
 
-    // Cache IO, ZIP inflation and per-chapter XHTML parsing are all multi-second on a large
-    // book — none of it may touch the main thread.
     LaunchedEffect(book.id) {
         try {
-            val cacheKey = "epub_${book.id}"
-            val payload = fetchBookFile(api, book.id, cacheKey, listOf("EPUB", "KEPUB"))
-            val parsed = withContext(Dispatchers.Default) {
-                // Disk-backed where the platform allows it: the archive stays on disk and
-                // only the requested entry is inflated. EpubBook keeps the handle for images.
-                val onDisk = payload.path?.let { openZipArchive(it) }
-                when {
-                    onDisk != null -> parseEpub(onDisk)
-                    payload.bytes != null -> parseEpub(payload.bytes)
-                    else -> parseEpub(
-                        FileCache.get(cacheKey)
-                            ?: throw Exception("No readable file available for this book.")
-                    )
-                }
-            }
+            val loaded = ReaderBook(book.id, api.readerPackManifest(book.id), api)
+            if (loaded.chapterCount == 0) throw Exception("This book has nothing to read.")
             val progress = api.readerProgressOrNull(book.id)
-            epubBook = parsed
-            if (progress != null) {
-                savedCfi = progress.cfi
-                readingStateLoaded = true
-                val pct = progress.progressPercent ?: 0.0
-                if (pct > 0 && parsed.chapters.isNotEmpty()) {
-                    currentChapter = chapterForProgressPercent(pct, chapterWeights(parsed.chapters))
-                }
-            }
-            loading = false
+            val start = progress?.position?.takeIf { it.chapter in 0..loaded.lastChapter }
+                ?: progress?.progressPercent?.takeIf { it > 0 }
+                    ?.let { Position(chapterForProgressPercent(it, loaded.weights)) }
+                ?: Position()
+            paging = ReaderPaging(start)
+            readerBook = loaded
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             error = e.message ?: "Failed to load book"
-            loading = false
         }
     }
 
-    LaunchedEffect(currentChapter, epubBook) {
-        if (epubBook == null) return@LaunchedEffect
+    LaunchedEffect(currentChapter, readerBook) {
+        if (readerBook == null) return@LaunchedEffect
         while (isActive) {
             delay(30_000)
             persistProgress()
         }
     }
 
-    LaunchedEffect(currentChapter) { scrollState.scrollTo(0) }
-
     Box(Modifier.fillMaxSize().background(theme.backgroundColor)) {
+        val loaded = readerBook
+        val at = paging
         when {
-            loading -> CircularProgressIndicator(
+            error != null -> ReaderErrorState(message = error!!, onBack = onBack, theme = theme)
+            loaded == null || at == null -> CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
                 color = theme.linkColor,
             )
-            error != null -> ReaderErrorState(message = error!!, onBack = onBack, theme = theme)
-            epubBook != null -> ReaderLoaded(
-                epub = epubBook!!,
+            else -> ReaderLoaded(
+                readerBook = loaded,
+                paging = at,
                 book = book,
                 onBack = onBack,
                 scope = scope,
                 theme = theme,
-                themeMode = themeMode,
-                fontSize = fontSize,
-                lineHeightMultiplier = lineHeightMultiplier,
-                horizontalPadding = horizontalPadding,
-                readerFontFamily = readerFontFamily,
-                pageFit = pageFit,
-                brightness = brightness,
+                typography = typography,
+                settings = ReaderSettingsState(
+                    themeMode = themeMode,
+                    fontSize = fontSize,
+                    lineHeightMultiplier = lineHeightMultiplier,
+                    horizontalPadding = horizontalPadding,
+                    readerFontFamily = readerFontFamily,
+                    pageFit = pageFit,
+                    styleMode = styleMode,
+                    alignment = alignment,
+                    brightness = brightness,
+                    onThemeModeChange = { themeMode = it },
+                    onFontSizeChange = { fontSize = it },
+                    onLineHeightChange = { lineHeightMultiplier = it },
+                    onPaddingChange = { horizontalPadding = it },
+                    onFontFamilyChange = { readerFontFamily = it },
+                    onPageFitChange = { pageFit = it },
+                    onStyleModeChange = { styleMode = it },
+                    onAlignmentChange = { alignment = it },
+                    onBrightnessChange = { brightness = it },
+                ),
                 ttsController = ttsController,
                 ttsState = ttsState,
                 ttsVoices = ttsVoices,
                 ttsWordIndex = { ttsWordIndex.value },
                 synthStartWordIndex = synthStartWordIndex,
                 onSynthStartWordIndexChange = { synthStartWordIndex = it },
-                onStartReadAloud = { scope.launch { readAloudFrom(epubBook!!, currentChapter) } },
+                onStartReadAloud = { scope.launch { readAloudFrom(loaded, at, at.chapter) } },
                 keyNav = formFactor == FormFactor.TV || formFactor == FormFactor.Desktop,
                 // Chrome only gets out of the way where there is no pointer to aim with.
                 immersive = formFactor == FormFactor.TV,
@@ -376,14 +318,6 @@ fun ReaderScreen(
                 syncPlayer = syncPlayer,
                 audio = LocalSharedAudioPlayer.current,
                 activeHighlight = activeHighlight,
-                currentChapter = currentChapter,
-                onChapterChange = { currentChapter = it },
-                scrollState = scrollState,
-                viewportHeight = viewportHeight,
-                onViewportHeightChange = { viewportHeight = it },
-                contentHeight = contentHeight,
-                onContentHeightChange = { contentHeight = it },
-                pages = { pages.value },
                 showToc = showToc,
                 onShowTocChange = { showToc = it },
                 showSearch = showSearch,
@@ -392,13 +326,6 @@ fun ReaderScreen(
                 onShowSettingsChange = { showSettings = it },
                 readerBookmarks = readerBookmarks,
                 onBookmarksChange = { readerBookmarks = it },
-                onThemeModeChange = { themeMode = it },
-                onFontSizeChange = { fontSize = it },
-                onLineHeightChange = { lineHeightMultiplier = it },
-                onPaddingChange = { horizontalPadding = it },
-                onFontFamilyChange = { readerFontFamily = it },
-                onPageFitChange = { pageFit = it },
-                onBrightnessChange = { brightness = it },
             )
         }
 
@@ -439,525 +366,6 @@ private fun ReaderErrorState(message: String, onBack: () -> Unit, theme: ReaderT
         Text(message, style = KobappTheme.type.body.copy(color = theme.textColor))
         Spacer(Modifier.height(16.dp))
         KobButton(text = "Go Back", onClick = onBack, modifier = Modifier.focusKey("error.back"))
-    }
-}
-
-@Composable
-private fun ReaderLoaded(
-    epub: EpubBook,
-    book: Book,
-    onBack: () -> Unit,
-    scope: CoroutineScope,
-    theme: ReaderTheme,
-    themeMode: ReaderThemeMode,
-    fontSize: Float,
-    lineHeightMultiplier: Float,
-    horizontalPadding: Int,
-    readerFontFamily: ReaderFontFamily,
-    pageFit: ReaderPageFit,
-    brightness: Float,
-    ttsController: TtsController,
-    ttsState: TtsState,
-    ttsVoices: List<TtsVoiceDto>,
-    ttsWordIndex: () -> Int,
-    synthStartWordIndex: Int,
-    onSynthStartWordIndexChange: (Int) -> Unit,
-    onStartReadAloud: () -> Unit,
-    keyNav: Boolean,
-    immersive: Boolean,
-    syncController: AudiobookSyncController,
-    syncMode: SyncMode,
-    syncPlayer: MutableState<Player?>,
-    audio: SharedAudioPlayer,
-    activeHighlight: String?,
-    currentChapter: Int,
-    onChapterChange: (Int) -> Unit,
-    scrollState: ScrollState,
-    viewportHeight: Int,
-    onViewportHeightChange: (Int) -> Unit,
-    contentHeight: Int,
-    onContentHeightChange: (Int) -> Unit,
-    pages: () -> Pair<Int, Int>,
-    showToc: Boolean,
-    onShowTocChange: (Boolean) -> Unit,
-    showSearch: Boolean,
-    onShowSearchChange: (Boolean) -> Unit,
-    showSettings: Boolean,
-    onShowSettingsChange: (Boolean) -> Unit,
-    readerBookmarks: List<Bookmark>,
-    onBookmarksChange: (List<Bookmark>) -> Unit,
-    onThemeModeChange: (ReaderThemeMode) -> Unit,
-    onFontSizeChange: (Float) -> Unit,
-    onLineHeightChange: (Float) -> Unit,
-    onPaddingChange: (Int) -> Unit,
-    onFontFamilyChange: (ReaderFontFamily) -> Unit,
-    onPageFitChange: (ReaderPageFit) -> Unit,
-    onBrightnessChange: (Float) -> Unit,
-) {
-    val panelOpen = showToc || showSearch || showSettings
-    val nav = rememberReaderNavState(keyNav = keyNav, immersive = immersive, holdChrome = panelOpen)
-
-    val chapterView = rememberChapterView(epub, currentChapter)
-    var viewportWidth by remember { mutableIntStateOf(0) }
-    val fitted = rememberFittedChapters(epub, chapterView, currentChapter, pageFit, IntSize(viewportWidth, viewportHeight))
-    val shownChapters = fitted?.takeIf { it.isNotEmpty() }?.map { it.chapterIndex }
-        ?.let { it.min()..it.max() } ?: currentChapter..currentChapter
-    val activeWordHighlight = remember(chapterView, synthStartWordIndex) {
-        derivedStateOf {
-            val index = ttsWordIndex()
-            val words = chapterView?.tts?.words
-            val word = if (index < 0 || words == null) null
-                else words.getOrNull(synthStartWordIndex + index)
-            word?.highlightCharRange?.let { TtsWordHighlight(word.blockIndex, it) }
-        }
-    }
-    val tocEntries = rememberTocEntries(epub)
-    val searchIndex = rememberEpubSearchIndex(epub, active = showSearch)
-
-    // Content-relative Y range of every measured block, fed by EpubContent and read by
-    // both the long-press hit-test and the reading cursor.
-    val blockBounds = remember(currentChapter) { mutableStateMapOf<Int, IntRange>() }
-    val cursorBlock = remember(currentChapter) { mutableStateOf<Int?>(null) }
-    var committedScroll by remember(currentChapter) { mutableStateOf<Int?>(null) }
-    var pendingScroll by remember(epub) { mutableStateOf<PendingScroll?>(null) }
-
-    fun scrollTo(target: Int) {
-        committedScroll = target
-        scope.launch { scrollState.animateScrollTo(target) }
-    }
-
-    fun startReadingAt(blockIndex: Int) {
-        val view = chapterView ?: return
-        startReadingAtBlock(view.tts, blockIndex, ttsController::start)
-            ?.let(onSynthStartWordIndexChange)
-    }
-
-    val cursor = remember(keyNav, blockBounds, scrollState, viewportHeight, theme.highlightColor, chapterView) {
-        if (!keyNav) null else ReaderCursorConfig(
-            bounds = blockBounds,
-            scrollState = scrollState,
-            viewportHeight = viewportHeight,
-            bandColor = theme.highlightColor.copy(alpha = theme.highlightColor.alpha * 0.55f),
-            onScrollTo = { target -> scrollTo(target) },
-            onStartReadingAt = { idx -> startReadingAt(idx) },
-        )
-    }
-
-    fun goNextPage() {
-        val base = pageTurnBase(committedScroll, scrollState.value, viewportHeight)
-        val target = nextScrollTarget(base, viewportHeight, scrollState.maxValue)
-        cursor?.followPageTurn(cursorBlock, target)
-        if (target != null) {
-            scrollTo(target)
-        } else if (shownChapters.last < epub.chapters.lastIndex) {
-            onChapterChange(shownChapters.last + 1)
-        }
-    }
-
-    fun goPrevPage() {
-        val base = pageTurnBase(committedScroll, scrollState.value, viewportHeight)
-        val target = previousScrollTarget(base, viewportHeight)
-        cursor?.followPageTurn(cursorBlock, target)
-        if (target != null) {
-            scrollTo(target)
-        } else if (shownChapters.first > 0) {
-            pendingScroll = PendingScroll.Bottom
-            onChapterChange(shownChapters.first - 1)
-        }
-    }
-
-    // The next chapter parses off-thread, so anything that wants to land somewhere other
-    // than the top has to wait for the new content to be measured.
-    LaunchedEffect(chapterView) {
-        val pending = pendingScroll ?: return@LaunchedEffect
-        if (chapterView == null) return@LaunchedEffect
-        pendingScroll = null
-        val extent = awaitScrollExtent(scrollState)
-        val target = when (pending) {
-            PendingScroll.Bottom -> extent
-            is PendingScroll.Fraction -> (pending.value * (extent + viewportHeight)).toInt().coerceIn(0, extent)
-        }
-        scrollState.scrollTo(target)
-        committedScroll = target
-    }
-
-    val onKeyAction: (ReaderKeyAction) -> Boolean = { action ->
-        when (action) {
-            ReaderKeyAction.PrevPage -> { goPrevPage(); true }
-            ReaderKeyAction.NextPage -> { goNextPage(); true }
-            ReaderKeyAction.CursorUp -> { cursor?.moveCursor(cursorBlock, forward = false); true }
-            ReaderKeyAction.CursorDown -> { cursor?.moveCursor(cursorBlock, forward = true); true }
-            ReaderKeyAction.CursorSelect -> cursor?.selectCursor(cursorBlock) ?: false
-            ReaderKeyAction.CursorExit -> { cursorBlock.value = null; true }
-            ReaderKeyAction.OpenChapters -> { onShowTocChange(true); true }
-            ReaderKeyAction.ClosePanel -> {
-                when {
-                    showSettings -> onShowSettingsChange(false)
-                    showSearch -> onShowSearchChange(false)
-                    else -> onShowTocChange(false)
-                }
-                true
-            }
-            else -> false
-        }
-    }
-    ReaderBackHandler(state = nav, panelOpen = panelOpen, cursorActive = cursorBlock.value != null, onAction = onKeyAction)
-
-    // Entry focus, and the way back after a panel that stole it closes. Reading must never
-    // be left with nothing focused — Compose only delivers keys into the focused subtree.
-    LaunchedEffect(panelOpen, keyNav) {
-        if (keyNav && !panelOpen) nav.returnToBody()
-    }
-
-    val topBar = @Composable {
-        Box(Modifier.readerZone(nav, ReaderZone.TopBar)) {
-            ReaderTopBar(
-                title = epub.chapters.getOrNull(currentChapter)?.title ?: book.title,
-                onBack = {
-                    ttsController.stop()
-                    syncController.stop()
-                    syncPlayer.value?.stop()
-                    syncPlayer.value = null
-                    onBack()
-                },
-                onToc = { onShowTocChange(!showToc) },
-                onSettings = { onShowSettingsChange(!showSettings) },
-                onTts = {
-                    if (syncMode == SyncMode.SYNCING) return@ReaderTopBar
-                    when (ttsState) {
-                        TtsState.IDLE -> onStartReadAloud()
-                        TtsState.LOADING -> {}
-                        TtsState.PLAYING -> ttsController.pause()
-                        TtsState.PAUSED -> ttsController.resume()
-                    }
-                },
-                onListenAlong = {
-                    if (!book.hasAudiobook) return@ReaderTopBar
-                    if (syncMode == SyncMode.SYNCING) {
-                        syncController.stop()
-                        syncPlayer.value?.stop()
-                        syncPlayer.value = null
-                    } else {
-                        ttsController.stop()
-                        val player = audio.get()
-                        syncPlayer.value = player
-                        scope.launch {
-                            syncController.start(book.id, player, epub.chapters)
-                        }
-                    }
-                },
-                onSearch = { onShowSearchChange(!showSearch) },
-                onBookmark = {
-                    val scrollFrac = if (contentHeight > 0) scrollState.value.toFloat() / contentHeight else 0f
-                    val chapterTitle = epub.chapters.getOrNull(currentChapter)?.title ?: "Chapter ${currentChapter + 1}"
-                    val totalChapters = epub.chapters.size
-                    val pct = if (totalChapters > 0) ((currentChapter.toFloat() / totalChapters) * 100).toInt() else 0
-                    val bookmark = Bookmark(
-                        id = BookmarkRepository.generateId(),
-                        bookId = book.id,
-                        label = "$chapterTitle (${pct}%)",
-                        createdAt = Clock.System.now().toEpochMilliseconds(),
-                        chapterIndex = currentChapter,
-                        scrollFraction = scrollFrac,
-                    )
-                    BookmarkRepository.addBookmark(bookmark)
-                    onBookmarksChange(BookmarkRepository.getBookmarks(book.id))
-                },
-                ttsState = ttsState,
-                syncMode = syncMode,
-                hasAudiobook = book.hasAudiobook,
-                theme = theme,
-                entryFocus = nav.topBarFocus,
-            )
-        }
-    }
-
-    val bottomBar = @Composable {
-        Column(Modifier.readerZone(nav, ReaderZone.BottomBar)) {
-            if (syncMode == SyncMode.SYNCING) {
-                ListenAlongBar(
-                    player = syncPlayer.value,
-                    theme = theme,
-                    onStop = {
-                        syncController.stop()
-                        syncPlayer.value?.stop()
-                        syncPlayer.value = null
-                    },
-                )
-            }
-            ReaderBottomBar(
-                pages = pages,
-                currentChapter = currentChapter,
-                totalChapters = epub.chapters.size,
-                onSliderChange = { frac ->
-                    if (epub.chapters.isEmpty()) return@ReaderBottomBar
-                    val idx = (frac * epub.chapters.lastIndex).toInt().coerceIn(0, epub.chapters.lastIndex)
-                    onChapterChange(idx)
-                },
-                theme = theme,
-                entryFocus = nav.bottomBarFocus,
-                onChapters = if (immersive) { { onShowTocChange(true) } } else null,
-            )
-        }
-    }
-
-    Box(
-        Modifier
-            .fillMaxSize()
-            .readerKeyNav(
-                state = nav,
-                panelOpen = panelOpen,
-                cursorActive = cursorBlock.value != null,
-                chaptersOnDown = immersive && syncMode != SyncMode.SYNCING,
-                onAction = onKeyAction,
-            )
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            if (!immersive) topBar()
-
-            Box(
-                Modifier
-                    .weight(1f)
-                    .onSizeChanged {
-                        onViewportHeightChange(it.height)
-                        viewportWidth = it.width
-                    }
-                    .pointerInput(currentChapter, epub.chapters.size, viewportHeight) {
-                        var cumDrag = 0f
-                        val threshold = 80.dp.toPx()
-                        detectHorizontalDragGestures(
-                            onDragStart = { cumDrag = 0f },
-                            onDragEnd = {
-                                if (cumDrag < -threshold) goNextPage()
-                                else if (cumDrag > threshold) goPrevPage()
-                            },
-                            onDragCancel = { cumDrag = 0f },
-                            onHorizontalDrag = { _, dragAmount -> cumDrag += dragAmount },
-                        )
-                    }
-            ) {
-                Box(
-                    Modifier
-                        .focusInert(panelOpen)
-                        .fillMaxSize()
-                        .clipToBounds()
-                        .verticalScroll(scrollState)
-                ) {
-                    if (fitted != null) {
-                        FittedPages(
-                            views = fitted,
-                            theme = theme,
-                            fillWidth = pageFit == ReaderPageFit.Width,
-                            viewportHeight = with(LocalDensity.current) { viewportHeight.toDp() },
-                            modifier = Modifier.onSizeChanged { onContentHeightChange(it.height) },
-                        )
-                        val page = chapterView?.page
-                        LaunchedEffect(page, contentHeight) {
-                            if (page != null && contentHeight > 0) blockBounds[page.blockIndex] = 0..<contentHeight
-                        }
-                    } else if (chapterView != null) {
-                        val imageResolver = remember(chapterView) {
-                            { src: String -> chapterView.images[src] }
-                        }
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .onSizeChanged { onContentHeightChange(it.height) }
-                        ) {
-                            EpubContent(
-                                blocks = chapterView.blocks,
-                                theme = theme,
-                                highlightedText = activeHighlight,
-                                wordHighlight = { activeWordHighlight.value },
-                                imageResolver = imageResolver,
-                                pageHeight = viewportHeight,
-                                imageMaxHeight = if (pageFit == ReaderPageFit.Width) 0 else viewportHeight,
-                                onActiveBlockY = { y ->
-                                    if (viewportHeight > 0) {
-                                        val targetPage = y / viewportHeight
-                                        val targetScroll = (targetPage * viewportHeight)
-                                            .coerceAtMost(scrollState.maxValue)
-                                        if (abs(scrollState.value - targetScroll) > 1) {
-                                            scrollTo(targetScroll)
-                                        }
-                                    }
-                                },
-                                onBlockPositioned = { idx, topY, height ->
-                                    val bounds = topY..(topY + height - 1).coerceAtLeast(topY)
-                                    if (blockBounds[idx] != bounds) blockBounds[idx] = bounds
-                                },
-                            )
-                        }
-                    }
-                }
-
-                ReaderBodyInput(
-                    modifier = Modifier.focusInert(panelOpen),
-                    onPrevPage = { goPrevPage() },
-                    onNextPage = { goNextPage() },
-                    onLongPressAt = { pos: Offset ->
-                        blockAt(blockBounds, scrollState.value + pos.y.toInt())?.let { startReadingAt(it) }
-                    },
-                    cursor = cursor,
-                    cursorBlock = cursorBlock.value,
-                )
-
-                if (showToc) {
-                    ReaderTocPanel(
-                        entries = tocEntries,
-                        currentChapter = currentChapter,
-                        bookmarks = readerBookmarks,
-                        onChapterSelect = { idx ->
-                            onChapterChange(idx)
-                            onShowTocChange(false)
-                        },
-                        onBookmarkSelect = { bm ->
-                            if (bm.chapterIndex != null) {
-                                bm.scrollFraction?.let { pendingScroll = PendingScroll.Fraction(it) }
-                                onChapterChange(bm.chapterIndex)
-                            }
-                            onShowTocChange(false)
-                        },
-                        onBookmarkDelete = { bm ->
-                            BookmarkRepository.removeBookmark(book.id, bm.id)
-                            onBookmarksChange(BookmarkRepository.getBookmarks(book.id))
-                        },
-                        onDismiss = { onShowTocChange(false) },
-                        theme = theme,
-                        modifier = Modifier.focusInert(showSearch || showSettings),
-                    )
-                }
-                if (showSearch) {
-                    ReaderSearchPanel(
-                        index = searchIndex,
-                        onResultSelect = { idx ->
-                            onChapterChange(idx)
-                            onShowSearchChange(false)
-                        },
-                        onDismiss = { onShowSearchChange(false) },
-                        theme = theme,
-                        modifier = Modifier.focusInert(showSettings),
-                    )
-                }
-                if (showSettings) {
-                    ReaderSettingsPanel(
-                        themeMode = themeMode,
-                        fontSize = fontSize,
-                        lineHeightMultiplier = lineHeightMultiplier,
-                        horizontalPadding = horizontalPadding,
-                        readerFontFamily = readerFontFamily,
-                        pageFit = pageFit,
-                        onThemeChange = onThemeModeChange,
-                        onFontSizeChange = onFontSizeChange,
-                        onLineHeightChange = onLineHeightChange,
-                        onPaddingChange = onPaddingChange,
-                        onFontFamilyChange = onFontFamilyChange,
-                        onPageFitChange = onPageFitChange,
-                        brightness = brightness,
-                        onBrightnessChange = onBrightnessChange,
-                        ttsController = ttsController,
-                        ttsVoices = ttsVoices,
-                        onDismiss = { onShowSettingsChange(false) },
-                        theme = theme,
-                    )
-                }
-            }
-
-            if (!immersive) bottomBar()
-        }
-
-        if (immersive) {
-            AnimatedVisibility(
-                visible = nav.chromeVisible,
-                modifier = Modifier.align(Alignment.TopCenter),
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) { topBar() }
-            AnimatedVisibility(
-                visible = nav.chromeVisible,
-                modifier = Modifier.align(Alignment.BottomCenter).focusInert(panelOpen),
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) { bottomBar() }
-            AnimatedVisibility(
-                visible = !nav.chromeVisible && !panelOpen,
-                modifier = Modifier.align(Alignment.BottomCenter),
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-                ReaderTvStatus(
-                    pages = pages,
-                    currentChapter = currentChapter,
-                    totalChapters = epub.chapters.size,
-                    cursorActive = cursorBlock.value != null,
-                    downOpensChapters = syncMode != SyncMode.SYNCING,
-                    theme = theme,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ListenAlongBar(player: Player?, theme: ReaderTheme, onStop: () -> Unit) {
-    if (player == null) return
-    val spState by player.state.collectAsState()
-    val spMs by player.currentMs.collectAsState()
-    val spDur by player.durationMs.collectAsState()
-    val spSpeed by player.playbackSpeed.collectAsState()
-
-    Row(
-        modifier = Modifier
-            .focusKeyGroup("listenalong")
-            .fillMaxWidth()
-            .background(theme.backgroundColor)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Headphones, null, tint = theme.linkColor, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        IconButton(
-            onClick = { player.togglePlayPause() },
-            modifier = Modifier
-                .focusKey("playpause")
-                .size(32.dp)
-                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(
-                if (spState == PlayerState.PLAYING) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                "Play/Pause", tint = theme.textColor, modifier = Modifier.size(20.dp),
-            )
-        }
-        Slider(
-            value = if (spDur > 0) spMs.toFloat() / spDur else 0f,
-            onValueChange = { player.seekTo((it * spDur).toLong()) },
-            modifier = Modifier.weight(1f).height(24.dp),
-            colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),
-        )
-        Box(
-            Modifier
-                .focusKey("speed")
-                .width(48.dp)
-                .tvAutoGlow(cornerRadiusDp = 6f, scale = 1.03f)
-                .clickable {
-                    val speeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
-                    val nextIdx = (speeds.indexOf(spSpeed) + 1) % speeds.size
-                    player.setPlaybackSpeed(speeds[nextIdx])
-                }
-                .padding(PaddingValues(horizontal = 4.dp, vertical = 6.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("${spSpeed}x", style = KobappTheme.type.caption.copy(color = theme.textColor))
-        }
-        IconButton(
-            onClick = onStop,
-            modifier = Modifier
-                .focusKey("stop")
-                .size(32.dp)
-                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.Outlined.Close, "Stop", tint = theme.textColor, modifier = Modifier.size(18.dp))
-        }
     }
 }
 

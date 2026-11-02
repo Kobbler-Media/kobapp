@@ -106,6 +106,7 @@ dependencies {
     // Present transitively already, but the profile only installs on API 28-30 if the
     // installer is a direct dependency the app can initialise.
     implementation(libs.androidx.profileinstaller)
+    debugImplementation(libs.ktor.client.mock)
     baselineProfile(project(":baselineprofile"))
 }
 

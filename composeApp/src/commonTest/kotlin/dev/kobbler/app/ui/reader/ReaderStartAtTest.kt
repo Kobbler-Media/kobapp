@@ -1,7 +1,5 @@
 package dev.kobbler.app.ui.reader
 
-import dev.kobbler.app.ui.reader.epub.ChapterTtsView
-import dev.kobbler.app.ui.reader.epub.TtsWord
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -23,7 +21,7 @@ class ReaderStartAtTest {
     @Test
     fun startsAtFirstWordOfTheRequestedBlock() {
         val sent = mutableListOf<String>()
-        val idx = startReadingAtBlock(view, blockIndex = 2, startSynth = { sent += it })
+        val idx = startReadingAtBlock(view, blockIndex = 2, offset = 0, startSynth = { sent += it })
         assertEquals(2, idx)
         assertEquals(listOf("Three four."), sent)
     }
@@ -32,7 +30,7 @@ class ReaderStartAtTest {
     fun blockThatEmitsNoWordsFallsForwardToTheNextSpokenBlock() {
         // Long-pressing the image at block 1 must still start reading, not silently no-op.
         val sent = mutableListOf<String>()
-        val idx = startReadingAtBlock(view, blockIndex = 1, startSynth = { sent += it })
+        val idx = startReadingAtBlock(view, blockIndex = 1, offset = 0, startSynth = { sent += it })
         assertEquals(2, idx)
         assertEquals(listOf("Three four."), sent)
     }
@@ -40,7 +38,7 @@ class ReaderStartAtTest {
     @Test
     fun startingAtTheTopSendsTheWholeChapter() {
         val sent = mutableListOf<String>()
-        val idx = startReadingAtBlock(view, blockIndex = 0, startSynth = { sent += it })
+        val idx = startReadingAtBlock(view, blockIndex = 0, offset = 0, startSynth = { sent += it })
         assertEquals(0, idx)
         assertEquals(listOf("One two.\n\nThree four."), sent)
     }
@@ -48,7 +46,7 @@ class ReaderStartAtTest {
     @Test
     fun returnsNullAndSynthesizesNothingWhenNoWordFollows() {
         val sent = mutableListOf<String>()
-        assertNull(startReadingAtBlock(view, blockIndex = 3, startSynth = { sent += it }))
+        assertNull(startReadingAtBlock(view, blockIndex = 3, offset = 0, startSynth = { sent += it }))
         assertTrue(sent.isEmpty())
     }
 
@@ -56,31 +54,29 @@ class ReaderStartAtTest {
     fun returnsNullForAnEmptyChapter() {
         val sent = mutableListOf<String>()
         val empty = ChapterTtsView("", emptyList())
-        assertNull(startReadingAtBlock(empty, blockIndex = 0, startSynth = { sent += it }))
+        assertNull(startReadingAtBlock(empty, blockIndex = 0, offset = 0, startSynth = { sent += it }))
         assertTrue(sent.isEmpty())
     }
 
     @Test
-    fun blockAtFindsTheBlockContainingTheContentY() {
-        val bounds = mapOf(0 to 0..99, 1 to 100..299, 2 to 300..399)
-        assertEquals(0, blockAt(bounds, 0))
-        assertEquals(1, blockAt(bounds, 100))
-        assertEquals(1, blockAt(bounds, 299))
-        assertEquals(2, blockAt(bounds, 300))
+    fun aPressInsideABlockStartsAtTheWordUnderIt() {
+        data class Case(val offset: Int, val word: Int, val sent: String)
+        for (case in listOf(
+            Case(0, 2, "Three four."),
+            Case(3, 2, "Three four."),
+            Case(5, 3, "four."),
+            Case(8, 3, "four."),
+        )) {
+            val sent = mutableListOf<String>()
+            assertEquals(case.word, startReadingAtBlock(view, blockIndex = 2, offset = case.offset, startSynth = { sent += it }), "$case")
+            assertEquals(listOf(case.sent), sent, "$case")
+        }
     }
 
     @Test
-    fun blockAtReturnsNullInPaginationWhitespace() {
-        // computePaginatedLayout leaves a gap when a block is pushed to the next page.
-        val bounds = mapOf(0 to 0..299, 1 to 600..899)
-        assertNull(blockAt(bounds, 450))
-        assertNull(blockAt(bounds, 1000))
-    }
-
-    @Test
-    fun blockAtPicksTheLowestIndexWhenBoundsOverlap() {
-        // Iteration order of a snapshot state map is not a contract; the answer must be.
-        val bounds = mapOf(2 to 0..199, 1 to 100..299, 0 to 150..250)
-        assertEquals(0, blockAt(bounds, 200))
+    fun aPressPastTheLastWordOfABlockFallsToTheNextBlock() {
+        val sent = mutableListOf<String>()
+        assertEquals(2, startReadingAtBlock(view, blockIndex = 0, offset = 99, startSynth = { sent += it }))
+        assertEquals(listOf("Three four."), sent)
     }
 }

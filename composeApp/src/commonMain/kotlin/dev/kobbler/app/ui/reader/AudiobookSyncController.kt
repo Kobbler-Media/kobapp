@@ -40,7 +40,7 @@ class AudiobookSyncController(
     suspend fun start(
         bookId: String,
         player: Player,
-        chapters: List<EpubChapter>,
+        chapterCount: Int,
     ) {
         this.player = player
         _mode.value = SyncMode.SYNCING
@@ -61,14 +61,14 @@ class AudiobookSyncController(
                 player.play()
 
                 // Start position tracking
-                startPositionTracking(bookId, chapters)
+                startPositionTracking(bookId, chapterCount)
             }
         } catch (e: Exception) {
             _mode.value = SyncMode.IDLE
         }
     }
 
-    private fun startPositionTracking(bookId: String, chapters: List<EpubChapter>) {
+    private fun startPositionTracking(bookId: String, chapterCount: Int) {
         syncJob?.cancel()
         syncJob = scope.launch {
             val player = this@AudiobookSyncController.player ?: return@launch
@@ -86,35 +86,15 @@ class AudiobookSyncController(
 
                 _highlightedText.value = activeSegment?.text
 
-                // Find sync point to suggest chapter position
+                // Timestamps restart in every file of a multi-file audiobook.
                 val activeSyncPoint = syncPoints.lastOrNull { sp ->
-                    sp.audioSeconds <= currentSec
-                }
-                if (activeSyncPoint?.ebookCfi != null && chapters.isNotEmpty()) {
-                    // Use CFI to find matching chapter by href prefix
-                    val cfi = activeSyncPoint.ebookCfi
-                    // CFI format is typically like "/6/4!/..." or contains chapter path
-                    // Try matching via the sync point's chapter reference if available
-                    val chapterIdx = activeSyncPoint.chapterIndex
-                        ?: estimateChapterFromProgress(activeSyncPoint, chapters)
-                    if (chapterIdx in chapters.indices) {
-                        _suggestedChapter.value = chapterIdx
-                    }
-                }
+                    sp.audioFileId == fileId && sp.audioSeconds <= currentSec
+                } ?: return@collect
+                val chapterIdx = activeSyncPoint.position?.chapter
+                    ?: estimateChapterFromProgress(activeSyncPoint, chapterCount)
+                if (chapterIdx in 0 until chapterCount) _suggestedChapter.value = chapterIdx
             }
         }
-    }
-
-    /**
-     * Seek audio to match a reader position (e.g., user tapped text in reader).
-     */
-    suspend fun seekFromReader(bookId: String, cfi: String) {
-        try {
-            val result = api.getSyncPosition(bookId, from = "ebook", cfi = cfi)
-            result?.audioSeconds?.let { sec ->
-                player?.seekTo((sec * 1000).toLong())
-            }
-        } catch (_: Exception) {}
     }
 
     fun stop() {
@@ -129,19 +109,19 @@ class AudiobookSyncController(
 
     /**
      * Estimate chapter from sync point audio position relative to total audio duration.
-     * Fallback when sync points don't include explicit chapter indices.
+     * Fallback when the server could not place the point in the book's reader pack.
      */
     private fun estimateChapterFromProgress(
         syncPoint: SyncPointDto,
-        chapters: List<EpubChapter>,
+        chapterCount: Int,
     ): Int {
         val totalDuration = audioFiles.sumOf { it.durationSeconds ?: 0.0 }
-        if (totalDuration <= 0 || chapters.isEmpty()) return -1
+        if (totalDuration <= 0 || chapterCount == 0) return -1
         val elapsedBefore = audioFiles
             .take(audioFiles.indexOfFirst { it.id == syncPoint.audioFileId }.coerceAtLeast(0))
             .sumOf { it.durationSeconds ?: 0.0 }
         val progress = (elapsedBefore + syncPoint.audioSeconds) / totalDuration
-        return (progress * chapters.size).toInt().coerceIn(0, chapters.lastIndex)
+        return (progress * chapterCount).toInt().coerceIn(0, chapterCount - 1)
     }
 
     /** Auto-advance to next audio file when current finishes. */

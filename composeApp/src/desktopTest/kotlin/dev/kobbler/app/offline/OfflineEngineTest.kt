@@ -32,13 +32,17 @@ class OfflineEngineTest {
     private val sessionsOpened = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var sessionMethod = "direct_play"
     @Volatile private var copiesShrink = true
-    private val epub = Random(5).nextBytes(300_000)
+    private val plate = Random(5).nextBytes(30_000)
+    private val packManifest = """{"generation":1,"title":"Novel","chapters":[{"href":"OEBPS/ch1.xhtml","weight":10}]}"""
+    private val packChapter = """{"blocks":[{"kind":"text","spans":[{"text":"It was a bright cold day."}]},{"kind":"image","image":{"src":"OEBPS/plate.png","width":10,"height":10}}]}"""
     private val chapterOne = Random(9).nextBytes(400_000)
     private val files = RangeServer(
         mapOf(
             directPath to film,
             exportPath to copy720,
-            "/api/v1/admin/books/b1/file" to epub,
+            "/api/v1/admin/books/b1/reader-pack" to packManifest.encodeToByteArray(),
+            "/api/v1/admin/books/b1/reader-pack/chapters/0" to packChapter.encodeToByteArray(),
+            "/api/v1/admin/books/b1/reader-pack/assets/OEBPS/plate.png" to plate,
             "/api/v1/admin/books/b1/audio/f1" to chapterOne,
             "/api/v1/library/books/b1" to """{"id":"b1","title":"Novel","formats":["EPUB"],"has_audiobook":true}""".encodeToByteArray(),
             "/api/v1/admin/books/b1/audio-files" to """[{"id":"f1","file_index":0,"format":"MP3","file_name":"01.mp3"}]""".encodeToByteArray(),
@@ -213,11 +217,25 @@ class OfflineEngineTest {
     }
 
     @Test
-    fun anEbookOpensFromItsDownloadWithNoNetwork() = runBlocking {
+    fun anEbookReadsItsReaderPackWithNoNetwork() = runBlocking {
         downloadedFrom(filesApi, OfflineItem.keyOf(OfflineKind.Book, "b1")) { engine.downloadBook(book()) }
+        assertTrue(engine.store.item(OfflineKind.Book, "b1")!!.files.isEmpty(), "an ebook downloads its pack, not its archive")
         goOffline()
-        val payload = dev.kobbler.app.ui.reader.fetchBookFile(filesApi, "b1", "unused-cache-key", listOf("EPUB", "KEPUB"))
-        assertContentEquals(epub, java.io.File(payload.path!!).readBytes())
+        assertEquals("Novel", filesApi.readerPackManifest("b1").title)
+        assertEquals("It was a bright cold day.", filesApi.readerPackChapter("b1", 0).blocks.first().text)
+        assertContentEquals(plate, filesApi.readerPackAssetBytes("b1", "OEBPS/plate.png"))
+    }
+
+    @Test
+    fun anEbookDownloadedAsAnArchiveIsClearedAway() = runBlocking {
+        engine.attach(filesApi)
+        val legacy = OfflineItem(OfflineKind.Book, "b2", "Old", bookFormat = "EPUB", files = listOf(OfflineFile("book.epub")))
+        val comic = OfflineItem(OfflineKind.Book, "c1", "Comic", bookFormat = "CBZ", files = listOf(OfflineFile("book.cbz")))
+        engine.enqueue(legacy)
+        engine.enqueue(comic)
+        engine.maintenance.runOnce()
+        assertEquals(null, engine.store.item(legacy.key))
+        assertTrue(engine.store.item(comic.key) != null, "comics still read from their archive")
     }
 
     private fun downloadedVideo(item: OfflineItem) = runBlocking {

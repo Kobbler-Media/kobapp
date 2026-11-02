@@ -12,6 +12,10 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import dev.kobbler.app.ui.reader.pack.Manifest
+import dev.kobbler.app.ui.reader.pack.PackChapter
+import dev.kobbler.app.ui.reader.pack.PackJson
+import dev.kobbler.app.ui.reader.pack.Position
 import io.ktor.utils.io.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -705,14 +709,7 @@ data class SyncPointDto(
     @SerialName("ebook_file_id") val ebookFileId: String? = null,
     @SerialName("ebook_cfi") val ebookCfi: String? = null,
     val confidence: Double? = null,
-    @SerialName("chapter_index") val chapterIndex: Int? = null,
-)
-
-@Serializable
-data class SyncPositionResult(
-    @SerialName("audio_seconds") val audioSeconds: Double? = null,
-    @SerialName("ebook_cfi") val ebookCfi: String? = null,
-    @SerialName("file_id") val fileId: String? = null,
+    val position: Position? = null,
 )
 
 // -- Reader DTOs --
@@ -721,6 +718,7 @@ data class SyncPositionResult(
 data class ReaderProgressDto(
     val cfi: String? = null,
     @SerialName("progress_percent") val progressPercent: Double? = null,
+    val position: Position? = null,
 )
 
 // -- TTS DTOs --
@@ -2778,15 +2776,6 @@ class KobblerApi(
     suspend fun getReadAlongData(bookId: String): ReadAlongDataDto =
         decode(get("/api/v1/admin/books/$bookId/read-along-data"))
 
-    suspend fun getSyncPosition(bookId: String, from: String, seconds: Double? = null, cfi: String? = null): SyncPositionResult? = quiet<SyncPositionResult?>(null) {
-        val params = buildString {
-            append("from=${from.encodeURLParameter()}")
-            seconds?.let { append("&seconds=$it") }
-            cfi?.let { append("&cfi=${it.encodeURLParameter()}") }
-        }
-        decode<SyncPositionResult>(get("/api/v1/admin/books/$bookId/sync-position?$params"))
-    }
-
     /** Build the direct audio streaming URL for a book's audio file. */
     fun audioStreamUrl(bookId: String, fileId: String): String =
         "$apiUrl/api/v1/admin/books/$bookId/audio/$fileId"
@@ -2812,21 +2801,50 @@ class KobblerApi(
         if (format != null) "$apiUrl/api/v1/admin/books/$bookId/file?format=$format"
         else "$apiUrl/api/v1/admin/books/$bookId/file"
 
+    // -- Reader Pack --
+
+    suspend fun readerPackManifest(bookId: String): Manifest =
+        PackJson.decodeFromString(get("/api/v1/admin/books/$bookId/reader-pack"))
+
+    suspend fun readerPackChapter(bookId: String, chapter: Int): PackChapter =
+        PackJson.decodeFromString(get("/api/v1/admin/books/$bookId/reader-pack/chapters/$chapter"))
+
+    fun readerPackAssetUrl(bookId: String, src: String): String =
+        "$apiUrl/api/v1/admin/books/$bookId/reader-pack/assets/" +
+            src.split('/').joinToString("/") { it.encodeURLPathPart() }
+
+    /** An asset's bytes from the server, or from the offline store for a downloaded book. */
+    suspend fun readerPackAssetBytes(bookId: String, src: String): ByteArray? {
+        val url = readerPackAssetUrl(bookId, src)
+        dev.kobbler.app.offline.Offline.engine?.store?.imageBytes(url)?.let { return it }
+        return quiet<ByteArray?>(null) {
+            fileClient.get(url) { authHeaders.forEach { (k, v) -> header(k, v) } }
+                .takeIf { it.status.isSuccess() }
+                ?.readRawBytes()
+        }
+    }
+
     // -- Reader Progress --
 
-    /** Null when the state could not be read, which callers that echo the stored CFI back
-     *  must not confuse with "the server has no CFI". */
+    /** Null when the state could not be read. The position is the latest across every
+     *  device — app, web reader and Kobo — resolved into this book's reader pack. */
     suspend fun readerProgressOrNull(bookId: String): ReaderProgressDto? = quiet<ReaderProgressDto?>(null) {
         val path = "/api/v1/admin/books/$bookId/reader-progress"
-        decode<ReaderProgressDto>(offline?.pendingWriteBody(offlineOwner, path) ?: get(path))
+        decode<ReaderProgressDto>(offline?.pendingWriteBody(offlineOwner, path) ?: get("$path?position=true"))
     }
 
     suspend fun getReaderProgress(bookId: String): ReaderProgressDto =
         readerProgressOrNull(bookId) ?: ReaderProgressDto()
 
-    suspend fun saveReaderProgress(bookId: String, cfi: String?, progressPercent: Double) {
+    suspend fun saveReaderProgress(bookId: String, position: Position?, progressPercent: Double) {
         val body = buildJsonObject {
-            put("cfi", cfi?.let { JsonPrimitive(it) } ?: JsonNull)
+            position?.let {
+                put("position", buildJsonObject {
+                    put("chapter", it.chapter)
+                    put("block", it.block)
+                    put("offset", it.offset)
+                })
+            }
             put("progress_percent", progressPercent)
         }
         post("/api/v1/admin/books/$bookId/reader-progress", body.toString())

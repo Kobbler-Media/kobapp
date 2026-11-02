@@ -5,7 +5,6 @@ compose-hot-reload = "1.2.0"
 agp = "9.4.1"
 coil = "3.6.3"
 ktor = "3.6.0"
-ksoup = "0.2.6"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 # 0.8.0-0.6.x-compat sorts ABOVE 0.8.0 in Gradle ordering — pin, never "upgrade".
@@ -53,7 +52,6 @@ ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
-ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

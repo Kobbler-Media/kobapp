@@ -1,11 +1,13 @@
 package dev.kobbler.app
 
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.SharedHttp
+import io.ktor.client.HttpClient
 
 /**
- * Dev harness for TestBookActivity: an offline [KobblerApi] for opening a packaged
- * book without a server. Progress calls degrade quietly (readerProgressOrNull is
- * quiet; the save on exit is fire-and-forget).
+ * Dev harness for TestBookActivity: a [KobblerApi] over a client that answers from the
+ * packaged test book instead of a server. Progress calls degrade quietly
+ * (readerProgressOrNull is quiet; the save on exit is fire-and-forget).
  */
-fun offlineTestApi(): KobblerApi = KobblerApi(SharedHttp.apiClient(), "http://127.0.0.1:9", "test")
+fun devBookApi(httpClient: HttpClient): KobblerApi = KobblerApi(httpClient, DevBookOrigin, "test")
+
+const val DevBookOrigin = "http://127.0.0.1:9"

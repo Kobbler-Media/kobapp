@@ -5,14 +5,6 @@ package dev.kobbler.app.ui.reader
  *  of the text is smaller than that gap, merely opening it would report Finished. */
 private const val LAST_CHAPTER_BAND_START = 94.0
 
-/** Relative chapter sizes for [readingProgressPercent] and [chapterForProgressPercent].
- *  parseEpub already holds every chapter's markup in memory, so raw length is the only
- *  size proxy that costs nothing; block or word counts would mean running the XHTML
- *  parser over the whole book on open. Per-chapter boilerplate makes it a slight
- *  over-estimate for tiny chapters, which errs towards reporting less progress. */
-internal fun chapterWeights(chapters: List<EpubChapter>): List<Int> =
-    chapters.map { it.xhtml.length }
-
 /** Percent band boundaries, one more than there are chapters: chapter i spans
  *  `[bands[i], bands[i + 1])` and `bands[size]` is always 100. Null when there is no book. */
 private fun progressBands(chapterWeights: List<Int>): DoubleArray? {

@@ -1,6 +1,7 @@
 package dev.kobbler.app.offline
 
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.ui.reader.pack.assetSources
 import dev.kobbler.app.ui.player.audiobook.pickBestAudioSource
 import dev.kobbler.app.ui.player.thumbnailVttBaseUrl
 import io.ktor.client.request.get
@@ -67,11 +68,12 @@ internal suspend fun prepare(engine: OfflineEngine, key: String) {
             kept.video(item)
         }
         OfflineKind.Book -> {
-            val book = withContext(OfflineCapture(key)) {
+            val (book, assets) = withContext(OfflineCapture(key)) {
                 api.readerProgressOrNull(item.mediaId)
-                api.getBook(item.mediaId)
+                val assets = if (item.isComic) emptyList() else captureReaderPack(api, item.mediaId)
+                api.getBook(item.mediaId) to assets
             }
-            kept.images(listOf(book.coverUrl))
+            kept.images(listOf(book.coverUrl) + assets)
             engine.store.updateItem(key) { it.copy(title = book.title, subtitle = book.author, posterUrl = book.coverUrl) }
         }
         OfflineKind.Audiobook -> {
@@ -143,4 +145,14 @@ private class Kept(private val engine: OfflineEngine, private val api: KobblerAp
     } catch (_: Exception) {
         null
     }
+}
+
+/** Fetches every chapter of the book's reader pack so the response store keeps it, and
+ *  returns the asset URLs the chapters draw. */
+private suspend fun captureReaderPack(api: KobblerApi, bookId: String): List<String> {
+    val manifest = api.readerPackManifest(bookId)
+    val sources = manifest.chapters.indices.flatMap { n ->
+        api.readerPackChapter(bookId, n).blocks.flatMap { it.assetSources() }
+    }
+    return (sources + manifest.fonts.map { it.src }).distinct().map { api.readerPackAssetUrl(bookId, it) }
 }

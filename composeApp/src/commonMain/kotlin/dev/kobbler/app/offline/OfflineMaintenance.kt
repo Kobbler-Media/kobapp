@@ -76,8 +76,11 @@ class OfflineMaintenance(private val engine: OfflineEngine, private val scope: C
 
     private suspend fun cleanUp() {
         val busy = engine.keysInUse()
-        val due = dueForCleanup(engine.store.index.value.items.values, CleanupPolicy.current, engine.now()) { it in busy }
-        due.forEach { engine.remove(it.key) }
+        val items = engine.store.index.value.items.values
+        val due = dueForCleanup(items, CleanupPolicy.current, engine.now()) { it in busy }
+        // Ebooks downloaded as raw archives predate reader packs and can no longer be opened.
+        val archivedEbooks = items.filter { it.kind == OfflineKind.Book && !it.isComic && it.files.isNotEmpty() }
+        (due + archivedEbooks).distinctBy { it.key }.forEach { engine.remove(it.key) }
     }
 
     private suspend fun <T> quietly(block: suspend () -> T): T? = try {

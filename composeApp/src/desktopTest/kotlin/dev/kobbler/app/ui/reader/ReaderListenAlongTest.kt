@@ -14,7 +14,6 @@ import androidx.compose.ui.test.requestFocus
 import dev.kobbler.app.UiTimeoutMs
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.platform.FileCache
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.theme.KobappTheme
@@ -24,7 +23,6 @@ import dev.kobbler.app.ui.player.SharedAudioPlayer
 import dev.kobbler.app.ui.player.StubServer
 import dev.kobbler.kobplayer.PlayerConfig
 import io.ktor.client.HttpClient
-import java.io.File
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -46,10 +44,8 @@ class ReaderListenAlongTest {
 
     private fun tvReader(test: ComposeUiTest.(Rig) -> Unit) {
         val id = "listen-${UUID.randomUUID()}"
-        val key = "epub_$id"
-        FileCache.put(key, epub())
         val server = StubServer(
-            mapOf(
+            packRoutes(id, listOf(textChapter("Chapter 1", "Words."))) + mapOf(
                 "/api/v1/admin/books/$id/reader-progress" to { _ -> """{"progress_percent":0}""" },
                 "/api/v1/admin/books/$id/read-along-data" to { _ -> "{}" },
                 "/api/v1/admin/books/$id/audio-files" to { _ ->
@@ -83,7 +79,6 @@ class ReaderListenAlongTest {
             }
         } finally {
             server.close()
-            FileCache.pathFor(key)?.let { File(it).delete() }
         }
     }
 
@@ -128,9 +123,4 @@ class ReaderListenAlongTest {
         assertTrue(!player.isPlaying.value, "listen-along kept playing after the reader closed")
         assertTrue(!player.released, "the shared player went with the reader")
     }
-
-    private fun epub(): ByteArray = epubZip(
-        opf(listOf("ch1")),
-        listOf("ch1.xhtml" to "<html><head><title>Chapter 1</title></head><body><p>Words.</p></body></html>".encodeToByteArray()),
-    )
 }

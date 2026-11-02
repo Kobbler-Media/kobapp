@@ -1,8 +1,11 @@
 package dev.kobbler.app.ui.reader
 
 import androidx.compose.ui.unit.IntSize
-import dev.kobbler.app.ui.reader.epub.XhtmlBlock
-import dev.kobbler.app.ui.reader.epub.XhtmlSpan
+import dev.kobbler.app.ui.reader.pack.Block
+import dev.kobbler.app.ui.reader.pack.BlockKind
+import dev.kobbler.app.ui.reader.pack.FixedPageDto
+import dev.kobbler.app.ui.reader.pack.ImageRef
+import dev.kobbler.app.ui.reader.pack.Span
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,42 +19,23 @@ class PageFitTest {
     private val portraitPage = IntSize(600, 900)
 
     @Test
-    fun readsPixelSizeFromImageHeaders() {
-        val cases = listOf(
-            "png" to TestImages.png(640, 960),
-            "gif" to TestImages.gif(300, 200),
-            "jpeg" to TestImages.jpeg(1200, 1800),
-            "webp lossy" to TestImages.webpLossy(800, 1200),
-            "webp lossless" to TestImages.webpLossless(1000, 1500),
-            "webp extended" to TestImages.webpExtended(1600, 2400),
-        )
-        val expected = listOf(IntSize(640, 960), IntSize(300, 200), IntSize(1200, 1800), IntSize(800, 1200), IntSize(1000, 1500), IntSize(1600, 2400))
-        for ((i, case) in cases.withIndex()) {
-            assertEquals(expected[i], imagePixelSize(case.second), case.first)
-        }
-        assertNull(imagePixelSize(byteArrayOf(1, 2, 3)))
-        assertNull(imagePixelSize(ByteArray(0)))
-    }
-
-    @Test
     fun aPageIsASingleImageOrFixedPageOnAFixedLayoutChapter() {
-        val image = XhtmlBlock.Image("p.png", "Page", width = 600, height = 900)
-        val unsized = XhtmlBlock.Image("p.png", "Page")
-        val kobo = XhtmlBlock.FixedPage(XhtmlBlock.Image("art.jpg", null, width = 600, height = 914), emptyList())
-        val text = XhtmlBlock.Paragraph(listOf(XhtmlSpan.Text("words")))
-        val headerBytes = mapOf("p.png" to TestImages.png(1000, 1600))
+        val image = Block(kind = BlockKind.Image, image = ImageRef("p.png", "Page", 600, 900))
+        val unsized = Block(kind = BlockKind.Image, image = ImageRef("p.png", "Page"))
+        val kobo = Block(kind = BlockKind.FixedPage, fixed = FixedPageDto(ImageRef("art.jpg"), 600f, 914f))
+        val text = Block(kind = BlockKind.Text, spans = listOf(Span("words")))
+        val rule = Block(kind = BlockKind.Rule)
 
-        assertEquals(IntSize(600, 900), fittedPageOf(listOf(image), emptyMap(), fixedLayout = true)?.size)
-        assertEquals(1, fittedPageOf(listOf(XhtmlBlock.Spacer, image, XhtmlBlock.Divider), emptyMap(), fixedLayout = true)?.blockIndex)
-        assertEquals(IntSize(1000, 1600), fittedPageOf(listOf(unsized), headerBytes, fixedLayout = true)?.size)
-        assertNull(fittedPageOf(listOf(unsized), emptyMap(), fixedLayout = true), "an unsizeable image cannot be fitted")
-        assertNull(fittedPageOf(listOf(image), emptyMap(), fixedLayout = false), "reflowable images stay in the text flow")
-        assertNull(fittedPageOf(listOf(image, text), emptyMap(), fixedLayout = true), "text on the page needs reflowing")
-        assertNull(fittedPageOf(listOf(image, image), emptyMap(), fixedLayout = true))
+        assertEquals(IntSize(600, 900), fittedPageOf(listOf(image), fixedLayout = true)?.size)
+        assertEquals(1, fittedPageOf(listOf(rule, image, rule), fixedLayout = true)?.blockIndex)
+        assertNull(fittedPageOf(listOf(unsized), fixedLayout = true), "an unsizeable image cannot be fitted")
+        assertNull(fittedPageOf(listOf(image), fixedLayout = false), "reflowable images stay in the text flow")
+        assertNull(fittedPageOf(listOf(image, text), fixedLayout = true), "text on the page needs reflowing")
+        assertNull(fittedPageOf(listOf(image, image), fixedLayout = true))
 
-        val koboPage = assertNotNull(fittedPageOf(listOf(kobo), emptyMap(), fixedLayout = false))
+        val koboPage = assertNotNull(fittedPageOf(listOf(kobo), fixedLayout = false))
         assertEquals(IntSize(600, 914), koboPage.size, "a Kobo fixed page is always a page")
-        assertTrue(koboPage.block is XhtmlBlock.FixedPage)
+        assertEquals(BlockKind.FixedPage, koboPage.block.kind)
     }
 
     @Test

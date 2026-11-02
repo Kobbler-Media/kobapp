@@ -2,14 +2,14 @@ package dev.kobbler.app.ui.reader
 
 import kotlinx.coroutines.CancellationException
 
-internal class ProgressSaver(private val send: suspend (percent: Double) -> Unit) {
-    private var lastSent: Double? = null
+internal class ProgressSaver<T>(private val send: suspend (T) -> Unit) {
+    private var lastSent: T? = null
 
-    suspend fun save(percent: Double) {
-        if (percent == lastSent) return
+    suspend fun save(progress: T) {
+        if (progress == lastSent) return
         try {
-            send(percent)
-            lastSent = percent
+            send(progress)
+            lastSent = progress
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

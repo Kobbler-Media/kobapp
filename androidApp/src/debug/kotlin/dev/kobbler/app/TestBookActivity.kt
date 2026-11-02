@@ -7,22 +7,25 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.kobbler.app.data.Book
-import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FileCache
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.Settings
 import dev.kobbler.app.ui.reader.ReaderScreen
-import java.io.File
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 
 /**
  * Dev-only: opens the packaged test book straight in the reader, no server required.
  *
- * Drop any KEPUB at androidApp/src/debug/assets/testbook/sample.kepub.epub (gitignored).
- * It is staged at cache/books/epub_test-sample — the exact key fetchBookFile
- * checks first — so the real reader path runs unchanged: cache hit, ZipArchive from
- * disk, parse, render. The API points at a dead endpoint; the reader only uses it
- * for progress sync, which degrades quietly (readerProgressOrNull is quiet, the
- * save on exit is fire-and-forget).
+ * Build a reader pack from any EPUB with kob-ebook's example
+ * (`cargo run --release --example reader_pack -- book.epub out/`) and copy its
+ * `manifest.json` and `chapters/` to androidApp/src/debug/assets/testbook/pack/
+ * (gitignored). The reader's pack requests are answered from there, so the real
+ * fetch → layout → render path runs unchanged. Images and progress go to a dead
+ * endpoint and degrade quietly.
  */
 class TestBookActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,22 +34,25 @@ class TestBookActivity : ComponentActivity() {
         Settings.init(this)
         FileCache.init(this)
 
-        val cacheKey = "epub_test-sample"
-        val staged = File(cacheDir, "books/$cacheKey")
-        if (!staged.exists()) {
-            staged.parentFile?.mkdirs()
-            assets.open("testbook/sample.kepub.epub").use { input ->
-                staged.outputStream().use { input.copyTo(it) }
+        val packPrefix = "/api/v1/admin/books/test-sample/reader-pack"
+        val client = HttpClient(MockEngine { request ->
+            val path = request.url.encodedPath
+            val asset = when {
+                path == packPrefix -> "testbook/pack/manifest.json"
+                path.startsWith("$packPrefix/chapters/") -> "testbook/pack/chapters/${path.substringAfterLast('/')}.json"
+                else -> null
             }
-        }
-
-        val api = offlineTestApi()
+            val body = asset?.let { runCatching { assets.open(it).use { s -> s.readBytes() } }.getOrNull() }
+            if (body == null) respond("", HttpStatusCode.NotFound)
+            else respond(body, HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
+        })
+        val api = devBookApi(client)
         val book = Book(
             id = "test-sample",
             title = "Test book",
             author = "",
             coverUrl = "",
-            formats = listOf("KEPUB"),
+            formats = listOf("EPUB"),
         )
         val isTv = getSystemService(UiModeManager::class.java)
             ?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION

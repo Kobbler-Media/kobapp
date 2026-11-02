@@ -150,13 +150,4 @@ class ReaderProgressTest {
         val endOfChapterFour = readingProgressPercent(3, weights, 1200, 1200)
         assertEquals(4, chapterForProgressPercent(endOfChapterFour, weights))
     }
-
-    @Test
-    fun weightsComeFromChapterMarkupLength() {
-        val chapters = listOf(
-            EpubChapter(title = "a", href = "a.xhtml", xhtml = "<p>hello</p>"),
-            EpubChapter(title = "b", href = "b.xhtml", xhtml = ""),
-        )
-        assertEquals(listOf(12, 0), chapterWeights(chapters))
-    }
 }
