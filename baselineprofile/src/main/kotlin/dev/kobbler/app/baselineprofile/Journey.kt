@@ -30,8 +30,9 @@ internal const val HOME_TAB = "Home"
 private const val TV_SHOWS_TAB = "TV Shows"
 private const val ADD_PROFILE = "Add profile"
 private const val PIN_PROMPT = "Enter your PIN"
-// Detail-only: the grid and carousels never render an overflow affordance.
-internal const val DETAIL_MARKER = "More actions"
+// Detail-only: the grid and carousels never render an overflow affordance. Phone and TV
+// share the label, so a rename in OverflowActions breaks both journeys at once.
+internal const val DETAIL_MARKER = "More"
 internal const val DETAIL_TIMEOUT_MS = 5_000L
 // Player-only: no browse screen draws a subtitle selector.
 internal const val TRANSPORT_MARKER = "Subtitles"
@@ -121,6 +122,18 @@ internal fun MacrobenchmarkScope.reachedLibrary(): Boolean {
     return false
 }
 
+// The player opens with its controls hidden, so the marker only appears once the viewer
+// reaches for them. Checked before each nudge, which would otherwise hide controls already up.
+internal fun MacrobenchmarkScope.revealTransport(nudge: () -> Unit): Boolean {
+    val deadline = SystemClock.uptimeMillis() + PLAYBACK_TIMEOUT_MS
+    while (SystemClock.uptimeMillis() < deadline) {
+        if (device.hasLabel(TRANSPORT_MARKER)) return true
+        nudge()
+        SystemClock.sleep(2_000)
+    }
+    return device.hasLabel(TRANSPORT_MARKER)
+}
+
 /** A silent degrade to cold-start-only is indistinguishable from a crash in the output. */
 internal fun skipped(why: String) {
     Log.w(LOG_TAG, "Browse journey skipped — $why Profile covers cold start only.")
@@ -171,20 +184,24 @@ internal fun MacrobenchmarkScope.scrollShowsGrid(rows: Int = 6) {
 internal fun MacrobenchmarkScope.openAndCloseShowDetail(attempts: Int = 6): Boolean {
     repeat(attempts) {
         device.pressKeyCode(KeyEvent.KEYCODE_DPAD_CENTER)
-        if (device.awaitLabel(DETAIL_MARKER, DETAIL_TIMEOUT_MS)) {
-            device.waitForIdle(UI_TIMEOUT_MS)
-            device.pressBack()
-            device.awaitGone(DETAIL_MARKER, DETAIL_TIMEOUT_MS)
-            device.waitForIdle(UI_TIMEOUT_MS)
-            return true
-        }
+        if (device.awaitLabel(DETAIL_MARKER, DETAIL_TIMEOUT_MS)) return leaveShowDetail()
         // Undo whatever the press did open (player, dialog, filter) before moving on.
         device.pressBack()
         device.waitForIdle(GRID_STEP_MS)
+        // Back out of a Continue Watching start lands on that show's detail page, not the grid.
+        if (device.awaitLabel(DETAIL_MARKER, DETAIL_TIMEOUT_MS)) return leaveShowDetail()
         step(KeyEvent.KEYCODE_DPAD_DOWN, GRID_STEP_MS)
     }
     skipped("no show detail screen opened in $attempts attempts; ui/detail stays uncovered.")
     return false
+}
+
+private fun MacrobenchmarkScope.leaveShowDetail(): Boolean {
+    device.waitForIdle(UI_TIMEOUT_MS)
+    device.pressBack()
+    device.awaitGone(DETAIL_MARKER, DETAIL_TIMEOUT_MS)
+    device.waitForIdle(UI_TIMEOUT_MS)
+    return true
 }
 
 /**
@@ -202,7 +219,8 @@ internal fun MacrobenchmarkScope.openAndCloseShowDetail(attempts: Int = 6): Bool
  */
 internal fun MacrobenchmarkScope.playFirstContinueWatching(): Boolean {
     device.pressKeyCode(KeyEvent.KEYCODE_DPAD_CENTER)
-    if (!device.awaitLabel(TRANSPORT_MARKER, PLAYBACK_TIMEOUT_MS)) {
+    // DOWN, not OK: OK on a start that is still preparing lands on its Cancel.
+    if (!revealTransport { device.pressKeyCode(KeyEvent.KEYCODE_DPAD_DOWN) }) {
         device.pressBack()
         device.waitForIdle(GRID_STEP_MS)
         skipped("nothing played from the first Home row; the player stays uncovered.")

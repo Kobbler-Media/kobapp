@@ -87,6 +87,23 @@ of the test suite runs.
 | `kobfocus`       | declarative D-pad focus graph used by the TV layouts |
 | `baselineprofile`| generates the Android baseline profile |
 
+## Baseline profile
+
+The release ships a baseline and startup profile from
+`androidApp/src/main/generated/baselineProfiles/`, so ART compiles the hot paths at install
+time instead of leaving them on the JIT. It is captured on real devices, not on every build —
+a TV run takes about half an hour — so regenerate it after a batch of UI work:
+
+```bash
+./baseline-profile.sh                  # every connected device, one after another
+./baseline-profile.sh <serial>...      # just these
+```
+
+Each device needs the debug build (`dev.kobbler.app.dbg`) installed and paired, and a phone
+needs its screen awake. If the app opens on a PIN-locked profile, pass `KOB_PIN=####`. The
+script fails rather than merge a run whose browse journey fell back to cold start only.
+Commit the two changed files.
+
 ## Desktop install (Linux)
 
 A standalone install with a bundled JRE, a `Kobbler` entry in your application menu, and a

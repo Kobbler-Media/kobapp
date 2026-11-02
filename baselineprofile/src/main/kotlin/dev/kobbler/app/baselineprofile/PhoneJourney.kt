@@ -2,19 +2,20 @@ package dev.kobbler.app.baselineprofile
 
 import android.content.pm.PackageManager
 import android.os.SystemClock
+import java.util.regex.Pattern
 import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.StaleObjectException
+import androidx.test.uiautomator.UiObject2
+import androidx.test.uiautomator.Until
 
 private const val SETTLE_MS = 1_200L
 private const val SWIPE_STEPS = 12
 private const val MENU = "Menu"
 private const val CLOSE_MINI_PLAYER = "Close"
 private const val RECENTLY_ADDED = "Recently Added"
-// The phone detail page collapses its overflow to "More", which the TV marker does not match.
-private const val PHONE_DETAIL_MARKER = "Stream options"
 private val BOTTOM_TABS = listOf("Movies", "TV Shows", "Audiobooks", "Calendar")
 // Drawer-only on a phone: the bottom bar holds the first five tabs.
 private val DRAWER_TABS = listOf("Live TV", "IPTV", "Books", "Downloads", "Activity")
@@ -60,8 +61,10 @@ private fun MacrobenchmarkScope.tapLabel(label: String): Boolean {
 /** The Home hero is the resume card of the first Continue Watching title; tapping it plays. */
 internal fun MacrobenchmarkScope.phonePlayHero(): Boolean {
     device.click(device.displayWidth / 2, device.displayHeight * 23 / 100)
-    if (!device.awaitLabel(TRANSPORT_MARKER, PLAYBACK_TIMEOUT_MS)) {
+    // The top of the picture keeps clear of the start shell's Cancel and the side seek zones.
+    if (!revealTransport { device.click(device.displayWidth / 2, device.displayHeight / 4) }) {
         device.pressBack()
+        returnHomeFromMiniPlayer()
         skipped("the Home hero did not start playback; the player stays uncovered.")
         return false
     }
@@ -98,16 +101,44 @@ internal fun MacrobenchmarkScope.phoneWalkTabs() {
     tapLabel(HOME_TAB)
 }
 
+// Each card is labelled with its title, so the first one is the leftmost labelled node in
+// the band under the header — wherever the feed happens to be scrolled.
+private fun MacrobenchmarkScope.firstRecentlyAddedCard(): UiObject2? {
+    device.wait(Until.hasObject(By.text(RECENTLY_ADDED)), UI_TIMEOUT_MS)
+    val w = device.displayWidth
+    val h = device.displayHeight
+    repeat(4) {
+        val header = device.findObject(By.text(RECENTLY_ADDED))
+        if (header != null) {
+            val top = header.visibleBounds.bottom
+            device.findObjects(By.desc(Pattern.compile(".+")))
+                .filter { it.visibleBounds.top in top..(top + h / 8) && it.visibleBounds.height() > h / 10 }
+                .minByOrNull { it.visibleBounds.left }
+                ?.let { return it }
+        }
+        device.swipe(w / 2, h * 7 / 10, w / 2, h * 4 / 10, SWIPE_STEPS)
+        device.waitForIdle(SETTLE_MS)
+    }
+    return null
+}
+
+private fun MacrobenchmarkScope.awaitPortrait() {
+    val deadline = SystemClock.uptimeMillis() + UI_TIMEOUT_MS
+    while (device.displayWidth > device.displayHeight && SystemClock.uptimeMillis() < deadline) {
+        SystemClock.sleep(200)
+    }
+    device.waitForIdle(SETTLE_MS)
+}
+
 /** Recently Added holds shows only, and unlike Continue Watching a tap there opens the detail page. */
 internal fun MacrobenchmarkScope.phoneOpenShowDetail(): Boolean {
-    val header = device.findObject(By.text(RECENTLY_ADDED))
-    if (header == null) {
-        skipped("no Recently Added rail on the phone Home; ui/detail stays uncovered.")
+    val card = firstRecentlyAddedCard()
+    if (card == null) {
+        skipped("no Recently Added card on the phone Home; ui/detail stays uncovered.")
         return false
     }
-    val b = header.visibleBounds
-    device.click(b.left + device.displayWidth / 10, b.bottom + device.displayHeight / 10)
-    if (!device.awaitLabel(PHONE_DETAIL_MARKER, DETAIL_TIMEOUT_MS)) {
+    card.click()
+    if (!device.awaitLabel(DETAIL_MARKER, DETAIL_TIMEOUT_MS)) {
         device.pressBack()
         skipped("no show detail screen opened on the phone; ui/detail stays uncovered.")
         return false
@@ -116,21 +147,23 @@ internal fun MacrobenchmarkScope.phoneOpenShowDetail(): Boolean {
     device.findObject(By.scrollable(true))?.scroll(Direction.DOWN, 1f)
     SystemClock.sleep(SETTLE_MS)
     device.pressBack()
-    device.awaitGone(PHONE_DETAIL_MARKER, DETAIL_TIMEOUT_MS)
+    device.awaitGone(DETAIL_MARKER, DETAIL_TIMEOUT_MS)
     device.waitForIdle(UI_TIMEOUT_MS)
     return true
 }
 
 // The player turns the phone to landscape and auto-rotate keeps whatever the desk says, so
-// pin portrait or every step after playback lands on a layout the journey does not expect.
+// pin portrait. Home is read before playback: coming back, it is still turning and rebuilding
+// its rows, and steps placed against it land on a layout that is not there yet.
 internal fun MacrobenchmarkScope.phoneJourney() {
     device.setOrientationNatural()
     try {
         phoneScrollFeed()
         phoneScrollRail()
+        phoneOpenShowDetail()
         phonePlayHero()
         device.setOrientationNatural()
-        phoneOpenShowDetail()
+        awaitPortrait()
         phoneWalkTabs()
     } finally {
         device.unfreezeRotation()
