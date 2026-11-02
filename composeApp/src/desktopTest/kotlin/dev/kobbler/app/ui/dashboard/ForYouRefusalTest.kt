@@ -36,8 +36,8 @@ class ForYouRefusalTest {
         ).use { stub ->
             runBlocking {
                 val refusals = forYouRefusals(entry, KobblerApi(HttpClient(), stub.url, "token"), this)
-                assertEquals(listOf("Not interested", "Not based on Peppa Pig"), refusals.map { it.first })
-                refusals.forEach { it.second() }
+                assertEquals(listOf("Not interested", "Not based on Peppa Pig"), refusals.map { it.label })
+                refusals.forEach { it.onClick() }
             }
             assertEquals("""{"media_type":"tv","tmdb_id":1399}""", stub.requestBodies["/api/v1/admin/discover/for-you/dismiss"])
             assertEquals(

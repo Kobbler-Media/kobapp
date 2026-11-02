@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard.home
 
+import dev.kobbler.app.ui.components.CardAction
 import dev.kobbler.app.ui.offline.continueAvailableOffline
 import dev.kobbler.app.ui.offline.recentAvailableOffline
 
@@ -186,6 +187,7 @@ fun HomeWide(
                             Box(Modifier.onSizeChanged { stripPx = it.height }) {
                                 UpNextStrip(
                                     items = upNext,
+                                    api = api,
                                     onClick = { idx -> onContinueClick(idx) },
                                     spotlight = spotlight,
                                     onFocused = { i -> heroId.value = upNext[i].mediaId; focusedRow.intValue = upNextRow },
@@ -380,6 +382,7 @@ private fun CenterFocusedPageRow(state: LazyListState, row: IntState, topRow: In
 @Composable
 private fun UpNextStrip(
     items: List<UpNextItem>,
+    api: KobblerApi,
     spotlight: SpotlightState,
     onClick: (Int) -> Unit,
     onFocused: (Int) -> Unit,
@@ -418,6 +421,7 @@ private fun UpNextStrip(
                             offline = continueAvailableOffline(item.mediaType, item.mediaId),
                             aspectRatio = 3f / 2f,
                             onClick = { onClick(i) },
+                            actions = rememberUpNextActions(item, api),
                             modifier = Modifier
                                 // A poster from the rows below turned on its side, so the
                                 // page reads as one grid rather than two sizes of card.
@@ -465,10 +469,10 @@ internal fun discoverContextMenu(
     api: KobblerApi,
     scope: kotlinx.coroutines.CoroutineScope,
     onClick: (DiscoverItem) -> Unit,
-): List<Pair<String, () -> Unit>> = buildList {
-    add("Info" to { onClick(item) })
+): List<CardAction> = buildList {
+    add(CardAction("Info", { onClick(item) }))
     if (item.libraryStatus == LibraryStatus.NotInLibrary && api.canWant) {
-        add("Want" to {
+        add(CardAction("Want", {
             scope.launch {
                 try {
                     val detail = api.getDiscoverDetail(item.mediaType, item.provider, item.providerId)
@@ -479,6 +483,6 @@ internal fun discoverContextMenu(
                     }
                 } catch (_: Exception) {}
             }
-        })
+        }))
     }
 }

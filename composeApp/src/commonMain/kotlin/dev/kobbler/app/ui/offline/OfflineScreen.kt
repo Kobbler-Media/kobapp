@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.offline
 
+import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,13 +132,13 @@ fun OfflineScreen(
                         accentColor = row.accent,
                         progress = card.progress,
                         offline = card.complete,
-                        contextMenuItems = buildList<Pair<String, () -> Unit>> {
+                        contextMenuItems = buildList {
                             card.items.filter { it.state == OfflineState.Failed }.takeIf { it.isNotEmpty() }?.let { failed ->
-                                add("Try again" to { failed.forEach { engine.retry(it.key) } })
+                                add(CardAction("Try again", { failed.forEach { engine.retry(it.key) } }))
                             }
-                            add((if (card.items.size > 1) "Remove all ${card.items.size}" else "Remove download") to {
+                            add(CardAction(if (card.items.size > 1) "Remove all ${card.items.size}" else "Remove download", {
                                 scope.launch { card.items.forEach { engine.remove(it.key) } }
-                            })
+                            }))
                         },
                         onClick = card.open,
                         modifier = Modifier.focusKey(card.key),

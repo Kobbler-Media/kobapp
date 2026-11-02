@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.Season
 import dev.kobbler.app.platform.FormFactor
@@ -68,6 +69,24 @@ class SeasonTabsEdgeTest {
                     val menu = bounds(hasContentDescription("$name options", substring = true) or hasText("$name options"))
                     label.left >= 0f && label.right <= menu.left
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `the season menu sits level with the labels and the tabs sit on the rule`() {
+        for ((formFactor, width) in listOf(FormFactor.Phone to 400, FormFactor.Desktop to 1280)) {
+            strip(formFactor, width, selected = 0) {
+                val label = bounds(hasText("Season 1"))
+                val menu = bounds(hasContentDescription("Season 1 options", substring = true) or hasText("Season 1 options"))
+                val strip = bounds(hasScrollAction() and hasAnyDescendant(hasText("Season 1")))
+                val whole = onRoot().fetchSemanticsNode().children.first().boundsInRoot
+                val offCentre = kotlin.math.abs(menu.center.y - label.center.y)
+                val gap = whole.bottom - strip.bottom
+                assertTrue(
+                    offCentre <= 2f && gap <= 1f,
+                    "$formFactor: the menu's centre is $offCentre px off the label's, $gap px between the tabs and the rule under them",
+                )
             }
         }
     }

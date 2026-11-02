@@ -2,6 +2,7 @@ package dev.kobbler.app.offline
 
 import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.ui.player.rememberedAudioTitle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -127,7 +128,7 @@ class OfflineEngine(
         val api = _api.value ?: return null
         val quality = item.exportQuality ?: return null
         val type = mediaTypeOf(item.kind)
-        suspend fun create() = api.createOfflineExport(type, item.mediaId, quality)
+        suspend fun create() = api.createOfflineExport(type, item.mediaId, quality, rememberedAudioTitle(type, item.mediaId, item.showId))
             ?: throw UpstreamUnavailable("The server has no file for ${item.title}")
         suspend fun original(): Upstream? {
             val playable = DownloadQuality.Original.wire.takeIf { item.session?.method != DirectPlay }

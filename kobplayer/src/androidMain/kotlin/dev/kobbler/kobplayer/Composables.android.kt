@@ -94,6 +94,7 @@ actual fun VideoSurface(
                     }
                     VideoFrameLayout(ctx, surface).also { frame ->
                         frameView = frame
+                        android.subtitlesView = frame.subtitles
                         surface.holder.addCallback(object : android.view.SurfaceHolder.Callback {
                             override fun surfaceCreated(holder: android.view.SurfaceHolder) {
                                 frame.applyFrameRate()

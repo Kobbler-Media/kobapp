@@ -2,20 +2,18 @@ package dev.kobbler.app.ui.components
 
 import dev.kobbler.app.ui.offline.OfflineBadge
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
@@ -23,10 +21,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -41,10 +35,8 @@ import dev.kobbler.app.theme.KobappTheme
 // Shared instances, not per-composition copies: background() caches its shader against
 // the Brush identity, so a fresh equal instance still rebuilds the shader.
 private val BottomScrim = Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000)))
-private val MenuShape = RoundedCornerShape(8.dp)
 private val CoverShape = RoundedCornerShape(4.dp)
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PosterCard(
     title: String,
@@ -54,7 +46,7 @@ fun PosterCard(
     statusBadge: LibraryStatus? = null,
     badge: String? = null,
     progress: Float? = null,
-    contextMenuItems: List<Pair<String, () -> Unit>> = emptyList(),
+    contextMenuItems: List<CardAction> = emptyList(),
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
@@ -66,6 +58,7 @@ fun PosterCard(
     val acc = accentColor ?: KobappTheme.accent
     val shape = KobappTheme.shapes.poster
     var showMenu by remember { mutableStateOf(false) }
+    val menuAnchor = remember { FocusRequester() }
     val focus = rememberTvFocusState()
     val placeholder = remember(colors.elev2, acc) {
         Brush.linearGradient(listOf(lerp(colors.elev2, acc, 0.30f), colors.elev2))
@@ -77,19 +70,9 @@ fun PosterCard(
         // lazy grid scrolls to reveal the overhang on every left/right press.
         modifier = modifier
             .width(width ?: dimens.posterWidth)
-            .onFocusChanged { focus.isFocused = it.isFocused }
+            .focusRequester(menuAnchor)
             .pointerHoverIcon(PointerIcon.Hand)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick ?: if (contextMenuItems.isNotEmpty()) { { showMenu = true } } else null,
-            )
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.Enter || event.key == Key.DirectionCenter)
-                ) {
-                    onClick(); true
-                } else false
-            }
+            .tvClickable(focus, onLongClick ?: if (contextMenuItems.isNotEmpty()) { { showMenu = true } } else null, onClick)
             .tvFocusGlow(focus, 8.dp.value, TvFocusScale.Standard, acc),
     ) {
         // Every layer here is paid on every card of every rail and grid, each frame the
@@ -154,21 +137,7 @@ fun PosterCard(
                     )
                 }
             }
-            if (contextMenuItems.isNotEmpty()) {
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    shape = MenuShape,
-                    containerColor = colors.elev1,
-                ) {
-                    contextMenuItems.forEach { (label, action) ->
-                        DropdownMenuItem(
-                            text = { Text(label, color = colors.textHi) },
-                            onClick = { showMenu = false; action() },
-                        )
-                    }
-                }
-            }
+            CardMenu(contextMenuItems, showMenu, menuAnchor, acc) { showMenu = false }
         }
         Spacer(Modifier.height(dimens.s2))
         MarqueeLine(title, KobappTheme.type.bodySm, colors.textHi, focus, Modifier.padding(horizontal = 2.dp))
@@ -192,12 +161,15 @@ fun WideCard(
     aspectRatio: Float = 16f / 9f,
     onClick: () -> Unit = {},
     offline: Boolean = false,
+    actions: List<CardAction> = emptyList(),
 ) {
     val dimens = KobappTheme.dimens
     val colors = KobappTheme.colors
     val acc = accentColor ?: KobappTheme.accent
     val shape = KobappTheme.shapes.card
     val focus = rememberTvFocusState()
+    var showMenu by remember { mutableStateOf(false) }
+    val menuAnchor = remember { FocusRequester() }
     val displayUrl = backdropUrl ?: imageUrl
     val placeholder = remember(colors.elev2, acc) {
         Brush.linearGradient(listOf(lerp(colors.elev2, acc, 0.35f), colors.elev2))
@@ -206,16 +178,9 @@ fun WideCard(
     Column(
         modifier = modifier
             .width(dimens.wideCardWidth)
-            .onFocusChanged { focus.isFocused = it.isFocused }
+            .focusRequester(menuAnchor)
             .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(onClick = onClick)
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.Enter || event.key == Key.DirectionCenter)
-                ) {
-                    onClick(); true
-                } else false
-            }
+            .tvClickable(focus, if (actions.isNotEmpty()) { { showMenu = true } } else null, onClick)
             .tvFocusGlow(focus, 10.dp.value, TvFocusScale.Standard, acc),
     ) {
         Box(
@@ -225,6 +190,7 @@ fun WideCard(
                 .clip(shape)
                 .background(placeholder),
         ) {
+            CardMenu(actions, showMenu, menuAnchor, acc) { showMenu = false }
             if (backdropUrl != null) {
                 FadeInImage(displayUrl, title, modifier = Modifier.fillMaxSize())
             } else {

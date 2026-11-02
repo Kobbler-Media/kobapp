@@ -1,5 +1,12 @@
 package dev.kobbler.app.ui.detail.tvshow
 
+import dev.kobbler.app.ui.components.CardMenu
+import dev.kobbler.app.ui.components.CardAction
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.outlined.DoneAll
 import dev.kobbler.app.offline.OfflineItem
 import dev.kobbler.app.offline.OfflineKind
 import dev.kobbler.app.offline.OfflineState
@@ -146,6 +153,14 @@ fun LazyListScope.episodeList(
                         .onFailure { watchedOverrides[ep.id] = !newState }
                 }
             } else null,
+            onMarkEarlierWatched = if (api != null && ep.id != null) {
+                {
+                    val earlier = season.episodes.take(idx).mapNotNull { it.id }.filterNot { it in watchedOverrides }
+                    earlier.forEach { watchedOverrides[it] = true }
+                    runCatching { api.markEarlierEpisodesWatched(ep.id) }
+                        .onFailure { earlier.forEach(watchedOverrides::remove) }
+                }
+            } else null,
             // Scoped per season: without it every season registers `episode.1`, and a restore
             // after recomposition hands focus to whichever season claimed the key last.
             modifier = Modifier.focusKeyGroup("season.${season.number}").then(if (idx == 0) exitUp else Modifier),
@@ -170,6 +185,7 @@ private fun EpisodeRow(
     onStreamPick: (() -> Unit)?,
     onWant: (suspend () -> Unit)?,
     onToggleWatched: (suspend (Boolean) -> Unit)?,
+    onMarkEarlierWatched: (suspend () -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
@@ -178,6 +194,16 @@ private fun EpisodeRow(
     val rowBg = if (isCurrent) accent.copy(alpha = 0.08f) else Color.Transparent
     val focusState = rememberTvFocusState()
     val compact = LocalFormFactor.current == FormFactor.Phone
+    var showMenu by remember { mutableStateOf(false) }
+    val menuAnchor = remember { FocusRequester() }
+    val menuActions = buildList {
+        if (onToggleWatched != null) {
+            add(CardAction(if (watched) "Mark unwatched" else "Mark watched", { scope.launch { runCatching { onToggleWatched(!watched) } } }, Icons.Outlined.Check))
+        }
+        if (onMarkEarlierWatched != null) {
+            add(CardAction("Mark earlier episodes watched", { scope.launch { onMarkEarlierWatched() } }, Icons.Outlined.DoneAll))
+        }
+    }
 
     val container = modifier
         .fillMaxWidth()
@@ -195,7 +221,13 @@ private fun EpisodeRow(
         .tvFocusGlow(focusState, cornerRadiusDp = 8f, scale = 1.01f)
         .clip(RoundedCornerShape(8.dp))
         .let { if (hasPlayback) it.pointerHoverIcon(PointerIcon.Hand) else it }
-        .then(if (hasPlayback) Modifier.tvClickable(focusState, onClick) else Modifier)
+        .then(
+            if (hasPlayback) {
+                Modifier.focusRequester(menuAnchor).tvClickable(focusState, if (menuActions.isNotEmpty()) { { showMenu = true } } else null, onClick)
+            } else {
+                Modifier
+            },
+        )
 
     val actions: @Composable () -> Unit = {
         // Asking for the file comes before choosing a stream to watch instead of it, and
@@ -256,6 +288,7 @@ private fun EpisodeRow(
         // Touch, not a D-pad: the icons are hit directly, so the tile stays one
         // clickable surface and the synopsis under it stays part of that surface.
         Column(container.then(body).padding(horizontal = 10.dp, vertical = 12.dp)) {
+            CardMenu(menuActions, showMenu, menuAnchor, accent) { showMenu = false }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -311,6 +344,7 @@ private fun EpisodeRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            CardMenu(menuActions, showMenu, menuAnchor, accent) { showMenu = false }
             Text(
                 episode.number.pad2(),
                 style = KobappTheme.type.bodySm,

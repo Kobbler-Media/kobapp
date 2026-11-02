@@ -42,7 +42,8 @@ private suspend fun GlobalPlayerState.reopenThroughDownload(player: Player, api:
     val previous = sessionId
     val keepPaused = player.state.value == PlayerState.PAUSED
     val resumeSec = (timeline.toAbsoluteMs(player.currentMs.value) / 1000).toInt()
-    val session = (if (type == "movie") api.getMovieStreamSession(id) else api.getEpisodeStreamSession(id)) ?: return
+    val audioTitle = rememberedAudioTitle(playbackTitleKey)
+    val session = (if (type == "movie") api.getMovieStreamSession(id, audioTitle = audioTitle) else api.getEpisodeStreamSession(id, audioTitle = audioTitle)) ?: return
     if (mediaId != id) return
     loadInPlace(player, api, type, id, session, resumeSec)
     if (keepPaused) endPreload(player) else playUnmuted(player)

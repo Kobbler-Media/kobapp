@@ -9,3 +9,8 @@ fun aspectBucket(width: Int, height: Int): String? {
         else -> "wide"
     }
 }
+
+/** The bucket of what is on screen: the picture, when the encode has bars round it. */
+fun aspectBucket(width: Int, height: Int, picture: dev.kobbler.app.data.PictureArea?): String? =
+    if (picture == null) aspectBucket(width, height)
+    else aspectBucket((width * picture.width).toInt(), (height * picture.height).toInt())

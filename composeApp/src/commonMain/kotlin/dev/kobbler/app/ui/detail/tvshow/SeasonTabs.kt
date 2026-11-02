@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
@@ -61,6 +62,14 @@ import kotlinx.coroutines.delay
 private const val SeasonFocusSelectDelayMs = 180L
 
 private val MenuFade = 24.dp
+private val LabelToRule = 6.dp
+private val ActiveRule = 2.dp
+
+// A phone's touch target is taller than the strip; counted, it stood the tabs off their rule.
+private fun Modifier.centredWithoutHeight(): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minHeight = 0))
+    layout(placeable.width, 0) { placeable.place(0, -placeable.height / 2) }
+}
 
 /**
  * The strip scrolls out to both edges of the screen. Where a season menu sits at its end,
@@ -134,6 +143,7 @@ fun SeasonTabs(
         FocusEdgeSlack {
             Row(
                 modifier = Modifier
+                    .align(Alignment.BottomStart)
                     .bleedHorizontally(gutter)
                     .then(if (menuButton) Modifier.fadeOutBefore(gutter + menuWidth) else Modifier)
                     .horizontalScroll(scrollState)
@@ -175,11 +185,11 @@ fun SeasonTabs(
                                 style = KobappTheme.type.bodySm.copy(fontWeight = FontWeight.Medium),
                                 color = if (active) colors.textHi else colors.textLo,
                             )
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(LabelToRule))
                             Box(
                                 Modifier
                                     .fillMaxWidth()
-                                    .height(2.dp)
+                                    .height(ActiveRule)
                                     .background(if (active) accent else Color.Transparent),
                             )
                         }
@@ -192,13 +202,18 @@ fun SeasonTabs(
         }
         // A pointer selects by clicking, so the menu needs a control of its own there.
         if (menuButton) {
+            val labelCentre = ActiveRule + LabelToRule + with(density) { KobappTheme.type.bodySm.lineHeight.toDp() } / 2
             OverflowActions(
                 accent = accent,
                 label = "Season ${seasons.getOrNull(selectedIdx)?.number} options",
                 focusKeyName = "season.more",
                 quiet = true,
                 content = menu,
-                modifier = Modifier.align(Alignment.CenterEnd).onSizeChanged { menuWidthPx = it.width },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = labelCentre)
+                    .centredWithoutHeight()
+                    .onSizeChanged { menuWidthPx = it.width },
             )
         }
     }

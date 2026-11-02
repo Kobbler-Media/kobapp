@@ -45,5 +45,18 @@ internal fun AudioTrackDto.speaks(preferred: String?): Boolean {
 
 private val CommentaryMarkers = listOf("commentary", "commentaries", "audio description", "descriptive", "described video")
 
-internal val AudioTrackDto.isCommentary: Boolean
-    get() = title?.lowercase()?.let { t -> CommentaryMarkers.any { it in t } } ?: false
+// Sport ships the race as commentary beside a feed with none; that feed is never the one wanted.
+private val AmbientMarkers = listOf("ambient", "natural sound", "nat sound", "clean feed", "no commentary", "effects only")
+
+private fun AudioTrackDto.titled(markers: List<String>): Boolean =
+    title?.lowercase()?.let { t -> markers.any { it in t } } ?: false
+
+internal val AudioTrackDto.isAmbient: Boolean get() = titled(AmbientMarkers)
+
+internal val AudioTrackDto.isCommentary: Boolean get() = !isAmbient && titled(CommentaryMarkers)
+
+/** Mirrors the server's `feature_tracks`: commentary gives way only to a real feature track. */
+internal fun List<AudioTrackDto>.featureTracks(): List<AudioTrackDto> {
+    val narrated = filterNot { it.isAmbient }
+    return narrated.filterNot { it.isCommentary }.ifEmpty { narrated }.ifEmpty { this }
+}

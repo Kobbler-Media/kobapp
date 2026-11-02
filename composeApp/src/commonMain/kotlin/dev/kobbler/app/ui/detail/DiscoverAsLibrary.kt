@@ -35,6 +35,7 @@ internal fun DiscoverDetail.asTvShow(episodes: Map<Int, List<DiscoverEpisode>>):
     backdropUrl = backdropUrl,
     network = network,
     rating = rating,
+    genres = genres,
     synopsis = description,
     cast = cast,
     seasons = listedSeasons.map { s ->

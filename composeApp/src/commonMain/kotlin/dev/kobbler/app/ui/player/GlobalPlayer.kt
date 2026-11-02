@@ -93,6 +93,12 @@ class GlobalPlayerState {
     // Where to navigate when tapping the mini player
     var detailDestination by mutableStateOf<Destination?>(null)
 
+    val playbackTitleKey: String?
+        get() = playbackTitleKey(
+            mediaType, mediaId,
+            (detailDestination as? Destination.TvShowDetail)?.takeUnless { it.isEpisodeId }?.showId,
+        )
+
     // Session management
     var sessionId by mutableStateOf<String?>(null)
 
@@ -152,6 +158,7 @@ class GlobalPlayerState {
     // (or for sessions where server hasn't probed yet — falls back to player).
     var videoWidth by mutableStateOf<Int?>(null)
     var videoHeight by mutableStateOf<Int?>(null)
+    var picture by mutableStateOf<dev.kobbler.app.data.PictureArea?>(null)
     var serverAudioTracks by mutableStateOf<List<dev.kobbler.app.data.AudioTrackDto>>(emptyList())
     var selectedServerAudioIndex by mutableStateOf<Int?>(null)
 
@@ -471,6 +478,7 @@ class GlobalPlayerState {
         lufs = session?.lufs
         videoWidth = session?.videoWidth
         videoHeight = session?.videoHeight
+        picture = session?.picture
         serverAudioTracks = session?.audioTracks ?: emptyList()
         selectedServerAudioIndex = startAudioIndex(
             audioTracks = serverAudioTracks,
@@ -652,6 +660,7 @@ class GlobalPlayerState {
         lufs = null
         videoWidth = null
         videoHeight = null
+        picture = null
         serverAudioTracks = emptyList()
         selectedServerAudioIndex = null
         serverSubtitleTracks = emptyList()

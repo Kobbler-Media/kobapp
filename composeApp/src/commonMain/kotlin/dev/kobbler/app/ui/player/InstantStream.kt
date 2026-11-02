@@ -99,16 +99,17 @@ internal fun WarmStream(gps: GlobalPlayerState, api: KobblerApi, target: StreamT
 internal fun nextEpisodeDue(positionMs: Long, durationMs: Long): Boolean =
     durationMs > 0 && positionMs >= durationMs * 7 / 10
 
-internal fun Movie.instantTarget(): StreamTarget? = takeIf { filePath == null }?.let { StreamTarget.movie(id) }
+internal fun Movie.instantTarget(): StreamTarget? =
+    takeIf { filePath == null }?.let { StreamTarget.movie(id, rememberedAudioTitle("movie", id, null)) }
 
 internal fun nextEpisodeWarmTarget(show: TvShow, playingEpisodeId: String?): StreamTarget? =
     neighbourEpisode(show, playingEpisodeId, 1)?.third
         ?.takeIf { it.filePath == null }
         ?.id
-        ?.let(StreamTarget::episode)
+        ?.let { StreamTarget.episode(it, rememberedAudioTitle("episode", it, show.id)) }
 
 internal fun TvShow.instantTarget(): StreamTarget? = continueEpisode
     ?.let { seasons.getOrNull(it.seasonIdx)?.episodes?.getOrNull(it.episodeIdx) }
     ?.takeIf { it.filePath == null }
     ?.id
-    ?.let(StreamTarget::episode)
+    ?.let { StreamTarget.episode(it, rememberedAudioTitle("episode", it, id)) }

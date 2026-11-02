@@ -10,16 +10,17 @@ data class StreamTarget(
     val mediaId: String? = null,
     val discover: DiscoverDetail? = null,
     val episode: DiscoverEpisodeRef? = null,
+    val audioTitle: String? = null,
 ) {
     val key: String
         get() = mediaId?.let { "$mediaType:$it" }
             ?: "discover:${discover?.provider}:${discover?.providerId}:${episode?.season}:${episode?.episode}"
 
     companion object {
-        fun movie(id: String) = StreamTarget("movie", mediaId = id)
-        fun episode(id: String) = StreamTarget("episode", mediaId = id)
-        fun discover(detail: DiscoverDetail, episode: DiscoverEpisodeRef?) =
-            StreamTarget(detail.mediaType, discover = detail, episode = episode)
+        fun movie(id: String, audioTitle: String? = null) = StreamTarget("movie", mediaId = id, audioTitle = audioTitle)
+        fun episode(id: String, audioTitle: String? = null) = StreamTarget("episode", mediaId = id, audioTitle = audioTitle)
+        fun discover(detail: DiscoverDetail, episode: DiscoverEpisodeRef?, audioTitle: String? = null) =
+            StreamTarget(detail.mediaType, discover = detail, episode = episode, audioTitle = audioTitle)
     }
 }
 

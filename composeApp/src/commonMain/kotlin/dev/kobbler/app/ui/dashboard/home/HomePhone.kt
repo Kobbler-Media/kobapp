@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import dev.kobbler.app.ui.scrollsUnderTopChrome
 import dev.kobbler.app.ui.LocalTopChromeOverlap
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -28,6 +27,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import dev.kobbler.app.ui.components.tvClickable
+import dev.kobbler.app.ui.components.rememberTvFocusState
+import dev.kobbler.app.ui.components.CardMenu
+import dev.kobbler.app.ui.components.CardAction
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -137,6 +144,7 @@ fun HomePhone(
                 item(key = "hero") {
                     PhoneHero(
                         item = hero,
+                        actions = rememberUpNextActions(hero, api),
                         height = heroHeight,
                         onClick = { onContinueClick(0) },
                         modifier = Modifier.showingBadge(spotlight, hero.spotlight()),
@@ -179,6 +187,7 @@ fun HomePhone(
                                         accentColor = colors.accentForMediaType(item.mediaType),
                                         offline = continueAvailableOffline(item.mediaType, item.mediaId),
                                         onClick = { onContinueClick(i + 1) },
+                                        actions = rememberUpNextActions(item, api),
                                         modifier = Modifier.width(cardWidth).showingBadge(spotlight, item.spotlight()),
                                     )
                                 }
@@ -287,18 +296,22 @@ fun HomePhone(
 }
 
 @Composable
-private fun PhoneHero(item: UpNextItem, height: Dp, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun PhoneHero(item: UpNextItem, actions: List<CardAction>, height: Dp, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = KobappTheme.colors
     val accent = colors.accentForMediaType(item.mediaType)
+    var showMenu by remember { mutableStateOf(false) }
+    val menuAnchor = remember { FocusRequester() }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
             .clip(KobappTheme.shapes.hero)
             .border(1.dp, colors.lineSoft, KobappTheme.shapes.hero)
+            .focusRequester(menuAnchor)
             .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(onClick = onClick),
+            .tvClickable(rememberTvFocusState(), if (actions.isNotEmpty()) { { showMenu = true } } else null, onClick),
     ) {
+        CardMenu(actions, showMenu, menuAnchor, accent) { showMenu = false }
         StripedArt(item.backdropUrl, accent, Modifier.fillMaxSize(), contentDescription = item.title)
         Box(
             modifier = Modifier.fillMaxSize().background(

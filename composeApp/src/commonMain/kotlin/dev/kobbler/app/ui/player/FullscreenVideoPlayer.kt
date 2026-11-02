@@ -48,7 +48,6 @@ import dev.kobbler.app.ui.navigation.InterceptBack
 import dev.kobbler.kobfocus.LocalFocusScope
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
-import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.data.KeepState
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.ThumbnailsProbe
@@ -306,6 +305,14 @@ fun FullscreenVideoPlayer(
                         val parsed = api.decodeSkipSegments(segments)
                         if (parsed.isNotEmpty()) state.skipSegments = parsed
                     }
+                    // Named by the server from the tracks' own text a few minutes into the
+                    // download; nothing renders these, they only name the player's own tracks.
+                    "subtitles" -> {
+                        val subtitles = frame.data["subtitles"] ?: return@runCatching
+                        if (state.serverSubtitleTracks.none { !it.url.isNullOrBlank() }) {
+                            state.serverSubtitleTracks = api.decodeSubtitleTracks(subtitles)
+                        }
+                    }
                     // The event carries the URL, but it is the same one the poll below
                     // builds — so use the event only as the trigger and let the existing
                     // helper resolve it and confirm the file is really servable.
@@ -410,12 +417,12 @@ fun FullscreenVideoPlayer(
     // two are not the same geometry. Keying this per title left a choice made about the
     // broadcast applied to a stream that had never been asked about.
     var aspectAppliedFor by remember { mutableStateOf<Pair<String, String>?>(null) }
-    LaunchedEffect(state.lastStreamUrl, state.videoWidth, state.videoHeight, playerVideoSize) {
+    LaunchedEffect(state.lastStreamUrl, state.videoWidth, state.videoHeight, state.picture, playerVideoSize) {
         val source = state.lastStreamUrl ?: return@LaunchedEffect
         if (aspectAppliedFor?.first == source) return@LaunchedEffect
         val w = state.videoWidth ?: playerVideoSize.first.takeIf { it > 0 } ?: return@LaunchedEffect
         val h = state.videoHeight ?: playerVideoSize.second.takeIf { it > 0 } ?: return@LaunchedEffect
-        val bucket = aspectBucket(w, h) ?: return@LaunchedEffect
+        val bucket = aspectBucket(w, h, state.picture) ?: return@LaunchedEffect
         val previous = aspectAppliedFor
         aspectAppliedFor = source to bucket
         // A new stream of the same shape keeps whatever is set — including a choice the
@@ -432,27 +439,29 @@ fun FullscreenVideoPlayer(
         if (ratio != dev.kobbler.kobplayer.AspectRatio.STRETCH) {
             val w = state.videoWidth ?: player.videoSize.value.first.takeIf { it > 0 }
             val h = state.videoHeight ?: player.videoSize.value.second.takeIf { it > 0 }
-            val bucket = if (w != null && h != null) aspectBucket(w, h) else null
+            val bucket = if (w != null && h != null) aspectBucket(w, h, state.picture) else null
             if (bucket != null) {
                 Settings.putString(ASPECT_BUCKET_KEY_PREFIX + bucket, ratio.name)
             }
         }
     }
 
+    val titleKey = state.playbackTitleKey
     val useServerAudio = state.serverAudioTracks.size > 1
     val audioTracks: List<TrackInfo> = if (useServerAudio) {
-        state.serverAudioTracks.map { it.toTrackInfo() }
+        state.serverAudioTracks.audioTrackInfos()
     } else vlcAudioTracks
     val selectedAudioTrack: TrackInfo? = if (useServerAudio) {
-        state.selectedServerAudioIndex?.let { idx ->
-            state.serverAudioTracks.find { it.streamIndex == idx }?.toTrackInfo()
-        }
+        state.selectedServerAudioIndex?.let { idx -> audioTracks.find { it.id == idx.toString() } }
     } else vlcSelectedAudioTrack
     var audioSwitching by remember { mutableStateOf(false) }
     val isDirectPlayAudio = useServerAudio
         && vlcAudioTracks.size == state.serverAudioTracks.size
         && vlcAudioTracks.isNotEmpty()
     val onSelectAudioTrack: (TrackInfo?) -> Unit = { track ->
+        if (useServerAudio && track != null) {
+            rememberAudioChoice(titleKey, state.serverAudioTracks.firstOrNull { it.streamIndex.toString() == track.id }?.title)
+        }
         when {
             isDirectPlayAudio && track != null -> {
                 val streamIdx = track.id.toIntOrNull()
@@ -483,13 +492,11 @@ fun FullscreenVideoPlayer(
     val renderableServerSubs = state.renderableServerSubtitles
     val useServerSubs = renderableServerSubs.isNotEmpty()
     val subtitleTracks: List<TrackInfo> = if (useServerSubs) {
-        renderableServerSubs.map { it.toSubtitleTrackInfo() }
-    } else vlcSubtitleTracks
+        renderableServerSubs.subtitleTrackInfos()
+    } else vlcSubtitleTracks.labelledBy(state.serverSubtitleTracks)
     val selectedSubtitleTrack: TrackInfo? = if (useServerSubs) {
-        state.selectedServerSubtitleTrackId?.let { id ->
-            renderableServerSubs.firstOrNull { it.trackId == id }?.toSubtitleTrackInfo()
-        }
-    } else vlcSelectedSubtitleTrack
+        state.selectedServerSubtitleTrackId?.let { id -> subtitleTracks.firstOrNull { it.id == id } }
+    } else vlcSelectedSubtitleTrack?.let { selected -> subtitleTracks.firstOrNull { it.id == selected.id } ?: selected }
     val onSelectSubtitleTrack: (TrackInfo?) -> Unit = { track ->
         if (useServerSubs) {
             player.selectSubtitleTrack(null)
@@ -936,30 +943,6 @@ fun FullscreenVideoPlayer(
 }
 
 private enum class SidePanel { Channels, Episodes }
-
-private fun AudioTrackDto.toTrackInfo(): TrackInfo {
-    val label = buildString {
-        if (!title.isNullOrBlank()) append(title)
-        else if (!language.isNullOrBlank()) append(language)
-        else append("Track ${streamIndex}")
-        if (codec.isNotBlank()) append(" ($codec)")
-        val chLabel = when (channels) { 1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> null }
-        if (chLabel != null) append(" $chLabel")
-    }
-    return TrackInfo(id = streamIndex.toString(), label = label, language = language)
-}
-
-private fun dev.kobbler.app.data.PlaybackSubtitleTrackDto.toSubtitleTrackInfo(): TrackInfo {
-    val label = buildString {
-        when {
-            !title.isNullOrBlank() -> append(title)
-            !language.isNullOrBlank() -> append(language.uppercase())
-            else -> append("Track")
-        }
-        if (isDefault) append(" · default")
-    }
-    return TrackInfo(id = trackId ?: "", label = label, language = language)
-}
 
 /**
  * Restart the session on another audio track and put the playhead back where it was.

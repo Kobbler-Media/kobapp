@@ -91,6 +91,7 @@ data class TvShow(
     val logoUrl: String? = null,
     val network: String? = null,
     val rating: Float? = null,
+    val genres: List<String> = emptyList(),
     val contentRating: String? = null,
     val kidsOverride: Boolean? = null,
     val kidsAllowed: Boolean = false,

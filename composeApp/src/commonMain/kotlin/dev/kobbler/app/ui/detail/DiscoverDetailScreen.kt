@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.CardAction
 import dev.kobbler.app.ui.components.KobBackButtonPinned
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -52,9 +53,11 @@ import dev.kobbler.app.ui.components.StatusPill
 import dev.kobbler.app.ui.components.rememberPalette
 import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.app.ui.player.WarmStream
+import dev.kobbler.app.ui.player.rememberedAudioTitle
 import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.ui.player.isInstant
 import dev.kobbler.kobplayer.Player
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -67,7 +70,7 @@ fun DiscoverDetailScreen(
     onBack: () -> Unit,
     onViewInLibrary: (mediaType: String, libraryId: String) -> Unit,
     modifier: Modifier = Modifier,
-    refusals: List<Pair<String, () -> Unit>> = emptyList(),
+    refusals: List<CardAction> = emptyList(),
 ) {
     val colors = KobappTheme.colors
     val accent = when (detail.mediaType) {
@@ -98,7 +101,7 @@ fun DiscoverDetailScreen(
         if (canStreamMedia && currentDetail.mediaType == "movie") streams.prefetch(null)
     }
     if (currentDetail.mediaType == "movie") {
-        WarmStream(gps, api, StreamTarget.discover(currentDetail, null).takeIf { canStreamMedia && player != null })
+        WarmStream(gps, api, StreamTarget.discover(currentDetail, null, currentDetail.rememberedAudioTitle(null)).takeIf { canStreamMedia && player != null })
     }
 
     // A show is asked for the same way as one already in the library: how much of it to
@@ -118,6 +121,21 @@ fun DiscoverDetailScreen(
                 if (newId != null) {
                     currentDetail = currentDetail.copy(libraryId = newId, wantStatus = "wanted")
                 }
+            } catch (_: Exception) {
+            } finally {
+                wantLoading = false
+            }
+        }
+    }
+
+    val onWantSeason: (Int) -> Unit = { season ->
+        wantLoading = true
+        scope.launch {
+            try {
+                val showId = api.wantDiscoverSeason(currentDetail, season)
+                currentDetail = currentDetail.copy(libraryId = showId, wantStatus = "wanted")
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
             } finally {
                 wantLoading = false
@@ -155,8 +173,9 @@ fun DiscoverDetailScreen(
                 onBack = onBack,
                 onStreamEpisode = if (canStreamMedia) { ref -> streams.play(ref) } else null,
                 onStreamEpisodePick = if (canStreamMedia) { ref -> streams.pick(ref) } else null,
+                onWantSeason = onWantSeason.takeIf { api.canWant },
                 actions = { wide, anchor, exitDown, target ->
-                    WarmStream(gps, api, target?.takeIf { canStreamMedia && player != null }?.let { StreamTarget.discover(currentDetail, it) })
+                    WarmStream(gps, api, target?.takeIf { canStreamMedia && player != null }?.let { StreamTarget.discover(currentDetail, it, currentDetail.rememberedAudioTitle(it)) })
                     val stream = target?.takeIf { canStreamMedia }?.let {
                         DiscoverStreamAction("Stream", episodeTag(it.season, it.episode), { streams.play(it) }, { streams.pick(it) })
                     }

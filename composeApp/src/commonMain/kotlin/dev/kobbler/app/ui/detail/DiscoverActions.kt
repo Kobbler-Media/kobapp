@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
@@ -29,7 +30,7 @@ internal fun DiscoverActions(
     wide: Boolean,
     modifier: Modifier = Modifier,
     exitDown: FocusRequester? = null,
-    refusals: List<Pair<String, () -> Unit>> = emptyList(),
+    refusals: List<CardAction> = emptyList(),
 ) {
     val colors = KobappTheme.colors
     val wantable = showWant && detail.libraryStatus == LibraryStatus.NotInLibrary

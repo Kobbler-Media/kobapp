@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkAdd
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverEpisode
 import dev.kobbler.app.data.DiscoverEpisodeRef
@@ -44,6 +46,7 @@ internal fun DiscoverShowPage(
     onBack: () -> Unit,
     onStreamEpisode: ((DiscoverEpisodeRef) -> Unit)?,
     onStreamEpisodePick: ((DiscoverEpisodeRef) -> Unit)?,
+    onWantSeason: ((Int) -> Unit)?,
     actions: @Composable (wide: Boolean, anchor: Modifier, exitDown: FocusRequester?, target: DiscoverEpisodeRef?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -87,7 +90,7 @@ internal fun DiscoverShowPage(
         onPersonClick = null,
         modifier = modifier,
         actions = { wide, anchor, exitDown -> actions(wide, anchor, exitDown, target) },
-        seasonMenu = { null },
+        seasonMenu = { discoverSeasonMenu(selectedNumber, accent, onWantSeason) },
         episodes = { seasonEntry ->
             val n = selectedNumber
             when {
@@ -133,5 +136,21 @@ internal fun DiscoverStatus(status: LibraryStatus) {
         LibraryStatus.NotInLibrary -> TopBarStatus("Not in library")
         LibraryStatus.Wanted -> TopBarStatus("Wanted", KobappTheme.colors.warn)
         LibraryStatus.InLibrary -> Unit
+    }
+}
+
+private fun discoverSeasonMenu(season: Int?, accent: Color, onWantSeason: ((Int) -> Unit)?): SeasonMenu? {
+    if (season == null || onWantSeason == null) return null
+    return { close ->
+        OverflowItem(
+            key = "wantSeason",
+            icon = Icons.Outlined.BookmarkAdd,
+            label = "Want season $season",
+            accent = accent,
+            onClick = {
+                close()
+                onWantSeason(season)
+            },
+        )
     }
 }

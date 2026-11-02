@@ -67,9 +67,9 @@ fun startAudioIndex(
     serverPick: Int?,
     preferredLanguage: String?,
 ): Int? {
-    val feature = audioTracks.filterNot { it.isCommentary }
+    val feature = audioTracks.featureTracks()
     val default = audioTracks.firstOrNull { it.isDefault }
-        ?.let { if (it.isCommentary) feature.firstOrNull() ?: it else it }
+        ?.let { if (it in feature) it else feature.firstOrNull() ?: it }
     return serverPick
         ?: feature.firstOrNull { it.speaks(preferredLanguage) }?.streamIndex
         ?: default?.streamIndex

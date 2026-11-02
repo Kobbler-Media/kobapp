@@ -130,7 +130,7 @@ fun InlineTvPlayer(
 
         if (autoPlay) PlaybackTrace.begin("play episode $episodeId (autoplay)")
         try {
-            val start = startPlayback(api, "episode", episodeId, cachedSec)
+            val start = startPlayback(api, "episode", episodeId, cachedSec, audioTitle = rememberedAudioTitle("episode", episodeId, show.id))
             val session = start?.session
             if (start != null && session != null) {
                 prefetchedEpisodeId = episodeId
@@ -360,7 +360,7 @@ fun InlineTvPlayer(
                             val oldSid = if (gps.mediaId != null) gps.sessionId else prefetchedSessionId
                             if (oldSid != null) gps.teardownScope.launch { api.closeSession(oldSid) }
 
-                            val start = startPlayback(api, "episode", episodeId, fromStart = fromStart)
+                            val start = startPlayback(api, "episode", episodeId, fromStart = fromStart, audioTitle = rememberedAudioTitle("episode", episodeId, show.id))
                             if (start != null) {
                                 gps.loadEpisode(
                                     player = player, api = api, show = show,
@@ -518,7 +518,7 @@ private fun playNeighbourEpisode(
         try {
             val oldSid = gps.sessionId
             if (oldSid != null) gps.teardownScope.launch { api.closeSession(oldSid) }
-            val start = startPlayback(api, "episode", epId)
+            val start = startPlayback(api, "episode", epId, audioTitle = rememberedAudioTitle("episode", epId, show.id))
             if (start == null && ep.filePath != null) {
                 throw IllegalStateException("Episode $epId has a library file but no playback session")
             }
@@ -606,7 +606,10 @@ internal suspend fun tryPlayTvWithFallback(
     walk = DebridPlayback(
         api = api, gps = gps, search = search,
         resolve = { opt, resume ->
-            api.streamResolve(option = opt, mediaType = "episode", mediaId = episodeId, startTime = resumeRequestSeconds(resume))
+            api.streamResolve(
+                option = opt, mediaType = "episode", mediaId = episodeId, startTime = resumeRequestSeconds(resume),
+                audioTitle = rememberedAudioTitle("episode", episodeId, show.id),
+            )
         },
         play = { _, session, resume ->
             gps.loadEpisode(

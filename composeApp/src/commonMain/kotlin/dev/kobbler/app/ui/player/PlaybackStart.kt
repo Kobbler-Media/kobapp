@@ -32,6 +32,7 @@ suspend fun startPlayback(
     id: String,
     savedFallback: Int? = null,
     fromStart: Boolean = false,
+    audioTitle: String? = null,
 ): PlaybackStart? = coroutineScope {
     // The buffer the stream opens with is sized from this, so it is timed alongside the
     // session rather than left to whatever requests happened to come before.
@@ -47,8 +48,8 @@ suspend fun startPlayback(
     // one — which is then only needed for the residual seek.
     val rebaseTo = if (fromStart) null else resumeRequestSeconds(savedFallback)
     val session = when (type) {
-        "movie" -> api.getMovieStreamSession(id, rebaseTo)
-        else -> api.getEpisodeStreamSession(id, rebaseTo)
+        "movie" -> api.getMovieStreamSession(id, rebaseTo, audioTitle)
+        else -> api.getEpisodeStreamSession(id, rebaseTo, audioTitle)
     }
     if (session == null) {
         progress?.cancel()

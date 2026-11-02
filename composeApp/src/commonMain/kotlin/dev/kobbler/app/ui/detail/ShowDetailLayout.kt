@@ -269,6 +269,7 @@ private fun MetaRow(show: TvShow, episodeTotal: Int) {
         metaText(show.network),
         metaRating(show.rating),
         metaText(show.contentRating),
+        metaText(show.genres.take(3).joinToString(", ").ifEmpty { null }),
         metaText(show.seasons.size.takeIf { it > 0 }?.let { n -> "$n season${if (n != 1) "s" else ""} · $episodeTotal ep" }),
         metaText(show.nextAiring?.let { "Next: $it" }),
     )

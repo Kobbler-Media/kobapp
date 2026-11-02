@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.navigation
 
+import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.foundation.clickable
 import dev.kobbler.app.offline.Offline
 import dev.kobbler.app.ui.components.ComicSkeleton
@@ -1461,7 +1462,7 @@ private fun DetailContent(
             val refuseScope = rememberCoroutineScope()
             val refusals = remember(forYou) {
                 forYou?.let { entry ->
-                    forYouRefusals(entry, api, refuseScope).map { (label, refuse) -> label to { refuse(); nav.goBack(); Unit } }
+                    forYouRefusals(entry, api, refuseScope).map { (label, refuse) -> CardAction(label, { refuse(); nav.goBack() }) }
                 }.orEmpty()
             }
             AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { detail ->

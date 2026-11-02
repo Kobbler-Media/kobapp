@@ -114,6 +114,22 @@ class TrackIntentTest {
                 ),
                 null, "jpn", 2,
             ),
+            Case(
+                "a race's commentary over its ambient feed",
+                listOf(
+                    AudioTrackDto(streamIndex = 1, language = "eng", title = "Commentary", isDefault = true),
+                    AudioTrackDto(streamIndex = 2, title = "Natural/Ambient", isDefault = true),
+                ),
+                null, "eng", 1,
+            ),
+            Case(
+                "an ambient default is not the fallback either",
+                listOf(
+                    AudioTrackDto(streamIndex = 1, title = "Clean Feed", isDefault = true),
+                    AudioTrackDto(streamIndex = 2, title = "Commentary"),
+                ),
+                null, null, 2,
+            ),
         ).forEach { c ->
             assertEquals(c.expected, startAudioIndex(c.tracks, c.server, c.preferred), c.name)
         }

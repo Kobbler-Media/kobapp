@@ -130,7 +130,7 @@ private val LocalOverflowEntry = compositionLocalOf<OverflowEntry?> { null }
 @Composable
 internal fun OverflowItem(
     key: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     label: String,
     accent: Color,
     onClick: () -> Unit,
@@ -155,8 +155,8 @@ internal fun OverflowItem(
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        leadingIcon = {
-            Icon(icon, null, tint = if (marked) accent else colors.textMd, modifier = Modifier.size(18.dp))
+        leadingIcon = icon?.let {
+            { Icon(it, null, tint = if (marked) accent else colors.textMd, modifier = Modifier.size(18.dp)) }
         },
         trailingIcon = if (selected) {
             { Icon(Icons.Outlined.Check, "Selected", tint = accent, modifier = Modifier.size(18.dp)) }

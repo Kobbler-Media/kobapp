@@ -303,6 +303,10 @@ internal class AndroidPlayer(
     private val surfaces = SurfaceSlot<android.view.SurfaceHolder>()
     private var voutAttached = false
 
+    // VLC's Android display blends subpictures only onto a window of their own; without
+    // one it opens "without subtitles support" and every embedded track draws nothing.
+    internal var subtitlesView: android.view.SurfaceView? = null
+
     override val videoOutputReady: StateFlow<Boolean> = surfaces.ready
     internal val surfaceEpoch: StateFlow<Int> = surfaces.epoch
 
@@ -442,6 +446,7 @@ internal class AndroidPlayer(
         val vout = vlcPlayer.vlcVout
         if (vout.areViewsAttached()) vout.detachViews()
         vout.setVideoSurface(holder.surface, holder)
+        subtitlesView?.let(vout::setSubtitlesView)
         vout.attachViews(videoLayoutListener)
         voutAttached = true
         if (pendingSurfaceWidth > 0 && pendingSurfaceHeight > 0) {

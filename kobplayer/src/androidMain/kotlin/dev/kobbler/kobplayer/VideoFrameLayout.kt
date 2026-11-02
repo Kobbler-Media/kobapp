@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
+import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
@@ -22,6 +23,12 @@ import androidx.lifecycle.findViewTreeLifecycleOwner
 // Sized to the picture; the surface inside is grown by the decoder's padding so the padding
 // lands past the right and bottom edges, as vlc-android's VideoHelper lays it out.
 internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : FrameLayout(context) {
+
+    val subtitles = SurfaceView(context).apply {
+        setZOrderMediaOverlay(true)
+        holder.setFormat(PixelFormat.TRANSLUCENT)
+        if (Build.VERSION.SDK_INT >= 34) setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
+    }
 
     var picture: DecodedPicture? = null
         set(value) {
@@ -114,6 +121,7 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
     init {
         addView(surface)
         addView(heldFrame)
+        addView(subtitles)
     }
 
     fun holdFrame() {
@@ -162,8 +170,10 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
         val exactHeight = MeasureSpec.makeMeasureSpec(surfaceHeight, MeasureSpec.EXACTLY)
         surface.measure(exactWidth, exactHeight)
         heldFrame.measure(exactWidth, exactHeight)
+        subtitles.measure(exactWidth, exactHeight)
         // A SurfaceView ignores its parent's bounds; its own clip holds from API 33.
         surface.clipBounds = Rect(0, 0, width, height)
+        subtitles.clipBounds = Rect(0, 0, width, height)
     }
 }
 

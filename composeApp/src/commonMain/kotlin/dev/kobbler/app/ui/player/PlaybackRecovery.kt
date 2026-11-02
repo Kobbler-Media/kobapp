@@ -474,8 +474,8 @@ private suspend fun GlobalPlayerState.reopenVod(
     // from zero has nothing to seek into.
     val rebaseTo = resumeRequestSeconds(resumeSec)
     val session = when (type) {
-        "movie" -> api.getMovieStreamSession(id, rebaseTo)
-        else -> api.getEpisodeStreamSession(id, rebaseTo)
+        "movie" -> api.getMovieStreamSession(id, rebaseTo, rememberedAudioTitle(playbackTitleKey))
+        else -> api.getEpisodeStreamSession(id, rebaseTo, rememberedAudioTitle(playbackTitleKey))
     } ?: return false
     if (mediaId != id) {
         teardownScope.launch { api.closeSession(session.sessionId) }

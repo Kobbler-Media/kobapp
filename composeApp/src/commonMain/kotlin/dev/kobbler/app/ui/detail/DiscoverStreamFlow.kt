@@ -22,6 +22,7 @@ import dev.kobbler.app.ui.player.InstantStart
 import dev.kobbler.app.ui.player.resumeRequestSeconds
 import dev.kobbler.app.ui.player.resumeSeekSeconds
 import dev.kobbler.app.ui.player.WantAction
+import dev.kobbler.app.ui.player.rememberedAudioTitle
 import dev.kobbler.app.ui.player.applyWarmReady
 import dev.kobbler.app.ui.player.awaitDebridCache
 import dev.kobbler.kobplayer.Player
@@ -166,6 +167,7 @@ internal class DiscoverStreams(
             startTime = resumeRequestSeconds(resumeSec),
             autoCreate = detail(),
             autoCreateEpisode = episode,
+            audioTitle = detail().rememberedAudioTitle(episode),
         )
 
     private suspend fun play(session: KobblerApi.StreamSession, episode: DiscoverEpisodeRef?, resumeSec: Int) {

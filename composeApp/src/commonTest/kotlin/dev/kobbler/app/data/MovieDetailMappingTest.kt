@@ -61,6 +61,12 @@ class MovieDetailMappingTest {
     }
 
     @Test
+    fun showsCarryTheirGenres() {
+        val show = ShowDetailDto(id = "s1", title = "Ted Lasso", genres = listOf("Comedy", "Drama")).toTvShow(base)
+        assertEquals(listOf("Comedy", "Drama"), show.genres)
+    }
+
+    @Test
     fun wantStatusReachesTheModel() {
         assertTrue(dto(wantStatus = "wanted").toMovie(base).isWanted)
         assertFalse(dto(wantStatus = "").toMovie(base).isWanted)

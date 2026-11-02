@@ -4,7 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -71,12 +71,16 @@ class TvFocusState {
 @Composable
 fun rememberTvFocusState(): TvFocusState = remember { TvFocusState() }
 
+fun Modifier.tvClickable(state: TvFocusState, onClick: () -> Unit): Modifier = tvClickable(state, null, onClick)
+
+/** [onLongClick] answers a touch long-press and an OK button held down on a remote alike. */
 fun Modifier.tvClickable(
     state: TvFocusState,
+    onLongClick: (() -> Unit)?,
     onClick: () -> Unit,
 ): Modifier = this
     .onFocusChanged { state.isFocused = it.isFocused }
-    .clickable(onClick = onClick)
+    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
 /**
  * Decoration driven by [state] rather than by a focus target below it, for elements whose

@@ -361,6 +361,7 @@ data class CreateSessionRequest(
     @SerialName("force_transcode") val forceTranscode: Boolean = false,
     @SerialName("max_bitrate_kbps") val maxBitrateKbps: Int? = null,
     @SerialName("preferred_audio_language") val preferredAudioLanguage: String? = null,
+    @SerialName("preferred_audio_title") val preferredAudioTitle: String? = null,
     @SerialName("preferred_subtitle_language") val preferredSubtitleLanguage: String? = null,
     @SerialName("subtitles_enabled") val subtitlesEnabled: Boolean? = null,
     /**
@@ -415,6 +416,7 @@ data class SessionResponse(
     /** Source video width — used for aspect-ratio bucket lookup. Null when unprobed. */
     @SerialName("video_width") val videoWidth: Int? = null,
     @SerialName("video_height") val videoHeight: Int? = null,
+    val picture: PictureArea? = null,
 )
 
 /**
@@ -1617,9 +1619,14 @@ data class PlaybackSubtitleTrackDto(
     val url: String? = null,
     val format: String? = null,
     @SerialName("is_default") val isDefault: Boolean = false,
+    @SerialName("is_forced") val isForced: Boolean = false,
+    @SerialName("is_hearing_impaired") val isHearingImpaired: Boolean = false,
 )
 
 // -- Discover DTOs --
+
+@Serializable
+internal data class CreateDiscoverSeasonWant(@SerialName("show_id") val showId: String)
 
 @Serializable
 data class DiscoverItemDto(
@@ -1862,6 +1869,7 @@ internal fun ShowDetailDto.toTvShow(base: String): TvShow {
         kidsOverride = kidsOverride,
         kidsAllowed = kidsAllowed,
         rating = rating?.toFloat(),
+        genres = genres.orEmpty(),
         synopsis = description,
         cast = cast.map { c -> CastMember(name = c.personName, character = c.characterName, imageUrl = resolveUrlOrNull(base, c.personImageUrl), personId = c.personId) },
         seasons = seasons,
@@ -2516,6 +2524,13 @@ class KobblerApi(
         put("/api/v1/admin/tv/episodes/$episodeId/watch-state", watchStateBody(watched))
         DataCache.invalidateWatchProgress()
         DataCache.invalidate("tvshows", "sports")
+    }
+
+    /** Every episode of the show before this one, specials aside. */
+    suspend fun markEarlierEpisodesWatched(episodeId: String) {
+        put("/api/v1/admin/tv/episodes/$episodeId/watch-state/earlier", """{"watched":true}""")
+        DataCache.invalidateWatchProgress()
+        invalidateTvShows()
     }
 
     suspend fun setShowWatched(showId: String, watched: Boolean) {
@@ -3912,14 +3927,26 @@ class KobblerApi(
         }
     }
 
-    /** Create a movie from discover data and mark it wanted. Returns the kobbler ID. */
     /** Want one episode of a show the library may not have yet; the server creates what is missing. */
     suspend fun wantDiscoverEpisode(detail: DiscoverDetail, episode: DiscoverEpisodeRef) {
-        val body = buildJsonObject {
+        val body = discoverShowSpec(detail, episode.season) { put("episode_number", episode.episode) }
+        post("/api/v1/admin/discover/want-episode", body.toString())
+        invalidateTvShows()
+    }
+
+    /** The show's library id: wanting the season added the show. */
+    suspend fun wantDiscoverSeason(detail: DiscoverDetail, season: Int): String {
+        val resp = decode<CreateDiscoverSeasonWant>(post("/api/v1/admin/discover/want-season", discoverShowSpec(detail, season).toString()))
+        invalidateTvShows()
+        return resp.showId
+    }
+
+    private fun discoverShowSpec(detail: DiscoverDetail, season: Int, extra: JsonObjectBuilder.() -> Unit = {}) =
+        buildJsonObject {
             put("provider", detail.provider)
             put("provider_id", detail.providerId)
-            put("season_number", episode.season)
-            put("episode_number", episode.episode)
+            put("season_number", season)
+            extra()
             put("title", detail.title)
             detail.year?.let { put("year", it) }
             if (detail.identifiers.isNotEmpty()) {
@@ -3935,10 +3962,8 @@ class KobblerApi(
             detail.runtime?.let { put("runtime", it) }
             detail.network?.let { put("network", it) }
         }
-        post("/api/v1/admin/discover/want-episode", body.toString())
-        invalidateTvShows()
-    }
 
+    /** Create a movie from discover data and mark it wanted. Returns the kobbler ID. */
     suspend fun wantMovie(detail: DiscoverDetail): String {
         val body = buildJsonObject {
             put("title", detail.title)
@@ -4108,8 +4133,9 @@ class KobblerApi(
         estimatedDuration: Int? = null,
         autoCreate: DiscoverDetail? = null,
         autoCreateEpisode: DiscoverEpisodeRef? = null,
+        audioTitle: String? = null,
     ): StreamResolveResult {
-        val target = StreamTarget(mediaType, mediaId, autoCreate, autoCreateEpisode)
+        val target = StreamTarget(mediaType, mediaId, autoCreate, autoCreateEpisode, audioTitle)
         val body = buildJsonObject {
             put("debrid_provider_id", option.debridProviderId)
             option.infoHash?.let { put("info_hash", it) }
@@ -4138,7 +4164,7 @@ class KobblerApi(
         put("media_type", target.mediaType)
         target.mediaId?.let { put("media_id", it) }
         startTime?.let { put("start_time", it) }
-        TrackPrefs.current().putInto(this)
+        TrackPrefs.current(target.audioTitle).putInto(this)
         put("capabilities", capabilitiesJson())
         target.discover?.let { ac ->
             putJsonObject("auto_create") {
@@ -4274,6 +4300,7 @@ class KobblerApi(
         /** Source video dimensions — used to bucket the aspect-ratio preference. */
         val videoWidth: Int? = null,
         val videoHeight: Int? = null,
+        val picture: PictureArea? = null,
         /**
          * The library file behind this session, when there is one. The server does not
          * return it, but the caller looked it up to create the session — and it is what
@@ -4296,14 +4323,14 @@ class KobblerApi(
      * between the tap and the first byte to re-derive a choice the server owns anyway.
      * A media with no available file comes back 404, which is the null.
      */
-    suspend fun getMovieStreamSession(movieId: String, startTimeSec: Int? = null): StreamSession? =
+    suspend fun getMovieStreamSession(movieId: String, startTimeSec: Int? = null, audioTitle: String? = null): StreamSession? =
         offline?.playbackSession("movie", movieId) { createDownloadSession("movie", movieId) }
-            ?: createDirectSession("movie", movieId, startTimeSec)
+            ?: createDirectSession("movie", movieId, startTimeSec, audioTitle)
 
     /** Get a streaming session for an episode. See [getMovieStreamSession]. */
-    suspend fun getEpisodeStreamSession(episodeId: String, startTimeSec: Int? = null): StreamSession? =
+    suspend fun getEpisodeStreamSession(episodeId: String, startTimeSec: Int? = null, audioTitle: String? = null): StreamSession? =
         offline?.playbackSession("episode", episodeId) { createDownloadSession("episode", episodeId) }
-            ?: createDirectSession("episode", episodeId, startTimeSec)
+            ?: createDirectSession("episode", episodeId, startTimeSec, audioTitle)
 
     /**
      * A session onto the title's own file, whatever the quality setting says: a download is
@@ -4334,6 +4361,10 @@ class KobblerApi(
     /** Decode the `segments` payload carried by a `skip_segments_ready` event. */
     fun decodeSkipSegments(element: kotlinx.serialization.json.JsonElement): List<SkipSegment> =
         json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(SkipSegment.serializer()), element)
+
+    /** Decode the `subtitles` payload carried by a debrid `probe_complete` event. */
+    fun decodeSubtitleTracks(element: kotlinx.serialization.json.JsonElement): List<PlaybackSubtitleTrackDto> =
+        json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(PlaybackSubtitleTrackDto.serializer()), element)
 
     /**
      * The server's live event stream, one connection shared by every collector; it closes
@@ -4414,6 +4445,7 @@ class KobblerApi(
         mediaType: String,
         mediaId: String,
         startTimeSec: Int? = null,
+        audioTitle: String? = null,
     ): StreamSession? {
         val qualityPref = UserSettings.getString(KEY_STREAMING_QUALITY) ?: "auto"
         val forceTranscode = qualityPref != "auto"
@@ -4423,7 +4455,7 @@ class KobblerApi(
             "480" -> 2000
             else -> null
         }
-        val prefs = TrackPrefs.current()
+        val prefs = TrackPrefs.current(audioTitle)
         val reqBody = json.encodeToString(CreateSessionRequest.serializer(), CreateSessionRequest(
             mediaType = mediaType,
             mediaId = mediaId,
@@ -4431,6 +4463,7 @@ class KobblerApi(
             forceTranscode = forceTranscode,
             maxBitrateKbps = maxBitrate,
             preferredAudioLanguage = prefs.audioLanguage,
+            preferredAudioTitle = prefs.audioTitle,
             preferredSubtitleLanguage = prefs.subtitleLanguage,
             subtitlesEnabled = prefs.subtitlesEnabled,
             startTime = startTimeSec,
@@ -4447,12 +4480,13 @@ class KobblerApi(
     }
 
     /** Asks the server for a copy of the title's file at [quality], or the one it already has. Null when it has no file. */
-    internal suspend fun createOfflineExport(mediaType: String, mediaId: String, quality: String): OfflineExport? {
+    internal suspend fun createOfflineExport(mediaType: String, mediaId: String, quality: String, audioTitle: String? = null): OfflineExport? {
         val body = buildJsonObject {
             put("media_type", mediaType)
             put("media_id", mediaId)
             put("quality", quality)
             put("preferred_audio_language", TrackPrefs.current().audioLanguage?.let { JsonPrimitive(it) } ?: JsonNull)
+            audioTitle?.let { put("preferred_audio_title", it) }
         }
         val text = try {
             post("/api/v1/admin/offline/exports", body.toString())
@@ -4505,6 +4539,7 @@ class KobblerApi(
             serverStartSeconds = rebaseSeconds(),
             videoWidth = videoWidth,
             videoHeight = videoHeight,
+            picture = picture,
             fileId = fileId,
             method = method,
         )

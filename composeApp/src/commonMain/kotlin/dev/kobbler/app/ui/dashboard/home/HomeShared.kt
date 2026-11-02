@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard.home
 
+import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -105,12 +106,12 @@ fun becauseLabel(because: List<String>): String = when (because.size) {
 fun shortBecauseLabel(because: List<String>): String = because.firstOrNull()?.let { "Like $it" }.orEmpty()
 
 /** The two ways to say no to a pick: to the title itself, or to the watch it came from. */
-fun forYouRefusals(entry: ForYouItem, api: KobblerApi, scope: CoroutineScope): List<Pair<String, () -> Unit>> = buildList {
+fun forYouRefusals(entry: ForYouItem, api: KobblerApi, scope: CoroutineScope): List<CardAction> = buildList {
     if (entry.item.provider == "tmdb") {
-        add("Not interested" to { scope.launch { runCatching { api.dismissRecommendation(entry.item) } } })
+        add(CardAction("Not interested", { scope.launch { runCatching { api.dismissRecommendation(entry.item) } } }))
     }
     entry.seeds.firstOrNull()?.let { seed ->
-        add("Not based on ${seed.title}" to { scope.launch { runCatching { api.excludeFromRecommendations(listOf(seed)) } } })
+        add(CardAction("Not based on ${seed.title}", { scope.launch { runCatching { api.excludeFromRecommendations(listOf(seed)) } } }))
     }
 }
 

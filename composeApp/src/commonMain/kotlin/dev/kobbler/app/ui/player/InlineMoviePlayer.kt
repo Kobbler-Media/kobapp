@@ -99,7 +99,7 @@ fun InlineMoviePlayer(
         if (movie.filePath != null && supportsVideoPlayback) {
             try {
                 PlaybackTrace.begin("prewarm movie ${movie.title}")
-                val start = startPlayback(api, "movie", movie.id, movie.resumeSeconds)
+                val start = startPlayback(api, "movie", movie.id, movie.resumeSeconds, audioTitle = rememberedAudioTitle("movie", movie.id, null))
                 val session = start?.session
                 if (start != null && session != null) {
                     prefetchedSession = session
@@ -328,7 +328,7 @@ fun InlineMoviePlayer(
                                 setOfNotNull(prefetchedSession?.sessionId, held).forEach { spent ->
                                     gps.teardownScope.launch { api.closeSession(spent) }
                                 }
-                                val start = startPlayback(api, "movie", movie.id, shown.resumeSeconds, fromStart)
+                                val start = startPlayback(api, "movie", movie.id, shown.resumeSeconds, fromStart, rememberedAudioTitle("movie", movie.id, null))
                                     ?: throw IllegalStateException("Server returned no stream URL for movie ${movie.id}")
                                 prefetchedSession = start.session
                                 gps.load(
@@ -405,7 +405,10 @@ private suspend fun tryPlayWithFallback(
     walk = DebridPlayback(
         api = api, gps = gps, search = search,
         resolve = { opt, resume ->
-            api.streamResolve(option = opt, mediaType = "movie", mediaId = movie.id, startTime = resumeRequestSeconds(resume))
+            api.streamResolve(
+                option = opt, mediaType = "movie", mediaId = movie.id, startTime = resumeRequestSeconds(resume),
+                audioTitle = rememberedAudioTitle("movie", movie.id, null),
+            )
         },
         play = { _, session, resume -> playDebridSession(gps, player, api, session, movie, resume) },
         onCaching = { onCaching(walk, it) },

@@ -120,8 +120,8 @@ class DiscoverStreamTest {
         return page
     }
 
+    // Season one opens selected; on TV, OK on its tab would open its menu instead.
     private fun ComposeUiTest.expandFirstSeason() {
-        onNodeWithText("Season 1").performClick()
         waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("The Mayor").fetchSemanticsNodes().isNotEmpty() }
     }
 
