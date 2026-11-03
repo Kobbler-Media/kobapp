@@ -26,6 +26,10 @@ actual val deviceLabel: String
 
 actual val clientKind: String = "ios"
 
+actual fun hostedServer(): dev.kobbler.app.data.HostedServer? = null
+
+actual fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities? = null
+
 @Composable
 actual fun BackHandler(enabled: Boolean, onBack: () -> Unit) {
     // iOS handles back via swipe gesture natively

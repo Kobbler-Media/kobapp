@@ -107,6 +107,8 @@ dependencies {
     // installer is a direct dependency the app can initialise.
     implementation(libs.androidx.profileinstaller)
     debugImplementation(libs.ktor.client.mock)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
     baselineProfile(project(":baselineprofile"))
 }
 

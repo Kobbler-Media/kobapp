@@ -1,5 +1,6 @@
 package dev.kobbler.app.data
 
+import dev.kobbler.app.platform.browserCapabilities
 import dev.kobbler.app.platform.connectRoundTripMs
 import dev.kobbler.kobplayer.deviceDecodesInterlaced
 import dev.kobbler.app.platform.AppVersion
@@ -1660,6 +1661,9 @@ data class DiscoverResponseDto(
 )
 
 @Serializable
+internal data class WatchNextResponseDto(@SerialName("watch_next") val watchNext: List<InProgressItem> = emptyList())
+
+@Serializable
 data class StremioContinueExtrasDto(
     val subtitle: String? = null,
     val season: Int? = null,
@@ -1792,7 +1796,7 @@ private fun resolveUrl(base: String, url: String?): String {
     return "$base$url"
 }
 
-private fun resolveUrlOrNull(base: String, url: String?): String? {
+internal fun resolveUrlOrNull(base: String, url: String?): String? {
     if (url.isNullOrEmpty()) return null
     if (url.startsWith("http://") || url.startsWith("https://")) return url
     return "$base$url"
@@ -3465,7 +3469,8 @@ class KobblerApi(
         put("priority", priority)
     }.toString()
 
-    private fun capabilities() = VLC_CAPABILITIES.copy(supportsInterlaced = decodesInterlaced())
+    private fun capabilities() =
+        browserCapabilities() ?: VLC_CAPABILITIES.copy(supportsInterlaced = decodesInterlaced())
 
     private fun capabilitiesJson() = json.encodeToJsonElement(ClientCapabilities.serializer(), capabilities())
 
@@ -3857,6 +3862,9 @@ class KobblerApi(
             )
         }
     }
+
+    suspend fun getWatchNext(): List<InProgressItem> =
+        decodeMap<WatchNextResponseDto, List<InProgressItem>>(get("/api/v1/admin/discover")) { it.watchNext }
 
     suspend fun getDiscoverDetail(mediaType: String, provider: String, providerId: String): DiscoverDetail {
         val respText = get("/api/v1/admin/discover/$mediaType/$provider/$providerId")
@@ -4313,6 +4321,7 @@ class KobblerApi(
          * local file has nothing to prepare, so a second of black is already suspicious.
          */
         val method: String? = null,
+        val durationSeconds: Double = 0.0,
     )
 
     /**
@@ -4426,6 +4435,22 @@ class KobblerApi(
         if (resp.status == HttpStatusCode.NotFound) return SessionStatus.Missing
         if (!resp.status.isSuccess()) return SessionStatus.Unknown
         return quiet(SessionStatus.Unknown) { decode<SessionStatusDto>(resp.bodyAsText()) }
+    }
+
+    @Serializable
+    data class SeekResult(
+        @SerialName("seek_generation") val generation: Int,
+        @SerialName("start_time") val startTimeSeconds: Double,
+    )
+
+    /** Restart a transcode at [seconds] of the title; the server rebuilds its playlist from there. */
+    suspend fun seekSession(sessionId: String, seconds: Double): SeekResult? = quiet(null) {
+        decode<SeekResult>(
+            post(
+                "/api/v1/admin/playback/sessions/$sessionId/seek",
+                buildJsonObject { put("time_seconds", seconds) }.toString(),
+            ),
+        )
     }
 
     /** Close a streaming session, cleaning up server-side resources. */
@@ -4542,6 +4567,7 @@ class KobblerApi(
             picture = picture,
             fileId = fileId,
             method = method,
+            durationSeconds = durationSeconds,
         )
     }
 

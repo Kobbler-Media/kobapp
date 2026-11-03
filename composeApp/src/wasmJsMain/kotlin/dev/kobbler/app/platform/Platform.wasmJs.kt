@@ -9,7 +9,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
 actual fun defaultFormFactor(): FormFactor = FormFactor.Desktop
-actual val supportsVideoPlayback: Boolean = false
+actual val supportsVideoPlayback: Boolean = true
 
 actual val deviceRegion: String?
     get() = kotlinx.browser.window.navigator.language.substringAfter('-', "").uppercase().takeIf { it.length == 2 }
@@ -83,3 +83,44 @@ actual fun imageCacheDir(context: PlatformContext): Path? = null
 actual fun ImageLoader.Builder.applyPlatformImageOptions(): ImageLoader.Builder = this
 
 actual suspend fun connectRoundTripMs(host: String, port: Int): Long? = null
+
+private const val HOSTED_PATH = "/player/"
+
+actual fun hostedServer(): dev.kobbler.app.data.HostedServer? {
+    val location = kotlinx.browser.window.location
+    val at = location.pathname.indexOf(HOSTED_PATH)
+    if (at < 0) return null
+    return dev.kobbler.app.data.HostedServer(location.origin + location.pathname.substring(0, at)) { apiUrl ->
+        val back = location.pathname + location.search + location.hash
+        location.assign("$apiUrl/?next=${encodeURIComponent(back)}")
+    }
+}
+
+private fun encodeURIComponent(value: String): String = js("encodeURIComponent(value)")
+
+private val VideoProbes = listOf(
+    "h264" to "video/mp4; codecs=\"avc1.42E01E\"",
+    "hevc" to "video/mp4; codecs=\"hvc1.1.6.L93.B0\"",
+    "vp9" to "video/mp4; codecs=\"vp09.00.10.08\"",
+    "av1" to "video/mp4; codecs=\"av01.0.05M.08\"",
+)
+
+private val AudioProbes = listOf(
+    "aac" to "audio/mp4; codecs=\"mp4a.40.2\"",
+    "ac3" to "audio/mp4; codecs=\"ac-3\"",
+    "eac3" to "audio/mp4; codecs=\"ec-3\"",
+    "opus" to "audio/mp4; codecs=\"opus\"",
+    "flac" to "audio/mp4; codecs=\"flac\"",
+    "mp3" to "audio/mpeg",
+)
+
+// Everything not direct-playable arrives as fMP4 over HLS, so mp4 is the only container.
+actual fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities? =
+    dev.kobbler.app.data.ClientCapabilities(
+        videoCodecs = (listOf("h264") + VideoProbes.filter { mseSupports(it.second) }.map { it.first }).distinct(),
+        audioCodecs = (listOf("aac") + AudioProbes.filter { mseSupports(it.second) }.map { it.first }).distinct(),
+        containers = listOf("mp4"),
+    )
+
+private fun mseSupports(mime: String): Boolean =
+    js("typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mime)")

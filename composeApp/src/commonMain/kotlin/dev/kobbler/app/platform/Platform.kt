@@ -17,6 +17,11 @@ expect val deviceLabel: String
 /** Stable client family for this install: android, androidtv, desktop, ios, web. */
 expect val clientKind: String
 
+expect fun hostedServer(): dev.kobbler.app.data.HostedServer?
+
+/** What the platform's own media stack decodes, or null where VLC plays everything. */
+expect fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities?
+
 expect val deviceRegion: String?
 
 @Composable

@@ -971,6 +971,8 @@ internal suspend fun switchAudioAndResume(
             api.playerUrl(newSession.url),
             networkCacheMs = api.networkCacheMsFor(newSession.url),
             startTimeSec = (seekMs / 1000).toInt().takeIf { it > 0 },
+            durationHintMs = durationHintMs(newSession, state.timeline),
+            reopenAt = transcodeReopen(api, newSession, state.timeline),
         ),
     )
     // Through the player's own resume path, so the switch is checked and repaired like

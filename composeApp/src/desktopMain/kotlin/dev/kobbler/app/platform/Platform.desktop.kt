@@ -33,6 +33,10 @@ actual val deviceLabel: String get() = resolvedDeviceLabel.value
 
 actual val clientKind: String = "desktop"
 
+actual fun hostedServer(): dev.kobbler.app.data.HostedServer? = null
+
+actual fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities? = null
+
 @Composable
 actual fun BackHandler(enabled: Boolean, onBack: () -> Unit) {
     // Desktop handles back via keyboard (Escape key) — no system back button

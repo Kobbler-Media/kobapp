@@ -16,7 +16,7 @@ fun readVersionProps(): Map<String, String> =
 
 // Desktop has no manifest to carry the version the way Android's does, so it ships as a
 // resource the app reads at runtime.
-val desktopVersionResource by tasks.registering {
+val desktopVersionResource = tasks.register("desktopVersionResource") {
     val props = file("${rootDir}/version.properties")
     val out = layout.buildDirectory.dir("generated/desktopVersion")
     inputs.file(props)
@@ -24,7 +24,7 @@ val desktopVersionResource by tasks.registering {
     doLast { props.copyTo(out.get().file("kobapp-version.properties").asFile, overwrite = true) }
 }
 
-val pinServiceSource by tasks.registering {
+val pinServiceSource = tasks.register("pinServiceSource") {
     val url = providers.gradleProperty("pinServiceUrl").orElse("https://pin.biboop.com")
     val out = layout.buildDirectory.dir("generated/pinService")
     inputs.property("pinServiceUrl", url)
@@ -104,12 +104,12 @@ kotlin {
             kotlin.srcDir(pinServiceSource)
         }
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.materialIconsExtended)
-            implementation(compose.ui)
-            implementation(compose.components.resources)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.material.icons.extended)
+            implementation(libs.compose.ui)
+            implementation(libs.compose.components.resources)
             implementation(libs.coil.compose)
             implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coil.network.ktor)
@@ -132,7 +132,7 @@ kotlin {
             implementation(libs.appcompat)
         }
 
-        val desktopMain by getting {
+        getByName("desktopMain") {
             resources.srcDir(desktopVersionResource)
             dependencies {
                 implementation(compose.desktop.currentOs)
@@ -156,11 +156,10 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
-            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
-            implementation(compose.uiTest)
+            implementation(libs.compose.ui.test)
         }
 
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.ktor.client.mock)
@@ -170,7 +169,7 @@ kotlin {
 }
 
 val appResources = layout.buildDirectory.dir("appResources")
-val bundleLibvlc by tasks.registering(Sync::class) {
+val bundleLibvlc = tasks.register<Sync>("bundleLibvlc") {
     from(project(":kobplayer").tasks.named("unpackLibvlc"))
     into(appResources.map { it.dir("linux-x64/libvlc") })
 }

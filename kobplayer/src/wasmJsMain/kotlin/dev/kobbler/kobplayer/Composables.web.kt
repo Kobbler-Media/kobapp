@@ -6,6 +6,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,39 +42,34 @@ actual fun VideoSurface(
     modifier: Modifier,
     overlay: @Composable (Player) -> Unit,
 ) {
-    val web = player as WebPlayer
+    val video = (player as WebPlayer).videoElement
 
-    // The video element needs to be in the DOM behind the Compose canvas.
-    // For now, we append it to the document body and position it behind the canvas.
-    // The overlay renders as normal Compose content on top.
-    DisposableEffect(web.videoElement) {
-        val container = kotlinx.browser.document.getElementById("ComposeTarget")
-            ?: kotlinx.browser.document.body!!
-        // Insert video before the canvas so it renders behind it
-        val canvas = container.querySelector("canvas")
-        if (canvas != null) {
-            container.insertBefore(web.videoElement, canvas)
-        } else {
-            container.appendChild(web.videoElement)
+    DisposableEffect(video) {
+        video.style.apply {
+            position = "fixed"
+            zIndex = "0"
+            backgroundColor = "black"
         }
-
-        // Style the video element to fill the container
-        web.videoElement.style.apply {
-            position = "absolute"
-            top = "0"
-            left = "0"
-            width = "100%"
-            height = "100%"
-            zIndex = "-1"
-        }
-
-        onDispose {
-            web.videoElement.parentElement?.removeChild(web.videoElement)
-        }
+        kotlinx.browser.document.body?.appendChild(video)
+        onDispose { video.parentElement?.removeChild(video) }
     }
 
-    // The overlay composable renders on the Compose canvas layer (above the video)
-    Box(modifier) {
+    // The <video> sits under Compose's canvas, so the canvas is cleared to transparent
+    // over it and the element is kept on the same rectangle.
+    Box(
+        modifier
+            .onGloballyPositioned { coords ->
+                val bounds = coords.boundsInWindow()
+                val scale = kotlinx.browser.window.devicePixelRatio
+                video.style.apply {
+                    left = "${bounds.left / scale}px"
+                    top = "${bounds.top / scale}px"
+                    width = "${bounds.width / scale}px"
+                    height = "${bounds.height / scale}px"
+                }
+            }
+            .drawBehind { drawRect(Color.Transparent, blendMode = BlendMode.Clear) },
+    ) {
         overlay(player)
     }
 }

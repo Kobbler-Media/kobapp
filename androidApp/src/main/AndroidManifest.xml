@@ -79,6 +79,21 @@
             </intent-filter>
         </activity>
 
+        <!-- The TV launcher's Watch Next row opens its programs through this. -->
+        <activity
+            android:name="dev.kobbler.app.tv.WatchNextLinkActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="kobapp" android:host="${applicationId}" android:path="/watch-next" />
+            </intent-filter>
+        </activity>
+
         <activity-alias
             android:name="dev.kobbler.app.android.TvActivity"
             android:targetActivity="dev.kobbler.app.MainActivity"

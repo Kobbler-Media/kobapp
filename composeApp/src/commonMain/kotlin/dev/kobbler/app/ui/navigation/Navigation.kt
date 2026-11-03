@@ -302,6 +302,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     // picking one up again on launch is the same handover as starting it.
     val cast = remember { dev.kobbler.app.platform.castManager() }
     if (api != null) dev.kobbler.app.ui.player.CastHandoff(cast, gps, api, player)
+    dev.kobbler.app.watchnext.HomeWatchNextSession(auth, api) { navigateContinueItem(nav, gps, it) }
 
     val isNonVideoPlayerScreen = nav.current is Destination.AudiobookPlayer || nav.current is Destination.BookReader || nav.current is Destination.ComicViewer
 

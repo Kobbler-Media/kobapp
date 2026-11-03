@@ -13,14 +13,15 @@
             overflow: hidden;
             background-color: #0F0F0F;
         }
-        #ComposeTarget {
-            width: 100%;
-            height: 100%;
+        #compose {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
         }
     </style>
 </head>
 <body>
-<canvas id="ComposeTarget"></canvas>
+<div id="compose"></div>
 <script src="composeApp.js"></script>
 </body>
 </html>

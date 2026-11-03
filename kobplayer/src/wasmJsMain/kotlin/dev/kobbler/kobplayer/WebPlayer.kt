@@ -107,6 +107,20 @@ internal class WebPlayer(
     /** Where the stream was asked to open, held until the element can be seeked. */
     private var pendingStartSec: Int? = null
 
+    private var source: MediaSource.Url? = null
+    private var hls: Hls? = null
+
+    /** Where the open stream begins on the original source's clock, after a [Reopened]. */
+    private var offsetMs = 0L
+
+    private val elementMs: Long get() = (videoElement.currentTime * 1000).toLong()
+
+    private fun reportDuration() {
+        val dur = videoElement.duration
+        val element = if (!dur.isNaN() && dur.isFinite()) (dur * 1000).toLong() + offsetMs else 0L
+        _durationMs.value = maxOf(element, source?.durationHintMs ?: 0L)
+    }
+
     init {
         // Wire up HTML5 video events to our state machine
         videoElement.addEventListener("loadstart") { _state.value = PlayerState.LOADING; _isBuffering.value = true }
@@ -120,7 +134,7 @@ internal class WebPlayer(
             _state.value = PlayerState.ERROR
         }
         videoElement.addEventListener("timeupdate") {
-            val time = (videoElement.currentTime * 1000).toLong()
+            val time = elementMs + offsetMs
             if (time != _currentMs.value) {
                 val resolved = stateAfterClockAdvance(_state.value)
                 if (resolved != _state.value) {
@@ -131,20 +145,12 @@ internal class WebPlayer(
             _currentMs.value = time
             _positionReported.value = true
         }
-        videoElement.addEventListener("durationchange") {
-            val dur = videoElement.duration
-            if (!dur.isNaN() && dur.isFinite()) {
-                _durationMs.value = (dur * 1000).toLong()
-            }
-        }
+        videoElement.addEventListener("durationchange") { reportDuration() }
         videoElement.addEventListener("progress") {
             updateBufferPercent()
         }
         videoElement.addEventListener("loadedmetadata") {
-            val dur = videoElement.duration
-            if (!dur.isNaN() && dur.isFinite()) {
-                _durationMs.value = (dur * 1000).toLong()
-            }
+            reportDuration()
             // The element has no open-time equivalent of VLC's `start-time`, and a seek
             // before the metadata arrives is dropped. This is the first moment one lands,
             // and it is still ahead of the first frame the viewer sees.
@@ -169,14 +175,64 @@ internal class WebPlayer(
                 _bufferPercent.value = 0f
                 _currentMs.value = 0L
                 _positionReported.value = false
-                _durationMs.value = 0L
                 _error.value = null
 
+                this.source = source
+                offsetMs = 0L
                 pendingStartSec = source.startTimeSec
-                videoElement.src = source.url
-                videoElement.load()
+                _durationMs.value = source.durationHintMs ?: 0L
+                open(source.url)
             }
         }
+    }
+
+    private fun open(url: String) {
+        hls?.destroy()
+        hls = null
+        if (isPlaylist(url) && videoElement.canPlayType(HLS_MIME).toString().isEmpty() && Hls.isSupported()) {
+            hls = Hls().apply {
+                on(HLS_ERROR) { _, data -> onHlsError(data) }
+                attachMedia(videoElement)
+                loadSource(url)
+            }
+        } else {
+            videoElement.src = url
+            videoElement.load()
+        }
+    }
+
+    private fun onHlsError(data: HlsErrorData) {
+        if (!data.fatal) return
+        when (data.type) {
+            HLS_NETWORK_ERROR -> hls?.startLoad()
+            HLS_MEDIA_ERROR -> hls?.recoverMediaError()
+            else -> {
+                _error.value = RuntimeException("HLS ${data.type}: ${data.details}")
+                _state.value = PlayerState.ERROR
+            }
+        }
+    }
+
+    private fun reopen(targetMs: Long) {
+        val reopenAt = source?.reopenAt ?: return
+        val resume = !videoElement.paused
+        _isBuffering.value = true
+        _currentMs.value = targetMs
+        scope.launch {
+            val reopened = runCatching { reopenAt(targetMs) }.getOrNull() ?: run {
+                _isBuffering.value = false
+                return@launch
+            }
+            offsetMs = reopened.startMs
+            pendingStartSec = null
+            open(reopened.url)
+            if (resume) videoElement.play()
+        }
+    }
+
+    private fun producedEndMs(): Long {
+        val seekable = videoElement.seekable
+        return if (seekable.length > 0) (seekable.end(seekable.length - 1) * 1000).toLong() else 0L
     }
 
     override fun play() { videoElement.play() }
@@ -188,8 +244,14 @@ internal class WebPlayer(
 
     override fun seekTo(ms: Long) {
         val clamped = clampSeekTarget(ms, _durationMs.value)
-        videoElement.currentTime = clamped / 1000.0
-        _currentMs.value = clamped
+        val canReopen = source?.reopenAt != null && (hls != null || isPlaylist(videoElement.src))
+        when (val plan = planSeek(clamped, offsetMs, producedEndMs(), canReopen)) {
+            is SeekPlan.Local -> {
+                videoElement.currentTime = plan.elementMs / 1000.0
+                _currentMs.value = clamped
+            }
+            is SeekPlan.Reopen -> reopen(plan.targetMs)
+        }
     }
 
     override fun skip(deltaMs: Long) {
@@ -249,6 +311,8 @@ internal class WebPlayer(
     override fun release() {
         if (released) return
         released = true
+        hls?.destroy()
+        hls = null
         videoElement.pause()
         videoElement.src = ""
         videoElement.load()
@@ -275,3 +339,10 @@ internal class WebPlayer(
         // For now, consumers can access the raw <video> element via player.native.
     }
 }
+
+private const val HLS_MIME = "application/vnd.apple.mpegurl"
+private const val HLS_ERROR = "hlsError"
+private const val HLS_NETWORK_ERROR = "networkError"
+private const val HLS_MEDIA_ERROR = "mediaError"
+
+private fun isPlaylist(url: String): Boolean = url.substringBefore('?').endsWith(".m3u8")

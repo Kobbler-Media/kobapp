@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.onFocusedBoundsChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Star
@@ -40,7 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusTargetModifierNode
+import androidx.compose.ui.focus.Focusability
+import androidx.compose.ui.focus.getFocusedRect
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -229,9 +233,14 @@ class PageTopHold internal constructor(
 
     internal val holding: Boolean get() = enabled && focused && fitsAtTop
 
+    internal var anchorNode: PageTopAnchorNode? = null
+
     @OptIn(ExperimentalFoundationApi::class)
     val spec: BringIntoViewSpec = object : BringIntoViewSpec {
         override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+            // Asked on every focus move inside the page, which is exactly when the focused
+            // control can change: measure it now rather than tracking its bounds.
+            anchorNode?.let { fitsAtTop = it.focusedFitsAtTop(scroll.offset) }
             if (holding) return 0f
             // Measure against the part of the viewport the bar does not cover. The delta
             // returned applies unchanged, since scrolling moves all of the content.
@@ -251,20 +260,45 @@ class PageTopHold internal constructor(
         }
     }
 
-    @OptIn(ExperimentalFoundationApi::class)
-    val anchor: Modifier = Modifier
-        .onFocusedBoundsChanged { coords ->
-            // Null arrives between the old target losing focus and the new one gaining
-            // it. Acting on it drops the pin for a frame, which is all a queued scroll
-            // needs. `focused` already says when focus has genuinely left.
-            if (coords != null && coords.isAttached) {
-                // Undo the current scroll to get where the focused control rests with the
-                // page at the top; the scrolling column starts at the root's origin.
-                fitsAtTop = coords.positionInRoot().y + coords.size.height + scroll.offset <=
-                    coords.findRootCoordinates().size.height
-            }
-        }
-        .onFocusChanged { focused = it.hasFocus }
+    val anchor: Modifier = Modifier then PageTopAnchorElement(this)
+
+    internal fun onAnchorFocus(hasFocus: Boolean) {
+        focused = hasFocus
+    }
+}
+
+private data class PageTopAnchorElement(val hold: PageTopHold) : ModifierNodeElement<PageTopAnchorNode>() {
+    override fun create() = PageTopAnchorNode(hold)
+    override fun update(node: PageTopAnchorNode) = node.retarget(hold)
+}
+
+/** A focus group over the action block that answers where its focused control would sit at the top. */
+internal class PageTopAnchorNode(private var hold: PageTopHold) : DelegatingNode() {
+    private val group = delegate(
+        FocusTargetModifierNode(Focusability.Never) { _, now -> hold.onAnchorFocus(now.hasFocus) },
+    )
+
+    fun retarget(next: PageTopHold) {
+        if (hold.anchorNode === this) hold.anchorNode = null
+        hold = next
+        if (isAttached) next.anchorNode = this
+    }
+
+    override fun onAttach() {
+        hold.anchorNode = this
+    }
+
+    override fun onDetach() {
+        if (hold.anchorNode === this) hold.anchorNode = null
+    }
+
+    fun focusedFitsAtTop(scrollOffset: Int): Boolean {
+        val focused = group.getFocusedRect() ?: return false
+        val coords = requireLayoutCoordinates()
+        // Undo the current scroll to get where the focused control rests with the page at
+        // the top; the scrolling column starts at the root's origin.
+        return coords.positionInRoot().y + focused.bottom + scrollOffset <= coords.findRootCoordinates().size.height
+    }
 }
 
 /**

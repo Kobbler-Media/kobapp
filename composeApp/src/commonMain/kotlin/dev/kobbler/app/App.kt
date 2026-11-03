@@ -32,6 +32,7 @@ import dev.kobbler.app.ui.auth.PinLoginScreen
 import dev.kobbler.app.ui.auth.ProfilePickerScreen
 import dev.kobbler.app.ui.components.RefreshWatchStateOnFocus
 import dev.kobbler.app.ui.navigation.AdaptiveScaffold
+import dev.kobbler.app.watchnext.HomeWatchNextProfileSync
 import io.ktor.client.*
 
 @Composable
@@ -54,6 +55,7 @@ fun App(
     }
 
     RefreshWatchStateOnFocus(LocalWindowInfo.current.isWindowFocused)
+    HomeWatchNextProfileSync(auth)
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {

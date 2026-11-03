@@ -8,13 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAddCheck
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.LibraryAdd
 import androidx.compose.material.icons.outlined.MoreHoriz
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
-import androidx.compose.material.icons.outlined.PlaylistAddCheck
-import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -192,7 +192,7 @@ internal fun WatchlistItem(
     // worse than a duller one.
     OverflowItem(
         key = "watchlist",
-        icon = if (inList) Icons.Outlined.PlaylistAddCheck else Icons.Outlined.PlaylistAdd,
+        icon = if (inList) Icons.AutoMirrored.Outlined.PlaylistAddCheck else Icons.AutoMirrored.Outlined.PlaylistAdd,
         label = if (inList) "Remove from your list" else "Add to your list",
         accent = accent,
         onClick = {

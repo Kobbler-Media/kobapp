@@ -45,6 +45,10 @@ actual val deviceLabel: String
 actual val clientKind: String
     get() = if (defaultFormFactor() == FormFactor.TV) "androidtv" else "android"
 
+actual fun hostedServer(): dev.kobbler.app.data.HostedServer? = null
+
+actual fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities? = null
+
 @Composable
 actual fun BackHandler(enabled: Boolean, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler(enabled = enabled, onBack = onBack)

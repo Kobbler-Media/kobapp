@@ -28,6 +28,7 @@ kotlin {
 
     jvm("desktop")
 
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
     wasmJs {
         browser()
         binaries.executable()
@@ -44,16 +45,16 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.ui)
-            implementation(compose.material3)
-            implementation(compose.materialIconsExtended)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.ui)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.material.icons.extended)
             implementation(libs.coil.compose)
             api(libs.kotlinx.coroutines.core)
         }
 
-        val desktopMain by getting {
+        getByName("desktopMain") {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.vlcj)
@@ -64,6 +65,10 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
+        }
+
+        wasmJsMain.dependencies {
+            implementation(npm("hls.js", libs.versions.hlsjs.get()))
         }
 
         androidMain.dependencies {
@@ -88,10 +93,10 @@ kotlin {
 
 // Desktop plays through the libvlc kobvlc builds for Linux. -Pkobvlc.linux=<kobvlc>/work/linux/pkg
 // tries a local kobvlc build instead of the published one.
-val libvlcLinux by configurations.creating { isCanBeConsumed = false }
+val libvlcLinux = configurations.create("libvlcLinux") { isCanBeConsumed = false }
 dependencies { libvlcLinux("${libs.libvlc.linux.get()}@tar.gz") }
 val libvlcDir = layout.buildDirectory.dir("libvlc")
-val unpackLibvlc by tasks.registering(Sync::class) {
+val unpackLibvlc = tasks.register<Sync>("unpackLibvlc") {
     onlyIf { org.jetbrains.kotlin.konan.target.HostManager.hostIsLinux }
     val local = providers.gradleProperty("kobvlc.linux")
     from(provider<Any> { local.orNull?.let(::file) ?: tarTree(libvlcLinux.singleFile) })

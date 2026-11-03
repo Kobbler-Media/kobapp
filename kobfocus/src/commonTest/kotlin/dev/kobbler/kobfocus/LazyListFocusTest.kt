@@ -16,7 +16,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -84,8 +84,7 @@ class LazyListFocusTest {
         setContent {
             FocusScopeHost(id = "page", store = FocusScopeStore(), restoreEnabled = !covered) {
                 scope = LocalFocusScope.current
-                val state = rememberLazyListState()
-                LaunchedEffect(Unit) { state.scrollToItem(80) }
+                val state = rememberLazyListState(initialFirstVisibleItemIndex = 80)
                 Box(Modifier.focusInert(covered)) {
                     LazyColumn(Modifier.size(100.dp).focusKey("page", entryEligible = false).focusable(), state = state) {
                         items((0 until 100).toList(), key = { it }) { row ->

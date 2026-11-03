@@ -36,6 +36,7 @@ import dev.kobbler.app.platform.Settings
 import dev.kobbler.app.offline.DownloadService
 import dev.kobbler.app.offline.NewEpisodesWorker
 import dev.kobbler.app.offline.Offline
+import dev.kobbler.app.tv.TvWatchNext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
         FileCache.init(this)
         requestNotificationPermission()
         keepDownloadsRunning()
+        TvWatchNext.install(this)
 
         // Provide context for Cast SDK (actual init happens lazily after server config is fetched)
         if (!isTv()) {

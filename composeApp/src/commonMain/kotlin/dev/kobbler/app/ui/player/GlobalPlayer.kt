@@ -545,6 +545,8 @@ class GlobalPlayerState {
                 subtitlesOff = intent.subtitlesOff,
                 startTimeSec = seekToSec.takeIf { it > RESUME_MIN_SECONDS },
                 live = type in LiveMediaTypes,
+                durationHintMs = session?.let { durationHintMs(it, timeline) },
+                reopenAt = session?.let { transcodeReopen(api, it, timeline) },
             ),
         )
         // Pause immediately — prefetch only, don't start playback.

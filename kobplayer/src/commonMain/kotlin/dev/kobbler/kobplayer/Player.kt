@@ -79,8 +79,18 @@ sealed class MediaSource {
         val startTimeSec: Int? = null,
         /** A channel rather than a title: it has no end, so a stop it was not asked for is a dropout. */
         val live: Boolean = false,
+        /** The title's length when the stream itself only lists what has been produced so far. */
+        val durationHintMs: Long? = null,
+        /**
+         * Reopens a transcode at a point it has not produced yet. Only a player that cannot
+         * seek there on its own calls it; VLC waits out the segments instead.
+         */
+        val reopenAt: (suspend (playerMs: Long) -> Reopened?)? = null,
     ) : MediaSource()
 }
+
+/** A reopened stream, and where on the original source's clock it begins. */
+data class Reopened(val url: String, val startMs: Long)
 
 data class PlayerConfig(
     val networkCacheMs: Int = 1500,

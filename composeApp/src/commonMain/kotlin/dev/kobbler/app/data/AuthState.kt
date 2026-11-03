@@ -24,6 +24,7 @@ import kotlin.random.Random
 import kotlin.time.Clock
 import dev.kobbler.app.platform.clientKind
 import dev.kobbler.app.platform.deviceLabel
+import dev.kobbler.app.platform.hostedServer
 import dev.kobbler.app.platform.ioDispatcher
 
 private const val LEGACY_KEY_API_URL = "kobbler_api_url"
@@ -126,6 +127,7 @@ class AuthState(
     private val scope: CoroutineScope,
     private val formFactor: FormFactor = FormFactor.Phone,
     private val store: KeyValueStore = PlatformKeyValueStore,
+    private val hosted: HostedServer? = hostedServer(),
 ) {
     var screen by mutableStateOf(AuthScreen.Loading)
         private set
@@ -185,6 +187,7 @@ class AuthState(
         // off the composition thread and hold AuthScreen.Loading until it lands.
         scope.launch {
             applyStored(withContext(ioDispatcher) { readStoredProfiles() })
+            hostedAdopted = hosted?.let { adoptHostedSession(it) } == true
             decideInitialScreen()
             // Every profile, not just the active one: the picker shows each one's name and
             // avatar, and a family TV profile nobody picks for 90 days would otherwise
@@ -193,8 +196,11 @@ class AuthState(
         }
     }
 
+    private var hostedAdopted = false
+
     private fun decideInitialScreen() {
         screen = when {
+            hostedAdopted && currentProfile?.hasPin != true -> AuthScreen.LoggedIn
             profiles.isEmpty() -> AuthScreen.Login
             currentProfileId == null -> AuthScreen.Picker
             currentProfile?.needsRelink == true -> AuthScreen.Picker
@@ -627,6 +633,47 @@ class AuthState(
         } catch (_: Exception) {
             false
         }
+    }
+
+    /**
+     * Signs in as whoever the browser's kobbler session belongs to. The `/me` call carries
+     * no bearer, so the server answers from the same-origin session cookie.
+     */
+    private suspend fun adoptHostedSession(host: HostedServer): Boolean {
+        val cookieUser = try {
+            val resp = httpClient.get("${host.apiUrl}/api/v1/admin/me")
+            if (resp.status == HttpStatusCode.Unauthorized) {
+                host.signIn(host.apiUrl)
+                return false
+            }
+            if (!resp.status.isSuccess()) return false
+            json.decodeFromString<MeResponse>(resp.bodyAsText()).user_id
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return false
+        }
+        val linked = profiles.firstOrNull { it.apiUrl == host.apiUrl && it.userId == cookieUser }
+        if (linked != null && !linked.needsRelink) {
+            currentProfileId = linked.id
+            persistProfiles()
+            return true
+        }
+        val token = try {
+            val resp = httpClient.post("${host.apiUrl}/api/v1/admin/auth/player-token")
+            if (!resp.status.isSuccess()) return false
+            json.decodeFromString<PlaybackTokenDto>(resp.bodyAsText()).token
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return false
+        }
+        val profile = linked?.copy(token = token, needsRelink = false)
+            ?: Profile(id = newProfileId(), userId = cookieUser, token = token, apiUrl = host.apiUrl)
+        if (linked == null) profiles.add(profile) else updateProfile(linked.id) { profile }
+        currentProfileId = profile.id
+        persistProfiles()
+        return true
     }
 
     private fun newProfileId(): String {

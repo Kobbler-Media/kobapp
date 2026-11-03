@@ -27,6 +27,7 @@ kotlin {
 
     jvm("desktop")
 
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
     wasmJs {
         browser()
         binaries.executable()
@@ -44,7 +45,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // Only Compose UI for Color type
-            implementation(compose.ui)
+            implementation(libs.compose.ui)
         }
     }
 }
