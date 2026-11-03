@@ -58,17 +58,19 @@ actual fun VideoSurface(
     val video = (player as DesktopPlayer).video
     val ratio by player.aspectRatio.collectAsState()
     val videoSize by player.videoSize.collectAsState()
+    val crop by player.pictureCrop.collectAsState()
 
     Box(modifier) {
         Canvas(Modifier.matchParentSize()) {
             if (video == null) return@Canvas
             video.frameVersion.intValue
             val (vw, vh) = videoSize
-            val (w, h) = videoFrameSize(ratio, vw, vh, size.width.toInt(), size.height.toInt())
-            val left = (size.width - w) / 2
-            val top = (size.height - h) / 2
+            val frame = videoFrameRect(ratio, vw, vh, size.width.toInt(), size.height.toInt(), crop)
             clipRect {
-                drawIntoCanvas { video.draw(it.nativeCanvas, Rect.makeXYWH(left, top, w.toFloat(), h.toFloat())) }
+                drawIntoCanvas {
+                    val rect = Rect.makeXYWH(frame.left.toFloat(), frame.top.toFloat(), frame.width.toFloat(), frame.height.toFloat())
+                    video.draw(it.nativeCanvas, rect)
+                }
             }
         }
 

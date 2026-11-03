@@ -13,7 +13,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +57,7 @@ actual fun VideoSurface(
     val contentFrameRate by android.contentFrameRate.collectAsState()
     val modeSwitchAllowed by android.modeSwitchAllowed.collectAsState()
     val matchDisplayRefresh by android.matchDisplayRefresh.collectAsState()
+    val pictureCrop by android.pictureCrop.collectAsState()
     val pictureReturns by android.pictureReturns.collectAsState()
     val surfaceEpoch by android.surfaceEpoch.collectAsState()
     var frameView by remember { mutableStateOf<VideoFrameLayout?>(null) }
@@ -69,17 +69,6 @@ actual fun VideoSurface(
     }
 
     Box(modifier.clipToBounds(), contentAlignment = Alignment.Center) {
-        val (vw, vh) = videoSize
-        val frameModifier = Modifier.layout { measurable, constraints ->
-            val (w, h) = videoFrameSize(aspectRatio, vw, vh, constraints.maxWidth, constraints.maxHeight)
-            val placeable = measurable.measure(
-                constraints.copy(minWidth = w, maxWidth = w, minHeight = h, maxHeight = h)
-            )
-            layout(constraints.maxWidth, constraints.maxHeight) {
-                placeable.place((constraints.maxWidth - w) / 2, (constraints.maxHeight - h) / 2)
-            }
-        }
-
         key(surfaceEpoch) {
             AndroidView(
                 factory = { ctx ->
@@ -117,6 +106,9 @@ actual fun VideoSurface(
                 },
                 update = {
                     it.picture = decodedPicture
+                    it.aspectRatio = aspectRatio
+                    it.videoSize = videoSize
+                    it.crop = pictureCrop
                     it.frameRate = contentFrameRate
                     it.modeSwitchAllowed = modeSwitchAllowed
                     it.matchDisplayRefresh = matchDisplayRefresh
@@ -124,7 +116,7 @@ actual fun VideoSurface(
                 // Without it Compose discards and recreates the view inside any reusable
                 // container, and a recreated SurfaceView is a destroyed surface.
                 onReset = {},
-                modifier = frameModifier,
+                modifier = Modifier.matchParentSize(),
             )
         }
 

@@ -12,7 +12,11 @@ class GlobalPlayerLoadTest {
 
     private val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
 
-    private suspend fun load(player: FakePlayer, seekToSec: Int): GlobalPlayerState {
+    private suspend fun load(
+        player: FakePlayer,
+        seekToSec: Int,
+        picture: dev.kobbler.app.data.PictureArea? = null,
+    ): GlobalPlayerState {
         val gps = GlobalPlayerState()
         gps.load(
             player = player, api = api,
@@ -22,6 +26,7 @@ class GlobalPlayerLoadTest {
             newPosterUrl = null, newLogoUrl = null,
             destination = null,
             seekToSec = seekToSec,
+            session = picture?.let { KobblerApi.StreamSession(url = "http://127.0.0.1:1/stream", sessionId = "s1", picture = it) },
         )
         return gps
     }
@@ -38,6 +43,24 @@ class GlobalPlayerLoadTest {
             assertTrue("matchDisplayRefresh:true" in on.calls, on.calls.toString())
         } finally {
             if (previous != null) Settings.putString(KEY_MATCH_DISPLAY_REFRESH, previous) else Settings.remove(KEY_MATCH_DISPLAY_REFRESH)
+        }
+    }
+
+    @Test
+    fun theSessionsPictureIsTrimmedOnlyWhenTheDeviceSettingIsOn() = runTest {
+        val previous = Settings.getString(KEY_TRIM_BLACK_BARS)
+        val area = dev.kobbler.app.data.PictureArea(0.0, 0.12, 1.0, 0.76)
+        try {
+            Settings.remove(KEY_TRIM_BLACK_BARS)
+            val off = FakePlayer().also { load(it, seekToSec = 0, picture = area) }
+            Settings.putString(KEY_TRIM_BLACK_BARS, "true")
+            val on = FakePlayer().also { load(it, seekToSec = 0, picture = area) }
+            val bare = FakePlayer().also { load(it, seekToSec = 0) }
+            assertEquals(null, off.croppedTo)
+            assertEquals(dev.kobbler.kobplayer.PictureCrop(0.0, 0.12, 1.0, 0.76), on.croppedTo)
+            assertEquals(null, bare.croppedTo)
+        } finally {
+            if (previous != null) Settings.putString(KEY_TRIM_BLACK_BARS, previous) else Settings.remove(KEY_TRIM_BLACK_BARS)
         }
     }
 

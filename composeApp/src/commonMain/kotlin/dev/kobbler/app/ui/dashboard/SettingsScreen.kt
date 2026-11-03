@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Crop
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.Edit
@@ -89,6 +90,8 @@ import dev.kobbler.app.ui.player.KEY_VIDEO_DECODING
 import dev.kobbler.app.ui.player.videoDecodingSetting
 import dev.kobbler.app.ui.player.KEY_MATCH_DISPLAY_REFRESH
 import dev.kobbler.app.ui.player.matchDisplayRefreshSetting
+import dev.kobbler.app.ui.player.KEY_TRIM_BLACK_BARS
+import dev.kobbler.app.ui.player.trimBlackBarsSetting
 import dev.kobbler.kobplayer.videoDecoderChoices
 import dev.kobbler.app.ui.player.audioOutputModeSetting
 import dev.kobbler.kobplayer.AudioOutputMode
@@ -197,6 +200,7 @@ fun SettingsScreen(
     val decoderChoices = remember { videoDecoderChoices() }
     var videoDecoding by remember { mutableStateOf(videoDecodingSetting().key) }
     var matchDisplayRefresh by remember { mutableStateOf(matchDisplayRefreshSetting()) }
+    var trimBlackBars by remember { mutableStateOf(trimBlackBarsSetting()) }
     var playbackSpeed by remember { mutableStateOf(UserSettings.getString(KEY_DEFAULT_PLAYBACK_SPEED) ?: "1.0") }
     var streamingQuality by remember { mutableStateOf(UserSettings.getString(KEY_STREAMING_QUALITY) ?: "auto") }
     var ttsVoice by remember { mutableStateOf(UserSettings.getString(KEY_TTS_VOICE) ?: "") }
@@ -376,6 +380,19 @@ fun SettingsScreen(
                     onToggle = {
                         matchDisplayRefresh = it
                         Settings.putString(KEY_MATCH_DISPLAY_REFRESH, it.toString())
+                    },
+                )
+            }
+            if (clientKind.startsWith("android") || clientKind == "desktop") {
+                SettingsDivider()
+                SettingsToggleRow(
+                    icon = Icons.Outlined.Crop,
+                    title = "Trim black bars",
+                    key = "trim-black-bars",
+                    checked = trimBlackBars,
+                    onToggle = {
+                        trimBlackBars = it
+                        Settings.putString(KEY_TRIM_BLACK_BARS, it.toString())
                     },
                 )
             }

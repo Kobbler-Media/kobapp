@@ -402,6 +402,13 @@ internal class AndroidPlayer(
         _matchDisplayRefresh.value = enabled
     }
 
+    private val _pictureCrop = MutableStateFlow<PictureCrop?>(null)
+    internal val pictureCrop: StateFlow<PictureCrop?> = _pictureCrop.asStateFlow()
+
+    override fun setPictureCrop(crop: PictureCrop?) {
+        _pictureCrop.value = crop
+    }
+
     private fun updateModeSwitchAllowed() {
         _modeSwitchAllowed.value = worthAModeSwitch(_durationMs.value, sourceLive)
     }

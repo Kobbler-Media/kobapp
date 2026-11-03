@@ -20,8 +20,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.findViewTreeLifecycleOwner
 
-// Sized to the picture; the surface inside is grown by the decoder's padding so the padding
-// lands past the right and bottom edges, as vlc-android's VideoHelper lays it out.
+// Fills the container and places the frame inside it, clipped to what the container shows: a
+// trimmed or cropped frame overhangs it. The surface is grown by the decoder's padding so the
+// padding lands past the frame's right and bottom edges, as vlc-android's VideoHelper lays it out.
 internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : FrameLayout(context) {
 
     val subtitles = SurfaceView(context).apply {
@@ -36,6 +37,29 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
             field = value
             requestLayout()
         }
+
+    var aspectRatio: AspectRatio = AspectRatio.FIT
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
+
+    var videoSize: Pair<Int, Int> = 0 to 0
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
+
+    var crop: PictureCrop? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
+
+    private var frame = FrameRect(0, 0, 0, 0)
 
     // Left to guess, SurfaceFlinger reads 24fps through VLC's uneven queueing as 60Hz content
     // in busy scenes and the panel drops to 60, where frames alternate two and three vsyncs.
@@ -165,15 +189,25 @@ internal class VideoFrameLayout(context: Context, val surface: SurfaceView) : Fr
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val height = MeasureSpec.getSize(heightMeasureSpec)
         setMeasuredDimension(width, height)
-        val (surfaceWidth, surfaceHeight) = decodedSurfaceSize(width, height, picture)
+        frame = videoFrameRect(aspectRatio, videoSize.first, videoSize.second, width, height, crop)
+        val (surfaceWidth, surfaceHeight) = decodedSurfaceSize(frame.width, frame.height, picture)
         val exactWidth = MeasureSpec.makeMeasureSpec(surfaceWidth, MeasureSpec.EXACTLY)
         val exactHeight = MeasureSpec.makeMeasureSpec(surfaceHeight, MeasureSpec.EXACTLY)
         surface.measure(exactWidth, exactHeight)
         heldFrame.measure(exactWidth, exactHeight)
         subtitles.measure(exactWidth, exactHeight)
         // A SurfaceView ignores its parent's bounds; its own clip holds from API 33.
-        surface.clipBounds = Rect(0, 0, width, height)
-        subtitles.clipBounds = Rect(0, 0, width, height)
+        val shown = frame.visibleIn(width, height)
+        val clip = Rect(shown.left, shown.top, shown.left + shown.width, shown.top + shown.height)
+        surface.clipBounds = clip
+        subtitles.clipBounds = clip
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            child.layout(frame.left, frame.top, frame.left + child.measuredWidth, frame.top + child.measuredHeight)
+        }
     }
 }
 

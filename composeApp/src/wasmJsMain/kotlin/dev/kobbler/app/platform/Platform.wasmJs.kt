@@ -8,7 +8,12 @@ import kotlinx.browser.localStorage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
-actual fun defaultFormFactor(): FormFactor = FormFactor.Desktop
+// The screen, not the window: a narrowed desktop browser stays Desktop, and the same 600dp
+// line Android draws between phone and tablet holds in CSS pixels.
+actual fun defaultFormFactor(): FormFactor {
+    val screen = kotlinx.browser.window.screen
+    return if (minOf(screen.width, screen.height) < 600) FormFactor.Phone else FormFactor.Desktop
+}
 actual val supportsVideoPlayback: Boolean = true
 
 actual val deviceRegion: String?

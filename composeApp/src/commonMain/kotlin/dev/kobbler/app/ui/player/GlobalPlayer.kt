@@ -514,6 +514,7 @@ class GlobalPlayerState {
         player.setAudioOutputMode(audioOutputModeSetting())
         player.setVideoDecoding(videoDecodingSetting())
         player.setMatchDisplayRefresh(matchDisplayRefreshSetting())
+        player.setPictureCrop(picture?.takeIf { trimBlackBarsSetting() }?.toCrop())
 
         if (type != "livetv") liveFieldCoded = false
         val intent = trackIntent(

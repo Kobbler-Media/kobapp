@@ -29,6 +29,46 @@ fun videoFrameSize(
     return (videoWidth * scale).roundToInt() to (videoHeight * scale).roundToInt()
 }
 
+data class PictureCrop(val x: Double, val y: Double, val width: Double, val height: Double)
+
+data class FrameRect(val left: Int, val top: Int, val width: Int, val height: Int) {
+    fun visibleIn(containerWidth: Int, containerHeight: Int): FrameRect {
+        val l = maxOf(0, -left)
+        val t = maxOf(0, -top)
+        return FrameRect(l, t, minOf(width, containerWidth - left) - l, minOf(height, containerHeight - top) - t)
+    }
+}
+
+fun videoFrameRect(
+    ratio: AspectRatio,
+    videoWidth: Int,
+    videoHeight: Int,
+    containerWidth: Int,
+    containerHeight: Int,
+    crop: PictureCrop? = null,
+): FrameRect {
+    val area = crop?.takeIf { videoWidth > 0 && videoHeight > 0 && it.width > 0 && it.height > 0 }
+    if (area == null) {
+        val (w, h) = videoFrameSize(ratio, videoWidth, videoHeight, containerWidth, containerHeight)
+        return FrameRect((containerWidth - w) / 2, (containerHeight - h) / 2, w, h)
+    }
+    val (pw, ph) = videoFrameSize(
+        ratio,
+        (videoWidth * area.width).roundToInt(),
+        (videoHeight * area.height).roundToInt(),
+        containerWidth,
+        containerHeight,
+    )
+    val w = (pw / area.width).roundToInt()
+    val h = (ph / area.height).roundToInt()
+    return FrameRect(
+        (containerWidth - pw) / 2 - (w * area.x).roundToInt(),
+        (containerHeight - ph) / 2 - (h * area.y).roundToInt(),
+        w,
+        h,
+    )
+}
+
 fun displaySize(width: Int, height: Int, sarNum: Int, sarDen: Int): Pair<Int, Int> {
     if (sarNum <= 0 || sarDen <= 0) return width to height
     return (width.toLong() * sarNum / sarDen).toInt() to height

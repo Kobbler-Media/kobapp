@@ -235,6 +235,7 @@ interface Player {
     /** Applies from the next [load]; see [videoDecoderChoices]. */
     fun setVideoDecoding(decoding: VideoDecoding) {}
     fun setMatchDisplayRefresh(enabled: Boolean) {}
+    fun setPictureCrop(crop: PictureCrop?) {}
     /** Hint that the player is silently preloading — platforms that render to a
      *  surface (Android) can defer video output until preloading ends to avoid
      *  showing corrupt frames before the first keyframe. No-op on other platforms. */

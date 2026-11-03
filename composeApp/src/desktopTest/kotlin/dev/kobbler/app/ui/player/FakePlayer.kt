@@ -159,6 +159,8 @@ class FakePlayer(private val clock: CoroutineScope = CoroutineScope(Dispatchers.
     override fun setAspectRatio(ratio: AspectRatio) { aspectRatio.value = ratio }
     override fun setPreloading(preloading: Boolean) { calls += "preloading:$preloading" }
     override fun setMatchDisplayRefresh(enabled: Boolean) { calls += "matchDisplayRefresh:$enabled" }
+    var croppedTo: dev.kobbler.kobplayer.PictureCrop? = null
+    override fun setPictureCrop(crop: dev.kobbler.kobplayer.PictureCrop?) { croppedTo = crop }
     override fun setChapter(chapter: Chapter) { currentChapter.value = chapter }
     override suspend fun takeScreenshot(path: String) { }
     var released = false

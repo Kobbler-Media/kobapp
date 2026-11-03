@@ -504,6 +504,13 @@ internal class DesktopPlayer(
         }
     }
 
+    private val _pictureCrop = MutableStateFlow<PictureCrop?>(null)
+    internal val pictureCrop: StateFlow<PictureCrop?> = _pictureCrop.asStateFlow()
+
+    override fun setPictureCrop(crop: PictureCrop?) {
+        _pictureCrop.value = crop
+    }
+
     override fun setAspectRatio(ratio: AspectRatio) {
         _aspectRatio.value = ratio
     }

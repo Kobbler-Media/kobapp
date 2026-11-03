@@ -46,6 +46,34 @@ class VideoFrameTest {
     }
 
     @Test
+    fun trimmedFramePutsBakedInBarsOutsideTheContainer() {
+        val scope = PictureCrop(x = 0.0, y = 0.125, width = 1.0, height = 0.75)
+        val pillarbox = PictureCrop(x = 0.125, y = 0.0, width = 0.75, height = 1.0)
+        val phoneScope = PictureCrop(x = 0.0, y = 0.12, width = 1.0, height = 0.76)
+        listOf(
+            Triple(AspectRatio.FIT, null, 1920 to 1080) to FrameRect(0, 0, 1920, 1080),
+            Triple(AspectRatio.FIT, scope, 1920 to 1080) to FrameRect(0, 0, 1920, 1080),
+            Triple(AspectRatio.CROP, null, 1920 to 1080) to FrameRect(0, 0, 1920, 1080),
+            Triple(AspectRatio.CROP, scope, 1920 to 1080) to FrameRect(-320, -180, 2560, 1440),
+            Triple(AspectRatio.FIT, pillarbox, 1440 to 1080) to FrameRect(-240, 0, 1920, 1080),
+            Triple(AspectRatio.FIT, null, 1440 to 1080) to FrameRect(0, 135, 1440, 810),
+            Triple(AspectRatio.FIT, null, 2400 to 1080) to FrameRect(240, 0, 1920, 1080),
+            Triple(AspectRatio.FIT, phoneScope, 2400 to 1080) to FrameRect(0, -135, 2400, 1350),
+            Triple(AspectRatio.FIT, PictureCrop(0.0, 0.0, 0.0, 0.0), 1920 to 1080) to FrameRect(0, 0, 1920, 1080),
+        ).forEach { (case, expected) ->
+            val (ratio, crop, container) = case
+            assertEquals(expected, videoFrameRect(ratio, 1920, 1080, container.first, container.second, crop), case.toString())
+        }
+    }
+
+    @Test
+    fun visiblePartOfTheFrameIsWhatTheContainerShows() {
+        assertEquals(FrameRect(0, 135, 2400, 1080), FrameRect(0, -135, 2400, 1350).visibleIn(2400, 1080))
+        assertEquals(FrameRect(240, 0, 1440, 1080), FrameRect(-240, 0, 1920, 1080).visibleIn(1440, 1080))
+        assertEquals(FrameRect(0, 0, 1920, 1080), FrameRect(240, 0, 1920, 1080).visibleIn(2400, 1080))
+    }
+
+    @Test
     fun appliesSampleAspectToStoredWidth() {
         assertEquals(1024 to 576, displaySize(720, 576, sarNum = 64, sarDen = 45))
         assertEquals(1280 to 528, displaySize(1280, 528, sarNum = 1, sarDen = 1))
