@@ -23,10 +23,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.components.PageBackdropHost
 
 // How much pinned chrome sits over the top of the page here: the phone bar, the status bar,
 // a header. Zero where nothing is pinned over the page.
@@ -136,6 +140,40 @@ fun PinnedHeader(
         layout(constraints.maxWidth, constraints.maxHeight) {
             contentPlaceable.place(0, top)
             headerPlaceable.place(0, 0)
+        }
+    }
+}
+
+// A bar pinned over a tab whose picture runs up under it, phone and wide layouts alike. The
+// page is laid out below [barHeight] (measured off the bar when not given), and once
+// something has scrolled under the bar it fills in to [scrolledFill]. With no bar the page
+// keeps the same composition, so swapping the bar in and out never resets its state.
+@Composable
+fun UnderTopBar(
+    bar: (@Composable () -> Unit)?,
+    barHeight: Dp? = null,
+    scrolledFill: Float = 0f,
+    content: @Composable () -> Unit,
+) {
+    val density = LocalDensity.current
+    var measured by remember { mutableStateOf(0.dp) }
+    val overlap = if (bar == null) 0.dp else barHeight ?: measured
+    val shade = remember { PinnedShade() }
+    val fill by animateFloatAsState(
+        if (!shade.nested && shade.scroller?.canScrollBackward == true) scrolledFill else 0f,
+    )
+    val bg = KobappTheme.colors.bg
+    PageBackdropHost {
+        Box(Modifier.fillMaxSize().padding(top = overlap)) {
+            CompositionLocalProvider(LocalTopChromeOverlap provides overlap, LocalPinnedShade provides shade, content = content)
+        }
+        if (bar != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { measured = with(density) { it.height.toDp() } }
+                    .drawBehind { drawRect(bg, alpha = fill) },
+            ) { bar() }
         }
     }
 }

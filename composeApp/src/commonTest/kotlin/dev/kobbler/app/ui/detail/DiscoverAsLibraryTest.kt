@@ -72,11 +72,16 @@ class DiscoverAsLibraryTest {
 
     @Test
     fun `a discover movie reads as a library movie`() {
-        val m = detail().copy(mediaType = "movie", runtime = 125, genres = listOf("Drama", "War")).asMovie()
+        val m = detail().copy(
+            mediaType = "movie", runtime = 125, genres = listOf("Drama", "War"),
+            tagline = "Hold the line", contentRating = "R", directors = listOf("D"), writers = listOf("W1", "W2"),
+        ).asMovie()
         assertEquals(Triple("Show", 2021, "2h 5m"), Triple(m.title, m.year, m.duration))
         assertEquals(125, m.runtimeMinutes)
         assertEquals(listOf("Drama", "War"), m.genres)
         assertEquals(Pair("About", "b"), Pair(m.synopsis, m.backdropUrl))
+        assertEquals(Pair("Hold the line", "R"), Pair(m.tagline, m.contentRating))
+        assertEquals(Pair(listOf("D"), listOf("W1", "W2")), Pair(m.directors, m.writers))
         assertNull(m.filePath)
     }
 

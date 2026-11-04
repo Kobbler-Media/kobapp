@@ -639,9 +639,7 @@ internal class AndroidPlayer(
         return Media(libVLC, Uri.parse(source.url)).apply {
             addOption(":http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
             addOption(":network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
-            // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
-            // verifies none over a network: every seek decoded the title from its first frame.
-            addOption(":demux=mkv_trusted,any")
+            addOption(":${vlcDemuxOption(source)}")
             if (config.audioOnly) addOption(":no-video")
             headers["referer"]?.let { addOption(":http-referrer=$it") }
             if (!config.hardwareAcceleration) {

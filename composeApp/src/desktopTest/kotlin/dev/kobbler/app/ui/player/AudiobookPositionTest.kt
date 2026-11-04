@@ -9,6 +9,7 @@ import dev.kobbler.app.ui.player.audiobook.AudiobookPlayerState
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -109,5 +110,23 @@ class AudiobookPositionTest {
         assertEquals(1_201_000, s.globalPositionMs)
         s.audioFiles = s.audioFiles.take(2)
         assertEquals(1_200_000, s.totalBookDurationMs)
+    }
+
+    @Test
+    fun `an mp3 is opened as mpeg audio so its seeks land where the transcript is timed`() = runBlocking {
+        listOf("MP3" to true, "mp3" to true, "M4B" to false, "M4A" to false).forEach { (format, mpeg) ->
+            val player = FakePlayer()
+            AudiobookPlayerState(
+                Book(id = "b1", title = "T", author = "A", coverUrl = ""),
+                KobblerApi(HttpClient(), "http://127.0.0.1:1", "token"),
+                player,
+                CoroutineScope(Dispatchers.Unconfined),
+            ).apply {
+                audioFiles = listOf(file("f1", 0).copy(format = format))
+                playFileAt(0, 300_000)
+            }
+            assertEquals(mpeg, player.loadedSource?.mpegAudio, format)
+            assertEquals(mpeg, player.loadedSource!!.url.contains("/audio/f1?container=mp4"), format)
+        }
     }
 }

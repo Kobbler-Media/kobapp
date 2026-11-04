@@ -103,11 +103,13 @@ fun LiveChannelDetailScreen(
         PinnedHeader(
             header = {
                 val identity: @Composable RowScope.() -> Unit = {
-                    Box(Modifier.offset(x = BackButtonGutter(formFactor, gutter) - gutter)) {
-                        KobBackButton(
-                            onBack,
-                            modifier = Modifier.focusKey("back", entryEligible = false),
-                        )
+                    if (formFactor != FormFactor.TV) {
+                        Box(Modifier.offset(x = BackButtonGutter(formFactor, gutter) - gutter)) {
+                            KobBackButton(
+                                onBack,
+                                modifier = Modifier.focusKey("back", entryEligible = false),
+                            )
+                        }
                     }
                     ChannelLogo(channel, accent, if (compact) 48.dp else 64.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

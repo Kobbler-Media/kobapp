@@ -1,61 +1,28 @@
 package dev.kobbler.app.ui.detail
 
-import dev.kobbler.app.ui.components.CardAction
-import dev.kobbler.app.ui.components.KobBackButtonPinned
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.LibraryStatus
+import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.theme.LocalFormFactor
-import dev.kobbler.app.ui.components.CastRow
-import dev.kobbler.app.ui.components.ExpandableText
-import dev.kobbler.app.ui.components.PillStatus
-import dev.kobbler.app.ui.components.StatusPill
-import dev.kobbler.app.ui.components.rememberPalette
+import dev.kobbler.app.ui.components.CardAction
 import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.app.ui.player.WarmStream
-import dev.kobbler.app.ui.player.rememberedAudioTitle
-import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.ui.player.isInstant
+import dev.kobbler.app.ui.player.rememberedAudioTitle
+import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.kobplayer.Player
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -76,6 +43,7 @@ fun DiscoverDetailScreen(
     val accent = when (detail.mediaType) {
         "tv" -> colors.accTv
         "movie" -> colors.accMovies
+        "book" -> colors.accBooks
         else -> colors.accWanted
     }
     var currentDetail by remember(detail) { mutableStateOf(detail) }
@@ -194,24 +162,25 @@ fun DiscoverDetailScreen(
                     actions(wide, anchor, null, stream)
                 },
                 topBarStatus = { DiscoverStatus(currentDetail.libraryStatus) },
-                aside = { wide ->
+                aside = {
                     val streaming = streamingAvailability(
                         canStream = canStreamMedia,
                         searching = streams.loading,
                         found = streams.result?.options?.map { it.isInstant },
                     )
                     ReleaseAvailabilityStrip(currentDetail.availability(streaming), accent)
-                    if (wide) DiscoverDetailsPanel(currentDetail, formFactor)
                 },
                 modifier = Modifier.focusInert(streams.showOptions),
             )
-            else -> DiscoverHeroPage(
-                detail = currentDetail,
+            else -> BookDetailLayout(
+                book = currentDetail.asBook(),
                 formFactor = formFactor,
                 accent = accent,
-                inert = streams.showOptions,
                 onBack = onBack,
-                actions = { wide, anchor -> actions(wide, anchor, null, null) },
+                crumbRoot = "Discover",
+                actions = { anchor -> actions(false, anchor, null, null) },
+                topBarStatus = { DiscoverStatus(currentDetail.libraryStatus) },
+                aside = { ReleaseAvailabilityStrip(currentDetail.availability(StreamingAvailability.Hidden), accent) },
             )
         }
 
@@ -239,255 +208,4 @@ fun DiscoverDetailScreen(
             )
         }
     }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DiscoverHeroPage(
-    detail: DiscoverDetail,
-    formFactor: FormFactor,
-    accent: Color,
-    inert: Boolean,
-    onBack: () -> Unit,
-    actions: @Composable (wide: Boolean, anchor: Modifier) -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val palette = rememberPalette(detail.posterUrl)
-    val gutter = gutterFor(formFactor)
-    val pageScroll = rememberScrollState()
-    val pageTopHold = rememberPageTopHold(pageScroll.asPageScroll())
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val stacked = detailStacked(formFactor, maxWidth)
-        CompositionLocalProvider(LocalBringIntoViewSpec provides pageTopHold.spec) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .focusInert(inert)
-                .scrollWhenFocusIsStuck(pageScroll.asPageScroll())
-                .verticalScroll(pageScroll),
-        ) {
-            DetailHero(
-                backdropUrl = detail.backdropUrl,
-                posterUrl = detail.posterUrl,
-                formFactor = formFactor,
-                accentTint = palette.darkAccent,
-                accent = accent,
-            ) {
-                HeroCrumb(detail)
-                Spacer(Modifier.height(8.dp))
-                DiscoverTitleBlock(detail.title, colors.textHi)
-            }
-
-            if (stacked) {
-                PhoneBody(detail = detail, accent = accent, gutter = gutter, actions = { actions(false, Modifier) })
-            } else {
-                WideBody(
-                    detail = detail,
-                    formFactor = formFactor,
-                    accent = accent,
-                    gutter = gutter,
-                    actions = { actions(true, pageTopHold.anchor) },
-                )
-            }
-
-            Spacer(Modifier.height(64.dp))
-        }
-        }
-
-        Box(Modifier.focusInert(inert)) {
-            KobBackButtonPinned(onBack, formFactor, accent = accent)
-        }
-    }
-}
-
-@Composable
-private fun ColumnScope.HeroCrumb(detail: DiscoverDetail) {
-    val crumb = buildString {
-        append(when (detail.mediaType) {
-            "movie" -> "Movie"
-            "tv" -> "TV"
-            "book" -> "Book"
-            else -> "Discover"
-        })
-        append(" · ")
-        append(detail.provider.uppercase())
-        when (detail.libraryStatus) {
-            LibraryStatus.Wanted -> append(" · WANTED")
-            LibraryStatus.NotInLibrary -> append(" · NOT IN LIBRARY")
-            LibraryStatus.InLibrary -> Unit
-        }
-    }
-    Text(
-        crumb.uppercase(),
-        style = KobappTheme.type.bodySm.copy(letterSpacing = 0.12.em),
-        color = KobappTheme.colors.textLo,
-    )
-}
-
-@Composable
-private fun PhoneBody(
-    detail: DiscoverDetail,
-    accent: Color,
-    gutter: Dp,
-    actions: @Composable () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
-        Spacer(Modifier.height(14.dp))
-        StatRow(detail, formFactor = FormFactor.Phone)
-        Spacer(Modifier.height(16.dp))
-        if (detail.genres.isNotEmpty()) {
-            GenreChips(detail.genres, accent = accent)
-            Spacer(Modifier.height(14.dp))
-        }
-        actions()
-        ReleaseAvailabilityStrip(
-            availability = detail.availability(StreamingAvailability.Hidden),
-            accent = accent,
-            modifier = Modifier.padding(top = 18.dp),
-        )
-        if (detail.description != null) {
-            Spacer(Modifier.height(20.dp))
-            ExpandableText(detail.description)
-        }
-        if (detail.cast.isNotEmpty()) {
-            Spacer(Modifier.height(28.dp))
-            CastRow(detail.cast, accent = accent)
-        }
-    }
-}
-
-@Composable
-private fun WideBody(
-    detail: DiscoverDetail,
-    formFactor: FormFactor,
-    accent: Color,
-    gutter: Dp,
-    actions: @Composable () -> Unit,
-) {
-    Spacer(Modifier.height(32.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = gutter),
-        horizontalArrangement = Arrangement.spacedBy(48.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(modifier = Modifier.widthIn(max = 1000.dp).weight(1f, fill = true)) {
-            StatRow(detail, formFactor = formFactor)
-            if (detail.description != null) {
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    detail.description,
-                    style = KobappTheme.type.body,
-                    color = KobappTheme.colors.textMd,
-                )
-            }
-            Spacer(Modifier.height(26.dp))
-            actions()
-            if (detail.genres.isNotEmpty()) {
-                Spacer(Modifier.height(20.dp))
-                GenreChips(detail.genres, accent = accent)
-            }
-            if (detail.authors.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    detail.authors.joinToString(", "),
-                    style = KobappTheme.type.bodySm,
-                    color = KobappTheme.colors.textMd,
-                )
-            }
-            if (detail.cast.isNotEmpty()) {
-                Spacer(Modifier.height(36.dp))
-                CastRow(detail.cast, accent = accent)
-            }
-        }
-
-        Column(
-            modifier = Modifier.widthIn(min = 280.dp, max = 380.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            StatusPill(PillStatus.NotInLibrary)
-            ReleaseAvailabilityStrip(availability = detail.availability(StreamingAvailability.Hidden), accent = accent)
-            DiscoverDetailsPanel(detail = detail, formFactor = formFactor)
-        }
-    }
-}
-
-@Composable
-private fun DiscoverTitleBlock(title: String, color: Color) {
-    // The two-line split is a 10-foot/desktop flourish: it halves a title that already
-    // wraps three times in a phone hero's 194dp column.
-    val parts = if (LocalFormFactor.current == FormFactor.Phone) DiscoverTitleParts(title.trim(), null) else splitDiscoverTitle(title)
-    Column {
-        SerifLine(parts.head, color)
-        if (parts.tail != null) SerifLine(parts.tail, color, italic = true)
-    }
-}
-
-@Composable
-private fun SerifLine(text: String, color: Color, italic: Boolean = false) {
-    Text(
-        text,
-        style = KobappTheme.heroTitle.copy(
-            fontFamily = FontFamily.Serif,
-            fontWeight = FontWeight.Medium,
-            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-        ),
-        color = color,
-    )
-}
-
-@Composable
-private fun StatRow(detail: DiscoverDetail, formFactor: FormFactor) {
-    val colors = KobappTheme.colors
-    // Flow, not Row: four stats do not fit a phone's width, and a Row squeezed the last
-    // one until its value broke mid-word.
-    FlowRow(
-        itemVerticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (formFactor == FormFactor.Phone) 12.dp else 28.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (detail.year != null) Stat("Year", detail.year.toString())
-        if (detail.runtime != null) {
-            val h = detail.runtime / 60
-            val m = detail.runtime % 60
-            Stat("Runtime", if (h > 0) "${h}h ${m}m" else "${m}m")
-        }
-        if (detail.network != null) Stat("Network", detail.network)
-        if (detail.rating != null) {
-            Column {
-                Text(
-                    "RATING",
-                    style = KobappTheme.type.label.copy(letterSpacing = 0.12.em),
-                    color = colors.textLo,
-                )
-                Spacer(Modifier.height(4.dp))
-                RatingBadge(detail.rating, ratingOutOf(detail.mediaType))
-            }
-        }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: String) {
-    val colors = KobappTheme.colors
-    Column {
-        Text(
-            label.uppercase(),
-            style = KobappTheme.type.label.copy(letterSpacing = 0.12.em),
-            color = colors.textLo,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(value, style = KobappTheme.type.body, color = colors.textHi)
-    }
-}
-
-private data class DiscoverTitleParts(val head: String, val tail: String?)
-
-private fun splitDiscoverTitle(title: String): DiscoverTitleParts {
-    val trimmed = title.trim()
-    if (trimmed.length < 22) return DiscoverTitleParts(trimmed, null)
-    val mid = trimmed.length / 2
-    val splitAt = (mid until trimmed.length).firstOrNull { trimmed[it] == ' ' }
-        ?: (mid downTo 0).firstOrNull { trimmed[it] == ' ' }
-        ?: return DiscoverTitleParts(trimmed, null)
-    return DiscoverTitleParts(trimmed.substring(0, splitAt), trimmed.substring(splitAt + 1))
 }

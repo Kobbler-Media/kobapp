@@ -79,90 +79,6 @@ import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
 
-@Composable
-fun DetailHero(
-    backdropUrl: String?,
-    posterUrl: String?,
-    formFactor: FormFactor,
-    accentTint: Color = Color.Unspecified,
-    accent: Color = Color.Unspecified,
-    infoContent: @Composable ColumnScope.() -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val dimens = KobappTheme.dimens
-    val posterWidth = when (formFactor) {
-        FormFactor.Phone -> 110.dp
-        FormFactor.Desktop -> 160.dp
-        FormFactor.TV -> 160.dp
-    }
-    val gutter = when (formFactor) {
-        FormFactor.TV -> dimens.pageGutterTv
-        FormFactor.Phone -> dimens.pageGutterPhone
-        else -> dimens.pageGutter
-    }
-    val accentColor = if (accent != Color.Unspecified) accent else KobappTheme.accent
-
-    Box(Modifier.fillMaxWidth().clipToBounds()) {
-        StripedBackdrop(
-            accent = accentColor,
-            opacity = 0.32f,
-            withRadialOverlay = false,
-            cached = true,
-            modifier = Modifier.matchParentSize(),
-        )
-
-        val bgUrl = backdropUrl ?: posterUrl
-        if (!bgUrl.isNullOrEmpty()) {
-            AsyncImage(
-                model = if (backdropUrl != null) bgUrl else softenedArt(bgUrl),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alpha = if (backdropUrl != null) 0.85f else 0.55f,
-                modifier = Modifier.matchParentSize(),
-            )
-        }
-
-        val scrim = remember(colors.bg) {
-            Brush.verticalGradient(
-                0.0f to Color.Transparent,
-                0.4f to colors.bg.copy(alpha = 0.45f),
-                1.0f to colors.bg,
-            )
-        }
-        Box(
-            Modifier.matchParentSize().drawBehind {
-                if (accentTint != Color.Unspecified) drawRect(accentTint.copy(alpha = 0.18f))
-                drawRect(scrim)
-            }
-        )
-
-        Row(
-            modifier = Modifier
-                .safeTopPadding()
-                .padding(start = gutter, end = gutter, top = 64.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            if (!posterUrl.isNullOrEmpty()) {
-                AsyncImage(
-                    model = posterUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .width(posterWidth)
-                        .aspectRatio(2f / 3f)
-                        .clip(KobappTheme.shapes.poster),
-                )
-            }
-
-            Column(
-                modifier = Modifier.padding(bottom = 8.dp),
-                content = infoContent,
-            )
-        }
-    }
-}
-
 /**
  * The poster block a wide detail page leads with: fixed width, 2:3, striped fallback
  * behind whatever art there is.
@@ -477,6 +393,10 @@ internal fun detailStacked(formFactor: FormFactor, width: androidx.compose.ui.un
 // of its own, which on a phone was most of a screen's worth of nothing above the poster.
 internal val detailStackedTop: androidx.compose.ui.unit.Dp
     @Composable get() = kobTopInset + 8.dp
+
+// Beside the poster, a third column leaves the synopsis and actions a strip a few words wide
+// on anything short of a large window — a TV's 960dp included.
+internal val detailThirdColumnMinWidth = 1400.dp
 
 internal fun gutterFor(formFactor: FormFactor): androidx.compose.ui.unit.Dp = when (formFactor) {
     FormFactor.TV -> 48.dp

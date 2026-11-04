@@ -617,9 +617,7 @@ internal fun vlcMediaOptions(source: MediaSource.Url, config: PlayerConfig): Lis
     return buildList {
         add("http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
         add("network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
-        // libVLC 4 seeks a Matroska stream only to cue points it has verified, and it
-        // verifies none over a network: every seek decoded the title from its first frame.
-        add("demux=mkv_trusted,any")
+        add(vlcDemuxOption(source))
         if (config.audioOnly) add("no-video")
         headers["referer"]?.let { add("http-referrer=$it") }
         source.audioLanguage?.let { add("audio-language=$it") }

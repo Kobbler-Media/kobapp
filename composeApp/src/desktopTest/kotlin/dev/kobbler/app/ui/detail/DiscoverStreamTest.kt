@@ -243,7 +243,6 @@ class DiscoverStreamTest {
 
             onNodeWithText("Mayor.of.Kingstown.S01E01.1080p.mkv", substring = true).assertIsDisplayed()
             onNodeWithText("Torrentio", substring = true).assertIsDisplayed()
-            onNodeWithText("91%", substring = true).assertIsDisplayed()
         }
     }
 

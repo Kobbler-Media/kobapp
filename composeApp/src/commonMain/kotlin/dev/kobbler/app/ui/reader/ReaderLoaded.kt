@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -125,6 +126,14 @@ internal fun ReaderLoaded(
     fun startReadingAt(blockIndex: Int, offset: Int = 0) {
         val tts = view?.tts ?: return
         startReadingAtBlock(tts, blockIndex, offset, ttsController::start)?.let(onSynthStartWordIndexChange)
+    }
+
+    SideEffect {
+        ttsController.onHandoff = { index ->
+            view?.tts?.words?.getOrNull(synthStartWordIndex + index)?.let { word ->
+                startReadingAt(word.blockIndex, word.highlightCharRange?.first ?: 0)
+            } ?: ttsController.stop()
+        }
     }
 
     val cursor = rememberPageCursor(paging, enabled = keyNav)

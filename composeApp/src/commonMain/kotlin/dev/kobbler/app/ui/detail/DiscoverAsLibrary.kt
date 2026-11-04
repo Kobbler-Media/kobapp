@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverEpisode
 import dev.kobbler.app.data.DiscoverEpisodeRef
@@ -19,10 +20,27 @@ internal fun DiscoverDetail.asMovie(): Movie = Movie(
     rating = rating,
     genres = genres,
     synopsis = description,
+    tagline = tagline,
+    contentRating = contentRating,
     duration = formatRuntime(runtime),
     runtimeMinutes = runtime,
     cast = cast,
+    directors = directors,
+    writers = writers,
     releaseDate = releaseDate,
+    releaseDates = releaseDates,
+)
+
+internal fun DiscoverDetail.asBook(): Book = Book(
+    id = "discover:$provider:$providerId",
+    title = title,
+    author = authors.joinToString(", "),
+    coverUrl = posterUrl,
+    rating = rating,
+    description = description,
+    genres = genres,
+    isInLibrary = isInLibrary,
+    wantStatus = wantStatus,
 )
 
 private val DiscoverDetail.listedSeasons get() = seasons.filter { it.seasonNumber > 0 }.sortedBy { it.seasonNumber }

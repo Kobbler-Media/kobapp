@@ -58,6 +58,15 @@ fun MovieDetailScreen(
     val toast = rememberToastState()
     // The player opens on the logo; fetched only then, it was the last thing to appear.
     PrefetchToDisk(listOfNotNull(movie.logoUrl))
+    val releaseStrip: @Composable () -> Unit = {
+        ReleaseAvailabilityStrip(
+            releaseAvailability(
+                movie.releaseDate, movie.year.takeIf { it > 0 }, movie.releaseDates, deviceRegion,
+                localToday(), streaming, LibraryStatus.Wanted,
+            ),
+            accent,
+        )
+    }
     MovieDetailLayout(
         movie = movie,
         formFactor = formFactor,
@@ -65,15 +74,7 @@ fun MovieDetailScreen(
         onBack = onBack,
         onPersonClick = onPersonClick,
         modifier = modifier,
-        aside = if (movie.filePath == null && movie.isWanted) { _ ->
-            ReleaseAvailabilityStrip(
-                releaseAvailability(
-                    movie.releaseDate, movie.year.takeIf { it > 0 }, movie.releaseDates, deviceRegion,
-                    localToday(), streaming, LibraryStatus.Wanted,
-                ),
-                accent,
-            )
-        } else null,
+        aside = releaseStrip.takeIf { movie.filePath == null && movie.isWanted },
         actions = { wide, anchor ->
             ActionRow(
                 movie = movie, api = api, accent = accent,

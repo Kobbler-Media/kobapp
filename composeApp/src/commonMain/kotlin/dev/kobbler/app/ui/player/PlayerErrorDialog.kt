@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -39,23 +38,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.detail.StreamOptionRow
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.KobChip
-import dev.kobbler.app.ui.components.KobChipStyle
-import dev.kobbler.app.ui.components.PillStatus
-import dev.kobbler.app.ui.components.StatusPill
-import dev.kobbler.app.ui.components.rememberTvFocusState
-import dev.kobbler.app.ui.components.tvClickable
-import dev.kobbler.app.ui.components.tvFocusGlow
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -298,108 +288,8 @@ private fun AlternativesSection(
             modifier = Modifier.heightIn(max = 240.dp).focusKeyGroup("alternatives"),
         ) {
             items(alternatives, key = { it.id }) { option ->
-                AlternativeRow(option = option, accent = accent, onPick = { onPick(option) })
+                StreamOptionRow(option = option, accent = accent, onSelect = { onPick(option) }, modifier = Modifier.focusKey("alt.${option.id}"))
             }
         }
-    }
-}
-
-@Composable
-private fun AlternativeRow(
-    option: StreamOption,
-    accent: Color,
-    onPick: () -> Unit,
-) {
-    val colors = KobappTheme.colors
-    val focus = rememberTvFocusState()
-    val isFocused = focus.isFocused
-    val rowShape = RoundedCornerShape(8.dp)
-    val bg = if (isFocused) colors.elev3 else Color.Transparent
-    val borderColor =
-        if (isFocused) lerp(Color.Transparent, accent, 0.28f) else Color.Transparent
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .focusKey("alt.${option.id}")
-            .fillMaxWidth()
-            .tvFocusGlow(focus, cornerRadiusDp = 8f, scale = 1.01f)
-            .clip(rowShape)
-            .background(bg)
-            .border(1.dp, borderColor, rowShape)
-            .tvClickable(focus, onPick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-    ) {
-        KobChip(
-            text = option.quality.resolution ?: "SD",
-            style = KobChipStyle.AccentTint,
-            accent = accent,
-            modifier = Modifier.widthIn(min = 64.dp),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(
-                altCodecLine(option),
-                style = KobappTheme.type.body.copy(fontWeight = FontWeight.Medium),
-                color = colors.textHi,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val sizeText = altFormatSize(option.size)
-            if (sizeText.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    sizeText,
-                    style = KobappTheme.type.bodySm,
-                    color = colors.textLo,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (option.isInstant) {
-            StatusPill(PillStatus.InLibrary)
-        } else {
-            Box(
-                Modifier
-                    .clip(KobappTheme.shapes.pill)
-                    .background(lerp(colors.elev1, colors.accDown, 0.14f))
-                    .border(1.dp, lerp(Color.Transparent, colors.accDown, 0.30f), KobappTheme.shapes.pill)
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(colors.accDown))
-                    Text(
-                        "WILL CACHE",
-                        style = KobappTheme.type.labelSm.copy(letterSpacing = 0.1.em),
-                        color = colors.accDown,
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun altCodecLine(option: StreamOption): String {
-    val parts = buildList {
-        option.quality.codec?.let { add(it) }
-        option.quality.hdr?.let { add(it) }
-        option.quality.audio?.let { add(it) }
-    }
-    return if (parts.isEmpty()) option.releaseTitle else parts.joinToString(" · ")
-}
-
-private fun altFormatSize(bytes: Long): String {
-    if (bytes <= 0) return ""
-    val gb = bytes / (1024.0 * 1024.0 * 1024.0)
-    return if (gb >= 1.0) {
-        val rounded = (gb * 10).toLong() / 10.0
-        "$rounded GB"
-    } else {
-        val mb = (bytes / (1024.0 * 1024.0)).toLong()
-        "$mb MB"
     }
 }

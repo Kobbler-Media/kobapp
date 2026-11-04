@@ -72,7 +72,7 @@ class ReleaseAvailabilityStripTest {
     }
 
     @Test
-    fun `a discover movie shows the strip and its details panel`() =
+    fun `a discover movie shows the strip`() =
         shows(FormFactor.Desktop, "RELEASE AVAILABILITY", "Mar 31, 1999", "Physical", "Coming Jan 9, 2099", "Not in library") {
             DiscoverDetailScreen(
                 detail = DiscoverDetail(

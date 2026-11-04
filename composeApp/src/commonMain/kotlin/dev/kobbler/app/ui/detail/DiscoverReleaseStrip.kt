@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.localToday
-import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.deviceRegion
 import dev.kobbler.app.theme.KobappTheme
 
@@ -64,41 +63,5 @@ private fun AvailabilityLine(label: String, value: String, valueColor: Color) {
     ) {
         Text(label, style = KobappTheme.type.bodySm, color = KobappTheme.colors.textMd)
         Text(value, style = KobappTheme.type.bodySm, color = valueColor)
-    }
-}
-
-@Composable
-internal fun DiscoverDetailsPanel(detail: DiscoverDetail, formFactor: FormFactor) {
-    val colors = KobappTheme.colors
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(KobappTheme.shapes.card)
-            .background(colors.elev1)
-            .border(1.dp, colors.lineSoft, KobappTheme.shapes.card)
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Details", style = KobappTheme.type.h3, color = colors.textHi)
-            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-            Text(
-                detail.provider.lowercase(),
-                style = KobappTheme.type.bodySm,
-                color = colors.textLo,
-            )
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.lineSoft))
-        InfoLine("Title", detail.title, formFactor)
-        if (detail.year != null) InfoLine("Year", detail.year.toString(), formFactor)
-        if (detail.runtime != null) {
-            val h = detail.runtime / 60; val m = detail.runtime % 60
-            InfoLine("Runtime", if (h > 0) "${h}h ${m}m" else "${m}m", formFactor)
-        }
-        if (detail.rating != null) InfoLine("Rating", formatRatingOutOf(detail.rating, ratingOutOf(detail.mediaType)), formFactor)
-        if (detail.network != null) InfoLine("Network", detail.network, formFactor)
-        if (detail.authors.isNotEmpty()) InfoLine("Author", detail.authors.joinToString(", "), formFactor)
-        if (detail.genres.isNotEmpty()) InfoLine("Genres", detail.genres.take(4).joinToString(" · "), formFactor)
-        if (detail.cast.isNotEmpty()) InfoLine("Cast", "${detail.cast.size} credited", formFactor)
     }
 }

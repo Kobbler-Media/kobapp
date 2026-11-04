@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.platform.CastButton
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
@@ -105,6 +106,8 @@ internal fun ReaderTopBar(
             val tint = if (ttsState != TtsState.IDLE) theme.linkColor else theme.textColor
             Icon(icon, "Read Aloud", tint = tint)
         }
+        // Read-aloud follows the receiver picked here: the next read starts on it.
+        CastButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), theme.textColor)
         IconButton(
             onClick = onSearch,
             modifier = Modifier.focusKey("search").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),

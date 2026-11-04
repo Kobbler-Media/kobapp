@@ -52,9 +52,8 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalKobappDimens
 import dev.kobbler.app.theme.LocalSection
 import dev.kobbler.app.ui.kobChromeInsets
-import dev.kobbler.app.ui.LocalTopChromeOverlap
+import dev.kobbler.app.ui.UnderTopBar
 import dev.kobbler.app.theme.Section
-import dev.kobbler.app.ui.components.PageBackdropHost
 import dev.kobbler.app.ui.components.LocalTvFocusDecor
 import dev.kobbler.app.ui.components.LocalCoveredByPlayer
 import dev.kobbler.app.ui.components.DataCache
@@ -301,7 +300,14 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     // One sender for the app: a cast session outlives the screen that started it, and
     // picking one up again on launch is the same handover as starting it.
     val cast = remember { dev.kobbler.app.platform.castManager() }
-    if (api != null) dev.kobbler.app.ui.player.CastHandoff(cast, gps, api, player)
+    if (api != null) {
+        dev.kobbler.app.ui.player.CastHandoff(cast, gps, api, player) { type, id ->
+            when (type) {
+                "movie" -> nav.navigate(Destination.MovieDetail(id, autoPlay = true))
+                "episode" -> nav.navigate(Destination.TvShowDetail(id, autoPlay = true, isEpisodeId = true))
+            }
+        }
+    }
     dev.kobbler.app.watchnext.HomeWatchNextSession(auth, api) { navigateContinueItem(nav, gps, it) }
 
     val isNonVideoPlayerScreen = nav.current is Destination.AudiobookPlayer || nav.current is Destination.BookReader || nav.current is Destination.ComicViewer
@@ -390,7 +396,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         // No movableContentOf, no re-parenting, no SurfaceView Z-order issues.
         // miniBottomInset reserves room above the phone bottom-nav so the mini
         // player snaps above it (and not over it).
-        if (player != null && gps.isActive) {
+        if (player != null && gps.showsPlayerSurface) {
             val bottomNavHeight = KobPhoneBottomBarHeight +
                 kobChromeInsets.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
             val miniBottomInset = if (
@@ -966,25 +972,25 @@ internal fun DesktopScaffold(
                             .onSizeChanged { size -> contentWidthDp = with(density) { size.width.toDp() } },
                     ) {
                         // Home draws the bar itself, over its hero.
-                        if (!isDetailScreen && tabTopBar != null && current != Destination.Tab.Home) {
-                            tabTopBar(false)
-                        }
+                        val pageBar = tabTopBar?.takeIf { !isDetailScreen && current != Destination.Tab.Home }
                         Box(Modifier.fillMaxSize().weight(1f)) {
-                            // Content keeps its focus while the rail is open — screens
-                            // claim entry focus whenever their data lands — but it must
-                            // not advertise it behind a menu the viewer is still in.
-                            CompositionLocalProvider(LocalTvFocusDecor provides (zone == Zone.Content)) {
-                                if (showSearch) {
-                                    searchUi()
-                                } else {
-                                    ScreenContent(
-                                        nav, api, formFactor, player, gps,
-                                        contentActive = zone == Zone.Content,
-                                        onSearchClick = openSearch,
-                                        homeTopBar = tabTopBar,
-                                        serverUrl = serverUrl,
-                                        onLogout = onLogout,
-                                    )
+                            UnderTopBar(bar = pageBar?.let { { it(true) } }, scrolledFill = 0.92f) {
+                                // Content keeps its focus while the rail is open — screens
+                                // claim entry focus whenever their data lands — but it must
+                                // not advertise it behind a menu the viewer is still in.
+                                CompositionLocalProvider(LocalTvFocusDecor provides (zone == Zone.Content)) {
+                                    if (showSearch) {
+                                        searchUi()
+                                    } else {
+                                        ScreenContent(
+                                            nav, api, formFactor, player, gps,
+                                            contentActive = zone == Zone.Content,
+                                            onSearchClick = openSearch,
+                                            homeTopBar = tabTopBar,
+                                            serverUrl = serverUrl,
+                                            onLogout = onLogout,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1600,8 +1606,7 @@ private fun DetailContent(
     }
 }
 
-/** Wraps a tab screen with the phone top bar on phones. Desktop/TV use the
- *  scaffold-level KobTopBar instead. */
+// Desktop/TV pin their bar once, at the scaffold, rather than per tab.
 @Composable
 internal fun TabScreenWithTopBar(
     onMenuClick: (() -> Unit)?,
@@ -1613,16 +1618,11 @@ internal fun TabScreenWithTopBar(
         Box(Modifier.fillMaxSize()) { content() }
         return
     }
-    PageBackdropHost {
-        val overlap = phoneTopBarOverlap
-        Box(Modifier.fillMaxSize().padding(top = overlap)) {
-            CompositionLocalProvider(LocalTopChromeOverlap provides overlap) { content() }
-        }
-        KobPhoneTopBar(
-            onSearchClick = { onSearchClick?.invoke() },
-            onMenuClick = onMenuClick,
-        )
-    }
+    UnderTopBar(
+        bar = { KobPhoneTopBar(onSearchClick = { onSearchClick?.invoke() }, onMenuClick = onMenuClick) },
+        barHeight = phoneTopBarOverlap,
+        content = content,
+    )
 }
 
 @Composable

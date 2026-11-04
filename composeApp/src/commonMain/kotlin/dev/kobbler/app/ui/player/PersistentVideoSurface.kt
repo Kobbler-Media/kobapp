@@ -89,17 +89,34 @@ fun PersistentVideoSurface(
     if (!state.isVideoPlaying && cast == null) return
 
     if (cast != null) {
+        if (state.isCastExpanded) {
+            CastExpandedController(
+                session = cast,
+                subtitle = cast.subtitle,
+                artUrl = state.backdropUrl ?: state.posterUrl,
+                onPlayPause = { state.onCastPlayPause?.invoke() },
+                onSeekTo = { ms -> state.onCastSeek?.invoke(ms) },
+                onDisconnect = { state.onCastDisconnect?.invoke() },
+                onCollapse = { state.isCastExpanded = false },
+                onSelectSubtitle = { id -> state.onCastSubtitle?.invoke(id) },
+                onSelectAudio = { index -> state.onCastAudio?.invoke(index) },
+            )
+            return
+        }
         Box(Modifier.fillMaxSize().then(if (miniBottomInset > 0.dp) Modifier.padding(bottom = miniBottomInset) else Modifier)) {
             CastMiniController(
                 deviceName = cast.deviceName,
                 title = cast.mediaTitle,
-                subtitle = state.subtitle,
+                subtitle = cast.subtitle,
                 isPlaying = cast.isPlaying,
                 positionMs = cast.positionMs,
                 durationMs = cast.durationMs,
+                connecting = cast.connecting,
+                skip = cast.skip,
                 onPlayPause = { state.onCastPlayPause?.invoke() },
                 onSeekTo = { ms -> state.onCastSeek?.invoke(ms) },
                 onDisconnect = { state.onCastDisconnect?.invoke() },
+                onExpand = { state.isCastExpanded = true },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }

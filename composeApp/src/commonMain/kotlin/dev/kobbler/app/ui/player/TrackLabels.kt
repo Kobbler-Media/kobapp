@@ -32,9 +32,15 @@ internal fun List<TrackInfo>.labelledBy(server: List<PlaybackSubtitleTrackDto>):
 private val GenericTitle = Regex("""(?i)\s*((track|subtitles?|subs?|stream|text)\s*#?\s*[\d:]*|subrip|srt|ass|ssa|pgs|vobsub|webvtt|mov_text)\s*""")
 
 private fun PlaybackSubtitleTrackDto.label(position: Int) = buildString {
-    val named = title?.takeIf { it.isNotBlank() && !(GenericTitle.matches(it) && !language.isNullOrBlank()) }
-    append(named ?: language?.takeIf { it.isNotBlank() }?.uppercase() ?: title?.takeIf { it.isNotBlank() } ?: "Track ${position + 1}")
+    val lang = language?.takeIf { it.isNotBlank() }
+    val named = title?.takeIf { it.isNotBlank() && !(GenericTitle.matches(it) && lang != null) }
+    // "European" and "Latin American" are two Spanish tracks, not two languages.
+    val namesLanguage = named != null && named.split(Regex("[^\\p{L}]+")).any { sameLanguage(it, lang) }
+    when {
+        named != null && lang != null && !namesLanguage -> append("${lang.uppercase()} · $named")
+        else -> append(named ?: lang?.uppercase() ?: title?.takeIf { it.isNotBlank() } ?: "Track ${position + 1}")
+    }
     if (isForced) append(" · forced")
-    if (isHearingImpaired) append(" · SDH")
+    if (isHearingImpaired && named?.contains("SDH", ignoreCase = true) != true) append(" · SDH")
     if (isDefault) append(" · default")
 }

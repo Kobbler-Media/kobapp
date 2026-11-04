@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 /** Listening along turns the book to where the narrator is. */
@@ -40,6 +41,11 @@ class AudiobookSyncControllerTest {
             controller.start("b1", player, chapterCount = 10)
             player.seekTo(6_000)
             assertEquals(3, withTimeout(5_000) { controller.suggestedChapter.first { it >= 0 } })
+            assertEquals(true, player.loadedSource?.mpegAudio, "an mp3 is opened as mpeg audio")
+            assertContains(player.loadedSource!!.url, "/audio/f1?container=mp4")
+            controller.handlePlayerFinished("b1")
+            assertEquals(true, player.loadedSource?.mpegAudio, "the next mp3 too")
+            assertContains(player.loadedSource!!.url, "/audio/f2?container=mp4")
         } finally {
             scope.cancel()
             server.close()

@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.data.BufferClass
+import dev.kobbler.app.data.CastSkip
+import dev.kobbler.app.data.CastTracks
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.ui.navigation.Destination
@@ -54,10 +56,16 @@ fun GlobalPlayerState.fullscreenExit(
  */
 data class CastSessionDto(
     val deviceName: String,
+    val mediaId: String?,
+    val mediaType: String?,
     val mediaTitle: String,
+    val subtitle: String?,
     val positionMs: Long,
     val durationMs: Long,
     val isPlaying: Boolean,
+    val connecting: Boolean = false,
+    val tracks: CastTracks? = null,
+    val skip: CastSkip? = null,
 )
 
 /**
@@ -186,10 +194,13 @@ class GlobalPlayerState {
     // Cast — when non-null, PersistentVideoSurface renders CastMiniController
     // instead of the local mini player and skips the video surface entirely.
     var castSession by mutableStateOf<CastSessionDto?>(null)
+    var isCastExpanded by mutableStateOf(false)
     var onCastPlayPause: (() -> Unit)? = null
     var onCastDisconnect: (() -> Unit)? = null
     /** Absolute media time, as every position outside the player is. */
     var onCastSeek: ((Long) -> Unit)? = null
+    var onCastSubtitle: ((Int?) -> Unit)? = null
+    var onCastAudio: ((Int) -> Unit)? = null
     /** When the viewer last moved the receiver themselves. See CastHandoff. */
     var castScrubbedAt: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
 
@@ -399,6 +410,9 @@ class GlobalPlayerState {
     var lastSaved: Pair<String, Int>? = null
 
     val isActive: Boolean get() = mediaId != null || preparingFor != null
+
+    /** A cast this device joined has nothing open here, and still needs its transport. */
+    val showsPlayerSurface: Boolean get() = isActive || castSession != null
     val isVideoPlaying: Boolean get() = isFullscreen || isMiniPlayer
 
     val renderableServerSubtitles: List<dev.kobbler.app.data.PlaybackSubtitleTrackDto>
@@ -674,9 +688,12 @@ class GlobalPlayerState {
         debridPlayback = null
         onSwitchStream = null
         castSession = null
+        isCastExpanded = false
         onCastPlayPause = null
         onCastDisconnect = null
         onCastSeek = null
+        onCastSubtitle = null
+        onCastAudio = null
         castScrubbedAt = null
         isFullscreen = false
         isMiniPlayer = false
@@ -914,6 +931,10 @@ class GlobalPlayerState {
 
     /** Unmute if we muted for preload, then play. */
     fun playUnmuted(player: dev.kobbler.kobplayer.Player) {
+        if (castSession != null && mediaType in CastableTypes) {
+            endPreload(player)
+            return
+        }
         if (mutedForPreload) {
             player.setPreloading(false)
             mutedForPreload = false

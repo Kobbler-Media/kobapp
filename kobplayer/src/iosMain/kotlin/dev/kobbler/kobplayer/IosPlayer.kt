@@ -202,6 +202,8 @@ internal class IosPlayer(
                 media.addOption(":network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
                 headers["referer"]?.let { media.addOption(":http-referrer=$it") }
                 source.startTimeSec?.let { media.addOption(":start-time=$it") }
+                // mkv_trusted is kobvlc's module; stock MobileVLCKit only gets the MPEG audio choice.
+                if (source.mpegAudio) media.addOption(":${vlcDemuxOption(source)}")
 
                 vlcMediaPlayer.media = media
                 vlcMediaPlayer.play()

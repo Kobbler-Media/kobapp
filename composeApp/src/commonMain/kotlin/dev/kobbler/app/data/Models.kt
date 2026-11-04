@@ -668,6 +668,10 @@ data class DiscoverDetail(
     val ratingCount: Int? = null,
     val releaseDate: LocalDate? = null,
     val releaseDates: ReleaseDates? = null,
+    val tagline: String? = null,
+    val contentRating: String? = null,
+    val directors: List<String> = emptyList(),
+    val writers: List<String> = emptyList(),
 ) {
     val libraryStatus: LibraryStatus get() = when {
         isInLibrary -> LibraryStatus.InLibrary

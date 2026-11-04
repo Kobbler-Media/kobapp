@@ -388,6 +388,7 @@ data class ClientCapabilities(
     @SerialName("audio_codecs") val audioCodecs: List<String>,
     val containers: List<String>,
     @SerialName("supports_interlaced") val supportsInterlaced: Boolean? = null,
+    @SerialName("max_height") val maxHeight: Int? = null,
 )
 
 @Serializable
@@ -771,6 +772,9 @@ sealed interface TtsStreamEvent {
         val audioB64: String,
         /** Rate this sentence was RENDERED at — each one is its own render. */
         val speed: Double,
+        /** Where the sentence sits in a cast render's stream, which carries no audio here. */
+        val audioOffsetMs: Int? = null,
+        val durationMs: Int? = null,
     ) : TtsStreamEvent
 
     /** Start of a paragraph in the streaming path. `audioOffsetMs` is global; word_offset is global word index. */
@@ -1819,8 +1823,8 @@ internal fun MovieDetailDto.toMovie(base: String): Movie = Movie(
     duration = formatRuntime(runtime),
     runtimeMinutes = runtime,
     cast = cast.map { c -> CastMember(name = c.personName, character = c.characterName, imageUrl = resolveUrlOrNull(base, c.personImageUrl), personId = c.personId) },
-    directors = crew.creditsFor("Director"),
-    writers = crew.creditsFor("Screenplay", "Writer", "Story"),
+    directors = crew.directors(),
+    writers = crew.writers(),
     filePath = if (isInLibrary) "stream" else null,
     wantStatus = wantStatus,
     isWatched = watched ?: false,
@@ -1832,6 +1836,10 @@ internal fun MovieDetailDto.toMovie(base: String): Movie = Movie(
 
 private fun List<CrewDto>.creditsFor(vararg jobs: String): List<String> =
     filter { it.job in jobs }.map { it.personName }.distinct()
+
+private fun List<CrewDto>.directors() = creditsFor("Director")
+
+private fun List<CrewDto>.writers() = creditsFor("Screenplay", "Writer", "Story")
 
 internal fun ShowDetailDto.toTvShow(base: String): TvShow {
     val seasons = this.seasons
@@ -2800,18 +2808,22 @@ class KobblerApi(
         "$apiUrl/api/v1/admin/books/$bookId/audio/$fileId"
 
     /**
-     * The player source for one audiobook file: its URL, its auth, and the buffer depth
-     * its host warrants. Every chapter hand-off built these three by hand, which is three
-     * chances for one of them to be forgotten.
+     * The player source for one audiobook file: its URL, its auth, the buffer depth its
+     * host warrants, and whether it is MP3. Every chapter hand-off built these by hand, which
+     * is a chance per hand-off for one of them to be forgotten.
      */
-    fun audioSource(bookId: String, fileId: String): dev.kobbler.kobplayer.MediaSource.Url {
-        offline?.audioUrl(bookId, fileId)?.let {
-            return dev.kobbler.kobplayer.MediaSource.Url(url = it, networkCacheMs = LanNetworkCacheMs)
+    fun audioSource(bookId: String, file: AudioFileDto): dev.kobbler.kobplayer.MediaSource.Url {
+        val mpegAudio = file.format.equals("mp3", ignoreCase = true)
+        offline?.audioUrl(bookId, file.id)?.let {
+            return dev.kobbler.kobplayer.MediaSource.Url(url = it, networkCacheMs = LanNetworkCacheMs, mpegAudio = mpegAudio)
         }
-        val url = audioStreamUrl(bookId, fileId)
+        // The server's mp4 copy of an mp3 seeks by sample table on every player; the web
+        // element and MobileVLCKit otherwise land seconds off the time they report.
+        val url = audioStreamUrl(bookId, file.id) + if (mpegAudio) "?container=mp4" else ""
         return dev.kobbler.kobplayer.MediaSource.Url(
             url = withHeldPlaybackToken(url),
             networkCacheMs = networkCacheMsFor(url),
+            mpegAudio = mpegAudio,
         )
     }
 
@@ -2908,23 +2920,50 @@ class KobblerApi(
                 requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
                 socketTimeoutMillis = BookFetchTimeoutMs
             }
-        }.execute { response ->
-            if (!response.status.isSuccess()) {
-                throw ApiException(
-                    response.status.value,
-                    ttsErrorMessage(response.status.value, response.status.description, response.bodyAsText()),
-                )
+        }.execute { readTtsEvents(it, onEvent) }
+    }
+
+    /** Render [text] for a cast receiver, returning the render's id. Same body as a read. */
+    suspend fun startTtsCast(text: String, voice: String? = null, speed: Double? = null): String {
+        val body = httpClient.post("$apiUrl/api/v1/admin/tts/cast") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(TtsSynthesizeRequest.serializer(), TtsSynthesizeRequest(text, voice, speed)))
+        }.checkedBody()
+        return (json.parseToJsonElement(body) as JsonObject)["id"]!!.jsonPrimitive.content
+    }
+
+    /** What a receiver holding [token] plays for the cast render [id]. */
+    fun ttsCastAudioUrl(id: String, token: String): String =
+        withPlaybackToken("$apiUrl/api/v1/admin/tts/cast/$id/audio", token)
+
+    /** The cast render's timeline: what [streamTtsSynthesize] sends, without the audio. */
+    suspend fun streamTtsCastEvents(id: String, onEvent: suspend (TtsStreamEvent) -> Unit) {
+        httpClient.prepareGet("$apiUrl/api/v1/admin/tts/cast/$id/events") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+            timeout {
+                requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                socketTimeoutMillis = BookFetchTimeoutMs
             }
-            val channel = response.bodyAsChannel()
-            val framer = JsonObjectFramer()
-            val chunk = ByteArray(TtsStreamChunkBytes)
-            while (true) {
-                val read = channel.readAvailable(chunk, 0, chunk.size)
-                if (read < 0) break
-                if (read == 0) continue
-                for (obj in framer.feed(chunk, read)) {
-                    onEvent(decodeTtsEvent(obj) ?: continue)
-                }
+        }.execute { readTtsEvents(it, onEvent) }
+    }
+
+    private suspend fun readTtsEvents(response: HttpResponse, onEvent: suspend (TtsStreamEvent) -> Unit) {
+        if (!response.status.isSuccess()) {
+            throw ApiException(
+                response.status.value,
+                ttsErrorMessage(response.status.value, response.status.description, response.bodyAsText()),
+            )
+        }
+        val channel = response.bodyAsChannel()
+        val framer = JsonObjectFramer()
+        val chunk = ByteArray(TtsStreamChunkBytes)
+        while (true) {
+            val read = channel.readAvailable(chunk, 0, chunk.size)
+            if (read < 0) break
+            if (read == 0) continue
+            for (obj in framer.feed(chunk, read)) {
+                onEvent(decodeTtsEvent(obj) ?: continue)
             }
         }
     }
@@ -2955,6 +2994,8 @@ class KobblerApi(
                 audioB64 = str("audio_b64") ?: "",
                 // Absent on older backends, which only ever rendered at 1.0.
                 speed = dbl("speed") ?: 1.0,
+                audioOffsetMs = int("audio_offset_ms"),
+                durationMs = int("duration_ms"),
             )
             "paragraph_start" -> TtsStreamEvent.ParagraphStart(
                 index = int("index") ?: 0,
@@ -3867,7 +3908,7 @@ class KobblerApi(
         decodeMap<WatchNextResponseDto, List<InProgressItem>>(get("/api/v1/admin/discover")) { it.watchNext }
 
     suspend fun getDiscoverDetail(mediaType: String, provider: String, providerId: String): DiscoverDetail {
-        val respText = get("/api/v1/admin/discover/$mediaType/$provider/$providerId")
+        val respText = get("/api/v1/admin/discover/$mediaType/$provider/${providerId.encodeURLPathPart()}")
         return withContext(Dispatchers.Default) {
             val dto = json.decodeFromString<DiscoverDetailDto>(respText)
             val d = dto.details
@@ -3894,6 +3935,16 @@ class KobblerApi(
                         ?.mapNotNull { it["name"]?.jsonPrimitive?.content } ?: emptyList()
                 } catch (_: Exception) { emptyList() }
             }
+
+            val crew = try {
+                d["crew"]?.let { json.decodeFromString<List<JsonObject>>(it.toString()) }?.mapNotNull { c ->
+                    CrewDto(
+                        personName = c["name"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                        department = c["department"]?.jsonPrimitive?.content ?: "",
+                        job = c["job"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                    )
+                } ?: emptyList()
+            } catch (_: Exception) { emptyList() }
 
             val identifiers = try {
                 d["identifiers"]?.jsonObject?.mapValues { (_, v) -> v.jsonPrimitive.content }
@@ -3931,6 +3982,10 @@ class KobblerApi(
                 releaseDates = runCatching {
                     (d["release_dates"] as? JsonObject)?.let { json.decodeFromJsonElement(ReleaseDatesDto.serializer(), it).toModel() }
                 }.getOrNull(),
+                tagline = str("tagline")?.ifBlank { null },
+                contentRating = str("content_rating")?.ifBlank { null },
+                directors = crew.directors(),
+                writers = crew.writers(),
             )
         }
     }
@@ -4466,11 +4521,20 @@ class KobblerApi(
     suspend fun getMovieStreamUrl(movieId: String): String? = getMovieStreamSession(movieId)?.url
     suspend fun getEpisodeStreamUrl(episodeId: String): String? = getEpisodeStreamSession(episodeId)?.url
 
+    /** A session for another device to play, built for what that device can decode. */
+    suspend fun createCastSession(
+        mediaType: String,
+        mediaId: String,
+        capabilities: ClientCapabilities,
+        startTimeSec: Int,
+    ): StreamSession? = createDirectSession(mediaType, mediaId, startTimeSec, capabilities = capabilities)
+
     private suspend fun createDirectSession(
         mediaType: String,
         mediaId: String,
         startTimeSec: Int? = null,
         audioTitle: String? = null,
+        capabilities: ClientCapabilities = capabilities(),
     ): StreamSession? {
         val qualityPref = UserSettings.getString(KEY_STREAMING_QUALITY) ?: "auto"
         val forceTranscode = qualityPref != "auto"
@@ -4484,7 +4548,7 @@ class KobblerApi(
         val reqBody = json.encodeToString(CreateSessionRequest.serializer(), CreateSessionRequest(
             mediaType = mediaType,
             mediaId = mediaId,
-            capabilities = capabilities(),
+            capabilities = capabilities,
             forceTranscode = forceTranscode,
             maxBitrateKbps = maxBitrate,
             preferredAudioLanguage = prefs.audioLanguage,

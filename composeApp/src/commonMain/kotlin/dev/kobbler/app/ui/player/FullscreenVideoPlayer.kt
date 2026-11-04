@@ -981,7 +981,7 @@ internal suspend fun switchAudioAndResume(
     state.playUnmuted(player)
 }
 
-private fun skipLabel(segmentType: String) = when (segmentType) {
+internal fun skipLabel(segmentType: String) = when (segmentType) {
     "intro" -> "Skip Intro"
     "credits" -> "Skip Credits"
     "recap" -> "Skip Recap"

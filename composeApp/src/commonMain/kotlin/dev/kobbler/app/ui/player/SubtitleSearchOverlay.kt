@@ -21,10 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.HearingDisabled
 import androidx.compose.material.icons.outlined.Subtitles
@@ -53,7 +51,11 @@ import dev.kobbler.app.data.PlaybackSubtitleTrackDto
 import dev.kobbler.app.data.SubtitleSearchResultDto
 import dev.kobbler.app.theme.KobappColors
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.platform.FormFactor
+import dev.kobbler.app.theme.LocalFormFactor
+import dev.kobbler.app.ui.components.KobBackButton
 import dev.kobbler.app.ui.components.KobButton
+import dev.kobbler.app.ui.navigation.InterceptBack
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
@@ -126,6 +128,7 @@ fun SubtitleSearchOverlay(
     }
 
     LaunchedEffect(Unit) { search() }
+    InterceptBack(enabled = true, onBack = onDismiss)
 
     // The overlay sits outside the navigation focus host, so it hosts its own scope:
     // without one nothing claims entry focus and the D-pad has nowhere to land.
@@ -250,25 +253,8 @@ private fun Header(onDismiss: () -> Unit, loading: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val backFocus = rememberTvFocusState()
-            Box(
-                modifier = Modifier
-                    .focusKey("back")
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .tvFocusGlow(backFocus, cornerRadiusDp = 18f)
-                    .background(colors.elev2)
-                    .border(1.dp, colors.lineSoft, CircleShape)
-                    .pointerHoverIcon(PointerIcon.Hand)
-                    .tvClickable(backFocus, onDismiss),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                    tint = colors.textHi,
-                    modifier = Modifier.size(18.dp),
-                )
+            if (LocalFormFactor.current != FormFactor.TV) {
+                KobBackButton(onDismiss, modifier = Modifier.focusKey("back", entryEligible = false))
             }
             Column(Modifier.weight(1f)) {
                 Text(

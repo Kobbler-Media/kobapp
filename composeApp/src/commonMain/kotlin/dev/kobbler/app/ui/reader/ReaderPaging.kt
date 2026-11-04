@@ -10,7 +10,10 @@ import dev.kobbler.app.ui.reader.pack.BlockOffset
 import dev.kobbler.app.ui.reader.pack.Position
 import kotlin.math.min
 
-internal data class PageRef(val chapter: Int, val page: Int)
+internal data class PageRef(val chapter: Int, val page: Int) {
+    // Pager keys go into Android's saved-state Bundle, which refuses a data class.
+    val pagerKey: Long get() = (chapter.toLong() shl 32) or page.toLong()
+}
 
 /**
  * Where the reader is: a chapter and an anchor character in it. The page is derived from

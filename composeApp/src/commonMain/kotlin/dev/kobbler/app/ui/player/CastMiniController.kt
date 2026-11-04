@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,9 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
@@ -50,22 +53,22 @@ fun CastMiniController(
     onPlayPause: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onDisconnect: () -> Unit,
+    onExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    connecting: Boolean = false,
+    skip: CastSkip? = null,
 ) {
     val colors = KobappTheme.colors
     val type = KobappTheme.type
     val castTint = colors.accCal
-    val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs) else 0f
-    // What the finger is on, which leads the receiver: a scrub is a round trip to the
-    // other end of the house, and the next broadcast from it is up to five seconds away.
-    var scrubFraction by remember(positionMs) { mutableStateOf<Float?>(null) }
 
     Column(
         modifier = modifier
             .focusKeyGroup("cast")
             .fillMaxWidth()
             .height(104.dp)
-            .background(colors.elev1),
+            .background(colors.elev1)
+            .pointerInput(onExpand) { detectTapGestures { onExpand() } },
     ) {
         Box(
             modifier = Modifier
@@ -109,7 +112,7 @@ fun CastMiniController(
                             .background(castTint),
                     )
                     Text(
-                        text = "Casting to $deviceName",
+                        text = castingLabel(deviceName, connecting),
                         style = type.caption,
                         color = castTint,
                         maxLines = 1,
@@ -136,6 +139,8 @@ fun CastMiniController(
                 }
             }
 
+            skip?.let { CastSkipButton(it, onSeekTo) }
+
             CastTransportButton(
                 key = "playpause",
                 icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -155,48 +160,71 @@ fun CastMiniController(
             )
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val shown = scrubFraction?.let { (it * durationMs).toLong() } ?: positionMs
-            Text(formatTime(shown), style = type.caption, color = colors.textLo)
-            // The player's own bar, so a scrub reads and behaves the same whether the
-            // picture is here or across the room — including a step per D-pad press.
-            MediaSeekBar(
-                progress = { scrubFraction ?: progress },
-                onSeek = { fraction ->
-                    scrubFraction = fraction
-                    onSeekTo((fraction * durationMs).toLong())
-                },
-                onSeeking = { scrubFraction = it },
-                modifier = Modifier.weight(1f),
-                activeColor = castTint,
-                inactiveColor = colors.textHi.copy(alpha = 0.18f),
-                focusDecoration = Modifier.focusKey("seek"),
-                dpadStepFraction = if (durationMs > 0) (10_000f / durationMs) else 0f,
-            )
-            Text(formatTime(durationMs), style = type.caption, color = colors.textLo)
-        }
+        CastSeekRow(
+            positionMs = positionMs,
+            durationMs = durationMs,
+            onSeekTo = onSeekTo,
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
+        )
+    }
+}
+
+internal fun castingLabel(deviceName: String, connecting: Boolean) =
+    if (connecting) "Connecting to $deviceName…" else "Casting to $deviceName"
+
+@Composable
+internal fun CastSeekRow(
+    positionMs: Long,
+    durationMs: Long,
+    onSeekTo: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KobappTheme.colors
+    val type = KobappTheme.type
+    val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs) else 0f
+    // What the finger is on, which leads the receiver: a scrub is a round trip to the
+    // other end of the house, and the next broadcast from it is up to five seconds away.
+    var scrubFraction by remember(positionMs) { mutableStateOf<Float?>(null) }
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val shown = scrubFraction?.let { (it * durationMs).toLong() } ?: positionMs
+        Text(formatTime(shown), style = type.caption, color = colors.textLo)
+        // The player's own bar, so a scrub reads and behaves the same whether the
+        // picture is here or across the room — including a step per D-pad press.
+        MediaSeekBar(
+            progress = { scrubFraction ?: progress },
+            onSeek = { fraction ->
+                scrubFraction = fraction
+                onSeekTo((fraction * durationMs).toLong())
+            },
+            onSeeking = { scrubFraction = it },
+            modifier = Modifier.weight(1f),
+            activeColor = colors.accCal,
+            inactiveColor = colors.textHi.copy(alpha = 0.18f),
+            focusDecoration = Modifier.focusKey("seek"),
+            dpadStepFraction = if (durationMs > 0) (10_000f / durationMs) else 0f,
+        )
+        Text(formatTime(durationMs), style = type.caption, color = colors.textLo)
     }
 }
 
 @Composable
-private fun CastTransportButton(
+internal fun CastTransportButton(
     key: String,
     icon: ImageVector,
     description: String,
     tint: Color,
     iconSize: Dp,
     onClick: () -> Unit,
+    size: Dp = 40.dp,
 ) {
     Box(
         modifier = Modifier
             .focusKey(key)
-            .size(40.dp)
+            .size(size)
             .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f)
             .clip(RoundedCornerShape(999.dp))
             .clickable(onClick = onClick),

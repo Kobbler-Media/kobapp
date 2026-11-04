@@ -16,11 +16,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.data.AudioFileDto
 import dev.kobbler.app.data.Book
+import dev.kobbler.app.data.CastAudiobookChapter
+import dev.kobbler.app.data.CastAudiobookMetadata
+import dev.kobbler.app.data.CastInitAudiobook
 import dev.kobbler.app.data.Bookmark
 import dev.kobbler.app.data.BookmarkRepository
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TranscriptSegmentDto
 import dev.kobbler.app.data.UnifiedChapterDto
+import dev.kobbler.app.platform.CastSender
 import dev.kobbler.app.platform.PlaybackTimeline
 import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.Player
@@ -78,6 +82,11 @@ class AudiobookPlayerState internal constructor(
         internal set
     var playbackSpeed by mutableFloatStateOf(1f)
         internal set
+
+    /** The device the book is playing on instead of this one, while it is. */
+    var castingTo by mutableStateOf<String?>(null)
+        internal set
+    internal var cast: CastSender? = null
 
     val fileTimeOffsetsMs: List<Long> by derivedStateOf {
         var offset = 0L
@@ -153,7 +162,7 @@ class AudiobookPlayerState internal constructor(
         currentFileIndex = index
         errorMessage = null
         val startSec = (positionMs / 1000).toInt().takeIf { it > RESUME_MIN_SECONDS }
-        player.load(api.audioSource(book.id, file.id).copy(startTimeSec = startSec))
+        player.load(api.audioSource(book.id, file).copy(startTimeSec = startSec))
         player.play()
     }
 
@@ -212,8 +221,74 @@ class AudiobookPlayerState internal constructor(
             }
         }
         val localMs = (targetGlobalMs - (offsets.getOrNull(targetFileIdx) ?: 0L)).coerceAtLeast(0)
-        if (targetFileIdx != currentFileIndex) play(targetFileIdx, localMs)
-        else player.seekTo(localMs)
+        goTo(targetFileIdx, localMs)
+    }
+
+    private fun goTo(fileIdx: Int, localMs: Long) {
+        val receiver = cast
+        when {
+            receiver != null -> {
+                currentFileIndex = fileIdx
+                currentMs = localMs
+                scope.launch {
+                    receiver.send("AUDIOBOOK_SEEK", """{"fileIndex":$fileIdx,"time":${localMs / 1000.0}}""")
+                }
+            }
+            fileIdx != currentFileIndex -> play(fileIdx, localMs)
+            else -> player.seekTo(localMs)
+        }
+    }
+
+    fun togglePlayPause() {
+        val receiver = cast ?: return player.togglePlayPause()
+        playerState = if (playerState == PlayerState.PLAYING) PlayerState.PAUSED else PlayerState.PLAYING
+        scope.launch { receiver.togglePlayPause() }
+    }
+
+    fun pause() {
+        if (cast == null) player.pause()
+        else if (playerState == PlayerState.PLAYING) togglePlayPause()
+    }
+
+    fun setSpeed(rate: Float) {
+        player.setPlaybackSpeed(rate)
+        val receiver = cast ?: return
+        playbackSpeed = rate
+        scope.launch { receiver.send("AUDIOBOOK_RATE", """{"rate":$rate}""") }
+    }
+
+    internal fun castPayload(token: String) = CastInitAudiobook(
+        baseUrl = api.apiUrl,
+        token = token,
+        bookId = book.id,
+        fileIds = audioFiles.map { it.id },
+        fileDurations = audioFiles.map { it.durationSeconds ?: 0.0 },
+        currentFileIndex = currentFileIndex,
+        currentTime = player.currentMs.value / 1000.0,
+        duration = totalBookDurationMs / 1000.0,
+        chapters = chapters.mapNotNull { ch ->
+            val fileIndex = audioFiles.indexOfFirst { it.id == ch.fileId }.takeIf { it >= 0 } ?: return@mapNotNull null
+            CastAudiobookChapter(ch.chapterIndex, fileIndex, ch.title, ch.startSeconds, ch.endSeconds)
+        },
+        metadata = CastAudiobookMetadata(
+            title = book.title,
+            author = book.author.takeIf { it.isNotBlank() },
+            coverUrl = book.coverUrl.takeIf { it.isNotBlank() }?.let { if (it.startsWith("http")) it else api.apiUrl + it },
+        ),
+        playbackRate = playbackSpeed,
+    )
+
+    /** Back on this device at the receiver's place, playing only if it was. */
+    internal fun handBackFromCast() {
+        if (cast == null) return
+        cast = null
+        castingTo = null
+        val playing = playerState == PlayerState.PLAYING
+        val (index, at) = currentFileIndex to currentMs
+        scope.launch {
+            playFileAt(index, at)
+            if (playing) awaitFileStart(at) else player.pause()
+        }
     }
 
     fun skipBack() = seekToGlobal((globalPositionMs - AUDIOBOOK_SKIP_BACK_MS).coerceAtLeast(0))
@@ -238,8 +313,7 @@ class AudiobookPlayerState internal constructor(
      */
     private fun seekInFile(fileId: String, localMs: Long) {
         val fileIdx = audioFiles.indexOfFirst { it.id == fileId }.takeIf { it >= 0 } ?: return
-        val target = localMs.coerceAtLeast(0)
-        if (fileIdx != currentFileIndex) play(fileIdx, target) else player.seekTo(target)
+        goTo(fileIdx, localMs.coerceAtLeast(0))
     }
 
     fun jumpToChapter(chapter: UnifiedChapterDto) =
@@ -277,6 +351,8 @@ class AudiobookPlayerState internal constructor(
     }
 
     fun saveProgress() {
+        // The receiver saves its own place, and this player is parked where the cast began.
+        if (cast != null) return
         val fileId = audioFiles.getOrNull(currentFileIndex)?.id ?: return
         val pos = player.currentMs.value / 1000.0
         val curGlobal = (fileTimeOffsetsMs.getOrNull(currentFileIndex) ?: 0L) + player.currentMs.value
@@ -362,7 +438,7 @@ fun rememberAudiobookState(
             delay(1000)
             state.sleepRemainingMs -= 1000
         }
-        player.pause()
+        state.pause()
         state.sleepMode = SleepMode.Off
     }
 
@@ -370,7 +446,7 @@ fun rememberAudiobookState(
         if (state.sleepMode != SleepMode.EndOfChapter) return@LaunchedEffect
         val sleepChapter = state.currentChapter ?: return@LaunchedEffect
         snapshotFlow { state.currentChapter }.first { it != sleepChapter }
-        player.pause()
+        state.pause()
         state.sleepMode = SleepMode.Off
     }
 

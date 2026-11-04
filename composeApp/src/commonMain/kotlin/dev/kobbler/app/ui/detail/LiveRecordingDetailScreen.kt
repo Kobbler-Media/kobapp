@@ -84,11 +84,13 @@ fun LiveRecordingDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(dimens.s3),
                 modifier = Modifier.fillMaxWidth().focusKeyGroup("rechead"),
             ) {
-                Box(Modifier.offset(x = BackButtonGutter(formFactor, gutter) - gutter)) {
-                    KobBackButton(
-                        onBack,
-                        modifier = Modifier.focusKey("back", entryEligible = false),
-                    )
+                if (formFactor != FormFactor.TV) {
+                    Box(Modifier.offset(x = BackButtonGutter(formFactor, gutter) - gutter)) {
+                        KobBackButton(
+                            onBack,
+                            modifier = Modifier.focusKey("back", entryEligible = false),
+                        )
+                    }
                 }
                 LiveThumb(current.imageUrl, width = 112.dp, height = 64.dp)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -1,5 +1,6 @@
 package dev.kobbler.app.offline
 
+import dev.kobbler.app.data.AudioFileDto
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
@@ -211,7 +212,7 @@ class OfflineEngineTest {
     fun anAudiobookPlaysItsFilesFromDiskWithNoNetwork() = runBlocking {
         downloadedFrom(filesApi, OfflineItem.keyOf(OfflineKind.Audiobook, "b1")) { engine.downloadAudiobook(book()) }
         goOffline()
-        val source = filesApi.audioSource("b1", "f1")
+        val source = filesApi.audioSource("b1", AudioFileDto(id = "f1", fileIndex = 0, format = "MP3", fileName = "01.mp3"))
         assertTrue(source.url.startsWith("file://"), source.url)
         assertContentEquals(chapterOne, read(source.url))
     }

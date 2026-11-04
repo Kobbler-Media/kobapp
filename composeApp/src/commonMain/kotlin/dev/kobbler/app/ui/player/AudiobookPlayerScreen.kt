@@ -57,6 +57,9 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.player.audiobook.AudiobookPlayerState
 import dev.kobbler.app.ui.player.audiobook.ChapterListPanel
 import dev.kobbler.app.ui.player.audiobook.SleepMode
+import dev.kobbler.app.platform.CastButton
+import dev.kobbler.app.platform.castManager
+import dev.kobbler.app.ui.player.audiobook.AudiobookCastHandoff
 import dev.kobbler.app.ui.player.audiobook.SleepTimerMenu
 import dev.kobbler.app.ui.player.audiobook.TransportRow
 import dev.kobbler.app.ui.player.audiobook.rememberAudiobookState
@@ -76,6 +79,7 @@ fun AudiobookPlayerScreen(
     onOpenReader: (() -> Unit)? = null,
 ) {
     val state = rememberAudiobookState(book, api)
+    AudiobookCastHandoff(remember { castManager() }, state)
 
     DisposableEffect(Unit) {
         PlaybackLifecycle.startBackgroundPlayback()
@@ -84,7 +88,7 @@ fun AudiobookPlayerScreen(
     DisposableEffect(state.player) {
         PlaybackLifecycle.setPlayer(state.player)
         PlaybackLifecycle.setControls(
-            onPlayPause = { state.player.togglePlayPause() },
+            onPlayPause = state::togglePlayPause,
             onSkipForward = state::skipForward,
             onSkipBack = state::skipBack,
             onStop = {
@@ -163,6 +167,7 @@ internal fun AudiobookPlayerContent(
                 TopBar(
                     book = book,
                     chapterTitle = state.currentChapter?.title,
+                    castingTo = state.castingTo,
                     sleepMode = state.sleepMode,
                     sleepRemainingMs = { state.sleepRemainingMs },
                     onBack = onBack,
@@ -200,6 +205,7 @@ internal fun AudiobookPlayerContent(
 private fun TopBar(
     book: Book,
     chapterTitle: String?,
+    castingTo: String?,
     sleepMode: SleepMode,
     sleepRemainingMs: () -> Long,
     onBack: () -> Unit,
@@ -227,8 +233,8 @@ private fun TopBar(
         }
         Column(Modifier.weight(1f).padding(horizontal = if (touch) 6.dp else KobappTheme.dimens.s2)) {
             Text(
-                "Now playing",
-                color = colors.textLo,
+                castingTo?.let { "Casting to $it" } ?: "Now playing",
+                color = if (castingTo != null) colors.accAudio else colors.textLo,
                 style = type.bodySm,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -241,6 +247,7 @@ private fun TopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        CastButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), colors.textMd)
         IconButton(
             onClick = onAddBookmark,
             modifier = Modifier.focusKey("bookmark").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
@@ -290,10 +297,10 @@ private fun PhoneLayout(
                     state = state.playerState,
                     speed = state.playbackSpeed,
                     volume = state.volume,
-                    onPlayPause = { state.player.togglePlayPause() },
+                    onPlayPause = state::togglePlayPause,
                     onSkipBack = state::skipBack,
                     onSkipForward = state::skipForward,
-                    onSpeedChange = { state.player.setPlaybackSpeed(it) },
+                    onSpeedChange = state::setSpeed,
                     onVolumeChange = { state.volume = it; state.player.setVolume(it) },
                     playSize = 88.dp,
                     sideSize = 64.dp,
@@ -362,10 +369,10 @@ private fun WideLayout(
                 state = state.playerState,
                 speed = state.playbackSpeed,
                 volume = state.volume,
-                onPlayPause = { state.player.togglePlayPause() },
+                onPlayPause = state::togglePlayPause,
                 onSkipBack = state::skipBack,
                 onSkipForward = state::skipForward,
-                onSpeedChange = { state.player.setPlaybackSpeed(it) },
+                onSpeedChange = state::setSpeed,
                 onVolumeChange = { state.volume = it; state.player.setVolume(it) },
                 playSize = 96.dp,
                 sideSize = 68.dp,
@@ -490,7 +497,7 @@ private fun ProgressBlock(state: AudiobookPlayerState, modifier: Modifier = Modi
             dpadStepFraction = if (state.totalBookDurationMs > 0) 30_000f / state.totalBookDurationMs else 0f,
             // The bar is what a remote stops on, so it answers OK with the transport next to it
             // rather than leaving the press unanswered.
-            onActivate = { state.player.togglePlayPause() },
+            onActivate = state::togglePlayPause,
         )
         ProgressLabels(state, scrubMs)
     }

@@ -86,7 +86,6 @@ class MainActivity : ComponentActivity() {
         keepDownloadsRunning()
         TvWatchNext.install(this)
 
-        // Provide context for Cast SDK (actual init happens lazily after server config is fetched)
         if (!isTv()) {
             CastManager.initContext(this)
         }

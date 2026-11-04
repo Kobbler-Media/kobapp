@@ -1,6 +1,5 @@
 package dev.kobbler.app.data
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -28,8 +27,10 @@ data class CastInitSession(
     val thumbnailsUrl: String? = null,
     val chapters: List<SessionChapter> = emptyList(),
     val skipSegments: List<SkipSegment> = emptyList(),
-    val capabilities: CastCapabilities,
+    val capabilities: ClientCapabilities,
     val metadata: CastMetadata,
+    /** Where in the title the stream begins: a transcode made from a resume starts there. */
+    val startOffset: Double = 0.0,
 )
 
 @Serializable
@@ -40,42 +41,63 @@ data class CastMetadata(
     val backdropUrl: String? = null,
 )
 
-/** Shaped as the server's `ClientCapabilities`, because that is what it is used as. */
+/** The tracks the receiver can switch between, as it numbers them. */
 @Serializable
-data class CastCapabilities(
-    @SerialName("video_codecs") val videoCodecs: List<String>,
-    @SerialName("audio_codecs") val audioCodecs: List<String>,
-    val containers: List<String> = listOf("mp4"),
+data class CastTracks(
+    val subtitles: List<CastTextTrack> = emptyList(),
+    val activeSubtitleId: Int? = null,
+    val audioTracks: List<CastAudioTrack> = emptyList(),
+    val activeAudioIndex: Int? = null,
 )
 
+@Serializable
+data class CastTextTrack(
+    val id: Int,
+    val language: String? = null,
+    val title: String? = null,
+    val forced: Boolean = false,
+    val hearingImpaired: Boolean = false,
+)
+
+@Serializable
+data class CastAudioTrack(
+    val streamIndex: Int,
+    val language: String? = null,
+    val title: String? = null,
+    val codec: String? = null,
+    val channels: Int? = null,
+)
+
+/** A segment the receiver is in that the viewer can skip, and where skipping lands. */
+@Serializable
+data class CastSkip(val segmentType: String, val endSeconds: Double)
+
 /**
- * What a cast device can decode, from the only thing a sender knows about it: its name.
+ * What a cast device can decode, guessed from its name — for a receiver too old to say.
  *
- * The receiver passes this on when it mints its own sessions, so getting it wrong costs
- * a transcode the device did not need — or a stream it cannot play. Deliberately the
- * same profile the web sender uses; a device does not gain codecs by being cast to from
- * a phone.
+ * The receiver probes itself and answers a `CAPABILITIES_REQUEST`; this is only the
+ * fallback, and deliberately the same one the web sender falls back to.
  */
-fun castCapabilities(deviceName: String): CastCapabilities {
+fun castCapabilities(deviceName: String): ClientCapabilities {
     val name = deviceName.lowercase()
     val googleTv = listOf("google tv", "ccgtv", "shield", "onn", "bravia").any { it in name }
     val ultra = "ultra" in name
-    return CastCapabilities(
+    return ClientCapabilities(
         videoCodecs = buildList {
             add("h264")
             add("vp9")
             if (googleTv || ultra) add("hevc")
         },
+        // A transcode reaches the receiver as fMP4 through MSE, which rejects MP3, FLAC
+        // and Opus inside it; anything else is cheaper re-encoded to AAC than unplayable.
         audioCodecs = buildList {
             add("aac")
-            add("opus")
-            add("mp3")
-            add("flac")
             if (googleTv) {
                 add("ac3")
                 add("eac3")
             }
         },
+        containers = listOf("mp4"),
     )
 }
 
@@ -85,3 +107,42 @@ fun castMethod(sessionMethod: String?): String =
 
 fun castContentType(sessionMethod: String?): String =
     if (castMethod(sessionMethod) == "direct_play") "video/mp4" else "application/x-mpegURL"
+
+/** A book handed to the receiver, which plays its files in turn and saves the place itself. */
+@Serializable
+data class CastInitAudiobook(
+    val baseUrl: String,
+    val token: String,
+    val bookId: String,
+    val fileIds: List<String>,
+    val fileDurations: List<Double>,
+    val currentFileIndex: Int,
+    val currentTime: Double,
+    val duration: Double,
+    val chapters: List<CastAudiobookChapter>,
+    val metadata: CastAudiobookMetadata,
+    val playbackRate: Float,
+)
+
+/** Times are within the chapter's file: the receiver plays one file at a time. */
+@Serializable
+data class CastAudiobookChapter(
+    val index: Int,
+    val fileIndex: Int,
+    val title: String?,
+    val startSeconds: Double,
+    val endSeconds: Double,
+)
+
+@Serializable
+data class CastAudiobookMetadata(val title: String, val author: String? = null, val coverUrl: String? = null)
+
+/** A read-aloud handed to the receiver: one live stream the server renders as it goes. */
+@Serializable
+data class CastInitTts(
+    val url: String,
+    val title: String,
+    val subtitle: String? = null,
+    val coverUrl: String? = null,
+    val startMs: Long = 0,
+)

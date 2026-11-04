@@ -74,7 +74,7 @@ internal fun showPage(
 ) = detailPage(
     Destination.TvShowDetail("show-1"),
     mapOf<String, (HttpExchange) -> String>(SHOW_PATH to { _ -> json }) + routes,
-    canStream, gps, androidFocus, nav, formFactor, test,
+    canStream, gps, androidFocus, nav, formFactor, test = test,
 )
 
 /** A detail page driven by a remote, through the real scaffold: it is what maps the D-pad to focus moves. */
@@ -87,8 +87,10 @@ internal fun detailPage(
     androidFocus: AndroidLikeFocus? = null,
     nav: NavigationState = NavigationState(),
     formFactor: FormFactor = FormFactor.TV,
+    width: Int = 960,
+    height: Int = 540,
     test: DesktopComposeUiTest.(StubServer) -> Unit,
-) = runUiTest(width = 960, height = 540) {
+) = runUiTest(width = width, height = height) {
     DataCache.clear()
     // The page probes for streaming itself, and an unanswered probe turns it back off.
     val probe = "/api/v1/library/stats" to { _: HttpExchange -> """{"kobload_configured":$canStream}""" }

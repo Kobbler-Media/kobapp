@@ -59,4 +59,18 @@ class TrackLabelsTest {
         )
         assertEquals(listOf("ENG", "FRE", "English (Commentary)", "Subtitle"), subs.subtitleTrackInfos().map { it.label })
     }
+
+    @Test
+    fun `a title that names a variant keeps the language beside it`() {
+        val subs = listOf(
+            PlaybackSubtitleTrackDto(trackId = "a", title = "European", language = "spa"),
+            PlaybackSubtitleTrackDto(trackId = "b", title = "Latin American", language = "spa"),
+            PlaybackSubtitleTrackDto(trackId = "c", title = "SDH", language = "eng", isHearingImpaired = true),
+            PlaybackSubtitleTrackDto(trackId = "d", title = "Spanish (Castilian)", language = "spa"),
+        )
+        assertEquals(
+            listOf("SPA · European", "SPA · Latin American", "ENG · SDH", "Spanish (Castilian)"),
+            subs.subtitleTrackInfos().map { it.label },
+        )
+    }
 }

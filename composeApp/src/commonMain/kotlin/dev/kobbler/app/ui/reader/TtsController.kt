@@ -1,17 +1,24 @@
 package dev.kobbler.app.ui.reader
 
+import dev.kobbler.app.data.CastInitTts
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TtsStreamEvent
 import dev.kobbler.app.data.TtsVoiceDto
 import dev.kobbler.app.data.TtsWordTiming
+import dev.kobbler.app.data.resolveUrlOrNull
+import dev.kobbler.app.data.withPlaybackToken
+import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastSender
 import dev.kobbler.app.platform.ChunkPlayer
 import dev.kobbler.app.platform.PcmStreamPlayer
 import dev.kobbler.app.platform.PlaybackLifecycle
+import dev.kobbler.app.platform.castManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
 import kotlin.concurrent.Volatile
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -40,10 +47,14 @@ private data class ChunkAnchor(val wordOffset: Int, val wordCount: Int, val audi
  *    sentence-level highlight via [currentSentence].
  *  - **Paragraph path** (breeze via koblem): streaming s16le PCM via [PcmStreamPlayer], plus forced
  *    alignment events that drive [currentWordIndex] (global word index since synth start).
+ *
+ * With a receiver connected the server renders the read for it instead, and the same events
+ * — without their audio — are followed against the receiver's clock.
  */
 class TtsController(
     private val api: KobblerApi,
     private val scope: CoroutineScope,
+    private val cast: CastSender = castManager(),
 ) {
     private val _state = MutableStateFlow(TtsState.IDLE)
     val state: StateFlow<TtsState> = _state.asStateFlow()
@@ -145,6 +156,18 @@ class TtsController(
     /** Called when TTS finishes the current text — used for auto-advancing pages/chapters. */
     var onFinished: (() -> Unit)? = null
 
+    /**
+     * The receiver a read was on went away, at this word of the text it was started with.
+     * Without a taker the read just stops.
+     */
+    var onHandoff: ((wordIndex: Int) -> Unit)? = null
+
+    @Volatile
+    private var castingTo: String? = null
+    private val castClock = TtsCastClock()
+    @Volatile
+    private var castSentences: List<CastSentence> = emptyList()
+
     fun loadVoices() {
         scope.launch {
             try {
@@ -166,7 +189,9 @@ class TtsController(
      */
     @OptIn(ExperimentalEncodingApi::class)
     fun start(text: String) {
-        stop()
+        val receiver = cast.device.value?.takeUnless { it.connecting }?.name
+        // A receiver about to be handed the next read replaces this one by itself.
+        halt(stopReceiver = receiver == null)
         _state.value = TtsState.LOADING
         _error.value = null
         requestedRate = _selectedSpeed.value
@@ -184,26 +209,30 @@ class TtsController(
                 fun noteAudio() {
                     if (receivedAudio) return
                     receivedAudio = true
+                    // A receiver says for itself when it is playing.
+                    if (receiver != null) return
                     _state.value = TtsState.PLAYING
                     refreshNowPlaying()
                 }
 
-                // The WHOLE chapter goes in one request. Splitting it here used
-                // to mean one synthesis per segment, and without a cloned voice
-                // each one picked its own speaker — the narrator changed mid
-                // chapter. Long-form mode carries the voice instead.
-                api.streamTtsSynthesize(
-                    text = text,
-                    voice = selectedVoice,
-                    speed = requestedRate,
-                ) { event ->
+                val onEvent: suspend (TtsStreamEvent) -> Unit = { event ->
                     when (event) {
                         is TtsStreamEvent.Sentence -> {
                             noteAudio()
                             sentencesSeen = maxOf(sentencesSeen, event.index + 1)
-                            handleSentence(event, streamScope)
+                            val offset = event.audioOffsetMs
+                            if (offset != null) {
+                                noteRenderedRate(event.speed)
+                                castSentences = castSentences + CastSentence(sentenceBase + event.index, event.text, offset)
+                            } else {
+                                handleSentence(event, streamScope)
+                            }
                         }
-                        is TtsStreamEvent.ParagraphStart -> handleParagraphStart(event)
+                        is TtsStreamEvent.ParagraphStart -> {
+                            // A cast timeline carries no audio of its own; a passage starting is the sign of it.
+                            if (receiver != null) noteAudio()
+                            handleParagraphStart(event)
+                        }
                         is TtsStreamEvent.AudioPcm -> {
                             noteAudio()
                             // Backpressure lives here now that there is no gap
@@ -234,14 +263,25 @@ class TtsController(
                         TtsStreamEvent.Other -> { /* forward-compat */ }
                     }
                 }
+                // The WHOLE chapter goes in one request. Splitting it here used
+                // to mean one synthesis per segment, and without a cloned voice
+                // each one picked its own speaker — the narrator changed mid
+                // chapter. Long-form mode carries the voice instead.
+                val receiverDone = if (receiver != null) {
+                    castRead(text, receiver, streamScope, onEvent)
+                } else {
+                    api.streamTtsSynthesize(text = text, voice = selectedVoice, speed = requestedRate, onEvent = onEvent)
+                    null
+                }
                 sentenceBase += sentencesSeen
 
                 if (!receivedAudio && _error.value == null) {
                     _error.value = "TTS returned no audio"
                 }
 
-                if (paragraphMode && receivedAudio && !fatal) {
-                    pcmPlayer.awaitDrain()
+                if (receivedAudio && !fatal) {
+                    if (receiverDone != null) receiverDone.await()
+                    else if (paragraphMode) pcmPlayer.awaitDrain()
                 }
 
                 _state.value = TtsState.IDLE
@@ -266,14 +306,106 @@ class TtsController(
                 _currentSentence.value = null
                 _currentWordIndex.value = -1
             } finally {
+                streamScope.coroutineContext.cancelChildren()
                 wordTickerJob?.cancel()
                 wordTickerJob = null
-                if (paragraphMode) pcmPlayer.stop()
+                if (paragraphMode && castingTo == null) pcmPlayer.stop()
                 paragraphMode = false
                 paragraphs = emptyMap()
                 resetSegmentBases()
             }
         }
+    }
+
+    /**
+     * Have the server render [text] for [receiver] and follow it there. Returns once the
+     * whole timeline is in; what it returns completes when the receiver has played it out.
+     *
+     * A receiver whose stream ran dry before the timeline did — a dropped connection the
+     * server took for the end — is handed the read again from where it was.
+     */
+    private suspend fun castRead(
+        text: String,
+        receiver: String,
+        streamScope: CoroutineScope,
+        onEvent: suspend (TtsStreamEvent) -> Unit,
+    ): Deferred<Unit> {
+        val id = api.startTtsCast(text, selectedVoice, requestedRate)
+        val token = api.castToken() ?: throw IllegalStateException("no playback credential for $receiver")
+        val init = CastInitTts(
+            url = api.ttsCastAudioUrl(id, token),
+            title = nowPlayingTitle,
+            subtitle = nowPlayingSubtitle,
+            coverUrl = resolveUrlOrNull(api.apiUrl, nowPlayingCoverUrl)?.let { withPlaybackToken(it, token) },
+        )
+        castingTo = receiver
+        val timelineIn = CompletableDeferred<Unit>()
+        val played = CompletableDeferred<Unit>()
+        // Its events are replayed to a new collector on some senders, so a receiver's
+        // end only counts once it has been heard playing this read.
+        var heardPlaying = false
+        streamScope.launch {
+            cast.events.collect { event ->
+                when (event) {
+                    is CastEvent.Position -> {
+                        castClock.report(event.positionSec, event.isPlaying)
+                        heardPlaying = heardPlaying || event.isPlaying
+                        if (_state.value != TtsState.IDLE) {
+                            _state.value = if (event.isPlaying) TtsState.PLAYING else TtsState.PAUSED
+                            refreshNowPlaying()
+                        }
+                    }
+                    CastEvent.TtsFinished -> when {
+                        !heardPlaying -> Unit
+                        timelineIn.isCompleted -> played.complete(Unit)
+                        else -> cast.send("INIT_TTS", castJson.encodeToString(init.copy(startMs = castClock.nowMs())))
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        streamScope.launch {
+            cast.device.first { it?.name != receiver || it.connecting }
+            scope.launch { handBack(receiver) }
+        }
+        cast.send("INIT_TTS", castJson.encodeToString(init))
+        startCastTicker()
+        api.streamTtsCastEvents(id, onEvent)
+        timelineIn.complete(Unit)
+        return played
+    }
+
+    private fun handBack(receiver: String) {
+        if (castingTo != receiver) return
+        val word = _currentWordIndex.value
+        val handoff = onHandoff?.takeIf { word >= 0 }
+        if (handoff == null) _error.value = "Lost the connection to $receiver"
+        castingTo = null
+        halt(stopReceiver = false)
+        handoff?.invoke(word)
+    }
+
+    private fun startCastTicker() {
+        wordTickerJob?.cancel()
+        wordTickerJob = scope.launch {
+            while (isActive) {
+                val posMs = castClock.nowMs()
+                if (paragraphMode) {
+                    followWord(posMs)
+                } else {
+                    sentenceAt(castSentences, posMs)?.let {
+                        _currentSentence.value = it.text
+                        _currentSentenceIndex.value = it.index
+                    }
+                }
+                delay(33)
+            }
+        }
+    }
+
+    private fun followWord(posMs: Long) {
+        val wi = stickyWordIndex(_currentWordIndex.value, paragraphs.values, posMs)
+        if (wi != _currentWordIndex.value) _currentWordIndex.value = wi
     }
 
     private suspend fun appendPcm(pcm: ByteArray) {
@@ -376,6 +508,7 @@ class TtsController(
 
     private fun resetSegmentBases() {
         anchors.clear()
+        castSentences = emptyList()
         paragraphKeyBase = 0
         wordBase = 0
         sentenceBase = 0
@@ -406,8 +539,10 @@ class TtsController(
         if (!paragraphMode) {
             paragraphMode = true
             streamSampleRate = event.sampleRate
-            pcmPlayer.start(event.sampleRate)
-            startWordTicker()
+            if (castingTo == null) {
+                pcmPlayer.start(event.sampleRate)
+                startWordTicker()
+            }
         }
         noteRenderedRate(event.speed)
         paragraphs = paragraphs + mapOf(
@@ -467,10 +602,7 @@ class TtsController(
             while (isActive) {
                 if (_state.value == TtsState.PAUSED) _state.first { it != TtsState.PAUSED }
                 val posMs = pcmPlayer.currentPositionMs()
-                if (posMs >= 0) {
-                    val wi = stickyWordIndex(_currentWordIndex.value, paragraphs.values, posMs)
-                    if (wi != _currentWordIndex.value) _currentWordIndex.value = wi
-                }
+                if (posMs >= 0) followWord(posMs)
                 delay(33)
             }
         }
@@ -478,14 +610,18 @@ class TtsController(
 
     fun pause() {
         if (_state.value != TtsState.PLAYING) return
-        if (paragraphMode) pcmPlayer.pause() else chunkPlayer.pause()
+        if (castingTo != null) {
+            castClock.hold()
+            scope.launch { cast.togglePlayPause() }
+        } else if (paragraphMode) pcmPlayer.pause() else chunkPlayer.pause()
         _state.value = TtsState.PAUSED
         refreshNowPlaying()
     }
 
     fun resume() {
         if (_state.value != TtsState.PAUSED) return
-        if (paragraphMode) pcmPlayer.resume() else chunkPlayer.resume()
+        if (castingTo != null) scope.launch { cast.togglePlayPause() }
+        else if (paragraphMode) pcmPlayer.resume() else chunkPlayer.resume()
         _state.value = TtsState.PLAYING
         refreshNowPlaying()
     }
@@ -510,13 +646,18 @@ class TtsController(
         _error.value = null
     }
 
-    fun stop() {
+    fun stop() = halt(stopReceiver = true)
+
+    private fun halt(stopReceiver: Boolean) {
+        if (stopReceiver && castingTo != null) scope.launch { cast.send("TTS_STOP", "{}") }
+        val wasCasting = castingTo != null
+        castingTo = null
         synthesizeJob?.cancel()
         synthesizeJob = null
         wordTickerJob?.cancel()
         wordTickerJob = null
         chunkPlayer.stop()
-        if (paragraphMode) pcmPlayer.stop()
+        if (paragraphMode && !wasCasting) pcmPlayer.stop()
         paragraphMode = false
         paragraphs = emptyMap()
         resetSegmentBases()
@@ -616,3 +757,5 @@ internal fun resolveWordIndex(alignments: Collection<ParagraphAlignment>, posMs:
  */
 internal fun stickyWordIndex(current: Int, alignments: Collection<ParagraphAlignment>, posMs: Long): Int =
     resolveWordIndex(alignments, posMs).let { if (it >= 0) it else current }
+
+private val castJson = Json { encodeDefaults = true }

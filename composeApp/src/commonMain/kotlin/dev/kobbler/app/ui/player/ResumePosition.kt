@@ -68,6 +68,26 @@ suspend fun Player.settleAt(targetMs: Long) {
     }
 }
 
+/**
+ * Move a player that may have sat paused for a while to [targetMs], in either direction.
+ *
+ * VLC drops a seek made on a stream paused long enough for its connection to go idle, so
+ * the seek is made once playback has resumed and checked against the clock after.
+ */
+suspend fun Player.landAt(targetMs: Long, resume: Boolean) {
+    if (resume) {
+        play()
+        withTimeoutOrNull(RESUME_CLOCK_TIMEOUT_MS) { state.first { it == dev.kobbler.kobplayer.PlayerState.PLAYING } }
+    }
+    repeat(RESUME_REPAIR_ATTEMPTS) {
+        seekTo(targetMs)
+        delay(RESUME_CONFIRM_MS)
+        if (kotlin.math.abs(currentMs.value - targetMs) <= LANDING_TOLERANCE_MS) return
+    }
+}
+
+private const val LANDING_TOLERANCE_MS = 5_000L
+
 /** The resume position to ask a debrid resolve to start at, or null for the start. */
 fun resumeRequestSeconds(saved: Int?): Int? = saved?.takeIf { it > RESUME_MIN_SECONDS }
 

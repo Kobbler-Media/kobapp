@@ -57,7 +57,7 @@ class AudiobookSyncController(
                 // Load first audio file
                 val file = audioFiles[0]
                 currentFileIndex = 0
-                player.load(api.audioSource(bookId, file.id))
+                player.load(api.audioSource(bookId, file))
                 player.play()
 
                 // Start position tracking
@@ -133,7 +133,7 @@ class AudiobookSyncController(
         }
         currentFileIndex = nextIdx
         val file = audioFiles[nextIdx]
-        player?.load(api.audioSource(bookId, file.id))
+        player?.load(api.audioSource(bookId, file))
         player?.play()
     }
 }

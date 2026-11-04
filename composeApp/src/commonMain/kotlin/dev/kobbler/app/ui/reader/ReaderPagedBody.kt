@@ -136,7 +136,7 @@ internal fun ReaderPagedBody(
         HorizontalPager(
             state = pagerState,
             reverseLayout = rtl,
-            key = { itemsState.getOrNull(it) ?: it },
+            key = { itemsState.getOrNull(it)?.pagerKey ?: it },
             modifier = Modifier.fillMaxSize(),
         ) { index ->
             val ref = itemsState.getOrNull(index) ?: return@HorizontalPager

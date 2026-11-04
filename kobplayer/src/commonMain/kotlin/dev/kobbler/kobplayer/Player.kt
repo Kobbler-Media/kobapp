@@ -48,6 +48,12 @@ sealed class MediaSource {
          */
         val fieldCoded: Boolean = false,
         /**
+         * This source is a bare MPEG audio (MP3) stream. Its only seek index is a 100-entry
+         * table its encoder estimated, which libVLC's own demuxer trusts and then reports the
+         * requested time — seconds away from what is playing, deep into a long file.
+         */
+        val mpegAudio: Boolean = false,
+        /**
          * How deep to buffer before this source starts, in ms. Null takes
          * [PlayerConfig.networkCacheMs].
          *

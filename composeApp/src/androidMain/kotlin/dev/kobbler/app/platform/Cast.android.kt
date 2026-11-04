@@ -20,7 +20,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.mediarouter.app.MediaRouteChooserDialog
 import androidx.mediarouter.app.MediaRouteControllerDialog
+import android.net.Uri
 import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.common.images.WebImage
 import com.google.android.gms.cast.MediaLoadRequestData
 import com.google.android.gms.cast.MediaSeekOptions
 import com.google.android.gms.cast.framework.CastContext
@@ -44,18 +47,18 @@ import org.json.JSONObject
 private const val PREFS_NAME = "kobbler_cast"
 private const val PREF_APP_ID = "receiver_app_id"
 
-actual fun castManager(): CastSender = CastManager()
+actual fun castManager(): CastSender = CastManager.shared
 
-class CastManager : CastSender {
+class CastManager private constructor() : CastSender {
     private var castContext: CastContext? = null
     private var session: CastSession? = null
 
     private val _device = MutableStateFlow<CastDevice?>(null)
     override val device: StateFlow<CastDevice?> = _device.asStateFlow()
 
-    // Replay one: a position that lands between the handover and the collector starting
-    // is the only news the mini controller has until the next broadcast, five seconds on.
-    private val _events = MutableSharedFlow<CastEvent>(replay = 1, extraBufferCapacity = 16)
+    // No replay: this outlives compositions, and a stale MEDIA_FINISHED replayed to the next
+    // one would end whatever cast it starts. It is collecting before any session connects.
+    private val _events = MutableSharedFlow<CastEvent>(extraBufferCapacity = 16)
     override val events: SharedFlow<CastEvent> = _events.asSharedFlow()
 
     override fun start() {
@@ -76,8 +79,8 @@ class CastManager : CastSender {
             object : SessionManagerListener<CastSession> {
                 override fun onSessionStarted(s: CastSession, sessionId: String) = adopt(s)
                 override fun onSessionResumed(s: CastSession, wasSuspended: Boolean) = adopt(s)
-                override fun onSessionResuming(s: CastSession, sessionId: String) {}
-                override fun onSessionStarting(s: CastSession) {}
+                override fun onSessionResuming(s: CastSession, sessionId: String) = opening(s)
+                override fun onSessionStarting(s: CastSession) = opening(s)
                 override fun onSessionEnding(s: CastSession) {}
                 override fun onSessionSuspended(s: CastSession, reason: Int) {}
                 override fun onSessionEnded(s: CastSession, error: Int) = release()
@@ -88,9 +91,15 @@ class CastManager : CastSender {
         )
     }
 
+    private fun opening(s: CastSession) {
+        _device.value = CastDevice(s.name(), connecting = true)
+    }
+
+    private fun CastSession.name() = castDevice?.friendlyName ?: "Cast device"
+
     private fun adopt(s: CastSession) {
         session = s
-        _device.value = CastDevice(s.castDevice?.friendlyName ?: "Cast device")
+        _device.value = CastDevice(s.name())
         try {
             s.setMessageReceivedCallbacks(CAST_NAMESPACE) { _, _, message ->
                 parseCastEvent(message)?.let { _events.tryEmit(it) }
@@ -110,6 +119,13 @@ class CastManager : CastSender {
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
             .setContentType(load.contentType)
             .setContentUrl(load.contentUrl)
+            .setMetadata(
+                MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
+                    putString(MediaMetadata.KEY_TITLE, load.title)
+                    load.subtitle?.let { putString(MediaMetadata.KEY_SUBTITLE, it) }
+                    load.imageUrl?.let { addImage(WebImage(Uri.parse(it))) }
+                },
+            )
             // The receiver reads the session off the load itself — its LOAD interceptor
             // takes `kobblerSession` and is running before any namespace message can be
             // delivered, which is why the same payload goes both ways.
@@ -172,10 +188,15 @@ class CastManager : CastSender {
         private val _savedAppId = MutableStateFlow<String?>(null)
         val savedAppId: StateFlow<String?> = _savedAppId.asStateFlow()
 
-        /** Call from MainActivity.onCreate to provide context for cast operations. */
+        // One per process: the SDK's session outlives any one composition of the app, and a
+        // listener per composition kept answering for screens that were long gone.
+        val shared = CastManager()
+
+        /** Call from MainActivity.onCreate; a receiver id saved by an earlier run starts the SDK at once. */
         fun initContext(context: Context) {
             appContext = context.applicationContext
             _savedAppId.value = getSavedAppId()
+            shared.start()
         }
 
         fun saveAppId(appId: String?) {

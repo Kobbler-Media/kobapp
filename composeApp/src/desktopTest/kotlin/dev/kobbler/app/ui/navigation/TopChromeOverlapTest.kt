@@ -44,6 +44,7 @@ import dev.kobbler.app.ui.dashboard.WantedTab
 import dev.kobbler.app.ui.dashboard.home.HomePhone
 import dev.kobbler.app.ui.detail.LiveChannelDetailScreen
 import dev.kobbler.app.ui.detail.LiveRecordingDetailScreen
+import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.app.ui.player.StubServer
 import dev.kobbler.kobfocus.FocusScopeHost
 import io.ktor.client.HttpClient
@@ -58,12 +59,12 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * A phone page scrolls up under the chrome pinned over it — the bar, the status bar, its own
+ * A page scrolls up under the chrome pinned over it — the bar, the status bar, its own
  * header — and off the top of the screen, as its picture does, rather than being cut off at
  * the chrome's lower edge. At rest it still opens below all of it, and a pinned header stays put.
  */
 @OptIn(ExperimentalTestApi::class)
-class PhoneTopBarOverlapTest {
+class TopChromeOverlapTest {
 
     private enum class Chrome { Bar, StatusBar }
 
@@ -210,6 +211,55 @@ class PhoneTopBarOverlapTest {
                     val after = onNodeWithContentDescription(it).getUnclippedBoundsInRoot()
                     assertTrue(after.top == pinnedBottom.top, "${case.name}: '$it' moved from $pinnedBottom to $after")
                 }
+            }
+        }
+    }
+
+    private val desktopTabs = listOf(
+        Destination.Tab.Movies to "Movies",
+        Destination.Tab.TvShows to "TV Shows",
+        Destination.Tab.Books to "Book 1",
+        Destination.Tab.Downloads to "Download 1",
+        Destination.Tab.Activity to "Watched 1",
+        Destination.Tab.Iptv to "Iptv 1",
+        Destination.Tab.Settings to "Settings",
+    )
+
+    @Test
+    fun `desktop tabs run up under the top bar like home`() {
+        val failures = desktopTabs.mapNotNull { (tab, text) ->
+            runCatching { checkDesktop(tab, text) }.exceptionOrNull()?.let { "${tab.title}: ${it.message?.lineSequence()?.first()}" }
+        }
+        assertTrue(failures.isEmpty(), failures.joinToString("\n"))
+    }
+
+    private fun checkDesktop(tab: Destination.Tab, text: String) {
+        runUiTest(width = 1280, height = 800) {
+            DataCache.clear()
+            StubServer(routes).use { stub ->
+                val nav = NavigationState().apply { navigate(tab) }
+                setContent {
+                    val auth = AuthState(rememberCoroutineScope(), FormFactor.Desktop)
+                    CompositionLocalProvider(LocalAuthState provides auth) {
+                        KobappTheme(formFactor = FormFactor.Desktop) {
+                            DesktopScaffold(
+                                nav = nav,
+                                navConfig = defaultNavConfig,
+                                api = KobblerApi(HttpClient(), stub.url, "token"),
+                                formFactor = FormFactor.Desktop,
+                                player = null,
+                                gps = GlobalPlayerState(),
+                            )
+                        }
+                    }
+                }
+                waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+                waitForIdle()
+                val bar = onNodeWithContentDescription("Notifications").getUnclippedBoundsInRoot()
+                val shown = top(text)
+                assertTrue(shown.top >= bar.bottom, "'$text' $shown starts under the bar ending at ${bar.bottom}")
+                val scroller = onAllNodes(hasScrollAction() and verticalScroll).onFirst().getUnclippedBoundsInRoot()
+                assertTrue(scroller.top <= bar.top, "the page $scroller stops below the bar $bar instead of running up under it")
             }
         }
     }

@@ -112,6 +112,13 @@ class DesktopVideoTest {
         assertTrue("demux=mkv_trusted,any" in vlcMediaOptions(MediaSource.Url("https://x/y.mkv"), PlayerConfig()))
     }
 
+    @Test
+    fun seeksMpegAudioBySample() {
+        val options = vlcMediaOptions(MediaSource.Url("https://x/a", mpegAudio = true), PlayerConfig(audioOnly = true))
+        assertTrue("demux=avformat,any" in options, "$options")
+        assertTrue(options.none { it.startsWith("demux=mkv") }, "$options")
+    }
+
     // An m4b or mp3 can carry its cover as a video track; an audio player with no video sink
     // would decode it, and on desktop let VLC open a window of its own to show it.
     @Test

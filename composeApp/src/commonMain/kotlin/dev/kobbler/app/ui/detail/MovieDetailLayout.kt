@@ -57,7 +57,7 @@ internal fun MovieDetailLayout(
     actions: @Composable (wide: Boolean, anchor: Modifier) -> Unit,
     modifier: Modifier = Modifier,
     topBarStatus: @Composable () -> Unit = {},
-    aside: (@Composable (wide: Boolean) -> Unit)? = null,
+    aside: (@Composable () -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val colors = KobappTheme.colors
@@ -66,6 +66,7 @@ internal fun MovieDetailLayout(
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val stacked = detailStacked(formFactor, maxWidth)
+        val asideInline = maxWidth < detailThirdColumnMinWidth
         val pageScroll = rememberScrollState()
         DetailBackdrop(movie.spotlight(), accent, pageScroll.asPageScroll())
         val pageTopHold = rememberPageTopHold(pageScroll.asPageScroll())
@@ -90,7 +91,7 @@ internal fun MovieDetailLayout(
                     actions(false, Modifier)
                     if (aside != null) {
                         Spacer(Modifier.height(18.dp))
-                        aside(false)
+                        aside()
                     }
                     if (movie.synopsis != null) {
                         Spacer(Modifier.height(18.dp))
@@ -138,14 +139,18 @@ internal fun MovieDetailLayout(
                         }
                         Spacer(Modifier.height(30.dp))
                         actions(true, pageTopHold.anchor)
+                        if (aside != null && asideInline) {
+                            Spacer(Modifier.height(24.dp))
+                            Column(Modifier.widthIn(max = 420.dp)) { aside() }
+                        }
                         Spacer(Modifier.height(24.dp))
                         CreditLines(movie, formFactor)
                     }
-                    if (aside != null) {
+                    if (aside != null && !asideInline) {
                         Column(
                             modifier = Modifier.widthIn(min = 260.dp, max = 360.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) { aside(true) }
+                        ) { aside() }
                     }
                 }
             }
