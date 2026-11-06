@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.reader
 
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.ui.reader.pack.Block
+import dev.kobbler.app.ui.reader.pack.BlockFloat
 import dev.kobbler.app.ui.reader.pack.BlockKind
 import dev.kobbler.app.ui.reader.pack.ChapterEntry
 import dev.kobbler.app.ui.reader.pack.FixedLayoutDto
@@ -15,6 +16,7 @@ internal class TestChapter(
     val title: String? = null,
     val paragraphs: List<String> = emptyList(),
     val image: ImageRef? = null,
+    val float: BlockFloat? = null,
 )
 
 internal fun textChapter(title: String, vararg paragraphs: String) = TestChapter(title, paragraphs.toList())
@@ -46,8 +48,11 @@ internal fun packRoutes(
     return buildMap {
         put(base) { _ -> PackJson.encodeToString(Manifest.serializer(), manifest) }
         chapters.forEachIndexed { i, chapter ->
-            val blocks = chapter.image?.let { listOf(Block(kind = BlockKind.Image, image = it)) }
-                ?: chapter.paragraphs.map { Block(kind = BlockKind.Text, spans = listOf(Span(it))) }
+            val text = chapter.paragraphs.map { Block(kind = BlockKind.Text, spans = listOf(Span(it))) }
+            val picture = chapter.image?.let {
+                Block(kind = BlockKind.Image, image = it, breakBefore = chapter.float == null && text.isNotEmpty(), float = chapter.float)
+            }
+            val blocks = if (chapter.float != null) listOfNotNull(picture) + text else text + listOfNotNull(picture)
             put("$base/chapters/$i") { _ -> PackJson.encodeToString(PackChapter.serializer(), PackChapter(blocks)) }
         }
     }

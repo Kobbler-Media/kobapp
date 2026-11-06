@@ -3,9 +3,7 @@ package dev.kobbler.app.ui.detail
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import dev.kobbler.app.data.KobblerApi
@@ -19,7 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
-/** An admin decides, from the title page's overflow menu, whether a Kids profile sees it. */
+/** An admin decides, from the title page's actions, whether a Kids profile sees it. */
 @OptIn(ExperimentalTestApi::class)
 class DetailKidsAccessTest {
 
@@ -62,20 +60,14 @@ class DetailKidsAccessTest {
             }
         }
 
-    private fun androidx.compose.ui.test.DesktopComposeUiTest.openMore() {
-        onNodeWithContentDescription("More").performClick()
-        waitForIdle()
-    }
-
     @Test
     fun `admin allows a title for kids profiles`() {
         for (kind in listOf("movie", "show")) page(kind, admin = true) { patches ->
-            openMore()
-            onAllNodesWithText("Kids: hidden").onFirst().performClick()
+            performAction("Kids: hidden")
             onAllNodesWithText("Always show").onFirst().performClick()
             waitUntil(timeoutMillis = UiTimeoutMs) { patches.isNotEmpty() }
-            openMore()
-            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Kids: shown").fetchSemanticsNodes().isNotEmpty() }
+            openOverflowIfAny()
+            waitUntil(timeoutMillis = UiTimeoutMs) { rowHas("Kids: shown") }
             assertTrue(patches.any { it.contains("\"kids_override\":true") }, "$kind: $patches")
         }
     }
@@ -83,8 +75,8 @@ class DetailKidsAccessTest {
     @Test
     fun `only admins see the control`() {
         for (kind in listOf("movie", "show")) page(kind, admin = false) {
-            if (onAllNodesWithContentDescription("More").fetchSemanticsNodes().isNotEmpty()) openMore()
-            assertTrue(onAllNodesWithText("Kids: hidden").fetchSemanticsNodes().isEmpty(), kind)
+            openOverflowIfAny()
+            assertTrue(!rowHas("Kids: hidden") && !rowHas("Kids: shown"), kind)
         }
     }
 }

@@ -30,6 +30,21 @@ internal fun DrawScope.drawFrames(frames: List<FrameBand>, theme: ReaderTheme) {
     }
 }
 
+private fun DrawScope.drawBookTable(slice: TableSlice, theme: ReaderTheme, book: BookStyle) {
+    val em = theme.fontSize.toPx()
+    val dy = slice.top - slice.rowsTop
+    for (r in slice.rows) {
+        val row = slice.table.rows[r]
+        val top = row.top + dy
+        if (row.header) drawRect(theme.textColor.copy(alpha = 0.06f), Offset(slice.left, top), Size(slice.width, row.height))
+        for (cell in row.cells) {
+            val left = slice.left + cell.left
+            cell.borders?.let { drawSides(it, left, top, left + cell.width, top + row.height, theme, book.colours, em, onEdge = slice.table.collapse) }
+            for (item in cell.items) if (item is CellItem.Text) drawText(item.layout, topLeft = Offset(left + item.dx, top + item.dy))
+        }
+    }
+}
+
 internal fun DrawScope.drawCursorBand(slices: List<PageSlice>, color: Color) {
     for (slice in slices) drawRect(
         color = color,
@@ -46,14 +61,15 @@ internal fun DrawScope.drawTextSlice(slice: TextSlice, highlights: List<TextHigh
             val start = maxOf(h.range.first, slice.startOffset)
             val end = minOf(h.range.last + 1, slice.endOffset)
             if (end <= start) continue
-            translate(origin.x, origin.y) { drawPath(slice.layout.getPathForRange(start, end), h.color) }
+            translate(origin.x, origin.y) { drawPath(slice.layout.getPathForRange(start - slice.base, end - slice.base), h.color) }
         }
         drawText(slice.layout, topLeft = origin)
     }
     slice.marker?.let { drawText(it.layout, topLeft = Offset(it.left, it.top)) }
 }
 
-internal fun DrawScope.drawRule(slice: RuleSlice, theme: ReaderTheme) {
+internal fun DrawScope.drawRule(slice: RuleSlice, theme: ReaderTheme, colours: Boolean) {
+    slice.style?.let { return drawBookRule(slice, it, theme, colours) }
     val y = slice.top + slice.height / 2
     drawLine(
         color = theme.textColor.copy(alpha = 0.4f),
@@ -63,7 +79,8 @@ internal fun DrawScope.drawRule(slice: RuleSlice, theme: ReaderTheme) {
     )
 }
 
-internal fun DrawScope.drawTableSlice(slice: TableSlice, theme: ReaderTheme) {
+internal fun DrawScope.drawTableSlice(slice: TableSlice, theme: ReaderTheme, book: BookStyle) {
+    if (slice.table.bookBorders) return drawBookTable(slice, theme, book)
     val grid = theme.textColor.copy(alpha = 0.2f)
     val stroke = 1.dp.toPx()
     val dy = slice.top - slice.rowsTop

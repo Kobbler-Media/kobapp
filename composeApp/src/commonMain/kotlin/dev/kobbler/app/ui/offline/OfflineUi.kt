@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.offline
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,6 +44,7 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.detail.IconAction
 import dev.kobbler.app.ui.detail.OverflowItem
 import dev.kobbler.app.ui.detail.OverflowMenu
+import dev.kobbler.app.ui.detail.RowAction
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
 
@@ -143,12 +145,12 @@ fun OfflineAction(
     modifier: Modifier = Modifier,
     label: String = "Download",
     focusKeyName: String = "download",
+    preferredEntry: Boolean = false,
 ) {
-    val engine = LocalOfflineEngine.current ?: return
+    LocalOfflineEngine.current ?: return
     val colors = KobappTheme.colors
     var open by remember { mutableStateOf(false) }
     val anchor = remember { FocusRequester() }
-    val scope = rememberCoroutineScope()
     Box(modifier) {
         IconAction(
             icon = iconFor(item),
@@ -160,29 +162,53 @@ fun OfflineAction(
             },
             accent = accent,
             onClick = { if (item == null) onDownload() else open = true },
-            modifier = Modifier.focusKey(focusKeyName).focusRequester(anchor),
+            modifier = Modifier.focusKey(focusKeyName, preferredEntry = preferredEntry).focusRequester(anchor),
         )
         if (item != null) OverflowMenu(expanded = open, anchor = anchor, onClose = { open = false }) { close ->
-            if (item.state == OfflineState.Failed) {
-                OverflowItem("retry", Icons.Outlined.Refresh, "Try again", accent, onClick = { close(); engine.retry(item.key) })
-            }
-            if (item.state == OfflineState.Complete) {
-                OverflowItem(
-                    "keep", Icons.Outlined.PushPin, "Keep through cleanup", accent,
-                    onClick = { close(); engine.setKeep(item.key, !item.keep) },
-                    selected = item.keep,
-                )
-            }
-            OverflowItem(
-                "remove",
-                if (item.state == OfflineState.Complete) Icons.Outlined.Delete else Icons.Outlined.Close,
-                if (item.state == OfflineState.Complete) "Remove download" else "Cancel download",
-                accent,
-                onClick = { close(); scope.launch { engine.remove(item.key) } },
-            )
+            OfflineItemEntries(item, accent, close)
         }
     }
 }
+
+@Composable
+private fun ColumnScope.OfflineItemEntries(item: OfflineItem, accent: Color, close: () -> Unit) {
+    val engine = LocalOfflineEngine.current ?: return
+    val scope = rememberCoroutineScope()
+    if (item.state == OfflineState.Failed) {
+        OverflowItem("retry", Icons.Outlined.Refresh, "Try again", accent, onClick = { close(); engine.retry(item.key) })
+    }
+    if (item.state == OfflineState.Complete) {
+        OverflowItem(
+            "keep", Icons.Outlined.PushPin, "Keep through cleanup", accent,
+            onClick = { close(); engine.setKeep(item.key, !item.keep) },
+            selected = item.keep,
+        )
+    }
+    OverflowItem(
+        "remove",
+        if (item.state == OfflineState.Complete) Icons.Outlined.Delete else Icons.Outlined.Close,
+        if (item.state == OfflineState.Complete) "Remove download" else "Cancel download",
+        accent,
+        onClick = { close(); scope.launch { engine.remove(item.key) } },
+    )
+}
+
+/** [OfflineAction] as one of a detail row's actions; folded into the row's overflow, its own menu's entries come along. */
+internal fun offlineRowAction(item: OfflineItem?, accent: Color, onDownload: () -> Unit, label: String, key: String) = RowAction(
+    key = key,
+    label = label,
+    icon = iconFor(item),
+    onClick = onDownload,
+    control = { lead -> OfflineAction(item, accent, onDownload, label = label, focusKeyName = key, preferredEntry = lead) },
+    menu = { close ->
+        if (item == null) {
+            OverflowItem(key, Icons.Outlined.Download, label, accent, onClick = { close(); onDownload() })
+        } else {
+            OverflowItem(key, iconFor(item), stateLabel(item), accent, onClick = {}, enabled = false)
+            OfflineItemEntries(item, accent, close)
+        }
+    },
+)
 
 @Composable
 fun isAvailableOffline(kind: OfflineKind, mediaId: String?): Boolean =

@@ -61,7 +61,6 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.StripedBackdrop
 import dev.kobbler.app.ui.player.GlobalPlayerState
-import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobplayer.Player
 import kotlin.time.Clock
 import kotlinx.coroutines.launch
@@ -404,26 +403,25 @@ private fun HeroActions(
     wide: Boolean,
 ) {
     DetailActionRow(
-        wide = wide,
-        primary = { fill ->
-            PrimaryAction(
-                icon = Icons.Outlined.PlayArrow,
+        actions = listOf(
+            RowAction(
+                key = "action.watchLive",
                 label = if (isLoading) "Loading…" else "Watch live",
+                icon = Icons.Outlined.PlayArrow,
                 onClick = onWatchLive,
                 enabled = !isLoading,
-                modifier = Modifier.focusKey("action.watchLive", preferredEntry = true).then(fill),
-            )
-        },
-    ) {
-        IconAction(
-            icon = if (isFavourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-            label = if (isFavourite) "Favourited" else "Favourite",
-            tint = if (isFavourite) accent else KobappTheme.colors.textHi,
-            accent = accent,
-            onClick = onToggleFavourite,
-            modifier = Modifier.focusKey("action.favourite"),
-        )
-    }
+            ),
+            RowAction(
+                key = "action.favourite",
+                label = if (isFavourite) "Favourited" else "Favourite",
+                icon = if (isFavourite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                tint = if (isFavourite) accent else null,
+                onClick = onToggleFavourite,
+            ),
+        ),
+        accent = accent,
+        wide = wide,
+    )
 }
 
 @Composable

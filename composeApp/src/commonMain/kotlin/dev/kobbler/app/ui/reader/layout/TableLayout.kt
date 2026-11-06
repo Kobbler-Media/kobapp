@@ -2,16 +2,19 @@ package dev.kobbler.app.ui.reader.layout
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextLayoutResult
+import dev.kobbler.app.ui.reader.pack.Borders
 import dev.kobbler.app.ui.reader.pack.ImageRef
 
 @Immutable
-class TableLayout(val width: Float, val cellPadding: Float, val rows: List<RowLayout>)
+class TableLayout(val width: Float, val cellPadding: Float, val rows: List<RowLayout>, val collapse: Boolean = false) {
+    val bookBorders: Boolean = rows.any { row -> row.cells.any { it.borders != null } }
+}
 
 @Immutable
 class RowLayout(val header: Boolean, val top: Float, val height: Float, val cells: List<CellLayout>)
 
 @Immutable
-class CellLayout(val left: Float, val width: Float, val items: List<CellItem>)
+class CellLayout(val left: Float, val width: Float, val items: List<CellItem>, val borders: Borders? = null)
 
 @Immutable
 sealed interface CellItem {

@@ -77,8 +77,9 @@ fun AudiobookPlayerScreen(
     api: KobblerApi,
     onBack: () -> Unit,
     onOpenReader: (() -> Unit)? = null,
+    fromStart: Boolean = false,
 ) {
-    val state = rememberAudiobookState(book, api)
+    val state = rememberAudiobookState(book, api, fromStart = fromStart)
     AudiobookCastHandoff(remember { castManager() }, state)
 
     DisposableEffect(Unit) {

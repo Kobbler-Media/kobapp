@@ -66,6 +66,16 @@ class ReportedProgressTest {
         assertNull(episode(updated, "e2").watchProgress)
     }
 
+    @Test
+    fun `an episode watched when fetched is unwatched again once this session saved it short of the end or unmarked it`() {
+        val watched = show.copy(seasons = show.seasons.map { s -> s.copy(episodes = s.episodes.map { it.copy(isWatched = true, watchProgress = null) }) })
+        for ((name, point) in listOf("rewatched part-way" to WatchedPoint(1800), "marked unwatched" to WatchedPoint(0))) {
+            val e1 = episode(watched.withReportedProgress(mapOf("e1" to point)), "e1")
+            assertEquals(false, e1.isWatched, name)
+            assertEquals(if (point.seconds > 0) 0.5f else null, e1.watchProgress, name)
+        }
+    }
+
     /** Without a runtime there is no fraction to draw; the reported seconds say nothing. */
     @Test
     fun `an episode with no runtime keeps what it had`() {

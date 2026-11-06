@@ -18,6 +18,7 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TtsVoiceDto
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.reader.layout.BookStyle
 import io.ktor.client.HttpClient
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -41,7 +42,7 @@ class ReaderSettingsRemoteTest {
                     horizontalPadding = 20,
                     readerFontFamily = ReaderFontFamily.entries.first(),
                     pageFit = ReaderPageFit.Spread,
-                    styleMode = ReaderStyleMode.Publisher,
+                    bookStyle = BookStyle.Book,
                     alignment = ReaderAlignment.Justified,
                     onThemeChange = {},
                     onFontSizeChange = { fontSize = it },
@@ -49,7 +50,7 @@ class ReaderSettingsRemoteTest {
                     onPaddingChange = {},
                     onFontFamilyChange = {},
                     onPageFitChange = {},
-                    onStyleModeChange = {},
+                    onBookStyleChange = {},
                     onAlignmentChange = {},
                     brightness = 1f,
                     onBrightnessChange = {},

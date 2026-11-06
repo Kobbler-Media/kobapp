@@ -19,7 +19,10 @@ import kotlin.test.Test
 class BooksGridHeadingTest {
 
     private val books = """{"items":[{"id":"b1","title":"Thud!","authors":[{"id":"a1","name":"Pratchett"}]}],"total_count":412}"""
-    private val dashboard = """{"recent_books":[{"id":"r1","title":"Recent","authors":[]}]}"""
+    private val dashboard = run {
+        val recent = """[{"id":"r1","title":"Recent","authors":""}]"""
+        """{"recent_ebooks":$recent,"recent_audiobooks":$recent}"""
+    }
 
     @Test
     fun `the grid has a heading that carries the library size`() {

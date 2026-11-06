@@ -105,6 +105,10 @@ actual object FileCache {
         cacheDir?.let { java.io.File(it, key).writeBytes(data) }
     }
 
+    actual fun remove(key: String) {
+        cacheDir?.let { java.io.File(it, key).delete() }
+    }
+
     actual fun pathFor(key: String): String? {
         val file = cacheDir?.let { java.io.File(it, key) } ?: return null
         return if (file.exists()) file.absolutePath else null

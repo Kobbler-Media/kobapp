@@ -218,6 +218,8 @@ object DataCache {
     /** Bump versions for [keys] and expire their entries; consumers of those keys refetch. */
     fun invalidate(vararg keys: String) = keys.forEach(::bump)
 
+    fun bookProgressKey(bookId: String) = "book-progress-$bookId"
+
     fun invalidateWatchProgress() {
         invalidate("home", "dashboard")
         invalidatePrefix("show-")

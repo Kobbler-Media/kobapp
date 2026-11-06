@@ -72,6 +72,7 @@ expect class CacheSink {
 expect object FileCache {
     fun get(key: String): ByteArray?
     fun put(key: String, data: ByteArray)
+    fun remove(key: String)
 
     /** Absolute path of the cached file, or null if absent or the platform has no filesystem. */
     fun pathFor(key: String): String?

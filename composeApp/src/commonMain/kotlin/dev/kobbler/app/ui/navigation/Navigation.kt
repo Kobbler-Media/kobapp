@@ -7,6 +7,8 @@ import dev.kobbler.app.ui.components.ComicSkeleton
 import dev.kobbler.app.ui.components.ReaderSkeleton
 import dev.kobbler.app.ui.components.PlayerSkeleton
 import dev.kobbler.app.ui.components.ChannelSkeleton
+import dev.kobbler.app.ui.detail.refreshesForProgress
+import dev.kobbler.app.ui.components.Async
 import dev.kobbler.app.ui.detail.DetailSkeleton
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -118,8 +120,8 @@ sealed interface Destination {
     data class BookDetail(val bookId: String) : Destination
     data class AuthorDetail(val authorId: String) : Destination
     data class SeriesDetail(val seriesId: String) : Destination
-    data class AudiobookPlayer(val bookId: String) : Destination
-    data class BookReader(val bookId: String) : Destination
+    data class AudiobookPlayer(val bookId: String, val fromStart: Boolean = false) : Destination
+    data class BookReader(val bookId: String, val fromStart: Boolean = false) : Destination
     data class ComicViewer(val bookId: String) : Destination
     data class DiscoverItemDetail(val mediaType: String, val provider: String, val providerId: String) : Destination
     data class PersonDetail(val personId: String) : Destination
@@ -1340,7 +1342,7 @@ private fun DetailContent(
             RefreshOnEvents(
                 api = api,
                 key = dest.movieId,
-                matches = { it.kind == "movie_updated" && it.idField("movie_id") == dest.movieId },
+                matches = { (it.kind == "movie_updated" && it.idField("movie_id") == dest.movieId) || refreshesForProgress(it, dest.movieId) },
                 onRefresh = retry,
             )
             AsyncContent(state, skeleton = { DetailSkeleton() }, onRetry = retry, onBack = { nav.goBack() }, modifier = modifier) { m ->
@@ -1374,7 +1376,8 @@ private fun DetailContent(
                 matches = {
                     it.kind == "tv_show_updated" ||
                         it.kind == "tv_season_updated" ||
-                        it.kind == "tv_episode_updated"
+                        it.kind == "tv_episode_updated" ||
+                        refreshesForProgress(it, (state as? Async.Ready)?.value?.id)
                 },
                 onRefresh = retry,
             )
@@ -1406,8 +1409,8 @@ private fun DetailContent(
                     api = api,
                     formFactor = formFactor,
                     onBack = { nav.goBack() },
-                    onRead = { nav.navigate(Destination.BookReader(book.id)) },
-                    onListen = { nav.navigate(Destination.AudiobookPlayer(book.id)) },
+                    onRead = { fromStart -> nav.navigate(Destination.BookReader(book.id, fromStart)) },
+                    onListen = { fromStart -> nav.navigate(Destination.AudiobookPlayer(book.id, fromStart)) },
                     onViewComic = { nav.navigate(Destination.ComicViewer(book.id)) },
                     onAuthorClick = { authorId -> nav.navigate(Destination.AuthorDetail(authorId)) },
                     onSeriesClick = { seriesId -> nav.navigate(Destination.SeriesDetail(seriesId)) },
@@ -1640,6 +1643,7 @@ private fun PlayerContent(
                 AudiobookPlayerScreen(
                     book = book,
                     api = api,
+                    fromStart = dest.fromStart,
                     onBack = { nav.goBack() },
                     onOpenReader = { nav.navigate(Destination.BookReader(book.id)) },
                 )
@@ -1653,6 +1657,7 @@ private fun PlayerContent(
                     api = api,
                     formFactor = formFactor,
                     onBack = { nav.goBack() },
+                    fromStart = dest.fromStart,
                 )
             }
         }

@@ -24,8 +24,10 @@ import dev.kobbler.app.data.Bookmark
 import dev.kobbler.app.data.BookmarkRepository
 import dev.kobbler.app.data.TtsVoiceDto
 import dev.kobbler.app.ui.player.SharedAudioPlayer
+import dev.kobbler.app.ui.reader.layout.BookStyle
 import dev.kobbler.app.ui.reader.layout.ReaderTypography
 import dev.kobbler.app.ui.reader.layout.TextHighlight
+import dev.kobbler.app.ui.reader.pack.ImageRef
 import dev.kobbler.app.ui.reader.pack.Link
 import dev.kobbler.app.ui.reader.pack.Position
 import dev.kobbler.kobfocus.focusInert
@@ -41,7 +43,7 @@ internal data class ReaderSettingsState(
     val horizontalPadding: Int,
     val readerFontFamily: ReaderFontFamily,
     val pageFit: ReaderPageFit,
-    val styleMode: ReaderStyleMode,
+    val bookStyle: BookStyle,
     val alignment: ReaderAlignment,
     val brightness: Float,
     val onThemeModeChange: (ReaderThemeMode) -> Unit,
@@ -50,7 +52,7 @@ internal data class ReaderSettingsState(
     val onPaddingChange: (Int) -> Unit,
     val onFontFamilyChange: (ReaderFontFamily) -> Unit,
     val onPageFitChange: (ReaderPageFit) -> Unit,
-    val onStyleModeChange: (ReaderStyleMode) -> Unit,
+    val onBookStyleChange: (BookStyle) -> Unit,
     val onAlignmentChange: (ReaderAlignment) -> Unit,
     val onBrightnessChange: (Float) -> Unit,
 )
@@ -89,7 +91,8 @@ internal fun ReaderLoaded(
     onBookmarksChange: (List<Bookmark>) -> Unit,
 ) {
     var sheet by remember(paging.chapter) { mutableStateOf<ReaderSheet?>(null) }
-    val panelOpen = showToc || showSearch || showSettings || sheet != null
+    var picture by remember { mutableStateOf<ImageRef?>(null) }
+    val panelOpen = showToc || showSearch || showSettings || sheet != null || picture != null
     val nav = rememberReaderNavState(keyNav = keyNav, immersive = immersive, holdChrome = panelOpen)
     val uriHandler = LocalUriHandler.current
     val currentChapter = paging.chapter
@@ -161,6 +164,7 @@ internal fun ReaderLoaded(
             ReaderKeyAction.OpenChapters -> { onShowTocChange(true); true }
             ReaderKeyAction.ClosePanel -> {
                 when {
+                    picture != null -> picture = null
                     sheet != null -> sheet = null
                     showSettings -> onShowSettingsChange(false)
                     showSearch -> onShowSearchChange(false)
@@ -287,6 +291,7 @@ internal fun ReaderLoaded(
                     onLink = onLink,
                     onNote = { sheet = ReaderSheet.Note(it) },
                     onLongPress = { at -> startReadingAt(at.block, at.offset) },
+                    onImage = { picture = it },
                     modifier = Modifier.focusInert(panelOpen).padding(vertical = PageVerticalMargin),
                 )
 
@@ -359,7 +364,7 @@ internal fun ReaderLoaded(
                         horizontalPadding = settings.horizontalPadding,
                         readerFontFamily = settings.readerFontFamily,
                         pageFit = settings.pageFit,
-                        styleMode = settings.styleMode,
+                        bookStyle = settings.bookStyle,
                         alignment = settings.alignment,
                         onThemeChange = settings.onThemeModeChange,
                         onFontSizeChange = settings.onFontSizeChange,
@@ -367,7 +372,7 @@ internal fun ReaderLoaded(
                         onPaddingChange = settings.onPaddingChange,
                         onFontFamilyChange = settings.onFontFamilyChange,
                         onPageFitChange = settings.onPageFitChange,
-                        onStyleModeChange = settings.onStyleModeChange,
+                        onBookStyleChange = settings.onBookStyleChange,
                         onAlignmentChange = settings.onAlignmentChange,
                         brightness = settings.brightness,
                         onBrightnessChange = settings.onBrightnessChange,
@@ -411,6 +416,8 @@ internal fun ReaderLoaded(
                 )
             }
         }
+
+        picture?.let { ReaderImageViewer(it, readerBook, onDismiss = { picture = null }) }
     }
 }
 

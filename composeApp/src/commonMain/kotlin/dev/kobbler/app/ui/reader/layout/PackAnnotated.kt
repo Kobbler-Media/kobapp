@@ -25,15 +25,23 @@ internal fun buildPackText(
     typography: ReaderTypography,
     sized: Boolean = true,
     dropCap: DropCap? = null,
+    smallCapsMissing: (FontFamily?) -> Boolean = { false },
 ): AnnotatedString = buildAnnotatedString {
+    val book = typography.book
     for (span in spans) {
         val style = styles.styleAt(span.style)
         val start = length
-        append(transformed(span.text, style.transform))
-        addStyle(spanStyle(style, typography, sized, span.link != null || span.note != null), start, length)
+        val text = transformed(span.text, style.transform)
+        val spanStyle = spanStyle(style, typography, sized, span.link != null || span.note != null)
+        val synthetic = style.smallCaps && smallCapsMissing(spanStyle.fontFamily ?: typography.theme.fontFamily)
+        append(if (synthetic) transformed(text, TextTransform.Uppercase) else text)
+        addStyle(if (synthetic) spanStyle.copy(fontFeatureSettings = null) else spanStyle, start, length)
+        if (synthetic) smallCapsFrom(text, start, spanStyle.fontSize)
+        val wordSpacing = style.wordSpacing?.takeIf { book.spacing && it != 0f }
+        if (wordSpacing != null) spaceWords(text, start, wordSpacing, style.letterSpacing?.takeIf { book.spacing } ?: 0f)
     }
     if (dropCap != null && dropCap.chars > 0 && length > 0 && sized) {
-        val size = styles.styleAt(spans.first().style).size ?: 1f
+        val size = styles.styleAt(spans.first().style).size?.takeIf { typography.book.sizes } ?: 1f
         val dropSize = typography.theme.fontSize.value * size * dropCap.lines.coerceIn(2, 4) * DropCapScale
         addStyle(SpanStyle(fontSize = dropSize.sp), 0, dropCap.chars.coerceAtMost(length))
     }
@@ -64,28 +72,29 @@ internal fun spanStyle(
     isLink: Boolean,
 ): SpanStyle {
     val theme = typography.theme
-    val publisher = typography.publisherStyles
-    val bookColor = if (publisher) parseHexColor(style.color)?.takeIf { readableOn(theme.backgroundColor, it) } else null
+    val book = typography.book
+    val bookColor = if (book.colours) parseHexColor(style.color)?.takeIf { readableOn(theme.backgroundColor, it) } else null
     return SpanStyle(
         color = bookColor ?: if (isLink) theme.linkColor else Color.Unspecified,
-        fontSize = if (sized) (theme.fontSize.value * (style.size ?: 1f)).sp else TextUnit.Unspecified,
+        fontSize = if (sized) (theme.fontSize.value * (style.size?.takeIf { book.sizes } ?: 1f)).sp else TextUnit.Unspecified,
         fontWeight = FontWeight((style.weight ?: 400).coerceIn(1, 1000)),
         fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
         fontFamily = familyOf(style.family, typography),
         fontFeatureSettings = if (style.smallCaps) "smcp" else null,
-        letterSpacing = if (publisher) style.letterSpacing?.em ?: TextUnit.Unspecified else TextUnit.Unspecified,
-        baselineShift = when (style.baseline) {
+        letterSpacing = style.letterSpacing?.takeIf { book.spacing }?.em ?: TextUnit.Unspecified,
+        baselineShift = style.shift?.let(::BaselineShift) ?: when (style.baseline) {
             Baseline.Super -> BaselineShift.Superscript
             Baseline.Sub -> BaselineShift.Subscript
             null -> null
         },
+        background = spanBackground(style.background?.takeIf { book.colours }) ?: Color.Unspecified,
         textDecoration = decorationOf(style.underline, style.strike),
     )
 }
 
 internal fun familyOf(family: String?, typography: ReaderTypography): FontFamily? = when {
     family == "monospace" -> FontFamily.Monospace
-    family == null || !typography.publisherStyles -> null
+    family == null || !typography.book.typeface -> null
     family == "serif" -> FontFamily.Serif
     family == "sans-serif" -> FontFamily.SansSerif
     else -> typography.publisherFonts[family]

@@ -136,6 +136,90 @@ class PackModelTest {
         for ((offset, expected) in cases) assertEquals(expected, block.spanAt(offset)?.text, "offset $offset")
         assertEquals(2, block.spanStart(2))
     }
+
+    @Test
+    fun `blocks decode the book's own boxes, rules and image widths`() {
+        val chapter = PackJson.decodeFromString<PackChapter>(
+            """
+            {"blocks":[
+              {"spans":[{"text":"Boxed"}],"frame":"quote","frame_plain":true,
+               "containers":[{"id":3,"inset_start":2.0,"inset_end":1.5,"space_top":0.625,"space_bottom":0.5,
+                 "top":{"width":0.125,"style":"dashed","color":"#333333"},"left":{"width":0.2,"style":"double"},
+                 "right":{"width":0.1,"style":"groove"},"background":"#dddddd"}]},
+              {"kind":"rule","rule":{"line":{"width":0.125,"style":"dotted"},"length":0.2}},
+              {"kind":"image","image":{"src":"a.png","column_width":0.4}}
+            ]}
+            """,
+        )
+        val boxed = chapter.blocks[0]
+        assertEquals(true, boxed.framePlain)
+        assertEquals(
+            listOf(
+                Container(
+                    id = 3, insetStart = 2f, insetEnd = 1.5f, spaceTop = 0.625f, spaceBottom = 0.5f,
+                    top = BorderLine(0.125f, LineStyle.Dashed, "#333333"),
+                    left = BorderLine(0.2f, LineStyle.Double),
+                    right = BorderLine(0.1f, LineStyle.Solid),
+                    background = "#dddddd",
+                ),
+            ),
+            boxed.containers,
+        )
+        assertEquals(RuleStyle(BorderLine(0.125f, LineStyle.Dotted), length = 0.2f), chapter.blocks[1].rule)
+        assertEquals(0.4f, chapter.blocks[2].image?.columnWidth)
+    }
+
+    @Test
+    fun `floats and clears decode`() {
+        val chapter = PackJson.decodeFromString<PackChapter>(
+            """
+            {"blocks":[
+              {"kind":"image","image":{"src":"a.png","column_width":0.4},"float":{"side":"right","gap":0.25},"clear":"left"},
+              {"kind":"image","image":{"src":"b.png"},"float":{"side":"left"}},
+              {"spans":[{"text":"x"}],"clear":"both"}
+            ]}
+            """,
+        )
+        assertEquals(BlockFloat(FloatSide.Right, 0.25f), chapter.blocks[0].float)
+        assertEquals(Clear.Left, chapter.blocks[0].clear)
+        assertEquals(BlockFloat(FloatSide.Left), chapter.blocks[1].float)
+        assertEquals(Clear.Both, chapter.blocks[2].clear)
+        assertEquals(null, chapter.blocks[2].float)
+    }
+
+    @Test
+    fun `round two of the book's css decodes`() {
+        val chapter = PackJson.decodeFromString<PackChapter>(
+            """
+            {"blocks":[
+              {"spans":[{"text":"x"}],"centred":{"em":20.0},
+               "containers":[{"id":1,"radius":[1.0,1.0,0.0,0.0],"centred":{"fraction":0.5},"inner":2.25}]},
+              {"kind":"table","table":{"collapse":true,"rows":[{"cells":[{"blocks":[],"colspan":1,"rowspan":1,
+                "borders":{"top":{"width":0.125,"style":"double"},"left":{"width":0.063,"style":"solid","color":"#000000"}}}]}]}}
+            ]}
+            """,
+        )
+        val block = chapter.blocks[0]
+        assertEquals(Measure(em = 20f), block.centred)
+        assertEquals(Container(id = 1, radius = listOf(1f, 1f, 0f, 0f), centred = Measure(fraction = 0.5f), inner = 2.25f), block.containers[0])
+        val table = chapter.blocks[1].table!!
+        assertEquals(true, table.collapse)
+        assertEquals(
+            Borders(top = BorderLine(0.125f, LineStyle.Double), left = BorderLine(0.063f, LineStyle.Solid, "#000000")),
+            table.rows[0].cells[0].borders,
+        )
+        val style = PackJson.decodeFromString<PackTextStyle>(
+            """{"shift":-0.25,"background":"#ffff00","borders":{"bottom":{"width":0.063,"style":"dashed"}}}""",
+        )
+        assertEquals(
+            PackTextStyle(shift = -0.25f, background = "#ffff00", borders = Borders(bottom = BorderLine(0.063f, LineStyle.Dashed))),
+            style,
+        )
+        val ornament = PackJson.decodeFromString<RuleStyle>(
+            """{"height":1.0,"image":{"src":"OEBPS/images/stars.png","width":1200,"height":800,"repeat":true}}""",
+        )
+        assertEquals(RuleStyle(height = 1f, image = RuleImage("OEBPS/images/stars.png", 1200, 800, repeat = true)), ornament)
+    }
 }
 
 private operator fun <T> List<T>.component6(): T = this[5]

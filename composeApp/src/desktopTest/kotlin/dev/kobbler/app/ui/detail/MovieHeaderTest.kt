@@ -47,14 +47,6 @@ class MovieHeaderTest {
         onNodeWithText("Horror, Drama").assertExists()
     }
 
-    private fun androidx.compose.ui.test.DesktopComposeUiTest.listAndWatchedLiveInMore() {
-        onAllNodesWithContentDescription("Add to your list").assertCountEquals(0)
-        onAllNodesWithContentDescription("Mark watched").assertCountEquals(0)
-        onNodeWithContentDescription("More").performClick()
-        onNodeWithText("Add to your list").assertExists()
-        onNodeWithText("Mark watched").assertExists()
-    }
-
     @Test
     fun `phone header puts the year by the title and the facts on one wrapping line`() =
         movie(FormFactor.Phone, 412, 900) { headerReads() }
@@ -63,8 +55,15 @@ class MovieHeaderTest {
     fun `wide header reads the same`() = movie(FormFactor.Desktop, 1280, 900) { headerReads() }
 
     @Test
-    fun `watchlist and watched live in More on a phone`() = movie(FormFactor.Phone, 412, 900) { listAndWatchedLiveInMore() }
+    fun `on a phone, what does not fit beside Resume is in More`() = movie(FormFactor.Phone, 412, 900) {
+        onNodeWithContentDescription("More").assertExists()
+        assertOfferedOnce("From start", "Mark watched", "Add to your list")
+    }
 
     @Test
-    fun `watchlist and watched live in More beside a poster`() = movie(FormFactor.Desktop, 1280, 900) { listAndWatchedLiveInMore() }
+    fun `beside a poster, the row has room for everything`() = movie(FormFactor.Desktop, 1280, 900) {
+        onAllNodesWithContentDescription("More").assertCountEquals(0)
+        onNodeWithContentDescription("Mark watched").assertExists()
+        onNodeWithContentDescription("Add to your list").assertExists()
+    }
 }

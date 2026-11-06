@@ -198,8 +198,7 @@ private fun AllBooksGrid(
         } ?: emptyList()
     }
 
-    // Recently added books
-    val recentBooks = (if (audiobooksOnly) dash?.audiobooks else dash?.books) ?: emptyList()
+    val recentBooks = (if (audiobooksOnly) dash?.audiobooks else dash?.ebooks) ?: emptyList()
 
     // Alphabet letters
     var letters by remember { mutableStateOf<List<String>>(emptyList()) }

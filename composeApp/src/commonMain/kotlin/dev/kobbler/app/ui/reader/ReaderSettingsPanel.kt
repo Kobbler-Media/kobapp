@@ -47,9 +47,12 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.TtsVoiceDto
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.reader.layout.BookStyle
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
 import dev.kobbler.app.ui.components.tvAutoGlow
@@ -64,7 +67,7 @@ internal fun ReaderSettingsPanel(
     horizontalPadding: Int,
     readerFontFamily: ReaderFontFamily,
     pageFit: ReaderPageFit,
-    styleMode: ReaderStyleMode,
+    bookStyle: BookStyle,
     alignment: ReaderAlignment,
     onThemeChange: (ReaderThemeMode) -> Unit,
     onFontSizeChange: (Float) -> Unit,
@@ -72,7 +75,7 @@ internal fun ReaderSettingsPanel(
     onPaddingChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
     onPageFitChange: (ReaderPageFit) -> Unit,
-    onStyleModeChange: (ReaderStyleMode) -> Unit,
+    onBookStyleChange: (BookStyle) -> Unit,
     onAlignmentChange: (ReaderAlignment) -> Unit,
     brightness: Float,
     onBrightnessChange: (Float) -> Unit,
@@ -129,7 +132,7 @@ internal fun ReaderSettingsPanel(
 
             SettingsLabel("Styling", theme)
             Spacer(Modifier.height(6.dp))
-            ChoiceChips(ReaderStyleMode.entries, styleMode, { it.label }, onStyleModeChange, theme, key = "style")
+            BookStyleControls(bookStyle, onBookStyleChange, theme)
             Spacer(Modifier.height(12.dp))
 
             SettingsLabel("Text alignment", theme)
@@ -279,7 +282,7 @@ internal fun ReaderSettingsPanel(
 }
 
 @Composable
-private fun <T : Enum<T>> ChoiceChips(
+internal fun <T : Enum<T>> ChoiceChips(
     options: List<T>,
     selected: T,
     label: (T) -> String,
@@ -292,12 +295,13 @@ private fun <T : Enum<T>> ChoiceChips(
         modifier = Modifier.fillMaxWidth(),
     ) {
         for (option in options) {
+            val isChosen = option == selected
             KobChip(
                 text = label(option),
-                style = if (option == selected) KobChipStyle.AccentTint else KobChipStyle.Default,
+                style = if (isChosen) KobChipStyle.AccentTint else KobChipStyle.Default,
                 accent = theme.linkColor,
                 onClick = { onSelect(option) },
-                modifier = Modifier.focusKey("$key.${option.name}").weight(1f),
+                modifier = Modifier.focusKey("$key.${option.name}").weight(1f).semantics { this.selected = isChosen },
             )
         }
     }

@@ -127,6 +127,7 @@ private fun parseServerError(body: String): ServerError = try {
 data class DashboardResponse(
     @SerialName("read_next") val readNext: List<InProgressItem> = emptyList(),
     @SerialName("recent_books") val recentBooks: List<RecentBook> = emptyList(),
+    @SerialName("recent_ebooks") val recentEbooks: List<RecentBook> = emptyList(),
     @SerialName("recent_audiobooks") val recentAudiobooks: List<RecentBook> = emptyList(),
     @SerialName("recent_movies") val recentMovies: List<RecentMovie> = emptyList(),
     @SerialName("recent_tv") val recentTv: List<RecentTvEntry> = emptyList(),
@@ -2375,6 +2376,7 @@ class KobblerApi(
                 movies = resp.recentMovies.map { it.toMovie(apiUrl) },
                 shows = resp.recentTv.map { it.toTvShow(apiUrl) },
                 books = resp.recentBooks.map { it.toBook(apiUrl) },
+                ebooks = resp.recentEbooks.map { it.toBook(apiUrl) },
                 audiobooks = resp.recentAudiobooks.map { it.toBook(apiUrl) },
                 sports = resp.recentSports.map { it.toTvShow(apiUrl) },
             )
@@ -2420,8 +2422,10 @@ class KobblerApi(
         DataCache.invalidate("home", "dashboard", "books_all", "books_audiobooks", "wanted", "authors", "series")
     }
 
-    private fun invalidateBookProgress() {
-        DataCache.invalidate("home", "dashboard")
+    // After the write, not before it: a detail page that refetched on return from the
+    // reader would otherwise read the position the exit save had not delivered yet.
+    private fun invalidateBookProgress(bookId: String) {
+        DataCache.invalidate("home", "dashboard", DataCache.bookProgressKey(bookId))
     }
 
     /** [allowed] null hands the decision back to the title's rating. */
@@ -2794,7 +2798,7 @@ class KobblerApi(
 
     suspend fun saveAudioPosition(bookId: String, fileId: String, positionSeconds: Double, progressPercent: Double) {
         put("/api/v1/admin/books/$bookId/audio-position", """{"file_id":"$fileId","position_seconds":$positionSeconds,"progress_percent":$progressPercent}""")
-        invalidateBookProgress()
+        invalidateBookProgress(bookId)
     }
 
     suspend fun getTranscriptSegments(bookId: String): List<TranscriptSegmentDto> =
@@ -2838,7 +2842,10 @@ class KobblerApi(
         PackJson.decodeFromString(get("/api/v1/admin/books/$bookId/reader-pack"))
 
     suspend fun readerPackChapter(bookId: String, chapter: Int): PackChapter =
-        PackJson.decodeFromString(get("/api/v1/admin/books/$bookId/reader-pack/chapters/$chapter"))
+        PackJson.decodeFromString(readerPackChapterJson(bookId, chapter))
+
+    suspend fun readerPackChapterJson(bookId: String, chapter: Int): String =
+        get("/api/v1/admin/books/$bookId/reader-pack/chapters/$chapter")
 
     fun readerPackAssetUrl(bookId: String, src: String): String =
         "$apiUrl/api/v1/admin/books/$bookId/reader-pack/assets/" +
@@ -2879,7 +2886,7 @@ class KobblerApi(
             put("progress_percent", progressPercent)
         }
         post("/api/v1/admin/books/$bookId/reader-progress", body.toString())
-        invalidateBookProgress()
+        invalidateBookProgress(bookId)
     }
 
     // -- TTS --
@@ -4765,6 +4772,7 @@ data class DashboardData(
     val movies: List<Movie>,
     val shows: List<TvShow>,
     val books: List<Book>,
+    val ebooks: List<Book> = emptyList(),
     val audiobooks: List<Book> = emptyList(),
     val sports: List<TvShow> = emptyList(),
 )

@@ -147,12 +147,12 @@ class PlayFromStartTest {
     }
 
     @Test
-    fun aWatchedMoviePlaysFromTheStart() = runUiTest {
+    fun aWatchedMovieIsWatchedAgainFromTheStart() = runUiTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
             onAllNodesWithText("Resume").assertCountEquals(0)
             onAllNodesWithContentDescription("From start").assertCountEquals(0)
-            onNodeWithText("Play").performClick()
+            onNodeWithText("Watch again").performClick()
             awaitLoaded(rig.gps, "m1")
             assertEquals(0L, rig.gps.pendingSeekMs ?: 0L)
             assertEquals(null, rig.stub.lastSessionStart())
@@ -163,14 +163,12 @@ class PlayFromStartTest {
     fun markingAMovieUnwatchedForgetsWhereItWasLeft() = runUiTest {
         val watched = nearEnd.copy(isWatched = true)
         movieRig(watched, """{"watched":true,"position_seconds":5900}""") { rig ->
-            onNodeWithContentDescription("More").performClick()
-            onNodeWithText("Mark unwatched").performClick()
+            performAction("Mark unwatched")
             waitUntil(timeoutMillis = UiTimeoutMs) { rig.stub.requestBodies[MOVIE_STATE].orEmpty().contains("watched") }
             val sent = rig.stub.requestBodies.getValue(MOVIE_STATE)
             assertTrue(sent.contains("\"watched\":false"), sent)
             assertTrue(sent.contains("\"position_seconds\":0"), "unwatching kept the old position: $sent")
-            onNodeWithContentDescription("More").performClick()
-            onNodeWithText("Mark watched").assertExists()
+            assertOfferedOnce("Mark watched")
             onNodeWithText("Play").assertExists()
             onAllNodesWithText("Resume").assertCountEquals(0)
         }

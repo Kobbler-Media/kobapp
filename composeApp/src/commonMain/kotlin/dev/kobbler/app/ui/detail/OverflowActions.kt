@@ -178,50 +178,32 @@ internal fun OverflowItem(
  * value is feeling instant. A failure reverts and says so. [scope] belongs to the page,
  * not the menu: the menu is disposed as it closes, and the request with it.
  */
-@Composable
-internal fun WatchlistItem(
+internal fun watchlistAction(
     inList: Boolean,
-    accent: Color,
     toast: ToastState,
     scope: CoroutineScope,
     onChanged: (Boolean) -> Unit,
     toggle: suspend (Boolean) -> Unit,
-    close: () -> Unit,
-) {
+) = RowAction(
+    key = "watchlist",
     // NOT the eye: `Visibility` is the watched toggle, and one glyph meaning two things is
     // worse than a duller one.
-    OverflowItem(
-        key = "watchlist",
-        icon = if (inList) Icons.AutoMirrored.Outlined.PlaylistAddCheck else Icons.AutoMirrored.Outlined.PlaylistAdd,
-        label = if (inList) "Remove from your list" else "Add to your list",
-        accent = accent,
-        onClick = {
-            val next = !inList
-            onChanged(next)
-            close()
-            scope.launch {
-                runCatching { toggle(next) }
-                    .onSuccess { toast.show(if (next) "Added to your list" else "Removed from your list") }
-                    .onFailure {
-                        onChanged(!next)
-                        toast.show("Could not update your list")
-                    }
-            }
-        },
-    )
-}
+    icon = if (inList) Icons.AutoMirrored.Outlined.PlaylistAddCheck else Icons.AutoMirrored.Outlined.PlaylistAdd,
+    label = if (inList) "Remove from your list" else "Add to your list",
+    selected = inList,
+    onClick = {
+        val next = !inList
+        onChanged(next)
+        scope.launch {
+            runCatching { toggle(next) }
+                .onSuccess { toast.show(if (next) "Added to your list" else "Removed from your list") }
+                .onFailure {
+                    onChanged(!next)
+                    toast.show("Could not update your list")
+                }
+        }
+    },
+)
 
-@Composable
-internal fun KeepItem(keep: KeepAction, accent: Color, close: () -> Unit) {
-    OverflowItem(
-        key = "keep",
-        icon = Icons.Outlined.LibraryAdd,
-        label = keep.label,
-        accent = accent,
-        enabled = keep.enabled,
-        onClick = {
-            close()
-            keep.run()
-        },
-    )
-}
+internal fun keepAction(keep: KeepAction) =
+    RowAction(key = "keep", icon = Icons.Outlined.LibraryAdd, label = keep.label, enabled = keep.enabled, onClick = keep.run)

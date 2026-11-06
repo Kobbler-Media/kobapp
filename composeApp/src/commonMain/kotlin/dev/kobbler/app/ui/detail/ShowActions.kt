@@ -1,14 +1,11 @@
 package dev.kobbler.app.ui.detail
 
-import dev.kobbler.app.ui.offline.ShowDownloadItems
-import dev.kobbler.app.ui.offline.offlineSupported
-
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -16,25 +13,35 @@ import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.ContinueEpisode
-import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.Season
 import dev.kobbler.app.data.TvShow
+import dev.kobbler.app.offline.downloadShow
+import dev.kobbler.app.offline.setAutoDownload
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
-import dev.kobbler.app.ui.components.remainingLabel
 import dev.kobbler.app.ui.components.KobButtonStyle
+import dev.kobbler.app.ui.components.remainingLabel
+import dev.kobbler.app.ui.detail.actions.EpisodeRef
+import dev.kobbler.app.ui.detail.actions.ShowAction
+import dev.kobbler.app.ui.detail.actions.ShowActionState
+import dev.kobbler.app.ui.detail.actions.episodeAt
+import dev.kobbler.app.ui.detail.actions.firstEpisode
+import dev.kobbler.app.ui.detail.actions.showActions
+import dev.kobbler.app.ui.offline.LocalOfflineEngine
+import dev.kobbler.app.ui.offline.episodesPlayableOffline
+import dev.kobbler.app.ui.offline.rememberShowDownloads
 import dev.kobbler.app.ui.player.KeepAction
-import dev.kobbler.app.ui.player.resumeRequestSeconds
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
 
@@ -42,7 +49,6 @@ import kotlinx.coroutines.launch
 internal fun ShowActions(
     show: TvShow,
     accent: Color,
-    selectedSeason: Season?,
     selectedSeasonIdx: Int,
     api: KobblerApi?,
     watchedOverrides: SnapshotStateMap<String, Boolean>,
@@ -55,184 +61,131 @@ internal fun ShowActions(
     exitDown: FocusRequester? = null,
     keep: KeepAction? = null,
 ) {
-    val resume = show.continueEpisode
-    // A sport is followed for what is newest: its first unwatched event is a test session
-    // from months ago, not where the viewer wants to start.
-    val unwatched: (Episode) -> Boolean = { it.filePath != null && !it.isWatchedNow(watchedOverrides) }
-    val firstUnwatchedIdx = selectedSeason?.episodes?.let { eps ->
-        if (show.isSport) eps.indexOfLast(unwatched) else eps.indexOfFirst(unwatched)
-    }?.takeIf { it >= 0 }
     // Owned out here, not inside the menu: an item closes the menu before its request
     // finishes, and menu content is disposed on close -- a scope remembered in there
     // cancels the work that just started.
     val actionScope = rememberCoroutineScope()
-
-    // The server offers an episode with no file when the show is one being streamed
-    // rather than collected (aired, unwanted, already being watched). That is a debrid
-    // search on tap, not a library play, so it must not wear the word Resume or the
-    // accent fill — see compute_continue_episode.
-    val resumeEpisode = resume?.let { show.seasons.getOrNull(it.seasonIdx)?.episodes?.getOrNull(it.episodeIdx) }
-    val resumeSeasonNumber = resume?.let { show.seasons.getOrNull(it.seasonIdx)?.number }
-    val resumeIsStream = resumeEpisode != null && resumeEpisode.filePath == null
-    // Toggling watched on the episode clears its saved position, which `show` cannot know.
-    val resumePosition = if (resumeEpisode?.id in watchedOverrides) 0 else resume?.positionSeconds ?: 0
-    val canRestart = resume != null && supportsVideoPlayback && resumeRequestSeconds(resumePosition) != null
-    val resumeTag = if (resumeSeasonNumber != null && resumeEpisode != null) episodeTag(resumeSeasonNumber, resumeEpisode.number) else null
-
-    val playButton: @Composable (Modifier) -> Unit = { playFill ->
-        if (resume != null && supportsVideoPlayback) {
-            val total = resumeEpisode?.runtimeMinutes?.times(60)
-            val inProgress = canRestart && resumeEpisode?.isWatchedNow(watchedOverrides) != true
-            PrimaryAction(
-                icon = if (resumeIsStream) Icons.Outlined.CloudDownload else Icons.Outlined.PlayArrow,
-                label = when {
-                    resumeIsStream -> "Stream"
-                    canRestart -> "Resume"
-                    else -> "Play"
-                },
-                detail = resumeTag,
-                progress = if (inProgress && total != null && total > 0) resumePosition.toFloat() / total else null,
-                remaining = if (inProgress && total != null) remainingLabel(total - resumePosition) else null,
-                onClick = { onPlayEpisode(resume.seasonIdx, resume.episodeIdx, false) },
-                modifier = Modifier.focusKey("action.resume", preferredEntry = true).then(playFill),
-            )
-        } else if (firstUnwatchedIdx != null && supportsVideoPlayback) {
-            PrimaryAction(
-                icon = Icons.Outlined.PlayArrow,
-                label = "Play",
-                onClick = { onPlayEpisode(selectedSeasonIdx, firstUnwatchedIdx, false) },
-                modifier = Modifier.focusKey("action.play", preferredEntry = true).then(playFill),
-            )
-        }
-    }
-
-    val fromStartButton: @Composable () -> Unit = {
-        if (resume != null && canRestart) {
-            IconAction(
-                icon = Icons.Outlined.Replay,
-                label = "From start",
-                accent = accent,
-                onClick = { onPlayEpisode(resume.seasonIdx, resume.episodeIdx, true) },
-                modifier = Modifier.focusKey("action.fromStart"),
-            )
-        }
-    }
-
-    // Streaming a copy and asking for the file are separate things — the episode the
-    // page offers to stream is exactly the one worth offering to want.
-    val wantableResume = resumeEpisode
-        ?.takeIf { api != null && it.id != null && it.canBeWanted(api.canWant) && !it.isWantedNow(wantOverrides) }
-    val wantButton: @Composable () -> Unit = {
-        val ep = wantableResume
-        if (ep?.id != null && api != null) {
-            IconAction(
-                icon = Icons.Outlined.BookmarkAdd,
-                label = listOfNotNull("Want", resumeTag).joinToString(" "),
-                accent = accent,
-                onClick = {
-                    // Optimistic: the request only enqueues a search, so `show` reports
-                    // the same thing back and the button would re-offer itself.
-                    wantOverrides[ep.id] = true
-                    actionScope.launch {
-                        runCatching { api.wantEpisode(ep.id) }
-                            .onSuccess { toast.show("Added to wanted") }
-                            .onFailure {
-                                wantOverrides.remove(ep.id)
-                                toast.show("Could not want that episode")
-                            }
-                    }
-                },
-                modifier = Modifier.focusKey("action.want"),
-            )
-        }
-    }
-
-    val nextIdx = resume?.let { r ->
-        val eps = show.seasons.getOrNull(r.seasonIdx)?.episodes ?: return@let null
-        val from = (r.episodeIdx + 1).coerceAtMost(eps.size)
-        eps.subList(from, eps.size).indexOfFirst { it.filePath != null }
-            .takeIf { it >= 0 }?.plus(from)
-    }
-    val nextButton: @Composable () -> Unit = {
-        if (resume != null && nextIdx != null && supportsVideoPlayback) {
-            IconAction(
-                icon = Icons.Outlined.SkipNext,
-                label = "Next episode",
-                accent = accent,
-                onClick = { onPlayEpisode(resume.seasonIdx, nextIdx, false) },
-                modifier = Modifier.focusKey("action.playNext"),
-            )
-        }
-    }
-
-    val canWatchlist = api != null && api.canWant
-    // Held out here, not in the menu item: menu content is disposed on close, so state
-    // remembered in there resets to the fetched snapshot and the entry offers "Add"
-    // again on the very next open.
+    // Held out here, not in the action: menu content is disposed on close, so state
+    // remembered in there resets to the fetched snapshot and offers "Add" again.
     var inList by remember(show.inWatchlist) { mutableStateOf(show.inWatchlist) }
     var showWantPicker by remember { mutableStateOf(false) }
     var confirmRewatch by remember { mutableStateOf(false) }
     var wantMode by remember(show.autoWantMode) { mutableStateOf(show.autoWantMode) }
-    val canWantShow = api != null && api.canWant
-    // Seeded from the show, not false: the entry used to appear only when unmonitored,
-    // so starting false was harmless. It is always shown now and has to say which way
-    // round it is.
     var monitored by remember(show.isMonitored) { mutableStateOf(show.isMonitored) }
-    val canRewatch = api != null && (
-        resumePosition > 0 ||
-            show.seasons.any { s -> s.episodes.any { it.id != null && it.isWatchedNow(watchedOverrides) } }
-        )
     val kids = rememberShowKidsAccess(show, api, toast)
+    val engine = LocalOfflineEngine.current
+    val downloads = rememberShowDownloads(show)
 
-    val hasOverflow = api != null && (canWantShow || canWatchlist || canRewatch || kids != null || keep != null ||
-        (offlineSupported && show.seasons.any { s -> s.episodes.any { it.filePath != null } }))
-    val overflowButton: @Composable () -> Unit = {
-        if (api != null && hasOverflow) {
-            OverflowActions(accent = accent) { close ->
-                if (canWatchlist) {
-                    WatchlistItem(
-                        inList = inList,
-                        accent = accent,
-                        toast = toast,
-                        scope = actionScope,
-                        onChanged = { inList = it },
-                        toggle = { on -> if (on) api.addToWatchlist("show", show.id) else api.removeFromWatchlist("show", show.id) },
-                        close = close,
-                    )
+    val plan = showActions(
+        ShowActionState(
+            show = show,
+            selectedSeasonIdx = selectedSeasonIdx,
+            watched = watchedOverrides,
+            wanted = wantOverrides,
+            canPlayVideo = supportsVideoPlayback,
+            onDevice = episodesPlayableOffline(),
+            connected = api != null,
+            canWant = api?.canWant == true,
+            downloads = downloads,
+            canKeep = keep != null,
+            canManageKids = kids != null,
+        ),
+    )
+    val tag: (EpisodeRef) -> String? = { at ->
+        show.seasons.getOrNull(at.seasonIdx)?.let { season -> show.episodeAt(at)?.let { episodeTag(season.number, it.number) } }
+    }
+    val play: (EpisodeRef, Boolean) -> () -> Unit = { at, fromStart -> { onPlayEpisode(at.seasonIdx, at.episodeIdx, fromStart) } }
+    val startOver: () -> Unit = {
+        if (api != null) actionScope.launch {
+            runCatching { api.setShowWatched(show.id, false) }
+                .onSuccess {
+                    show.seasons.forEach { s -> s.episodes.forEach { ep -> ep.id?.let { watchedOverrides[it] = false } } }
+                    onRestarted(show.restartPoint())
+                    toast.show("Starting ${show.title} over")
                 }
+                .onFailure { toast.show("Could not reset your progress") }
+        }
+    }
 
-                if (canWantShow) {
-                    OverflowItem(
-                        key = "monitor",
-                        icon = if (monitored) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
-                        // Naming the mode is the only way to tell "wanting everything"
-                        // from "wanting new ones" once it is already on.
-                        label = if (monitored) "Wanting: ${wantModeLabel(wantMode)}" else "Want",
-                        accent = accent,
-                        onClick = {
-                            close()
-                            showWantPicker = true
-                        },
-                    )
-                }
-
-                if (canRewatch) {
-                    OverflowItem(
-                        key = "rewatch",
-                        icon = Icons.Outlined.RestartAlt,
-                        label = "Rewatch from the start",
-                        accent = accent,
-                        onClick = {
-                            close()
-                            confirmRewatch = true
-                        },
-                    )
-                }
-
-                ShowDownloadItems(show, accent, close)
-                if (keep != null) KeepItem(keep, accent, close)
-                if (kids != null) KidsAccessItem(kids, accent, close)
+    val actions = plan.map { action ->
+        when (action) {
+            is ShowAction.Resume -> {
+                val total = show.episodeAt(action.at)?.runtimeMinutes?.times(60)
+                RowAction(
+                    key = "action.resume", label = "Resume", icon = Icons.Outlined.PlayArrow, onClick = play(action.at, false),
+                    detail = tag(action.at),
+                    progress = total?.takeIf { it > 0 }?.let { action.positionSeconds.toFloat() / it },
+                    remaining = total?.let { remainingLabel(it - action.positionSeconds) },
+                )
             }
+            // The server offers an episode with no file when the show is one being streamed
+            // rather than collected. That is a debrid search on tap, not a library play, so it
+            // must not wear the word Resume -- see compute_continue_episode.
+            is ShowAction.Stream ->
+                RowAction("action.stream", "Stream", Icons.Outlined.CloudDownload, play(action.at, false), detail = tag(action.at))
+            is ShowAction.Play ->
+                RowAction("action.play", "Play", Icons.Outlined.PlayArrow, play(action.at, false), detail = tag(action.at))
+            // One tap, no confirm: the button says what it does, and next-up is the first
+            // unwatched episode after the last watched one, so replaying the first episode
+            // of a show left watched would never move on from it.
+            is ShowAction.Rewatch -> RowAction(
+                key = "action.rewatch", label = "Rewatch", icon = Icons.Outlined.Replay, detail = tag(action.at),
+                onClick = {
+                    startOver()
+                    play(action.at, true)()
+                },
+            )
+            is ShowAction.NextEpisode ->
+                RowAction("action.playNext", "Next episode", Icons.Outlined.SkipNext, play(action.at, false), detail = tag(action.at))
+            is ShowAction.FromStart ->
+                RowAction("action.fromStart", "From start", Icons.Outlined.Replay, play(action.at, true))
+            is ShowAction.WantEpisode -> RowAction(
+                key = "action.want",
+                label = listOfNotNull("Want", tag(action.at)).joinToString(" "),
+                icon = Icons.Outlined.BookmarkAdd,
+                onClick = {
+                    // Optimistic: the request only enqueues a search, so `show` reports the
+                    // same thing back and the action would re-offer itself.
+                    wantOverrides[action.episodeId] = true
+                    actionScope.launch {
+                        runCatching { api?.wantEpisode(action.episodeId) }
+                            .onSuccess { toast.show("Added to wanted") }
+                            .onFailure {
+                                wantOverrides.remove(action.episodeId)
+                                toast.show("Could not want that episode")
+                            }
+                    }
+                },
+            )
+            ShowAction.DownloadAll ->
+                RowAction("downloadShow", "Download all episodes", Icons.Outlined.Download, { engine?.downloadShow(show) })
+            ShowAction.AutoDownload -> {
+                val following = downloads?.following == true
+                RowAction(
+                    "autoDownload", "Download new episodes", Icons.Outlined.NewReleases,
+                    { engine?.setAutoDownload(show, !following) }, selected = following,
+                )
+            }
+            ShowAction.StartOver ->
+                RowAction("rewatch", "Rewatch from the start", Icons.Outlined.RestartAlt, { confirmRewatch = true })
+            ShowAction.WantShow -> RowAction(
+                key = "monitor",
+                // Naming the mode is the only way to tell "wanting everything" from "wanting
+                // new ones" once it is already on.
+                label = if (monitored) "Wanting: ${wantModeLabel(wantMode)}" else "Want",
+                icon = if (monitored) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+                selected = monitored,
+                onClick = { showWantPicker = true },
+            )
+            ShowAction.Watchlist -> watchlistAction(
+                inList = inList,
+                toast = toast,
+                scope = actionScope,
+                onChanged = { inList = it },
+                toggle = { on -> if (on) api?.addToWatchlist("show", show.id) else api?.removeFromWatchlist("show", show.id) },
+            )
+            ShowAction.Keep -> keepAction(keep!!)
+            ShowAction.Kids -> kidsAction(kids!!)
         }
     }
 
@@ -245,15 +198,7 @@ internal fun ShowActions(
             onDismiss = { confirmRewatch = false },
             onConfirm = {
                 confirmRewatch = false
-                actionScope.launch {
-                    runCatching { api.setShowWatched(show.id, false) }
-                        .onSuccess {
-                            show.seasons.forEach { s -> s.episodes.forEach { ep -> ep.id?.let { watchedOverrides[it] = false } } }
-                            onRestarted(show.restartPoint())
-                            toast.show("Starting ${show.title} over")
-                        }
-                        .onFailure { toast.show("Could not reset your progress") }
-                }
+                startOver()
             },
         )
     }
@@ -290,19 +235,7 @@ internal fun ShowActions(
         )
     }
 
-    // The season strip is directly below, so a geometric search down out of the row
-    // lands on whichever tab is nearest -- season one, which on a remote selects it too.
-    DetailActionRow(
-        wide = wide,
-        modifier = modifier,
-        exitDown = exitDown,
-        primary = { fill -> playButton(fill) },
-    ) {
-        fromStartButton()
-        nextButton()
-        wantButton()
-        overflowButton()
-    }
+    DetailActionRow(actions = actions, accent = accent, wide = wide, modifier = modifier, exitDown = exitDown)
 }
 
 @Composable
@@ -336,14 +269,10 @@ private fun RewatchDialog(title: String, accent: Color, onDismiss: () -> Unit, o
     )
 }
 
-/** Where a show picks up once everything is unwatched: the first episode outside the specials. */
 internal fun TvShow.restartPoint(): ContinueEpisode? {
-    val seasonIdx = seasons.indexOfFirst { it.number > 0 && it.episodes.isNotEmpty() }
-        .takeIf { it >= 0 } ?: seasons.indexOfFirst { it.episodes.isNotEmpty() }.takeIf { it >= 0 } ?: return null
-    val season = seasons[seasonIdx]
-    val episodeIdx = season.episodes.indexOfFirst { it.filePath != null }.takeIf { it >= 0 } ?: 0
-    val id = season.episodes[episodeIdx].id ?: return null
-    return ContinueEpisode(seasonIdx = seasonIdx, episodeIdx = episodeIdx, episodeId = id)
+    val at = firstEpisode { it.filePath != null } ?: firstEpisode { true } ?: return null
+    val id = episodeAt(at)?.id ?: return null
+    return ContinueEpisode(seasonIdx = at.seasonIdx, episodeIdx = at.episodeIdx, episodeId = id)
 }
 
 internal fun episodeTag(season: Int, episode: Int) = "S${season.pad2()} E${episode.pad2()}"

@@ -36,21 +36,18 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
+import dev.kobbler.app.ui.player.ProgressSaveScope
 import dev.kobbler.app.ui.reader.layout.ReaderTypography
 import dev.kobbler.app.ui.reader.pack.Position
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-
-/** Outlives the reader composition so the exit save is not cancelled by navigation. */
-private val readerExitScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+import kotlinx.coroutines.withContext
 
 internal data class ReadingSpot(val position: Position, val percent: Double)
 
@@ -63,6 +60,7 @@ fun ReaderScreen(
     api: KobblerApi,
     formFactor: FormFactor,
     onBack: () -> Unit,
+    fromStart: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -92,7 +90,7 @@ fun ReaderScreen(
     }
     var readerFontFamily by remember { mutableStateOf(storedEnum("reader_font_family", ReaderFontFamily.Default)) }
     var pageFit by remember { mutableStateOf(storedEnum("reader_page_fit", ReaderPageFit.Spread)) }
-    var styleMode by remember { mutableStateOf(storedEnum("reader_style_mode", ReaderStyleMode.Publisher)) }
+    var bookStyle by remember { mutableStateOf(loadBookStyle(UserSettings::getString)) }
     var alignment by remember { mutableStateOf(storedEnum("reader_alignment", ReaderAlignment.Justified)) }
     fun saveSettings() {
         UserSettings.putString("reader_theme", themeMode.name)
@@ -102,11 +100,11 @@ fun ReaderScreen(
         UserSettings.putString("reader_font_family", readerFontFamily.name)
         UserSettings.putString("reader_brightness", brightness.toString())
         UserSettings.putString("reader_page_fit", pageFit.name)
-        UserSettings.putString("reader_style_mode", styleMode.name)
+        saveBookStyle(bookStyle, UserSettings::putString)
         UserSettings.putString("reader_alignment", alignment.name)
     }
     SaveWhenSettled(
-        listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness, pageFit, styleMode, alignment),
+        listOf(themeMode, fontSize, lineHeightMultiplier, horizontalPadding, readerFontFamily, brightness, pageFit, bookStyle, alignment),
     ) {
         saveSettings()
     }
@@ -184,7 +182,7 @@ fun ReaderScreen(
         val next = nextSpokenChapter(
             from = from,
             lastIndex = loaded.lastChapter,
-            textAt = { buildChapterView(loaded, it)?.tts?.plainText.orEmpty() },
+            textAt = { index -> buildChapterView(loaded, index)?.let { withContext(Dispatchers.Default) { it.tts.plainText } }.orEmpty() },
             onSkip = { index ->
                 at.goToChapter(index)
                 if (dwelt++ < BlankChapterDwellCount) delay(BlankChapterDwellMs)
@@ -215,7 +213,7 @@ fun ReaderScreen(
     }
     DisposableEffect(Unit) {
         onDispose {
-            readerExitScope.launch { persistProgress() }
+            ProgressSaveScope.launch { persistProgress() }
             ttsController.stop()
             syncController.stop()
             syncPlayer.value?.stop()
@@ -230,11 +228,11 @@ fun ReaderScreen(
             fontFamily = readerFontFamily.compose,
         )
     }
-    val publisherFonts = rememberPublisherFonts(readerBook, enabled = styleMode == ReaderStyleMode.Publisher)
-    val typography = remember(theme, styleMode, alignment, publisherFonts) {
+    val publisherFonts = rememberPublisherFonts(readerBook, enabled = bookStyle.typeface)
+    val typography = remember(theme, bookStyle, alignment, publisherFonts) {
         ReaderTypography(
             theme = theme,
-            publisherStyles = styleMode == ReaderStyleMode.Publisher,
+            book = bookStyle,
             justify = alignment == ReaderAlignment.Justified,
             publisherFonts = publisherFonts,
         )
@@ -244,7 +242,7 @@ fun ReaderScreen(
         try {
             val loaded = ReaderBook(book.id, api.readerPackManifest(book.id), api)
             if (loaded.chapterCount == 0) throw Exception("This book has nothing to read.")
-            val progress = api.readerProgressOrNull(book.id)
+            val progress = if (fromStart) null else api.readerProgressOrNull(book.id)
             val start = progress?.position?.takeIf { it.chapter in 0..loaded.lastChapter }
                 ?: progress?.progressPercent?.takeIf { it > 0 }
                     ?.let { Position(chapterForProgressPercent(it, loaded.weights)) }
@@ -290,7 +288,7 @@ fun ReaderScreen(
                     horizontalPadding = horizontalPadding,
                     readerFontFamily = readerFontFamily,
                     pageFit = pageFit,
-                    styleMode = styleMode,
+                    bookStyle = bookStyle,
                     alignment = alignment,
                     brightness = brightness,
                     onThemeModeChange = { themeMode = it },
@@ -299,7 +297,7 @@ fun ReaderScreen(
                     onPaddingChange = { horizontalPadding = it },
                     onFontFamilyChange = { readerFontFamily = it },
                     onPageFitChange = { pageFit = it },
-                    onStyleModeChange = { styleMode = it },
+                    onBookStyleChange = { bookStyle = it },
                     onAlignmentChange = { alignment = it },
                     onBrightnessChange = { brightness = it },
                 ),

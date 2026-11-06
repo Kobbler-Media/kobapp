@@ -6,8 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,9 +43,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -61,6 +57,9 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
+import dev.kobbler.app.ui.components.rememberZoomState
+import dev.kobbler.app.ui.components.zoomable
+import dev.kobbler.app.ui.components.zoomed
 import dev.kobbler.app.ui.safeBottomPadding
 import dev.kobbler.app.ui.safeTopPadding
 import kotlinx.coroutines.CancellationException
@@ -156,16 +155,9 @@ private fun ComicPager(
     // spread that disagrees must not be allowed to relayout the whole list.
     var pageAspect by remember(source) { mutableFloatStateOf(0f) }
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    val zoom = rememberZoomState()
     var chromeVisible by remember { mutableStateOf(true) }
     var activityTick by remember { mutableIntStateOf(0) }
-
-    val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 4f)
-        offset = if (scale > 1f) offset + panChange else Offset.Zero
-        activityTick++
-    }
 
     // Collected rather than keyed: a pinch bumps the tick every frame, and a key read
     // here would recompose the whole pager for each one.
@@ -200,31 +192,20 @@ private fun ComicPager(
     Box(
         Modifier
             .fillMaxSize()
-            .transformable(transformState)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        chromeVisible = !chromeVisible
-                        activityTick++
-                    },
-                    onDoubleTap = {
-                        scale = 1f
-                        offset = Offset.Zero
-                        activityTick++
-                    },
-                )
-            }
+            .zoomable(
+                zoom,
+                onTap = {
+                    chromeVisible = !chromeVisible
+                    activityTick++
+                },
+                onChange = { activityTick++ },
+            )
     ) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offset.x
-                    translationY = offset.y
-                },
+                .zoomed(zoom),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             items(source.pageCount, key = { it }) { index ->

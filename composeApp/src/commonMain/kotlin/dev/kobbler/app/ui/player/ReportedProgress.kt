@@ -93,11 +93,13 @@ fun TvShow.withReportedProgress(reported: Map<String, WatchedPoint>, today: Loca
                 if (point.finished) {
                     return@map episode.copy(isWatched = true, watchProgress = null)
                 }
+                // Short of the end is unwatched, as the server has it: a save before the
+                // credits takes back an earlier finish, and so does marking it unwatched.
                 // An episode carries a fraction, not a position: the seconds are only
                 // meaningful against a runtime, and without one there is no bar to draw.
-                val runtime = episode.runtimeMinutes?.times(60) ?: return@map episode
-                if (runtime <= 0) return@map episode
-                episode.copy(watchProgress = (point.seconds.toFloat() / runtime).coerceIn(0f, 1f))
+                val runtime = episode.runtimeMinutes?.times(60)?.takeIf { it > 0 }
+                val fraction = runtime?.takeIf { point.seconds > 0 }?.let { (point.seconds.toFloat() / it).coerceIn(0f, 1f) }
+                episode.copy(isWatched = false, watchProgress = fraction)
             },
         )
     }

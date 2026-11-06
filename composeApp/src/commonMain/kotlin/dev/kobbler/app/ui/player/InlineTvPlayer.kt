@@ -340,6 +340,7 @@ fun InlineTvPlayer(
             show = show.withReportedProgress(gps.reportedPositions),
             formFactor = formFactor,
             initialSeasonId = initialSeasonId,
+            onWatchedChanged = { id, watched -> gps.noteWatched(id, watched) },
             onBack = onBack,
             api = api,
             onPlayEpisode = { sIdx, eIdx, fromStart ->

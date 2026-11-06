@@ -1,11 +1,15 @@
 package dev.kobbler.app.ui.detail
 
-import dev.kobbler.app.ui.offline.LocalOfflineEngine
-
 import dev.kobbler.app.offline.OfflineKind
+import dev.kobbler.app.offline.OfflineState
 import dev.kobbler.app.offline.downloadMovie
-import dev.kobbler.app.ui.offline.OfflineAction
+import dev.kobbler.app.ui.detail.actions.MovieAction
+import dev.kobbler.app.ui.detail.actions.MovieActionState
+import dev.kobbler.app.ui.detail.actions.movieActions
+import dev.kobbler.app.ui.offline.LocalOfflineEngine
+import dev.kobbler.app.ui.offline.offlineRowAction
 import dev.kobbler.app.ui.offline.rememberOfflineItem
+import dev.kobbler.app.ui.offline.rememberOnline
 
 import dev.kobbler.app.ui.components.PrefetchToDisk
 import dev.kobbler.app.ui.components.remainingLabel
@@ -35,8 +39,6 @@ import dev.kobbler.app.platform.deviceRegion
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.player.KeepAction
-import dev.kobbler.app.ui.player.resumeSeconds
-import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
 
 @Composable
@@ -106,110 +108,77 @@ private fun ActionRow(
 ) {
     val colors = KobappTheme.colors
     val kids = rememberMovieKidsAccess(movie, api, toast)
-    val canPlay = supportsVideoPlayback && (movie.filePath != null || onStream != null)
     val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
-    val resumeAt = movie.resumeSeconds
     val total = movie.runtimeMinutes?.times(60)
     var inList by remember(movie.inWatchlist) { mutableStateOf(movie.inWatchlist) }
+    var wanted by remember { mutableStateOf(false) }
     // Owned by the row, not the menu: an item closes the menu, disposing its content,
     // before its request finishes.
     val actionScope = rememberCoroutineScope()
-    DetailActionRow(
-        wide = wide,
-        modifier = modifier,
-        primary = if (!canPlay) null else { fill ->
-            PrimaryAction(
-                icon = Icons.Outlined.PlayArrow,
-                label = if (resumeAt != null) "Resume" else "Play",
-                progress = if (resumeAt != null && total != null && total > 0) resumeAt.toFloat() / total else null,
-                remaining = if (resumeAt != null && total != null) remainingLabel(total - resumeAt) else null,
-                onClick = { play(resumeAt == null) },
-                modifier = Modifier.focusKey("play", preferredEntry = true).then(fill),
-            )
-        },
-    ) {
-        if (canPlay && resumeAt != null) {
-            IconAction(
-                icon = Icons.Outlined.Replay,
-                label = "From start",
-                accent = accent,
-                onClick = { play(true) },
-                modifier = Modifier.focusKey("fromStart"),
-            )
-        }
+    val engine = LocalOfflineEngine.current
+    val download = rememberOfflineItem(OfflineKind.Movie, movie.id)
 
-        if (onStreamPick != null) {
-            IconAction(
-                icon = Icons.Outlined.Tune,
-                label = "Streams",
-                accent = accent,
-                onClick = onStreamPick,
-                modifier = Modifier.focusKey("streams"),
+    val plan = movieActions(
+        MovieActionState(
+            movie = movie,
+            canPlayVideo = supportsVideoPlayback,
+            canStream = onStream != null,
+            canPickStream = onStreamPick != null,
+            offline = !rememberOnline(),
+            playableOffline = download?.state == OfflineState.Complete,
+            canDownload = engine != null,
+            downloadStarted = download != null,
+            canWant = api.canWant,
+            canKeep = keep != null,
+            canManageKids = kids != null,
+        ),
+    )
+    val actions = plan.map { action ->
+        when (action) {
+            is MovieAction.Resume -> RowAction(
+                key = "play", label = "Resume", icon = Icons.Outlined.PlayArrow, onClick = { play(false) },
+                progress = total?.takeIf { it > 0 }?.let { action.positionSeconds.toFloat() / it },
+                remaining = total?.let { remainingLabel(it - action.positionSeconds) },
             )
-        }
-
-        val offline = LocalOfflineEngine.current
-        if (offline != null && movie.filePath != null && supportsVideoPlayback) {
-            OfflineAction(
-                item = rememberOfflineItem(OfflineKind.Movie, movie.id),
-                accent = accent,
-                onDownload = { offline.downloadMovie(movie) },
-            )
-        }
-
-        if (movie.canBeWanted(api.canWant)) {
-            var wanted by remember { mutableStateOf(false) }
-            val wantScope = rememberCoroutineScope()
-            IconAction(
-                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+            MovieAction.Play -> RowAction("play", "Play", Icons.Outlined.PlayArrow, { play(true) })
+            MovieAction.WatchAgain -> RowAction("play", "Watch again", Icons.Outlined.Replay, { play(true) })
+            MovieAction.FromStart -> RowAction("fromStart", "From start", Icons.Outlined.Replay, { play(true) })
+            MovieAction.Download -> offlineRowAction(download, accent, { engine?.downloadMovie(movie) }, label = "Download", key = "download")
+            MovieAction.Streams -> RowAction("streams", "Streams", Icons.Outlined.Tune, { onStreamPick?.invoke() })
+            MovieAction.Want -> RowAction(
+                key = "want",
                 label = if (wanted) "Wanted" else "Want",
-                tint = if (wanted) colors.warn else colors.textHi,
-                accent = accent,
+                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+                tint = if (wanted) colors.warn else null,
                 onClick = {
-                    if (!wanted) {
-                        wantScope.launch {
-                            try { api.wantMovieById(movie.id); wanted = true } catch (_: Exception) {}
-                        }
+                    if (!wanted) actionScope.launch {
+                        try { api.wantMovieById(movie.id); wanted = true } catch (_: Exception) {}
                     }
                 },
-                modifier = Modifier.focusKey("want"),
             )
+            is MovieAction.SetWatched -> RowAction(
+                key = "watched",
+                label = if (action.watched) "Mark watched" else "Mark unwatched",
+                icon = if (action.watched) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                onClick = {
+                    onWatchedChanged(action.watched)
+                    actionScope.launch {
+                        try { api.setMovieWatched(movie.id, action.watched) }
+                        catch (_: Exception) { onWatchedChanged(!action.watched) }
+                    }
+                },
+            )
+            MovieAction.Watchlist -> watchlistAction(
+                inList = inList,
+                toast = toast,
+                scope = actionScope,
+                onChanged = { inList = it },
+                toggle = { on -> if (on) api.addToWatchlist("movie", movie.id) else api.removeFromWatchlist("movie", movie.id) },
+            )
+            MovieAction.Keep -> keepAction(keep!!)
+            MovieAction.Kids -> kidsAction(kids!!)
         }
-
-        // Rarely-reached state toggles, kept off the row so Resume has the room on a phone.
-        if (api.canWant || canPlay || kids != null || keep != null) OverflowActions(accent = accent) { close ->
-            if (api.canWant) {
-                WatchlistItem(
-                    inList = inList,
-                    accent = accent,
-                    toast = toast,
-                    scope = actionScope,
-                    onChanged = { inList = it },
-                    toggle = { on -> if (on) api.addToWatchlist("movie", movie.id) else api.removeFromWatchlist("movie", movie.id) },
-                    close = close,
-                )
-            }
-            if (canPlay) {
-                OverflowItem(
-                    key = "watched",
-                    icon = if (movie.isWatched) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                    label = if (movie.isWatched) "Mark unwatched" else "Mark watched",
-                    accent = accent,
-                    onClick = {
-                        val newState = !movie.isWatched
-                        close()
-                        onWatchedChanged(newState)
-                        actionScope.launch {
-                            try { api.setMovieWatched(movie.id, newState) }
-                            catch (_: Exception) { onWatchedChanged(!newState) }
-                        }
-                    },
-                )
-            }
-            if (keep != null) KeepItem(keep, accent, close)
-            if (kids != null) KidsAccessItem(kids, accent, close)
-        }
-        if (kids != null) KidsAccessDialog(kids, accent)
     }
+    if (kids != null) KidsAccessDialog(kids, accent)
+    DetailActionRow(actions = actions, accent = accent, wide = wide, modifier = modifier)
 }
-

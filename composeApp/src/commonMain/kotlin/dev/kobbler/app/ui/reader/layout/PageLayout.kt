@@ -2,15 +2,34 @@ package dev.kobbler.app.ui.reader.layout
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextLayoutResult
+import dev.kobbler.app.ui.reader.pack.Container
 import dev.kobbler.app.ui.reader.pack.FixedPageDto
 import dev.kobbler.app.ui.reader.pack.Frame
 import dev.kobbler.app.ui.reader.pack.ImageRef
+import dev.kobbler.app.ui.reader.pack.RuleStyle
 
 @Immutable
-class PageLayout(val index: Int, val slices: List<PageSlice>, val frames: List<FrameBand>)
+class PageLayout(
+    val index: Int,
+    val slices: List<PageSlice>,
+    val frames: List<FrameBand>,
+    val boxes: List<BoxBand> = emptyList(),
+)
 
 @Immutable
 data class FrameBand(val frame: Frame, val left: Float, val right: Float, val top: Float, val bottom: Float)
+
+/** A book's box as it falls on one page: a side the page cuts through is open, and not drawn. */
+@Immutable
+data class BoxBand(
+    val container: Container,
+    val left: Float,
+    val right: Float,
+    val top: Float,
+    val bottom: Float,
+    val openTop: Boolean,
+    val openBottom: Boolean,
+)
 
 @Immutable
 sealed interface PageSlice {
@@ -32,13 +51,15 @@ class TextSlice(
     override val left: Float,
     override val top: Float,
     val marker: PlacedMarker? = null,
+    val base: Int = 0,
 ) : PageSlice {
     val layoutTop: Float = layout.getLineTop(firstLine)
     override val width: Float get() = layout.size.width.toFloat()
     override val height: Float = layout.getLineBottom(lastLine) - layoutTop
-    val startOffset: Int get() = layout.getLineStart(firstLine)
-    val endOffset: Int get() = layout.getLineEnd(lastLine)
-    val isWhole: Boolean get() = firstLine == 0 && lastLine == layout.lineCount - 1
+    val startOffset: Int get() = base + layout.getLineStart(firstLine)
+    val endOffset: Int get() = base + layout.getLineEnd(lastLine)
+    val startsBlock: Boolean get() = base == 0 && firstLine == 0
+    val isWhole: Boolean get() = startsBlock && lastLine == layout.lineCount - 1
 }
 
 @Immutable
@@ -52,6 +73,7 @@ class ImageSlice(
     override val top: Float,
     override val width: Float,
     override val height: Float,
+    val floating: Boolean = false,
 ) : PageSlice
 
 @Immutable
@@ -61,6 +83,7 @@ class RuleSlice(
     override val top: Float,
     override val width: Float,
     override val height: Float,
+    val style: RuleStyle? = null,
 ) : PageSlice
 
 @Immutable

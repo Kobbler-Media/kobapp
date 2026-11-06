@@ -35,9 +35,8 @@ private val KidsChoices = listOf(
 )
 
 /**
- * Whether Kids profiles see this title. Rarely touched, so it lives in the page's overflow
- * menu rather than in the D-pad's way. Held outside that menu: menu content is disposed on
- * close, and the dialog it opens has to outlive it. The server owns the rating rule, so
+ * Whether Kids profiles see this title. Held outside the row's overflow menu: menu content is
+ * disposed on close, and the dialog it opens has to outlive it. The server owns the rating rule, so
  * after a change it is asked what the title now resolves to rather than guessed.
  */
 @Stable
@@ -113,19 +112,8 @@ internal fun rememberShowKidsAccess(show: TvShow, api: KobblerApi?, toast: Toast
     }
 }
 
-@Composable
-internal fun KidsAccessItem(state: KidsAccessState, accent: Color, close: () -> Unit) {
-    OverflowItem(
-        key = "kids",
-        icon = Icons.Outlined.ChildCare,
-        label = state.label,
-        accent = accent,
-        onClick = {
-            close()
-            state.picking = true
-        },
-    )
-}
+internal fun kidsAction(state: KidsAccessState) =
+    RowAction(key = "kids", icon = Icons.Outlined.ChildCare, label = state.label, onClick = { state.picking = true })
 
 @Composable
 internal fun KidsAccessDialog(state: KidsAccessState, accent: Color) {

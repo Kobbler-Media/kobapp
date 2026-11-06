@@ -71,7 +71,7 @@ class BookActionsTest {
                         }
                     }
                 }
-                onNodeWithContentDescription("Download audio").assertExists()
+                assertOfferedOnce("Download audio")
                 val label = onNodeWithText("Listen", useUnmergedTree = true).getBoundsInRoot()
                 assertTrue(label.right - label.left > 30.dp, "$formFactor: Listen is ${label.right - label.left} wide")
             }

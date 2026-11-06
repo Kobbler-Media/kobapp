@@ -32,13 +32,19 @@ data class Block(
     @SerialName("inset_start") val insetStart: Float = 0f,
     @SerialName("inset_end") val insetEnd: Float = 0f,
     val frame: Frame? = null,
+    @SerialName("frame_plain") val framePlain: Boolean = false,
+    val containers: List<Container> = emptyList(),
+    val centred: Measure? = null,
     val marker: String? = null,
     @SerialName("break_before") val breakBefore: Boolean = false,
     @SerialName("keep_with_next") val keepWithNext: Boolean = false,
     @SerialName("avoid_break_inside") val avoidBreakInside: Boolean = false,
     val image: ImageRef? = null,
+    val rule: RuleStyle? = null,
     val table: Table? = null,
     val fixed: FixedPageDto? = null,
+    val float: BlockFloat? = null,
+    val clear: Clear? = null,
 ) {
     @Transient
     val text: String = spans.joinToString("") { it.text }
@@ -64,6 +70,22 @@ data class Block(
 }
 
 @Serializable
+data class BlockFloat(val side: FloatSide, val gap: Float = 0f)
+
+@Serializable
+enum class FloatSide {
+    @SerialName("left") Left,
+    @SerialName("right") Right,
+}
+
+@Serializable
+enum class Clear {
+    @SerialName("left") Left,
+    @SerialName("right") Right,
+    @SerialName("both") Both,
+}
+
+@Serializable
 data class Span(
     val text: String = "",
     val style: Int = 0,
@@ -80,10 +102,11 @@ data class ImageRef(
     val alt: String? = null,
     val width: Int? = null,
     val height: Int? = null,
+    @SerialName("column_width") val columnWidth: Float? = null,
 )
 
 @Serializable
-data class Table(val rows: List<TableRow> = emptyList())
+data class Table(val rows: List<TableRow> = emptyList(), val collapse: Boolean = false)
 
 @Serializable
 data class TableRow(val header: Boolean = false, val cells: List<TableCell> = emptyList())
@@ -93,6 +116,7 @@ data class TableCell(
     val blocks: List<Block> = emptyList(),
     val colspan: Int = 1,
     val rowspan: Int = 1,
+    val borders: Borders? = null,
 )
 
 @Serializable

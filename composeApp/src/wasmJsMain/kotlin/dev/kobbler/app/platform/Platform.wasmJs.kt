@@ -64,6 +64,10 @@ actual object FileCache {
         }
     }
 
+    actual fun remove(key: String) {
+        cache.remove(key)?.let { bytes -= it.size }
+    }
+
     actual fun pathFor(key: String): String? = null
     actual fun sink(key: String): CacheSink? = null
 }

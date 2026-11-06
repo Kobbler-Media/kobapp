@@ -3,7 +3,6 @@ package dev.kobbler.app.ui.offline
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -14,33 +13,19 @@ import dev.kobbler.app.offline.OfflineIndex
 import dev.kobbler.app.offline.OfflineItem
 import dev.kobbler.app.offline.OfflineKind
 import dev.kobbler.app.offline.downloadEpisodes
-import dev.kobbler.app.offline.downloadShow
-import dev.kobbler.app.offline.setAutoDownload
 import dev.kobbler.app.ui.detail.OverflowItem
+import dev.kobbler.app.ui.detail.actions.ShowDownloads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private fun OfflineIndex.has(episodeId: String?) = episodeId != null && OfflineItem.keyOf(OfflineKind.Episode, episodeId) in items
 
-/** Whole-show entries for the show's own menu; nothing where downloads are not supported. */
 @Composable
-internal fun ShowDownloadItems(show: TvShow, accent: Color, close: () -> Unit) {
-    val engine = LocalOfflineEngine.current ?: return
-    val index = rememberOfflineIndex() ?: return
+internal fun rememberShowDownloads(show: TvShow): ShowDownloads? {
+    LocalOfflineEngine.current ?: return null
+    val index = rememberOfflineIndex() ?: return null
     val playable = show.seasons.flatMap { it.episodes }.filter { it.filePath != null }
-    if (playable.isEmpty()) return
-    val following = show.id in index.subscriptions
-    if (playable.any { !index.has(it.id) } || !following) {
-        OverflowItem("downloadShow", Icons.Outlined.Download, "Download all episodes", accent, onClick = { close(); engine.downloadShow(show) })
-    }
-    OverflowItem(
-        "autoDownload",
-        Icons.Outlined.NewReleases,
-        "Download new episodes",
-        accent,
-        onClick = { close(); engine.setAutoDownload(show, !following) },
-        selected = following,
-    )
+    return ShowDownloads(allHeld = playable.all { index.has(it.id) }, following = show.id in index.subscriptions)
 }
 
 /** Season entries for the season strip's menu. */

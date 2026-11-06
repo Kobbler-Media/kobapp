@@ -3,10 +3,6 @@ package dev.kobbler.app.ui.detail
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.performClick
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
@@ -50,9 +46,7 @@ class KeepActionTest {
             }
             waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/recent" in stub.requestBodies }
             waitForIdle()
-            onAllNodes(hasContentDescription("More") or hasText("More"))[0].performClick()
-            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Keep in library").fetchSemanticsNodes().isNotEmpty() }
-            onAllNodesWithText("Keep in library")[0].performClick()
+            performAction("Keep in library")
             waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/stream/s9/keep" in stub.requestBodies }
         }
     }

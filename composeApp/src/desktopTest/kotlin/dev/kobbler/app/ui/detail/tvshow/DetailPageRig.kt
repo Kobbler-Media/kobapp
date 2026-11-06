@@ -44,20 +44,25 @@ internal fun showJson(
     continueEpisodeIdx: Int = 1,
     position: Int = 600,
     inLibrary: (season: Int, episode: Int) -> Boolean = { _, _ -> true },
+    watched: (season: Int, episode: Int) -> Boolean = { s, _ -> s < 3 },
+    resumes: Boolean = true,
 ): String = buildString {
     append("""{"id":"show-1","title":"Remote Show","year":2015,"kids_allowed":false,"content_rating":"TV-MA","seasons":[""")
     append(
         (1..4).joinToString(",") { s ->
             val eps = (1..3).joinToString(",") { e ->
-                val watched = s < 3
                 """{"id":"e$s-$e","episode_identifier":"$e","episode_sort_order":$e,"title":"S${s}E$e title",
-                   "runtime":45,"is_in_library":${inLibrary(s, e)},"watched":$watched}"""
+                   "runtime":45,"is_in_library":${inLibrary(s, e)},"watched":${watched(s, e)}}"""
             }
             """{"id":"season-$s","season_identifier":"$s","season_sort_order":$s,"episodes":[$eps]}"""
         },
     )
-    append("""],"continue_episode":{"season_idx":$continueSeasonIdx,"episode_idx":$continueEpisodeIdx,""")
-    append(""""episode_id":"e${continueSeasonIdx + 1}-${continueEpisodeIdx + 1}","position_seconds":$position}}""")
+    append("]")
+    if (resumes) {
+        append(""","continue_episode":{"season_idx":$continueSeasonIdx,"episode_idx":$continueEpisodeIdx,""")
+        append(""""episode_id":"e${continueSeasonIdx + 1}-${continueEpisodeIdx + 1}","position_seconds":$position}""")
+    }
+    append("}")
 }
 
 /** The show page driven by a remote, through the real scaffold and its rail. */

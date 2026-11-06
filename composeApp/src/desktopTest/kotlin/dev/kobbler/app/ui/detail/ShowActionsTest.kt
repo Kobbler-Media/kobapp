@@ -5,6 +5,7 @@ import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -59,8 +60,7 @@ class ShowActionsTest {
     @Test
     fun `rewatch unwatches the whole show and resume goes back to the first episode`() = showPage { stub ->
         onNodeWithText("S03 E02", substring = true).assertExists()
-        onNodeWithContentDescription("More").performClick()
-        onNodeWithText("Rewatch from the start").performClick()
+        performAction("Rewatch from the start")
         onNodeWithText("Start over").performClick()
         waitUntil(timeoutMillis = UiTimeoutMs) { stub.requestBodies[SHOW_STATE] != null }
         assertTrue(stub.requestBodies.getValue(SHOW_STATE).contains("\"watched\":false"), stub.requestBodies.getValue(SHOW_STATE))
@@ -70,12 +70,12 @@ class ShowActionsTest {
     }
 
     @Test
-    fun `season actions live on the season strip, not in the show menu`() = showPage {
-        onNodeWithContentDescription("More").performClick()
+    fun `season actions live on the season strip, not in the show's row`() = showPage {
+        openOverflowIfAny()
         onAllNodesWithText("Mark season", substring = true).assertCountEquals(0)
         onAllNodesWithText("Want season", substring = true).assertCountEquals(0)
-        onNodeWithText("Rewatch from the start").assertExists()
-        onNodeWithText("Rewatch from the start").performClick()
+        onAllNodesWithContentDescription("Mark season", substring = true).assertCountEquals(0)
+        performAction("Rewatch from the start")
         onNodeWithText("Cancel").performClick()
 
         onNodeWithContentDescription("Season 3 options").performClick()

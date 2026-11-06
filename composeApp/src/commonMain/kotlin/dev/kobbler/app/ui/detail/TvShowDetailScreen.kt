@@ -10,6 +10,9 @@ import dev.kobbler.app.ui.components.rememberArtTone
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +40,7 @@ fun TvShowDetailScreen(
     onStreamEpisodePick: ((seasonIdx: Int, episodeIdx: Int) -> Unit)? = null,
     keep: KeepAction? = null,
     initialSeasonId: String? = null,
+    onWatchedChanged: (episodeId: String, watched: Boolean) -> Unit = { _, _ -> },
 ) {
     val colors = KobappTheme.colors
     // `show` is a fetched snapshot. Starting a show over moves Resume back to its first
@@ -64,8 +68,19 @@ fun TvShowDetailScreen(
     // `show` is a fetched snapshot, so marking an episode watched changes nothing it
     // reports — the action that did it stayed on screen offering itself again. One
     // override map per screen keeps the rows, the season action and the header count
-    // telling the same story until the next fetch.
-    val watchedOverrides = remember(fetched.id) { mutableStateMapOf<String, Boolean>() }
+    // telling the same story until the next fetch, and no longer: kept for the life of
+    // the screen, a reset's overrides hid every episode watched after it.
+    val watchedOverrides = remember(fetched) { mutableStateMapOf<String, Boolean>() }
+    val currentOnWatchedChanged by rememberUpdatedState(onWatchedChanged)
+    // The player's own record of this session outlives the page and outranks the fetch:
+    // an episode finished earlier would come back as watched straight after a reset.
+    LaunchedEffect(watchedOverrides) {
+        var told = emptyMap<String, Boolean>()
+        snapshotFlow { watchedOverrides.toMap() }.collect { now ->
+            now.forEach { (id, watched) -> if (told[id] != watched) currentOnWatchedChanged(id, watched) }
+            told = now
+        }
+    }
     // Same reason: wanting an episode enqueues a search, so nothing in `show` changes
     // and the action would offer itself again on the very next frame.
     val wantOverrides = remember(fetched.id) { mutableStateMapOf<String, Boolean>() }
@@ -90,7 +105,6 @@ fun TvShowDetailScreen(
             ShowActions(
                 show = shown,
                 accent = accent,
-                selectedSeason = selectedSeason,
                 selectedSeasonIdx = selectedSeasonIdx,
                 api = api,
                 watchedOverrides = watchedOverrides,

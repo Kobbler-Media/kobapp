@@ -11,8 +11,6 @@ import kotlin.math.roundToInt
 
 enum class ReaderPageFit(val label: String) { Width("Fit width"), Page("Fit page"), Spread("Two pages") }
 
-enum class ReaderStyleMode(val label: String) { Publisher("Book's style"), Reader("My style") }
-
 enum class ReaderAlignment(val label: String) { Justified("Justified"), Ragged("Ragged") }
 
 // A spread is only worth it if it barely shrinks either page against showing it alone.

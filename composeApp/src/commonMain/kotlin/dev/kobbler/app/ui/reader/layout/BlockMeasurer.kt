@@ -16,11 +16,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.kobbler.app.ui.reader.pack.Block
+import dev.kobbler.app.ui.reader.pack.BlockFloat
 import dev.kobbler.app.ui.reader.pack.BlockKind
 import dev.kobbler.app.ui.reader.pack.FixedPageDto
+import dev.kobbler.app.ui.reader.pack.FloatSide
 import dev.kobbler.app.ui.reader.pack.Hyphenation
 import dev.kobbler.app.ui.reader.pack.ImageRef
+import dev.kobbler.app.ui.reader.pack.Measure
 import dev.kobbler.app.ui.reader.pack.PackTextStyle
+import dev.kobbler.app.ui.reader.pack.RuleStyle
 import dev.kobbler.app.ui.reader.pack.Span
 import dev.kobbler.app.ui.reader.pack.Table
 import dev.kobbler.app.ui.reader.pack.TextAlignDto
@@ -29,9 +33,10 @@ import kotlin.math.abs
 import kotlin.math.min
 
 internal sealed interface MeasuredBlock {
-    class Text(val layout: TextLayoutResult, val left: Float, val marker: TextLayoutResult?, val markerLeft: Float) : MeasuredBlock
-    class Image(val image: ImageRef, val left: Float, val width: Float, val height: Float) : MeasuredBlock
-    class Rule(val left: Float, val width: Float, val height: Float) : MeasuredBlock
+    /** [layout] holds the block's text from [base] on. */
+    class Text(val layout: TextLayoutResult, val left: Float, val marker: TextLayoutResult?, val markerLeft: Float, val base: Int = 0) : MeasuredBlock
+    class Image(val image: ImageRef, val left: Float, val width: Float, val height: Float, val float: BlockFloat? = null, val gap: Float = 0f) : MeasuredBlock
+    class Rule(val left: Float, val width: Float, val height: Float, val style: RuleStyle?) : MeasuredBlock
     class Table(val table: TableLayout, val left: Float) : MeasuredBlock
     class Fixed(val fixed: FixedPageDto, val left: Float, val top: Float, val width: Float, val height: Float) : MeasuredBlock
     data object Empty : MeasuredBlock
@@ -45,34 +50,74 @@ internal class BlockMeasurer(
     private val measurer: TextMeasurer,
 ) {
     private val theme = typography.theme
+    val book: BookStyle get() = typography.book
     val basePx: Float = with(density) { theme.fontSize.toPx() }
     val padding: Float = with(density) { theme.horizontalPadding.dp.toPx() }
     private val contentWidth = (pageSize.width - 2 * padding).coerceAtLeast(1f)
 
     fun styleOf(block: Block): PackTextStyle = styles.styleAt(block.style)
 
-    fun insetLeft(block: Block): Float = padding + block.insetStart * basePx
+    fun insetLeft(block: Block): Float = edgeLeft(block.insetStart)
 
-    fun insetRight(block: Block): Float = pageSize.width - padding - block.insetEnd * basePx
+    fun insetRight(block: Block): Float = edgeRight(block.insetEnd)
+
+    fun edgeLeft(insetEm: Float): Float = padding + inset(insetEm) * basePx
+
+    fun edgeRight(insetEm: Float): Float = pageSize.width - padding - inset(insetEm) * basePx
+
+    /** The book's margins, or with spacing of my own, only as much of them as nesting needs. */
+    private fun inset(em: Float): Float = if (book.spacing) em else min(em, OwnInsetMaxEm)
+
+    fun spaceBefore(block: Block): Float =
+        if (book.spacing) block.spaceBefore * basePx else with(density) { theme.paragraphSpacing.dp.toPx() }
+
+    private fun sizeOf(style: PackTextStyle): Float = style.size?.takeIf { book.sizes } ?: 1f
+
+    private fun indentOf(style: PackTextStyle): Float = style.indent?.takeIf { book.spacing } ?: 0f
+
+    private fun columnWidth(block: Block): Float {
+        val available = availableWidth(block)
+        val measure = block.centred?.takeIf { book.spacing } ?: return available
+        return min(available, measure.px(available))
+    }
+
+    private fun columnLeft(block: Block): Float = insetLeft(block) + (availableWidth(block) - columnWidth(block)) / 2
+
+    fun Measure.px(of: Float): Float = em?.let { it * basePx } ?: fraction?.let { it * of } ?: of
+
+    private val smallCaps = HashMap<FontFamily?, Boolean>()
+
+    private fun smallCapsMissing(family: FontFamily?): Boolean = smallCaps.getOrPut(family) {
+        lacksSmallCaps { smcp ->
+            val style = TextStyle(fontFamily = family, fontSize = theme.fontSize, fontFeatureSettings = if (smcp) "smcp" else null)
+            measurer.measure(SmallCapsSample, style, softWrap = false, skipCache = true).size.width.toFloat()
+        }
+    }
 
     private fun availableWidth(block: Block): Float =
-        (contentWidth - (block.insetStart + block.insetEnd) * basePx).coerceAtLeast(contentWidth * MinColumnFraction)
+        (contentWidth - (inset(block.insetStart) + inset(block.insetEnd)) * basePx).coerceAtLeast(contentWidth * MinColumnFraction)
 
     fun measure(block: Block): MeasuredBlock = when (block.kind) {
         BlockKind.Text, BlockKind.Heading, BlockKind.Code ->
-            if (block.text.isEmpty()) MeasuredBlock.Empty else measureText(block)
+            if (block.text.isEmpty()) MeasuredBlock.Empty else textFrom(block, 0)
         BlockKind.Image -> block.image?.let { image ->
-            val width = availableWidth(block)
-            val (w, h) = fitImage(image, width, pageSize.height.toFloat())
-            MeasuredBlock.Image(image, insetLeft(block) + (width - w) / 2, w, h)
+            block.float?.takeIf { book.spacing }?.let { measureFloat(block, image, it) }?.let { return it }
+            val width = columnWidth(block)
+            val share = image.columnWidth?.takeIf { book.spacing }
+            val (w, h) = fitImage(image, width, pageSize.height.toFloat(), share)
+            MeasuredBlock.Image(image, columnLeft(block) + (width - w) / 2, w, h)
         } ?: MeasuredBlock.Empty
         BlockKind.Rule -> {
-            val width = availableWidth(block)
-            val w = width * RuleFraction
-            MeasuredBlock.Rule(insetLeft(block) + (width - w) / 2, w, basePx)
+            val width = columnWidth(block)
+            val style = block.rule?.takeIf { book.decorations }
+            val image = style?.image
+            val full = width * (style?.let { it.length ?: 1f } ?: RuleFraction)
+            val height = if (image != null) (style.height ?: 1f) * basePx else maxOf(basePx, (style?.line?.width ?: 0f) * basePx)
+            val w = if (image != null && !image.repeat) min(full, height * image.aspect) else full
+            MeasuredBlock.Rule(columnLeft(block) + (width - w) / 2, w, height, style)
         }
-        BlockKind.Table -> block.table?.let { measureTable(it, availableWidth(block)) }
-            ?.let { MeasuredBlock.Table(it, insetLeft(block)) } ?: MeasuredBlock.Empty
+        BlockKind.Table -> block.table?.let { measureTable(it, columnWidth(block)) }
+            ?.let { MeasuredBlock.Table(it, columnLeft(block)) } ?: MeasuredBlock.Empty
         BlockKind.FixedPage -> block.fixed?.let { fixed ->
             val scale = min(pageSize.width / fixed.pageWidth, pageSize.height / fixed.pageHeight)
             val w = fixed.pageWidth * scale
@@ -81,27 +126,51 @@ internal class BlockMeasurer(
         } ?: MeasuredBlock.Empty
     }
 
-    private fun measureText(block: Block): MeasuredBlock.Text {
-        val style = styleOf(block)
-        val indentPx = (style.indent ?: 0f) * (style.size ?: 1f) * basePx
-        val hang = if (indentPx < 0) min(abs(indentPx), block.insetStart * basePx) else 0f
-        val width = availableWidth(block) + hang
-        val layout = layoutText(block, style, width, hang)
-        val marker = block.marker?.let { measureMarker(it, block) }
-        val markerLeft = marker?.let {
-            (insetLeft(block) - hang - it.size.width - basePx * MarkerGap).coerceAtLeast(0f)
-        } ?: 0f
-        return MeasuredBlock.Text(layout, insetLeft(block) - hang, marker, markerLeft)
+    /** Too wide a float, or one leaving too narrow a column beside it, is laid out as a block. */
+    private fun measureFloat(block: Block, image: ImageRef, float: BlockFloat): MeasuredBlock.Image? {
+        val width = columnWidth(block)
+        val (w, h) = fitImage(image, width, pageSize.height.toFloat(), image.columnWidth)
+        val gap = maxOf(float.gap, MinFloatGapEm) * basePx
+        if (w > width * MaxFloatShare || width - w - gap < MinBesideEm * basePx) return null
+        val left = columnLeft(block) + if (float.side == FloatSide.Left) 0f else width - w
+        return MeasuredBlock.Image(image, left, w, h, float, gap)
     }
 
-    fun layoutText(block: Block, style: PackTextStyle, width: Float, hang: Float = 0f): TextLayoutResult {
+    private class TextColumn(val style: PackTextStyle, val hang: Float, val left: Float, val right: Float)
+
+    private fun textColumn(block: Block): TextColumn {
+        val style = styleOf(block)
+        val indentPx = indentOf(style) * sizeOf(style) * basePx
+        val hang = if (indentPx < 0) min(abs(indentPx), inset(block.insetStart) * basePx) else 0f
+        val left = columnLeft(block) - hang
+        return TextColumn(style, hang, left, left + columnWidth(block) + hang)
+    }
+
+    fun textFrom(block: Block, from: Int): MeasuredBlock.Text = textColumn(block).let { measureText(block, it, it.left, it.right, from) }
+
+    /** The block narrowed to run beside [area]; null when too little of the column is left. */
+    fun textBeside(block: Block, area: FloatArea): MeasuredBlock.Text? {
+        val column = textColumn(block)
+        val (left, right) = area.beside(column.left, column.right)
+        return if (right - left < MinBesideEm * basePx) null else measureText(block, column, left, right, 0)
+    }
+
+    private fun measureText(block: Block, column: TextColumn, left: Float, right: Float, from: Int): MeasuredBlock.Text {
+        val layout = layoutText(block, column.style, right - left, column.hang, from)
+        val marker = block.marker?.takeIf { from == 0 }?.let { measureMarker(it, block) }
+        val markerLeft = marker?.let { (left - it.size.width - basePx * MarkerGap).coerceAtLeast(0f) } ?: 0f
+        return MeasuredBlock.Text(layout, left, marker, markerLeft, from)
+    }
+
+    fun layoutText(block: Block, style: PackTextStyle, width: Float, hang: Float = 0f, from: Int = 0): TextLayoutResult {
         val text = buildPackText(
             block.spans, styles, typography,
-            dropCap = style.dropcap.takeIf { block.kind == BlockKind.Text },
+            dropCap = style.dropcap.takeIf { block.kind == BlockKind.Text && book.decorations },
+            smallCapsMissing = ::smallCapsMissing,
         )
         return measurer.measure(
-            text = text,
-            style = paragraphStyle(block, style, hang),
+            text = if (from > 0) text.subSequence(from, text.length) else text,
+            style = paragraphStyle(block, style, hang, continued = from > 0),
             constraints = Constraints.fixedWidth(width.toInt().coerceAtLeast(1)),
             skipCache = true,
         )
@@ -110,18 +179,17 @@ internal class BlockMeasurer(
     private fun measureMarker(marker: String, block: Block): TextLayoutResult {
         val markerSpan = Span(marker, block.spans.firstOrNull()?.style ?: block.style)
         return measurer.measure(
-            text = buildPackText(listOf(markerSpan), styles, typography),
+            text = buildPackText(listOf(markerSpan), styles, typography, smallCapsMissing = ::smallCapsMissing),
             style = TextStyle(color = theme.textColor, fontFamily = theme.fontFamily),
             softWrap = false,
             skipCache = true,
         )
     }
 
-    private fun paragraphStyle(block: Block, style: PackTextStyle, hang: Float): TextStyle {
-        val size = style.size ?: 1f
-        val indentEm = style.indent ?: 0f
-        val publisher = typography.publisherStyles
-        val lineHeight = style.lineHeight?.takeIf { publisher } ?: typography.lineHeightMultiplier
+    private fun paragraphStyle(block: Block, style: PackTextStyle, hang: Float, continued: Boolean): TextStyle {
+        val size = sizeOf(style)
+        val indentEm = indentOf(style)
+        val lineHeight = style.lineHeight?.takeIf { book.spacing } ?: typography.lineHeightMultiplier
         val hangSp = with(density) { hang.toSp() }
         return TextStyle(
             color = theme.textColor,
@@ -130,8 +198,11 @@ internal class BlockMeasurer(
             lineHeight = lineHeight.em,
             lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None),
             textAlign = alignOf(block, style),
-            textIndent = if (indentEm < 0) TextIndent(restLine = hangSp)
-            else TextIndent(firstLine = (theme.fontSize.value * size * indentEm).sp),
+            textIndent = when {
+                indentEm < 0 -> TextIndent(firstLine = if (continued) hangSp else 0.sp, restLine = hangSp)
+                continued -> TextIndent.None
+                else -> TextIndent(firstLine = (theme.fontSize.value * size * indentEm).sp)
+            },
             hyphens = if (block.kind == BlockKind.Code || style.hyphens == Hyphenation.None || style.hyphens == Hyphenation.Manual) {
                 Hyphens.None
             } else Hyphens.Auto,
@@ -145,7 +216,7 @@ internal class BlockMeasurer(
         val fallback = if (block.kind == BlockKind.Text && typography.justify) TextAlign.Justify else TextAlign.Start
         return when {
             book == null -> fallback
-            typography.publisherStyles -> book
+            typography.book.alignment -> book
             block.kind == BlockKind.Heading -> book
             else -> fallback
         }
@@ -164,21 +235,21 @@ internal class BlockMeasurer(
                 val cellWidth = (columnWidth * span - 2 * pad).coerceAtLeast(1f)
                 val left = column * columnWidth
                 column += span
-                CellLayout(left, columnWidth * span, measureCell(cell.blocks, cellWidth, pad))
+                CellLayout(left, columnWidth * span, measureCell(cell.blocks, cellWidth, pad), cell.borders?.takeIf { book.decorations })
             }
             val height = cells.maxOfOrNull { cell ->
                 cell.items.maxOfOrNull { it.dy + itemHeight(it) }?.plus(pad) ?: (2 * pad)
             } ?: (2 * pad)
             RowLayout(row.header, top, height, cells).also { top += height }
         }
-        return TableLayout(width, pad, rows)
+        return TableLayout(width, pad, rows, table.collapse)
     }
 
     private fun measureCell(blocks: List<Block>, width: Float, pad: Float): List<CellItem> {
         var y = pad
         val items = mutableListOf<CellItem>()
         for ((i, block) in blocks.withIndex()) {
-            if (i > 0) y += block.spaceBefore * basePx
+            if (i > 0) y += spaceBefore(block)
             when (block.kind) {
                 BlockKind.Text, BlockKind.Heading, BlockKind.Code -> if (block.text.isNotEmpty()) {
                     val layout = layoutText(block, styleOf(block), width)
@@ -201,23 +272,28 @@ internal class BlockMeasurer(
         is CellItem.Image -> item.height
     }
 
-    private fun fitImage(image: ImageRef, maxWidth: Float, maxHeight: Float): Pair<Float, Float> {
+    private fun fitImage(image: ImageRef, maxWidth: Float, maxHeight: Float, share: Float? = null): Pair<Float, Float> {
         val w = image.width?.takeIf { it > 0 }?.toFloat()
         val h = image.height?.takeIf { it > 0 }?.toFloat()
+        val target = share?.let { maxWidth * it }
         if (w == null || h == null) {
-            val fallbackH = min(maxWidth * FallbackAspect, maxHeight)
-            return maxWidth to fallbackH
+            val width = target ?: maxWidth
+            return width to min(width * FallbackAspect, maxHeight)
         }
-        val scale = minOf(density.density, maxWidth / w, maxHeight / h)
+        val scale = minOf(target?.let { it / w } ?: density.density, maxWidth / w, maxHeight / h)
         return w * scale to h * scale
     }
 
     private companion object {
         const val MinColumnFraction = 0.3f
         const val RuleFraction = 0.3f
+        const val OwnInsetMaxEm = 3f
         const val MarkerGap = 0.4f
         const val CellPaddingEm = 0.3f
         const val FallbackAspect = 2f / 3f
+        const val MaxFloatShare = 0.6f
+        const val MinBesideEm = 10f
+        const val MinFloatGapEm = 0.5f
     }
 }
 

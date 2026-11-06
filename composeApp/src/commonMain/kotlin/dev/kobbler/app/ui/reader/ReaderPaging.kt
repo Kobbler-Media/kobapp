@@ -38,13 +38,14 @@ internal class ReaderPaging(initial: Position) {
         internal set
     internal var turn: ((Int) -> Boolean)? = null
 
-    val page: Int
-        get() {
-            if (fitted != null) return 0
-            val l = layout ?: return 0
-            val raw = anchor?.let { l.pageOf(it.block, it.offset) } ?: l.pages.lastIndex
-            return raw - raw % pagesPerSpread
-        }
+    val page: Int get() = pageIn(layout.takeIf { fitted == null }, pagesPerSpread)
+
+    /** The page [anchor] falls on in [layout]; 0 with no layout or a fitted chapter. */
+    fun pageIn(layout: ChapterLayout?, perSpread: Int): Int {
+        val l = layout ?: return 0
+        val raw = anchor?.let { l.pageOf(it.block, it.offset) } ?: l.pages.lastIndex
+        return raw - raw % perSpread
+    }
 
     val pageCount: Int get() = if (fitted != null) 1 else layout?.pages?.size?.coerceAtLeast(1) ?: 1
 

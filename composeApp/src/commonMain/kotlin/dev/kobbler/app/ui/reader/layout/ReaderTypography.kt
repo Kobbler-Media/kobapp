@@ -7,7 +7,7 @@ import dev.kobbler.app.ui.reader.ReaderTheme
 @Immutable
 data class ReaderTypography(
     val theme: ReaderTheme,
-    val publisherStyles: Boolean = true,
+    val book: BookStyle = BookStyle.Book,
     val justify: Boolean = true,
     val publisherFonts: Map<String, FontFamily> = emptyMap(),
 ) {

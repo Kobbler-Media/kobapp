@@ -71,6 +71,10 @@ actual object FileCache {
         nsData.writeToFile("$cacheDir/$key", true)
     }
 
+    actual fun remove(key: String) {
+        platform.Foundation.NSFileManager.defaultManager.removeItemAtPath("$cacheDir/$key", null)
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun platform.Foundation.NSData.toByteArray(): ByteArray {
         val size = length.toInt()

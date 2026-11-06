@@ -26,7 +26,10 @@ import kotlin.test.assertEquals
 class BooksBackdropTest {
 
     private val books = """{"items":[{"id":"b1","title":"Thud!","cover_url":"/c/b1.jpg","authors":[{"id":"a1","name":"Pratchett"}]}],"total_count":1}"""
-    private val dashboard = """{"recent_books":[{"id":"r1","title":"Recent","cover_url":"/c/r1.jpg","authors":[]}]}"""
+    private val dashboard = run {
+        val recent = """[{"id":"r1","title":"Recent","cover_url":"/c/r1.jpg","authors":""}]"""
+        """{"recent_ebooks":$recent,"recent_audiobooks":$recent}"""
+    }
 
     @Test
     fun `the backdrop starts at the top of the page`() {

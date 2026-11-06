@@ -15,6 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import dev.kobbler.app.data.AudioFileDto
+import dev.kobbler.app.data.AudioPositionDto
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.CastAudiobookChapter
 import dev.kobbler.app.data.CastAudiobookMetadata
@@ -30,6 +31,7 @@ import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
 import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
+import dev.kobbler.app.ui.player.ProgressSaveScope
 import dev.kobbler.app.ui.player.RESUME_MIN_SECONDS
 import dev.kobbler.app.ui.player.settleAt
 import kotlinx.coroutines.CoroutineScope
@@ -357,7 +359,7 @@ class AudiobookPlayerState internal constructor(
         val pos = player.currentMs.value / 1000.0
         val curGlobal = (fileTimeOffsetsMs.getOrNull(currentFileIndex) ?: 0L) + player.currentMs.value
         val progress = if (totalBookDurationMs > 0) (curGlobal.toDouble() / totalBookDurationMs * 100) else 0.0
-        scope.launch { runCatching { api.saveAudioPosition(book.id, fileId, pos, progress) } }
+        ProgressSaveScope.launch { runCatching { api.saveAudioPosition(book.id, fileId, pos, progress) } }
     }
 }
 
@@ -366,6 +368,7 @@ fun rememberAudiobookState(
     book: Book,
     api: KobblerApi,
     player: Player = LocalSharedAudioPlayer.current.get(),
+    fromStart: Boolean = false,
 ): AudiobookPlayerState {
     val scope = rememberCoroutineScope()
     val state = remember(book.id) { AudiobookPlayerState(book, api, player, scope) }
@@ -391,7 +394,7 @@ fun rememberAudiobookState(
             state.transcriptSegments = runCatching { api.getTranscriptSegments(book.id) }.getOrElse { emptyList() }
 
             if (state.audioFiles.isNotEmpty()) {
-                val savedPos = api.getAudioPosition(book.id)
+                val savedPos = if (fromStart) AudioPositionDto() else api.getAudioPosition(book.id)
                 val fileIdx = savedPos.fileId?.let { fid ->
                     state.audioFiles.indexOfFirst { it.id == fid }
                 }?.takeIf { it >= 0 } ?: 0
