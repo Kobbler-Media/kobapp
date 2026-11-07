@@ -42,7 +42,7 @@ internal fun OfflineSettings() {
     SettingsGroup(label = "Offline") {
         SettingsDropdownRow(
             icon = Icons.Outlined.HighQuality,
-            title = "Download quality",
+            title = "Quality",
             key = "offline-quality",
             valueLabel = quality.label,
             options = DownloadQuality.entries.map { it.name to it.label },
@@ -54,7 +54,7 @@ internal fun OfflineSettings() {
         SettingsDivider()
         SettingsDropdownRow(
             icon = Icons.Outlined.AutoDelete,
-            title = "Downloads",
+            title = "Cleanup",
             key = "offline-cleanup",
             valueLabel = policy.label,
             options = CleanupPolicy.entries.map { it.name to it.label },
@@ -85,7 +85,7 @@ internal fun OfflineSettings() {
             SettingsDivider()
             SettingsRow(
                 icon = Icons.Outlined.DeleteSweep,
-                title = "Remove all downloads",
+                title = "Remove everything saved offline",
                 key = "offline-remove-all",
                 danger = true,
                 onClick = { confirmRemoveAll = true },
@@ -96,7 +96,7 @@ internal fun OfflineSettings() {
 
     if (confirmRemoveAll) {
         ConfirmDialog(
-            title = "Remove all downloads?",
+            title = "Remove everything saved offline?",
             body = "Everything kept on this device for offline use is deleted. Nothing on the server changes.",
             confirmLabel = "Remove all",
             danger = true,

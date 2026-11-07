@@ -54,20 +54,26 @@ internal fun OverflowActions(
     icon: ImageVector = Icons.Outlined.MoreHoriz,
     focusKeyName: String = "action.more",
     quiet: Boolean = false,
+    labelled: Boolean = false,
     content: @Composable ColumnScope.(close: () -> Unit) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     val anchor = remember { FocusRequester() }
     Box(modifier) {
-        IconAction(
-            icon = icon,
-            label = label,
-            onClick = { open = true },
-            accent = accent,
-            modifier = Modifier.focusKey(focusKeyName).focusRequester(anchor),
-            style = if (quiet) KobButtonStyle.Ghost else KobButtonStyle.Default,
-            captioned = !quiet,
-        )
+        val anchored = Modifier.focusKey(focusKeyName).focusRequester(anchor)
+        if (labelled) {
+            LabelledAction(icon = icon, label = label, onClick = { open = true }, accent = accent, modifier = anchored)
+        } else {
+            IconAction(
+                icon = icon,
+                label = label,
+                onClick = { open = true },
+                accent = accent,
+                modifier = anchored,
+                style = if (quiet) KobButtonStyle.Ghost else KobButtonStyle.Default,
+                captioned = !quiet,
+            )
+        }
         OverflowMenu(expanded = open, anchor = anchor, onClose = { open = false }, content = content)
     }
 }

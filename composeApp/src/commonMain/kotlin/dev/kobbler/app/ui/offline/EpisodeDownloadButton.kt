@@ -2,9 +2,9 @@ package dev.kobbler.app.ui.offline
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Downloading
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -38,12 +38,12 @@ internal fun EpisodeDownloadButton(item: OfflineItem?, accent: Color, onDownload
     Box {
         IconBtn(
             icon = when (item?.state) {
-                null -> Icons.Outlined.Download
+                null -> Icons.Outlined.DownloadForOffline
                 OfflineState.Complete -> Icons.Outlined.DownloadDone
                 OfflineState.Failed -> Icons.Outlined.ErrorOutline
                 else -> Icons.Outlined.Downloading
             },
-            description = item?.let(::stateLabel) ?: "Download episode",
+            description = item?.let(::stateLabel) ?: "Save episode offline",
             focusKey = "download",
             tint = when (item?.state) {
                 null -> colors.textLo
@@ -62,7 +62,7 @@ internal fun EpisodeDownloadButton(item: OfflineItem?, accent: Color, onDownload
                 OverflowItem(
                     "remove",
                     if (item.state == OfflineState.Complete) Icons.Outlined.Delete else Icons.Outlined.Close,
-                    if (item.state == OfflineState.Complete) "Remove download" else "Cancel download",
+                    if (item.state == OfflineState.Complete) "Remove from device" else "Cancel saving",
                     accent,
                     onClick = { close(); scope.launch { engine.remove(item.key) } },
                 )

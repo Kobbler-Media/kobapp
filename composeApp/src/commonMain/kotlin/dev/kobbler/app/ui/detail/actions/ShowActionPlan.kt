@@ -14,7 +14,7 @@ internal sealed interface ShowAction {
         val at: EpisodeRef
     }
     data class Resume(override val at: EpisodeRef, val positionSeconds: Int) : OnEpisode
-    data class Stream(override val at: EpisodeRef) : OnEpisode
+    data class Stream(override val at: EpisodeRef, val positionSeconds: Int) : OnEpisode
     data class Play(override val at: EpisodeRef) : OnEpisode
     data class Rewatch(override val at: EpisodeRef) : OnEpisode
     data class NextEpisode(override val at: EpisodeRef) : OnEpisode
@@ -55,7 +55,7 @@ internal fun showActions(state: ShowActionState): List<ShowAction> = with(state)
         lead?.let(::add)
         if (lead is Resume || lead is Stream) {
             show.nextAfter(lead.at, playable)?.let { add(NextEpisode(it)) }
-            if (lead is Resume) add(FromStart(lead.at))
+            if (lead is Resume || (lead is Stream && lead.positionSeconds > 0)) add(FromStart(lead.at))
         }
         val wantable = resumeEpisode?.takeIf { connected && online && it.canBeWanted(canWant) && !it.isWantedNow(wanted) }
         val resumeAt = show.continueEpisode?.let { EpisodeRef(it.seasonIdx, it.episodeIdx) }
@@ -82,8 +82,8 @@ private fun ShowActionState.lead(playable: (Episode) -> Boolean, unwatched: (Epi
     show.continueEpisode?.let { resume ->
         val at = EpisodeRef(resume.seasonIdx, resume.episodeIdx)
         val episode = show.episodeAt(at) ?: return@let
-        if (episode.filePath == null) return if (onDevice == null) Stream(at) else null
         val position = if (episode.id in watched) 0 else resume.positionSeconds
+        if (episode.filePath == null) return if (onDevice == null) Stream(at, position.takeIf { resumeRequestSeconds(it) != null } ?: 0) else null
         return if (resumeRequestSeconds(position) != null) Resume(at, position) else Play(at)
     }
     val pick: (List<Episode>) -> Int = { eps -> if (show.isSport) eps.indexOfLast(unwatched) else eps.indexOfFirst(unwatched) }

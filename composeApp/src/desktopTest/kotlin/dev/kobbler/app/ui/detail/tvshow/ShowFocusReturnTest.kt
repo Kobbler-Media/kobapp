@@ -27,8 +27,8 @@ class ShowFocusReturnTest {
         "/api/v1/admin/tv/episodes/e3-2/want" to { _ -> "{}" },
     )
 
-    private fun streamablePage(test: DesktopComposeUiTest.() -> Unit) =
-        showPage(json = streamable, routes = routes, canStream = true) { test() }
+    private fun streamablePage(json: String = streamable, test: DesktopComposeUiTest.() -> Unit) =
+        showPage(json = json, routes = routes, canStream = true) { test() }
 
     private fun DesktopComposeUiTest.toFirstEpisode(action: String) {
         press(Key.DirectionDown)
@@ -63,7 +63,8 @@ class ShowFocusReturnTest {
     }
 
     @Test
-    fun `wanting the resume episode from the action row moves focus to the next action`() = streamablePage {
+    fun `wanting the next episode from the action row moves focus to the next action`() =
+        streamablePage(showJson(inLibrary = { s, _ -> s < 3 }, position = 0)) {
         rightUntil("Want")
         press(Key.Enter)
         assertFocusSettlesOn("More")

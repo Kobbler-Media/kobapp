@@ -34,12 +34,12 @@ internal fun rememberBookDownloads(book: Book, accent: Color): BookDownloads {
         canAudio = engine != null && book.isInLibrary && book.hasAudiobook,
         textAction = offlineRowAction(
             text, accent, { engine?.downloadBook(book) },
-            label = if (book.hasAudiobook) "Download book" else "Download",
+            label = if (book.hasAudiobook) "Save book offline" else "Save offline",
             key = "download.book",
         ),
         audioAction = offlineRowAction(
             audio, KobappTheme.colors.accAudio, { engine?.downloadAudiobook(book) },
-            label = if (readable) "Download audio" else "Download",
+            label = if (readable) "Save audio offline" else "Save offline",
             key = "download.audio",
         ),
     )

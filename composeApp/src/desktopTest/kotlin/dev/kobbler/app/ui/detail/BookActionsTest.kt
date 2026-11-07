@@ -2,7 +2,6 @@ package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.runUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
@@ -27,7 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import java.nio.file.Files
 
-/** The labelled pill is the page's lead action; the rest are captioned icons. */
+/** The accent pill is the page's lead action; the rest follow it or wait in More. */
 @OptIn(ExperimentalTestApi::class)
 class BookActionsTest {
 
@@ -41,7 +40,7 @@ class BookActionsTest {
             }
         }
         onNodeWithText(lead).assertExists()
-        onNodeWithContentDescription(other).assertExists()
+        assertOfferedOnce(other)
     }
 
     @Test
@@ -71,7 +70,7 @@ class BookActionsTest {
                         }
                     }
                 }
-                assertOfferedOnce("Download audio")
+                assertOfferedOnce("Save audio offline")
                 val label = onNodeWithText("Listen", useUnmergedTree = true).getBoundsInRoot()
                 assertTrue(label.right - label.left > 30.dp, "$formFactor: Listen is ${label.right - label.left} wide")
             }

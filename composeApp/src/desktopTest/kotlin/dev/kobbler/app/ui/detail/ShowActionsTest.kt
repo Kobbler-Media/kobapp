@@ -40,9 +40,9 @@ private const val SHOW_STATE = "$SHOW_PATH/watch-state"
 @OptIn(ExperimentalTestApi::class)
 class ShowActionsTest {
 
-    private fun showPage(engine: OfflineEngine? = null, test: DesktopComposeUiTest.(StubServer) -> Unit) =
+    private fun showPage(engine: OfflineEngine? = null, json: String = showJson(), test: DesktopComposeUiTest.(StubServer) -> Unit) =
         runUiTest(width = 1280, height = 900) {
-            StubServer(mapOf(SHOW_PATH to { _ -> showJson() }, SHOW_STATE to { _ -> """{"updated_count":6}""" })).use { stub ->
+            StubServer(mapOf(SHOW_PATH to { _ -> json }, SHOW_STATE to { _ -> """{"updated_count":6}""" })).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 val show = runBlocking { api.getShow("show-1") }
                 setContent {
@@ -70,11 +70,24 @@ class ShowActionsTest {
     }
 
     @Test
-    fun `season actions live on the season strip, not in the show's row`() = showPage {
+    fun `a streamed episode left part-way resumes with its progress`() =
+        showPage(json = showJson(position = 600, inLibrary = { s, _ -> s < 3 })) {
+            onNodeWithText("Resume").assertExists()
+            onAllNodesWithText("Stream").assertCountEquals(0)
+            onNodeWithText("35m left").assertExists()
+            assertOfferedOnce("From start")
+        }
+
+    @Test
+    fun `the show's row offers no season actions`() = showPage {
         openOverflowIfAny()
         onAllNodesWithText("Mark season", substring = true).assertCountEquals(0)
         onAllNodesWithText("Want season", substring = true).assertCountEquals(0)
         onAllNodesWithContentDescription("Mark season", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `season actions live on the season strip`() = showPage {
         performAction("Rewatch from the start")
         onNodeWithText("Cancel").performClick()
 

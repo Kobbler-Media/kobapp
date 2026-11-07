@@ -3,7 +3,7 @@ package dev.kobbler.app.ui.detail
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoStories
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.runtime.Composable
@@ -137,7 +137,7 @@ private fun ActionRow(
             BookAction.Want -> RowAction(
                 key = "want",
                 label = if (wanted) "Wanted" else "Want",
-                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.Download,
                 tint = if (wanted) colors.accWanted else null,
                 onClick = {
                     if (!wanted) wantScope.launch { try { api.wantBookById(book.id); wanted = true } catch (_: Exception) {} }

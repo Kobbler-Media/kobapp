@@ -7,7 +7,7 @@ import dev.kobbler.app.platform.Settings
 enum class CleanupPolicy(val label: String) {
     Keep("Keep until removed"),
     AfterWatched("Remove once watched"),
-    AfterWeek("Remove a week after downloading");
+    AfterWeek("Remove a week after saving");
 
     companion object {
         private const val Key = "offline_cleanup"

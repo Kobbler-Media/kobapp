@@ -39,7 +39,7 @@ internal fun RowActionControl(action: RowAction, lead: Boolean, accent: Color, f
             remaining = action.remaining,
         )
     } else {
-        IconAction(
+        LabelledAction(
             icon = action.icon,
             label = action.label,
             onClick = action.onClick,

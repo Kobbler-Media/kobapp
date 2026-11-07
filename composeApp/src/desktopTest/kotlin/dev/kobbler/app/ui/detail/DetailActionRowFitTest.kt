@@ -27,15 +27,15 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** One line at any width: as many actions as fit, in order, and More only for what does not. */
+/** One line at any width: as many named actions as fit, in order, and More only for what does not. */
 @OptIn(ExperimentalTestApi::class)
 class DetailActionRowFitTest {
 
-    private val icons = (1..7).map { "Action $it" }
+    private val names = listOf("Watched", "Save all episodes offline", "Add to your list", "Want", "Keep", "Kids", "Rewatch from the start")
     private val actions = listOf(RowAction("lead", "Rewatch", Icons.Outlined.PlayArrow, {}, detail = "S01 E01")) +
-        icons.map { RowAction(it, it, Icons.Outlined.Download, {}) }
+        names.map { RowAction(it, it, Icons.Outlined.Download, {}) }
 
-    private class Natural(val lead: Dp, val icon: Dp, val more: Dp)
+    private class Natural(val lead: Dp, val actions: List<Dp>, val more: Dp)
 
     @Test
     fun `fills one line and overflows only what does not fit, at every width`() = runUiTest(width = 2400, height = 400) {
@@ -51,10 +51,10 @@ class DetailActionRowFitTest {
         waitForIdle()
         assertEquals(0, onAllNodesWithContentDescription("More").fetchSemanticsNodes().size, "everything fits at 2000dp")
         val lead = onNodeWithText("Rewatch").width()
-        val icon = onNodeWithContentDescription(icons.first()).width()
+        val widths = names.map { onNodeWithContentDescription(it).width() }
         rowWidth = 300.dp
         waitForIdle()
-        val natural = Natural(lead, icon, onNodeWithContentDescription("More").width())
+        val natural = Natural(lead, widths, onNodeWithContentDescription("More").width())
 
         for (mode in listOf(true, false)) {
             wide = mode
@@ -68,23 +68,28 @@ class DetailActionRowFitTest {
 
     private fun DesktopComposeUiTest.checkRow(width: Dp, wide: Boolean, natural: Natural) {
         val at = "width $width wide=$wide"
-        val shownIcons = icons.filter { onAllNodesWithContentDescription(it).fetchSemanticsNodes().isNotEmpty() }
-        assertEquals(icons.take(shownIcons.size), shownIcons, "$at: icons out of order")
+        val shown = names.filter { onAllNodesWithContentDescription(it).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(names.take(shown.size), shown, "$at: actions out of order")
         val overflowing = onAllNodesWithContentDescription("More").fetchSemanticsNodes().isNotEmpty()
-        assertEquals(shownIcons.size < icons.size, overflowing, "$at: More shown=$overflowing with ${shownIcons.size} of ${icons.size} icons")
+        assertEquals(shown.size < names.size, overflowing, "$at: More shown=$overflowing with ${shown.size} of ${names.size} actions")
 
         val gap = if (wide) 12.dp else 8.dp
         fun fits(count: Int): Boolean {
-            val more = if (count < icons.size) gap + natural.more else 0.dp
-            return natural.lead + (natural.icon + gap) * count + more <= width + 0.5.dp
+            val more = if (count < names.size) gap + natural.more else 0.dp
+            val actions = natural.actions.take(count).fold(0.dp) { sum, w -> sum + w + gap }
+            return natural.lead + actions + more <= width + 0.5.dp
         }
-        val expected = (icons.size downTo 0).firstOrNull { fits(it) } ?: 0
-        assertEquals(expected, shownIcons.size, "$at: row holds ${shownIcons.size} icons, room for $expected")
+        val expected = (names.size downTo 0).firstOrNull { fits(it) } ?: 0
+        assertEquals(expected, shown.size, "$at: row holds ${shown.size} actions, room for $expected")
 
         val row = onNodeWithTag("row").getBoundsInRoot()
         val lead = onNodeWithText("Rewatch").getBoundsInRoot()
-        val controls = listOf(lead) + shownIcons.map { onNodeWithContentDescription(it).getBoundsInRoot() } +
+        val controls = listOf(lead) + shown.map { onNodeWithContentDescription(it).getBoundsInRoot() } +
             listOfNotNull(if (overflowing) onNodeWithContentDescription("More").getBoundsInRoot() else null)
+        for (name in shown + listOfNotNull("More".takeIf { overflowing })) {
+            val c = onNodeWithContentDescription(name).getBoundsInRoot()
+            assertTrue(c.right - c.left > (c.bottom - c.top) * 2, "$at: $name is a bare icon, not a named button: $c")
+        }
         val middle = (lead.top + lead.bottom) / 2
         for (c in controls) {
             assertTrue((c.top + c.bottom) / 2 - middle in (-1).dp..1.dp, "$at: a control left the line: $c vs $lead")

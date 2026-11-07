@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.Downloading
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -41,7 +41,7 @@ import dev.kobbler.app.offline.OfflineItem
 import dev.kobbler.app.offline.OfflineKind
 import dev.kobbler.app.offline.OfflineState
 import dev.kobbler.app.theme.KobappTheme
-import dev.kobbler.app.ui.detail.IconAction
+import dev.kobbler.app.ui.detail.LabelledAction
 import dev.kobbler.app.ui.detail.OverflowItem
 import dev.kobbler.app.ui.detail.OverflowMenu
 import dev.kobbler.app.ui.detail.RowAction
@@ -120,14 +120,14 @@ fun metaOffline(item: OfflineItem?): (@Composable () -> Unit)? = when (item?.sta
 fun stateLabel(item: OfflineItem): String = when (item.state) {
     OfflineState.Queued -> "Queued"
     OfflineState.Downloading -> item.serverProgress?.let { "Preparing on server ${(it * 100).toInt()}%" }
-        ?: "Downloading ${(item.progress * 100).toInt()}%"
+        ?: "Saving ${(item.progress * 100).toInt()}%"
     OfflineState.Waiting -> "Waiting for network"
-    OfflineState.Complete -> "Downloaded"
-    OfflineState.Failed -> "Download failed"
+    OfflineState.Complete -> "Saved offline"
+    OfflineState.Failed -> "Couldn't save"
 }
 
 private fun iconFor(item: OfflineItem?): ImageVector = when (item?.state) {
-    null -> Icons.Outlined.Download
+    null -> Icons.Outlined.DownloadForOffline
     OfflineState.Complete -> Icons.Outlined.DownloadDone
     OfflineState.Failed -> Icons.Outlined.ErrorOutline
     else -> Icons.Outlined.Downloading
@@ -143,7 +143,7 @@ fun OfflineAction(
     accent: Color,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "Download",
+    label: String = "Save offline",
     focusKeyName: String = "download",
     preferredEntry: Boolean = false,
 ) {
@@ -152,9 +152,9 @@ fun OfflineAction(
     var open by remember { mutableStateOf(false) }
     val anchor = remember { FocusRequester() }
     Box(modifier) {
-        IconAction(
+        LabelledAction(
             icon = iconFor(item),
-            label = item?.let(::stateLabel)?.takeIf { item.state != OfflineState.Complete } ?: if (item != null) "Downloaded" else label,
+            label = item?.let(::stateLabel)?.takeIf { item.state != OfflineState.Complete } ?: if (item != null) "Saved offline" else label,
             tint = when (item?.state) {
                 OfflineState.Complete -> colors.ok
                 OfflineState.Failed -> colors.warn
@@ -187,7 +187,7 @@ private fun ColumnScope.OfflineItemEntries(item: OfflineItem, accent: Color, clo
     OverflowItem(
         "remove",
         if (item.state == OfflineState.Complete) Icons.Outlined.Delete else Icons.Outlined.Close,
-        if (item.state == OfflineState.Complete) "Remove download" else "Cancel download",
+        if (item.state == OfflineState.Complete) "Remove from device" else "Cancel saving",
         accent,
         onClick = { close(); scope.launch { engine.remove(item.key) } },
     )
@@ -202,7 +202,7 @@ internal fun offlineRowAction(item: OfflineItem?, accent: Color, onDownload: () 
     control = { lead -> OfflineAction(item, accent, onDownload, label = label, focusKeyName = key, preferredEntry = lead) },
     menu = { close ->
         if (item == null) {
-            OverflowItem(key, Icons.Outlined.Download, label, accent, onClick = { close(); onDownload() })
+            OverflowItem(key, iconFor(null), label, accent, onClick = { close(); onDownload() })
         } else {
             OverflowItem(key, iconFor(item), stateLabel(item), accent, onClick = {}, enabled = false)
             OfflineItemEntries(item, accent, close)

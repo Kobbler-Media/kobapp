@@ -78,7 +78,12 @@ class ShowActionPlanTest {
         Case(
             "a streamable next episode is streamed and can be wanted",
             online.copy(show = show(watched = { s, _ -> s < 2 }, file = { s, _ -> s < 2 }, continueAt = Triple(2, 0, 0))),
-            listOf(Stream(at(2, 0)), WantEpisode(at(2, 0), "e2-1"), DownloadAll, AutoDownload, StartOver, WantShow, Watchlist),
+            listOf(Stream(at(2, 0), 0), WantEpisode(at(2, 0), "e2-1"), DownloadAll, AutoDownload, StartOver, WantShow, Watchlist),
+        ),
+        Case(
+            "a stream part-watched resumes where it stopped and can start over",
+            online.copy(show = show(watched = { s, _ -> s < 2 }, file = { s, _ -> s < 2 }, continueAt = Triple(2, 0, 600))),
+            listOf(Stream(at(2, 0), 600), FromStart(at(2, 0)), WantEpisode(at(2, 0), "e2-1"), DownloadAll, AutoDownload, StartOver, WantShow, Watchlist),
         ),
         Case(
             "everything downloaded and followed only offers the follow toggle",

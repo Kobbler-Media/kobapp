@@ -36,7 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
@@ -234,7 +234,7 @@ private fun EpisodeRow(
         // both come before the watched flag — acquire, then play, then record.
         if (onWant != null) {
             IconBtn(
-                icon = Icons.Outlined.BookmarkAdd,
+                icon = Icons.Outlined.Download,
                 description = "Want episode",
                 focusKey = "want",
                 tint = colors.textLo,

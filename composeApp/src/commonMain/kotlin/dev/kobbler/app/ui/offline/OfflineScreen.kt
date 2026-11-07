@@ -97,7 +97,7 @@ fun OfflineScreen(
                     countLine = listOfNotNull(
                         "${items.size} ${if (items.size == 1) "title" else "titles"}".takeIf { items.isNotEmpty() },
                         formatBytes(used).takeIf { used > 0 },
-                        items.count { it.state != OfflineState.Complete }.takeIf { it > 0 }?.let { "$it downloading" },
+                        items.count { it.state != OfflineState.Complete }.takeIf { it > 0 }?.let { "$it saving" },
                     ).joinToString(" · ").ifEmpty { null },
                 )
                 if (!online) {
@@ -114,7 +114,7 @@ fun OfflineScreen(
             item(key = "empty") {
                 Box(Modifier.fillMaxWidth().padding(horizontal = gutter, vertical = 48.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        "Nothing downloaded yet. Use Download on a movie, an episode, a book or an audiobook to keep it on this device.",
+                        "Nothing saved yet. Use Save offline on a movie, an episode, a book or an audiobook to keep it on this device.",
                         style = KobappTheme.type.body,
                         color = colors.textLo,
                         textAlign = TextAlign.Center,
@@ -136,7 +136,7 @@ fun OfflineScreen(
                             card.items.filter { it.state == OfflineState.Failed }.takeIf { it.isNotEmpty() }?.let { failed ->
                                 add(CardAction("Try again", { failed.forEach { engine.retry(it.key) } }))
                             }
-                            add(CardAction(if (card.items.size > 1) "Remove all ${card.items.size}" else "Remove download", {
+                            add(CardAction(if (card.items.size > 1) "Remove all ${card.items.size}" else "Remove from device", {
                                 scope.launch { card.items.forEach { engine.remove(it.key) } }
                             }))
                         },

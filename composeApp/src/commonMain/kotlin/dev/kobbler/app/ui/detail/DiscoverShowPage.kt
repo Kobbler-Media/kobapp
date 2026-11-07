@@ -20,7 +20,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Download
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverEpisode
 import dev.kobbler.app.data.DiscoverEpisodeRef
@@ -144,7 +144,7 @@ private fun discoverSeasonMenu(season: Int?, accent: Color, onWantSeason: ((Int)
     return { close ->
         OverflowItem(
             key = "wantSeason",
-            icon = Icons.Outlined.BookmarkAdd,
+            icon = Icons.Outlined.Download,
             label = "Want season $season",
             accent = accent,
             onClick = {

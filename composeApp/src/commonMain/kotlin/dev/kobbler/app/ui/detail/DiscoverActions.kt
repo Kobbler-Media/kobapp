@@ -2,7 +2,7 @@ package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.HistoryToggleOff
 import androidx.compose.material.icons.outlined.ThumbDown
@@ -39,7 +39,7 @@ internal fun DiscoverActions(
             add(RowAction("play", stream.label, Icons.Outlined.PlayArrow, stream.play, detail = stream.detail))
             add(RowAction("streams", "Stream options", Icons.Outlined.Tune, stream.pick))
         }
-        if (wantable) add(RowAction("want", wantLabel, Icons.Outlined.BookmarkAdd, onWant, enabled = !wantLoading))
+        if (wantable) add(RowAction("want", wantLabel, Icons.Outlined.Download, onWant, enabled = !wantLoading))
         refusals.forEachIndexed { i, (label, refuse) ->
             add(RowAction("refuse.$i", label, if (i == 0) Icons.Outlined.ThumbDown else Icons.Outlined.HistoryToggleOff, refuse))
         }

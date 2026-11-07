@@ -73,7 +73,7 @@ internal fun PrimaryAction(
     ) {
         Icon(icon, null, tint = fg, modifier = Modifier.size(22.dp))
         // Two short lines rather than one long one: the pill stays narrow enough to share
-        // a phone's row with the icons and still say how much is left.
+        // a phone's row with the other actions and still say how much is left.
         Column(Modifier.width(IntrinsicSize.Max), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(label, style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold), color = fg, maxLines = 1)
@@ -101,6 +101,29 @@ internal fun PrimaryAction(
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun LabelledAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    tint: Color = KobappTheme.colors.textHi,
+    enabled: Boolean = true,
+) {
+    KobButton(
+        onClick = onClick,
+        accent = accent,
+        enabled = enabled,
+        cornerRadiusDp = PillRadius,
+        modifier = modifier.semantics { contentDescription = label },
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        // The button carries the name; read twice, it would also count twice for anything matching by text.
+        Text(label, style = KobappTheme.type.body, color = KobappTheme.colors.textHi, maxLines = 1, modifier = Modifier.clearAndSetSemantics { })
     }
 }
 

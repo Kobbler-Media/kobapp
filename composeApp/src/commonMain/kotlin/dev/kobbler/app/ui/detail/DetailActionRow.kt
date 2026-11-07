@@ -58,7 +58,7 @@ internal fun DetailActionRow(
                 }
             }
             Box(hidden(shown >= actions.size)) {
-                OverflowActions(accent = accent) { close -> actions.drop(shown).forEach { RowActionMenuEntry(it, accent, close) } }
+                OverflowActions(accent = accent, labelled = true) { close -> actions.drop(shown).forEach { RowActionMenuEntry(it, accent, close) } }
             }
         },
     ) { measurables, constraints ->

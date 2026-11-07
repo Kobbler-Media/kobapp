@@ -1,8 +1,8 @@
 package dev.kobbler.app.ui.offline
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,7 +37,7 @@ internal fun SeasonDownloadItems(show: TvShow, season: Season, accent: Color, sc
     val missing = playable.filterNot { index.has(it.id) }
     val held = playable.filter { index.has(it.id) }
     if (missing.isNotEmpty()) {
-        OverflowItem("downloadSeason", Icons.Outlined.Download, "Download season ${season.number}", accent, onClick = {
+        OverflowItem("downloadSeason", Icons.Outlined.DownloadForOffline, "Save season ${season.number} offline", accent, onClick = {
             close()
             engine.downloadEpisodes(show, missing)
         })

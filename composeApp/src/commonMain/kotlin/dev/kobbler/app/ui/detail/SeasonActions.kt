@@ -5,7 +5,7 @@ import dev.kobbler.app.ui.offline.seasonHasDownloadActions
 
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,7 +70,7 @@ internal fun seasonMenu(
         if (canWant && season.id != null) {
             OverflowItem(
                 key = "wantSeason",
-                icon = Icons.Outlined.BookmarkAdd,
+                icon = Icons.Outlined.Download,
                 label = "Want season ${season.number}",
                 accent = accent,
                 onClick = {

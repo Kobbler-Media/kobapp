@@ -1,11 +1,11 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.ContinueEpisode
@@ -107,22 +108,25 @@ internal fun ShowActions(
         }
     }
 
+    val resumeAction: (String, ImageVector, EpisodeRef, Int) -> RowAction = { key, icon, at, position ->
+        val total = show.episodeAt(at)?.runtimeMinutes?.times(60)
+        RowAction(
+            key = key, label = "Resume", icon = icon, onClick = play(at, false),
+            detail = tag(at),
+            progress = total?.takeIf { it > 0 }?.let { position.toFloat() / it },
+            remaining = total?.let { remainingLabel(it - position) },
+        )
+    }
+
     val actions = plan.map { action ->
         when (action) {
-            is ShowAction.Resume -> {
-                val total = show.episodeAt(action.at)?.runtimeMinutes?.times(60)
-                RowAction(
-                    key = "action.resume", label = "Resume", icon = Icons.Outlined.PlayArrow, onClick = play(action.at, false),
-                    detail = tag(action.at),
-                    progress = total?.takeIf { it > 0 }?.let { action.positionSeconds.toFloat() / it },
-                    remaining = total?.let { remainingLabel(it - action.positionSeconds) },
-                )
-            }
+            is ShowAction.Resume -> resumeAction("action.resume", Icons.Outlined.PlayArrow, action.at, action.positionSeconds)
             // The server offers an episode with no file when the show is one being streamed
-            // rather than collected. That is a debrid search on tap, not a library play, so it
-            // must not wear the word Resume -- see compute_continue_episode.
+            // rather than collected: a debrid search on tap, so it keeps the stream glyph even
+            // when it picks up where the viewer stopped.
             is ShowAction.Stream ->
-                RowAction("action.stream", "Stream", Icons.Outlined.CloudDownload, play(action.at, false), detail = tag(action.at))
+                if (action.positionSeconds > 0) resumeAction("action.stream", Icons.Outlined.CloudDownload, action.at, action.positionSeconds)
+                else RowAction("action.stream", "Stream", Icons.Outlined.CloudDownload, play(action.at, false), detail = tag(action.at))
             is ShowAction.Play ->
                 RowAction("action.play", "Play", Icons.Outlined.PlayArrow, play(action.at, false), detail = tag(action.at))
             // One tap, no confirm: the button says what it does, and next-up is the first
@@ -142,7 +146,7 @@ internal fun ShowActions(
             is ShowAction.WantEpisode -> RowAction(
                 key = "action.want",
                 label = listOfNotNull("Want", tag(action.at)).joinToString(" "),
-                icon = Icons.Outlined.BookmarkAdd,
+                icon = Icons.Outlined.Download,
                 onClick = {
                     // Optimistic: the request only enqueues a search, so `show` reports the
                     // same thing back and the action would re-offer itself.
@@ -158,11 +162,11 @@ internal fun ShowActions(
                 },
             )
             ShowAction.DownloadAll ->
-                RowAction("downloadShow", "Download all episodes", Icons.Outlined.Download, { engine?.downloadShow(show) })
+                RowAction("downloadShow", "Save all episodes offline", Icons.Outlined.DownloadForOffline, { engine?.downloadShow(show) })
             ShowAction.AutoDownload -> {
                 val following = downloads?.following == true
                 RowAction(
-                    "autoDownload", "Download new episodes", Icons.Outlined.NewReleases,
+                    "autoDownload", "Save new episodes offline", Icons.Outlined.SystemUpdateAlt,
                     { engine?.setAutoDownload(show, !following) }, selected = following,
                 )
             }
@@ -173,7 +177,7 @@ internal fun ShowActions(
                 // Naming the mode is the only way to tell "wanting everything" from "wanting
                 // new ones" once it is already on.
                 label = if (monitored) "Wanting: ${wantModeLabel(wantMode)}" else "Want",
-                icon = if (monitored) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+                icon = if (monitored) Icons.Outlined.Check else Icons.Outlined.Download,
                 selected = monitored,
                 onClick = { showWantPicker = true },
             )

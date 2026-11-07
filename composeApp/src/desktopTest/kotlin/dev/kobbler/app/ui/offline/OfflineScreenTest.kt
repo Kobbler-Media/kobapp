@@ -65,7 +65,7 @@ class OfflineScreenTest {
                 }
             }
         }
-        listOf("Movies", "TV shows", "Comics", "Audiobooks", "2 episodes", "Downloading 50%").forEach {
+        listOf("Movies", "TV shows", "Comics", "Audiobooks", "2 episodes", "Saving 50%").forEach {
             onNodeWithText(it, useUnmergedTree = true).assertExists(it)
         }
         onNodeWithText("Books", useUnmergedTree = true).assertDoesNotExist()
@@ -97,7 +97,7 @@ class OfflineScreenTest {
                 }
             }
         }
-        onNodeWithText("Nothing downloaded yet", substring = true, useUnmergedTree = true).assertExists()
+        onNodeWithText("Nothing saved yet", substring = true, useUnmergedTree = true).assertExists()
     }
 
     @Test

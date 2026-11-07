@@ -16,7 +16,7 @@ import dev.kobbler.app.ui.components.remainingLabel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -148,7 +148,7 @@ private fun ActionRow(
             MovieAction.Want -> RowAction(
                 key = "want",
                 label = if (wanted) "Wanted" else "Want",
-                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.BookmarkAdd,
+                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.Download,
                 tint = if (wanted) colors.warn else null,
                 onClick = {
                     if (!wanted) actionScope.launch {

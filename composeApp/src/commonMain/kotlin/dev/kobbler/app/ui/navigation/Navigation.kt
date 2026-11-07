@@ -330,13 +330,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         }
     }
 
-    // Sync Activity fullscreen state (orientation, system bars) with gps.isFullscreen
-    LaunchedEffect(gps.isFullscreen) {
-        if (onToggleFullscreen != null) {
-            if (gps.isFullscreen && !isFullscreen) onToggleFullscreen()
-            else if (!gps.isFullscreen && isFullscreen) onToggleFullscreen()
-        }
-    }
+    if (onToggleFullscreen != null) SyncPlaybackFullscreen(gps.isFullscreen, isFullscreen, onToggleFullscreen)
 
     // Back button: fullscreen video → mini player (if playing) or dismiss (if paused).
     // Not on TV: the mini player's controls are tap-only and it carries no focus target,
