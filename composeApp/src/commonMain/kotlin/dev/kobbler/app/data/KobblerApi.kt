@@ -755,6 +755,7 @@ data class TtsSynthesizeRequest(
     val text: String,
     val voice: String? = null,
     val speed: Double? = null,
+    @SerialName("book_id") val bookId: String? = null,
 )
 
 /**
@@ -2910,6 +2911,7 @@ class KobblerApi(
         text: String,
         voice: String? = null,
         speed: Double? = null,
+        bookId: String? = null,
         onEvent: suspend (TtsStreamEvent) -> Unit,
     ) {
         // Always explicit, including 1.0: kobbler falls back to the active
@@ -2918,7 +2920,7 @@ class KobblerApi(
         // Dropping it at natural rate is the ENGINE hop's job, not this one.
         val reqBody = json.encodeToString(
             TtsSynthesizeRequest.serializer(),
-            TtsSynthesizeRequest(text, voice, speed),
+            TtsSynthesizeRequest(text, voice, speed, bookId),
         )
         httpClient.preparePost("$apiUrl/api/v1/admin/tts/synthesize") {
             header(HttpHeaders.Authorization, "Bearer $token")
@@ -2934,11 +2936,11 @@ class KobblerApi(
     }
 
     /** Render [text] for a cast receiver, returning the render's id. Same body as a read. */
-    suspend fun startTtsCast(text: String, voice: String? = null, speed: Double? = null): String {
+    suspend fun startTtsCast(text: String, voice: String? = null, speed: Double? = null, bookId: String? = null): String {
         val body = httpClient.post("$apiUrl/api/v1/admin/tts/cast") {
             header(HttpHeaders.Authorization, "Bearer $token")
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(TtsSynthesizeRequest.serializer(), TtsSynthesizeRequest(text, voice, speed)))
+            setBody(json.encodeToString(TtsSynthesizeRequest.serializer(), TtsSynthesizeRequest(text, voice, speed, bookId)))
         }.checkedBody()
         return (json.parseToJsonElement(body) as JsonObject)["id"]!!.jsonPrimitive.content
     }

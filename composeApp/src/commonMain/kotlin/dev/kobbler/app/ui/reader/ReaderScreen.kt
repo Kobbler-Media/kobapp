@@ -124,7 +124,7 @@ fun ReaderScreen(
         progressSaver.save(ReadingSpot(at.position, percent))
     }
 
-    val ttsController = remember { TtsController(api, scope) }
+    val ttsController = remember { TtsController(api, scope, bookId = book.id) }
     val ttsState by ttsController.state.collectAsState()
     val ttsSentence by ttsController.currentSentence.collectAsState()
     val ttsWordIndex = ttsController.currentWordIndex.collectAsState()

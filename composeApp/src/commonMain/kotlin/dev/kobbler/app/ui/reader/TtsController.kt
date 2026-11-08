@@ -55,6 +55,7 @@ class TtsController(
     private val api: KobblerApi,
     private val scope: CoroutineScope,
     private val cast: CastSender = castManager(),
+    private val bookId: String? = null,
 ) {
     private val _state = MutableStateFlow(TtsState.IDLE)
     val state: StateFlow<TtsState> = _state.asStateFlow()
@@ -270,7 +271,7 @@ class TtsController(
                 val receiverDone = if (receiver != null) {
                     castRead(text, receiver, streamScope, onEvent)
                 } else {
-                    api.streamTtsSynthesize(text = text, voice = selectedVoice, speed = requestedRate, onEvent = onEvent)
+                    api.streamTtsSynthesize(text = text, voice = selectedVoice, speed = requestedRate, bookId = bookId, onEvent = onEvent)
                     null
                 }
                 sentenceBase += sentencesSeen
@@ -330,7 +331,7 @@ class TtsController(
         streamScope: CoroutineScope,
         onEvent: suspend (TtsStreamEvent) -> Unit,
     ): Deferred<Unit> {
-        val id = api.startTtsCast(text, selectedVoice, requestedRate)
+        val id = api.startTtsCast(text, selectedVoice, requestedRate, bookId)
         val token = api.castToken() ?: throw IllegalStateException("no playback credential for $receiver")
         val init = CastInitTts(
             url = api.ttsCastAudioUrl(id, token),
