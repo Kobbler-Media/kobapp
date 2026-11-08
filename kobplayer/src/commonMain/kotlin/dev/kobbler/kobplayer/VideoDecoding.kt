@@ -31,3 +31,5 @@ expect fun videoDecoderChoices(): List<VideoDecoderChoice>
 
 /** Whether a server may send this device interlace-coded video; see [FieldDecodeVerdict]. */
 expect fun deviceDecodesInterlaced(): Boolean
+
+expect fun deviceHdrFormats(): List<String>

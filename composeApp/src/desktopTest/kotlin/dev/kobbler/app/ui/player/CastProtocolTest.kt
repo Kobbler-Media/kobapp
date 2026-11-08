@@ -182,16 +182,17 @@ class CastProtocolTest {
         assertTrue("eac3" !in castCapabilities("Chromecast Ultra").audioCodecs)
         // A transcode reaches the receiver as fMP4 through MSE, which rejects MP3 in it.
         assertEquals(listOf("aac"), castCapabilities("Projector TV").audioCodecs)
+        assertEquals(null, castCapabilities("Lounge Google TV").hdrFormats)
     }
 
     @Test
     fun `what the receiver says about itself and its tracks reads as events`() {
         assertEquals(
             CastEvent.Capabilities(
-                ClientCapabilities(listOf("h264", "hevc"), listOf("aac", "ac3"), listOf("mp4"), maxHeight = 1080),
+                ClientCapabilities(listOf("h264", "hevc"), listOf("aac", "ac3"), listOf("mp4"), maxHeight = 1080, hdrFormats = listOf("hdr10")),
             ),
             parseCastEvent(
-                """{"type":"CAPABILITIES","payload":{"video_codecs":["h264","hevc"],"audio_codecs":["aac","ac3"],"containers":["mp4"],"max_height":1080}}""",
+                """{"type":"CAPABILITIES","payload":{"video_codecs":["h264","hevc"],"audio_codecs":["aac","ac3"],"containers":["mp4"],"max_height":1080,"hdr_formats":["hdr10"]}}""",
             ),
         )
         assertEquals(

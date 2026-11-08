@@ -417,7 +417,9 @@ class CastHandoffTest {
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
             val gps = loaded(api, player)
-            val cast = FakeSender(ClientCapabilities(listOf("h264", "hevc"), listOf("aac", "ac3"), listOf("mp4"), maxHeight = 1080))
+            val cast = FakeSender(
+                ClientCapabilities(listOf("h264", "hevc"), listOf("aac", "ac3"), listOf("mp4"), maxHeight = 1080, hdrFormats = emptyList()),
+            )
 
             setContent { CastHandoff(cast, gps, api, player) }
             cast.connect("Projector TV")
@@ -426,7 +428,9 @@ class CastHandoffTest {
             val asked = stub.requestBodies.getValue(sessions)
             assertTrue(""""video_codecs":["h264","hevc"]""" in asked, asked)
             assertTrue(""""max_height":1080""" in asked, asked)
+            assertTrue(""""hdr_formats":[]""" in asked, asked)
             assertTrue(""""max_height":1080""" in cast.loads.single().payloadJson)
+            assertTrue(""""hdr_formats":[]""" in cast.loads.single().payloadJson)
         }
     }
 

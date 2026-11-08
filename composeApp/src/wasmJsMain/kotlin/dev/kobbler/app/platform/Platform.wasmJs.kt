@@ -129,7 +129,18 @@ actual fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities? =
         videoCodecs = (listOf("h264") + VideoProbes.filter { mseSupports(it.second) }.map { it.first }).distinct(),
         audioCodecs = (listOf("aac") + AudioProbes.filter { mseSupports(it.second) }.map { it.first }).distinct(),
         containers = listOf("mp4"),
+        hdrFormats = dev.kobbler.app.data.browserHdrFormats(
+            decodesHdr = mseSupports("video/mp4; codecs=\"hvc1.2.4.L153.B0\"") || mseSupports("video/mp4; codecs=\"vp09.02.10.10\""),
+            decodesDolbyVision = mseSupports("video/mp4; codecs=\"dvh1.05.06\""),
+            hdrDisplay = displayIsHdr(),
+            firefox = isFirefox(),
+        ),
     )
 
 private fun mseSupports(mime: String): Boolean =
     js("typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(mime)")
+
+private fun displayIsHdr(): Boolean =
+    js("typeof window.matchMedia === 'function' && window.matchMedia('(dynamic-range: high)').matches")
+
+private fun isFirefox(): Boolean = js("/firefox/i.test(navigator.userAgent)")

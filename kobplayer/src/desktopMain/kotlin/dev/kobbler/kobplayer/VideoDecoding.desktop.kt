@@ -42,3 +42,6 @@ private fun vendorName(pciVendor: String?): String? = when (pciVendor?.lowercase
 }
 
 actual fun deviceDecodesInterlaced(): Boolean = true
+
+// LibVLC tone-maps HDR itself, but never applies a Dolby Vision RPU.
+actual fun deviceHdrFormats(): List<String> = listOf("hdr10", "hlg")

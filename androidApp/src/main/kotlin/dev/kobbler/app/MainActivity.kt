@@ -37,6 +37,7 @@ import dev.kobbler.app.offline.DownloadService
 import dev.kobbler.app.offline.NewEpisodesWorker
 import dev.kobbler.app.offline.Offline
 import dev.kobbler.app.tv.TvWatchNext
+import dev.kobbler.kobplayer.DisplayHdr
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
         }
         Settings.init(this)
         FileCache.init(this)
+        DisplayHdr.attach(this)
         requestNotificationPermission()
         keepDownloadsRunning()
         TvWatchNext.install(this)

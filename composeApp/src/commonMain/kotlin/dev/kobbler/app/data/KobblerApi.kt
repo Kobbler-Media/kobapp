@@ -3,6 +3,7 @@ package dev.kobbler.app.data
 import dev.kobbler.app.platform.browserCapabilities
 import dev.kobbler.app.platform.connectRoundTripMs
 import dev.kobbler.kobplayer.deviceDecodesInterlaced
+import dev.kobbler.kobplayer.deviceHdrFormats
 import dev.kobbler.app.platform.AppVersion
 import dev.kobbler.app.platform.clientKind
 import dev.kobbler.app.platform.deviceLabel
@@ -390,6 +391,7 @@ data class ClientCapabilities(
     val containers: List<String>,
     @SerialName("supports_interlaced") val supportsInterlaced: Boolean? = null,
     @SerialName("max_height") val maxHeight: Int? = null,
+    @SerialName("hdr_formats") val hdrFormats: List<String>? = null,
 )
 
 @Serializable
@@ -2084,6 +2086,7 @@ class KobblerApi(
     val canManageKids: Boolean = false,
     private val originProfiles: OriginProfiles = OriginProfiles.Persistent,
     private val decodesInterlaced: () -> Boolean = ::deviceDecodesInterlaced,
+    private val hdrFormats: () -> List<String> = ::deviceHdrFormats,
     internal val offline: OfflineHooks? = null,
 ) {
     /** True if kobload/debrid streaming is configured on the server. Set during initial load. */
@@ -3518,7 +3521,7 @@ class KobblerApi(
     }.toString()
 
     private fun capabilities() =
-        browserCapabilities() ?: VLC_CAPABILITIES.copy(supportsInterlaced = decodesInterlaced())
+        browserCapabilities() ?: VLC_CAPABILITIES.copy(supportsInterlaced = decodesInterlaced(), hdrFormats = hdrFormats())
 
     private fun capabilitiesJson() = json.encodeToJsonElement(ClientCapabilities.serializer(), capabilities())
 
