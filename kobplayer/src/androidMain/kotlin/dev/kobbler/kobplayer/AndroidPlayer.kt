@@ -1,7 +1,10 @@
 package dev.kobbler.kobplayer
 
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -829,7 +832,7 @@ internal class AndroidPlayer(
     }
 
     @Volatile private var audioOutputMode = AudioOutputMode.AUTO
-    @Volatile private var appliedAudioDevice: String? = null
+    private val route = AudioRoute()
 
     // Chosen per track, because whether a stream can go out as bitstream depends on its
     // codec. Setting a device also stops libVLC's own HDMI listener, which would otherwise
@@ -837,9 +840,7 @@ internal class AndroidPlayer(
     private fun applyAudioOutput() {
         val codec = vlcPlayer.getSelectedTrack(IMedia.Track.Type.Audio)?.codec
         val device = audioOutputDevice(audioOutputMode, codec, sinkPassthroughMask())
-        if (device == appliedAudioDevice) return
-        appliedAudioDevice = device
-        vlcPlayer.setAudioOutputDevice(device)
+        route.select(device).forEach(vlcPlayer::setAudioOutputDevice)
     }
 
     @Volatile private var passthroughMask: Long? = null
@@ -857,11 +858,25 @@ internal class AndroidPlayer(
 
     private fun sinksChanged() {
         passthroughMask = null
-        if (appliedAudioDevice != null) audioRoute.offer(Unit)
+        rebuildAudioOutput()
+    }
+
+    private fun rebuildAudioOutput() {
+        post { if (route.invalidate()) audioRoute.offer(Unit) }
+    }
+
+    // A TV box that sleeps with the TV can come back with its AudioTrack dead and no sink
+    // ever reported gone. Paused, the rebuild lands silently on the next play; playing, it
+    // would be an audible gap in sound that evidently survived.
+    private val wakeWatcher = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (_state.value != PlayerState.PLAYING) rebuildAudioOutput()
+        }
     }
 
     init {
         audioManager.registerAudioDeviceCallback(sinkWatcher, Handler(Looper.getMainLooper()))
+        context.applicationContext.registerReceiver(wakeWatcher, IntentFilter(Intent.ACTION_SCREEN_ON))
     }
 
     override fun selectSubtitleTrack(track: TrackInfo?) {
@@ -895,6 +910,7 @@ internal class AndroidPlayer(
         released = true
         scope.cancel()
         audioManager.unregisterAudioDeviceCallback(sinkWatcher)
+        context.applicationContext.unregisterReceiver(wakeWatcher)
         abandonAudioFocus()
         vlcPlayer.detachViews()
         val media = currentMedia
@@ -915,7 +931,7 @@ internal class AndroidPlayer(
         voutAttached = false
         surfaces.renew(FreshSurfaceWaitMs)
         attachVoutIfReady()
-        appliedAudioDevice = null
+        post { route.reset() }
         audioRoute.offer(Unit)
         restoreVolume()
         val speed = _playbackSpeed.value
