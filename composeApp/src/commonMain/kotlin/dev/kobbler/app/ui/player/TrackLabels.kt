@@ -23,10 +23,17 @@ internal fun List<PlaybackSubtitleTrackDto>.subtitleTrackInfos(): List<TrackInfo
  * when the counts agree is that worth trusting.
  */
 internal fun List<TrackInfo>.labelledBy(server: List<PlaybackSubtitleTrackDto>): List<TrackInfo> {
-    val ordered = server.sortedBy { it.streamIndex }
-    if (ordered.size != size) return this
+    val ordered = alignedWith(server) ?: return this
     return zip(ordered).mapIndexed { i, (own, dto) -> own.copy(label = dto.label(i), language = dto.language ?: own.language) }
 }
+
+internal fun List<TrackInfo>.forcedBy(server: List<PlaybackSubtitleTrackDto>): TrackInfo? {
+    val ordered = alignedWith(server) ?: return null
+    return getOrNull(ordered.indexOfFirst { it.isForced })
+}
+
+private fun List<TrackInfo>.alignedWith(server: List<PlaybackSubtitleTrackDto>) =
+    server.sortedBy { it.streamIndex }.takeIf { it.size == size }
 
 // What muxers write when they have nothing to say: "Track 3", "Subtitle 2", "SubRip".
 private val GenericTitle = Regex("""(?i)\s*((track|subtitles?|subs?|stream|text)\s*#?\s*[\d:]*|subrip|srt|ass|ssa|pgs|vobsub|webvtt|mov_text)\s*""")

@@ -76,6 +76,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
 private const val BRIGHTNESS_KEY = "player.brightness"
@@ -489,6 +490,17 @@ fun FullscreenVideoPlayer(
         }
     }
 
+    // A debrid stream opens with subtitles off: whether a track is forced is only known once
+    // the server has read the tracks' text, which is after the player has opened. The server
+    // switches forced tracks on for a library file at open time; this is the same rule, late.
+    var viewerPickedSubtitles by remember(state.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(state.sessionId, state.serverSubtitleTracks) {
+        val server = state.serverSubtitleTracks
+        if (!state.isDebrid || state.renderableServerSubtitles.isNotEmpty() || server.none { it.isForced }) return@LaunchedEffect
+        val forced = player.subtitleTracks.mapNotNull { it.forcedBy(server) }.first()
+        if (!viewerPickedSubtitles && player.selectedSubtitleTrack.value == null) player.selectSubtitleTrack(forced)
+    }
+
     val renderableServerSubs = state.renderableServerSubtitles
     val useServerSubs = renderableServerSubs.isNotEmpty()
     val subtitleTracks: List<TrackInfo> = if (useServerSubs) {
@@ -498,6 +510,7 @@ fun FullscreenVideoPlayer(
         state.selectedServerSubtitleTrackId?.let { id -> subtitleTracks.firstOrNull { it.id == id } }
     } else vlcSelectedSubtitleTrack?.let { selected -> subtitleTracks.firstOrNull { it.id == selected.id } ?: selected }
     val onSelectSubtitleTrack: (TrackInfo?) -> Unit = { track ->
+        viewerPickedSubtitles = true
         if (useServerSubs) {
             player.selectSubtitleTrack(null)
             state.selectedServerSubtitleTrackId = track?.id
