@@ -51,6 +51,7 @@ internal class DebridPlayback(
     private val posterUrl: String?,
     private val context: List<String>,
     private var claim: (suspend () -> InstantStart?)? = null,
+    private var local: (suspend () -> StreamOption?)? = null,
 ) {
     private var found: StreamSearchResult? = null
     private val options: List<StreamOption> get() = found?.options.orEmpty()
@@ -71,10 +72,10 @@ internal class DebridPlayback(
     private var resumeSec = 0
 
     // The first automatic start claims a stream warmed for this title, if there is one,
-    // before anything is searched or resolved.
+    // else the release already on disk, before anything is searched.
     suspend fun start(from: StreamOption?, resumeSec: Int) {
         this.resumeSec = resumeSec
-        if (from == null && startClaimed(resumeSec)) return
+        if (from == null && (startClaimed(resumeSec) || startLocal(resumeSec))) return
         claim = null
         if (from != null) {
             walked = 0
@@ -117,6 +118,23 @@ internal class DebridPlayback(
         current = instant.option
         currentSession = instant.session
         play(instant.option, instant.session, resumeSec)
+        gps.debridPlayback = this
+        return true
+    }
+
+    private suspend fun startLocal(resumeSec: Int): Boolean {
+        val option = local?.also { local = null }?.invoke() ?: return false
+        val ready = try {
+            resolve(option, resumeSec) as? StreamResolveResult.Ready
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        tried += option.id
+        current = option
+        currentSession = ready.session
+        play(option, ready.session, resumeSec)
         gps.debridPlayback = this
         return true
     }

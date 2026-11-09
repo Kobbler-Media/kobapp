@@ -50,7 +50,6 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.KeepState
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.ThumbnailsProbe
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.PlaybackLifecycle
 import dev.kobbler.app.platform.PlaybackTimeline
@@ -299,29 +298,7 @@ fun FullscreenVideoPlayer(
         api.debridSessionEvents(sid).collect { frame ->
             // Guarded whole: the key does not change for the life of the session, so an
             // unexpected payload would otherwise end the collector for good.
-            runCatching {
-                when (frame.kind) {
-                    "skip_segments_ready" -> {
-                        val segments = frame.data["segments"] ?: return@runCatching
-                        val parsed = api.decodeSkipSegments(segments)
-                        if (parsed.isNotEmpty()) state.skipSegments = parsed
-                    }
-                    // Named by the server from the tracks' own text a few minutes into the
-                    // download; nothing renders these, they only name the player's own tracks.
-                    "subtitles" -> {
-                        val subtitles = frame.data["subtitles"] ?: return@runCatching
-                        if (state.serverSubtitleTracks.none { !it.url.isNullOrBlank() }) {
-                            state.serverSubtitleTracks = api.decodeSubtitleTracks(subtitles)
-                        }
-                    }
-                    // The event carries the URL, but it is the same one the poll below
-                    // builds — so use the event only as the trigger and let the existing
-                    // helper resolve it and confirm the file is really servable.
-                    "thumbnails_ready" -> (api.checkThumbnailsReady(sid) as? ThumbnailsProbe.Ready)?.let {
-                        state.thumbnailsUrl = it.url
-                    }
-                }
-            }
+            runCatching { applyDebridSessionFrame(state, api, sid, frame) }
         }
     }
 

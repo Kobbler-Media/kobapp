@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -156,5 +157,33 @@ class LibraryEventStreamTest {
         assertEquals(60_000, p.next(previousMs = 40_000, outcome = StreamOutcome.Dropped))
         assertEquals(5_000, p.next(previousMs = 60_000, outcome = StreamOutcome.Connected))
         assertEquals(300_000, p.next(previousMs = 5_000, outcome = StreamOutcome.Rejected))
+    }
+
+    @Test
+    fun `a debrid session stream ends when the server says it is done`() = runBlocking {
+        val connections = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/api/v1/admin/stream/s1/status") { exchange ->
+                connections.incrementAndGet()
+                exchange.responseHeaders.add("Content-Type", "text/event-stream")
+                exchange.sendResponseHeaders(200, 0)
+                exchange.responseBody.use {
+                    it.write("data: {\"type\":\"skip_segments_ready\"}\n\ndata: {\"type\":\"done\"}\n\n".encodeToByteArray())
+                }
+            }
+            executor = Executors.newCachedThreadPool()
+            start()
+        }
+        try {
+            val kinds = withTimeout(10_000) {
+                debridSessionEventStream(HttpClient(), "http://127.0.0.1:${server.address.port}", "s1", "t", json)
+                    .toList()
+                    .map { it.kind }
+            }
+            assertEquals(listOf("skip_segments_ready"), kinds.filter { !it.startsWith("_") })
+            assertEquals(1, connections.get(), "reconnected to a finished session")
+        } finally {
+            server.stop(0)
+        }
     }
 }

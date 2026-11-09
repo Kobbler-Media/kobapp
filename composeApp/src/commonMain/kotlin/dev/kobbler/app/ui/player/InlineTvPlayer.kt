@@ -534,8 +534,9 @@ private fun playNeighbourEpisode(
                 gps.playUnmuted(player)
             } else if (allowDebridFallback && api.canStream && player != null) {
                 val claimed = gps.instant.claim(api, StreamTarget.episode(epId))
-                val searchResult = if (claimed == null) runCatching { api.streamSearch(episodeId = epId) }.getOrNull() else null
-                if (claimed != null || !searchResult?.options.isNullOrEmpty()) {
+                val onDisk = if (claimed == null) api.localStreamOption("episode", epId) else null
+                val searchResult = if (claimed == null && onDisk == null) runCatching { api.streamSearch(episodeId = epId) }.getOrNull() else null
+                if (claimed != null || onDisk != null || !searchResult?.options.isNullOrEmpty()) {
                     tryPlayTvWithFallback(
                         api = api, player = player, gps = gps, show = show,
                         episodeId = epId, seasonIdx = sIdx, episodeIdx = eIdx,
@@ -544,6 +545,7 @@ private fun playNeighbourEpisode(
                         resumeSec = (api.getEpisodeProgress(epId) ?: 0),
                         onCaching = { walk, c -> onStartCaching(walk, c, sIdx, eIdx, epId) },
                         claim = { claimed },
+                        local = { onDisk },
                     )
                 } else {
                     // Nothing on debrid for this episode (not aired yet, no release
@@ -599,6 +601,7 @@ internal suspend fun tryPlayTvWithFallback(
     resumeSec: Int = 0,
     onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
     claim: (suspend () -> InstantStart?)? = null,
+    local: suspend () -> StreamOption? = { api.localStreamOption("episode", episodeId) },
 ) {
     if (player == null) return
     val season = show.seasons.getOrNull(seasonIdx)
@@ -634,6 +637,7 @@ internal suspend fun tryPlayTvWithFallback(
             "ID: $episodeId",
         ),
         claim = claim,
+        local = local,
     )
     walk.start(option, resumeSec)
 }

@@ -74,6 +74,7 @@ fun InlineMoviePlayer(
     }
 
     var streamResult by remember { mutableStateOf<StreamSearchResult?>(null) }
+    var onDisk by remember { mutableStateOf<StreamOption?>(null) }
     var streamLoading by remember { mutableStateOf(false) }
     var showStreamOptions by remember { mutableStateOf(false) }
     var cachingProviderId by remember { mutableStateOf<String?>(null) }
@@ -140,12 +141,13 @@ fun InlineMoviePlayer(
             }
         } else if (movie.filePath == null && api.canStream && supportsVideoPlayback) {
             streamLoading = true
-            runCatching { streamResult = api.streamSearch(movieId = movie.id) }
+            onDisk = api.localStreamOption("movie", movie.id)
+            if (onDisk == null) runCatching { streamResult = api.streamSearch(movieId = movie.id) }
             streamLoading = false
         }
       } finally {
           // Nothing to hand the shell: take it back down rather than leave a spinner.
-          if (gps.mediaId == null && streamResult?.options.isNullOrEmpty()) gps.cancelPreparing()
+          if (gps.mediaId == null && streamResult?.options.isNullOrEmpty() && onDisk == null) gps.cancelPreparing()
       }
     }
 
@@ -192,7 +194,7 @@ fun InlineMoviePlayer(
             val debrid = debridFallback || (movie.filePath == null && api.canStream)
             when {
                 gps.mediaId == movie.id -> true
-                debrid && streamResult?.options?.isNotEmpty() == true -> false
+                debrid && (onDisk != null || streamResult?.options?.isNotEmpty() == true) -> false
                 else -> null
             }
         }.filterNotNull().first()
@@ -355,7 +357,7 @@ fun InlineMoviePlayer(
             streaming = streamingAvailability(
                 canStream = isDebrid && supportsVideoPlayback,
                 searching = streamLoading,
-                found = streamResult?.options?.map { it.isInstant },
+                found = streamResult?.options?.map { it.isInstant } ?: onDisk?.let { listOf(true) },
             ),
             onStream = if (isDebrid && supportsVideoPlayback) autoPlayDebrid else null,
             onStreamPick = if (isDebrid && supportsVideoPlayback) {
@@ -399,6 +401,7 @@ private suspend fun tryPlayWithFallback(
     resumeSec: Int = 0,
     onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
     claim: (suspend () -> InstantStart?)? = null,
+    local: suspend () -> StreamOption? = { api.localStreamOption("movie", movie.id) },
 ) {
     if (player == null) return
     lateinit var walk: DebridPlayback
@@ -417,6 +420,7 @@ private suspend fun tryPlayWithFallback(
         posterUrl = movie.posterUrl,
         context = listOf("Movie: ${movie.title}", "ID: ${movie.id}"),
         claim = claim,
+        local = local,
     )
     walk.start(option, resumeSec)
 }

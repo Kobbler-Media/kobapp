@@ -4152,6 +4152,17 @@ class KobblerApi(
     }
 
     /** Search for debrid stream options for a movie or episode. */
+    /** The title's release already on disk, if any — playable without a search or the debrid host. */
+    suspend fun localStreamOption(mediaType: String, mediaId: String): StreamOption? = try {
+        decode<StreamOptionDto>(
+            get("/api/v1/admin/stream/local?media_type=$mediaType&media_id=${mediaId.encodeURLParameter()}")
+        ).toModel()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
+
     suspend fun streamSearch(
         movieId: String? = null,
         episodeId: String? = null,

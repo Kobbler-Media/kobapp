@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.JsonObject
@@ -197,9 +198,8 @@ fun libraryEventStream(
  * while it plays, so a session that started with no segments and no thumbnails is the
  * normal case rather than the exception.
  *
- * The server closes this stream once it has sent everything, so reconnecting is capped:
- * past that point a retry loop would just be polling an endpoint with nothing left to
- * say. The cap is high enough to ride out a network blip mid-analysis.
+ * The server says `done` once analysis has finished and it has sent everything; the
+ * reconnect cap only rides out network blips before that.
  */
 fun debridSessionEventStream(
     httpClient: HttpClient,
@@ -209,6 +209,7 @@ fun debridSessionEventStream(
     json: kotlinx.serialization.json.Json,
 ): Flow<LibraryEventFrame> =
     sseFrames(httpClient, "$apiUrl/api/v1/admin/stream/$sessionId/status", token, json, maxReconnects = 3)
+        .takeWhile { it.kind != "done" }
 
 private fun parseFrame(
     json: kotlinx.serialization.json.Json,
