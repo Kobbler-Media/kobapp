@@ -132,6 +132,7 @@ private fun CastTracks.subtitleInfos(): List<TrackInfo> = subtitles.map {
     PlaybackSubtitleTrackDto(
         trackId = it.id.toString(),
         language = it.language,
+        languageName = it.languageName,
         title = it.title,
         isForced = it.forced,
         isHearingImpaired = it.hearingImpaired,
@@ -143,7 +144,8 @@ private fun CastTracks.audioInfos(): List<TrackInfo> = audioTracks.map {
         streamIndex = it.streamIndex,
         codec = it.codec.orEmpty(),
         channels = it.channels ?: 0,
-        language = it.language?.uppercase(),
+        language = it.language,
+        languageName = it.languageName,
         title = it.title,
     )
 }.audioTrackInfos()

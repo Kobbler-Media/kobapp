@@ -54,6 +54,7 @@ data class CastTracks(
 data class CastTextTrack(
     val id: Int,
     val language: String? = null,
+    val languageName: String? = null,
     val title: String? = null,
     val forced: Boolean = false,
     val hearingImpaired: Boolean = false,
@@ -63,6 +64,7 @@ data class CastTextTrack(
 data class CastAudioTrack(
     val streamIndex: Int,
     val language: String? = null,
+    val languageName: String? = null,
     val title: String? = null,
     val codec: String? = null,
     val channels: Int? = null,

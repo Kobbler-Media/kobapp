@@ -122,9 +122,15 @@ class CastControllerTest {
         state.castSession = state.castSession?.copy(
             skip = CastSkip("credits", 1_400.0),
             tracks = CastTracks(
-                subtitles = listOf(CastTextTrack(id = 1, language = "eng"), CastTextTrack(id = 2, language = "fre")),
+                subtitles = listOf(
+                    CastTextTrack(id = 1, language = "eng", languageName = "English"),
+                    CastTextTrack(id = 2, language = "fre", languageName = "French"),
+                ),
                 activeSubtitleId = 2,
-                audioTracks = listOf(CastAudioTrack(streamIndex = 1, language = "jpn"), CastAudioTrack(streamIndex = 2, language = "eng")),
+                audioTracks = listOf(
+                    CastAudioTrack(streamIndex = 1, language = "jpn", languageName = "Japanese"),
+                    CastAudioTrack(streamIndex = 2, language = "eng", languageName = "English"),
+                ),
                 activeAudioIndex = 1,
             ),
         )
@@ -135,10 +141,10 @@ class CastControllerTest {
         show(state) {}
 
         onNodeWithText("Skip Credits").assertExists()
-        onNodeWithText("Subtitles: FRE").performClick()
+        onNodeWithText("Subtitles: French").performClick()
         onNodeWithText("Off").performClick()
-        onNodeWithText("Audio: JPN").performClick()
-        onNodeWithText("ENG").performClick()
+        onNodeWithText("Audio: Japanese").performClick()
+        onNodeWithText("English").performClick()
         waitForIdle()
 
         assertEquals(listOf<Int?>(null), subtitles)

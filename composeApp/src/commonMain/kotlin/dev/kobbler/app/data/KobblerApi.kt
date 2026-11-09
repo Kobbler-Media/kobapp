@@ -499,6 +499,7 @@ data class AudioTrackDto(
     val codec: String = "",
     val channels: Int = 2,
     val language: String? = null,
+    @SerialName("language_name") val languageName: String? = null,
     val title: String? = null,
     @SerialName("is_default") val isDefault: Boolean = false,
 )
@@ -1624,6 +1625,7 @@ data class PlaybackSubtitleTrackDto(
     @SerialName("stream_index") val streamIndex: Int? = null,
     val codec: String? = null,
     val language: String? = null,
+    @SerialName("language_name") val languageName: String? = null,
     val title: String? = null,
     val url: String? = null,
     val format: String? = null,

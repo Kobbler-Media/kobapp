@@ -6,7 +6,7 @@ import dev.kobbler.kobplayer.TrackInfo
 
 internal fun List<AudioTrackDto>.audioTrackInfos(): List<TrackInfo> = mapIndexed { i, track ->
     val label = buildString {
-        append(track.title?.takeIf { it.isNotBlank() } ?: track.language?.takeIf { it.isNotBlank() } ?: "Track ${i + 1}")
+        append(track.title?.takeIf { it.isNotBlank() } ?: spokenName(track.languageName, track.language) ?: "Track ${i + 1}")
         if (track.codec.isNotBlank()) append(" (${track.codec})")
         when (track.channels) { 1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> null }?.let { append(" $it") }
     }
@@ -40,14 +40,19 @@ private val GenericTitle = Regex("""(?i)\s*((track|subtitles?|subs?|stream|text)
 
 private fun PlaybackSubtitleTrackDto.label(position: Int) = buildString {
     val lang = language?.takeIf { it.isNotBlank() }
+    val langName = spokenName(languageName, lang)
     val named = title?.takeIf { it.isNotBlank() && !(GenericTitle.matches(it) && lang != null) }
     // "European" and "Latin American" are two Spanish tracks, not two languages.
     val namesLanguage = named != null && named.split(Regex("[^\\p{L}]+")).any { sameLanguage(it, lang) }
     when {
-        named != null && lang != null && !namesLanguage -> append("${lang.uppercase()} · $named")
-        else -> append(named ?: lang?.uppercase() ?: title?.takeIf { it.isNotBlank() } ?: "Track ${position + 1}")
+        named != null && langName != null && !namesLanguage -> append("$langName · $named")
+        else -> append(named ?: langName ?: title?.takeIf { it.isNotBlank() } ?: "Track ${position + 1}")
     }
     if (isForced) append(" · forced")
     if (isHearingImpaired && named?.contains("SDH", ignoreCase = true) != true) append(" · SDH")
     if (isDefault) append(" · default")
 }
+
+// The server names the languages it recognises; any other code is shown as the code.
+private fun spokenName(name: String?, code: String?): String? =
+    name?.takeIf { it.isNotBlank() } ?: code?.takeIf { it.isNotBlank() }?.uppercase()
