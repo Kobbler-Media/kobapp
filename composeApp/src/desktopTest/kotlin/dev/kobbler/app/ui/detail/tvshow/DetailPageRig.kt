@@ -31,6 +31,7 @@ import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.app.ui.navigation.NavigationState
 import dev.kobbler.app.ui.navigation.defaultNavConfig
 import dev.kobbler.app.ui.player.GlobalPlayerState
+import dev.kobbler.app.ui.player.StreamPickerHost
 import dev.kobbler.app.ui.player.StubServer
 import dev.kobbler.kobfocus.FocusScopeStore
 import dev.kobbler.kobfocus.LocalFocusScopeStore
@@ -115,7 +116,7 @@ internal fun detailPage(
                 KobappTheme(formFactor = formFactor) {
                     // AdaptiveScaffold's covered layer; it cannot be hosted here, as it builds
                     // the real player.
-                    Box(Modifier.focusInert(gps.isFullscreen || gps.loadingError != null)) {
+                    Box(Modifier.focusInert(gps.isFullscreen || gps.loadingError != null || gps.streamPicker != null)) {
                         DesktopScaffold(
                             nav = nav,
                             navConfig = defaultNavConfig,
@@ -125,6 +126,7 @@ internal fun detailPage(
                             gps = gps,
                         )
                     }
+                    StreamPickerHost(gps, api)
                 }
             }
         }

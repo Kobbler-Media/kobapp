@@ -190,6 +190,7 @@ class GlobalPlayerState {
 
     val isStreamStart: Boolean get() = isDebrid || streamStart
     var onSwitchStream: (() -> Unit)? = null
+    var streamPicker by mutableStateOf<StreamPicker?>(null)
 
     // Cast — when non-null, PersistentVideoSurface renders CastMiniController
     // instead of the local mini player and skips the video surface entirely.

@@ -266,7 +266,7 @@ internal class AndroidPlayer(
                 if (isPreloading.value) return@setOnAudioFocusChangeListener
                 when (focusResume.onChange(change, _state.value == PlayerState.PLAYING)) {
                     FocusAction.Pause -> pauseIfPlaying()
-                    FocusAction.Duck -> if (!_isMuted.value) volumes.offer(((_volume.value * 100) * 0.3f).toInt())
+                    FocusAction.Duck -> if (!_isMuted.value) volumes.offer((userVolume() * 0.3f).toInt())
                     FocusAction.Resume -> {
                         restoreVolume()
                         resume()
@@ -285,8 +285,12 @@ internal class AndroidPlayer(
         }
     }
 
+    private var normalization = 1f
+
+    private fun userVolume() = vlcVolume(_volume.value, normalization, maxVolume)
+
     private fun restoreVolume() {
-        volumes.offer(if (_isMuted.value) 0 else (_volume.value * 100).toInt())
+        volumes.offer(if (_isMuted.value) 0 else userVolume())
     }
 
     private fun abandonAudioFocus() {
@@ -778,7 +782,12 @@ internal class AndroidPlayer(
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, maxVolume)
         _volume.value = clamped
-        volumes.offer((clamped * 100).toInt())
+        volumes.offer(userVolume())
+    }
+
+    override fun setNormalizationGain(gain: Float) {
+        normalization = gain
+        if (!isPreloading.value) restoreVolume()
     }
 
     override fun setMuted(muted: Boolean) {
@@ -787,7 +796,7 @@ internal class AndroidPlayer(
         if (muted) {
             volumes.offer(0)
         } else {
-            volumes.offer((_volume.value * 100).toInt())
+            volumes.offer(userVolume())
             // Grab audio focus now if unmuting (skipped during muted preload)
             requestAudioFocus()
         }

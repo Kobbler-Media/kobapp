@@ -231,6 +231,8 @@ interface Player {
     fun skip(deltaMs: Long)
     fun setVolume(volume: Float)
     fun setMuted(muted: Boolean)
+    /** Multiplies [volume] on its way out, to level a title's loudness; see [loudnessGain]. */
+    fun setNormalizationGain(gain: Float)
     fun volumeUp(step: Float = 0.1f)
     fun volumeDown(step: Float = 0.1f)
     fun setPlaybackSpeed(speed: Float)

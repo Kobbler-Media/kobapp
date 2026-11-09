@@ -113,4 +113,21 @@ class DesktopGainFadeTest {
         awaitLevel(100)
         assertEquals(PlayerState.PLAYING, player.state.value)
     }
+
+    @Test
+    fun theLoudnessGainScalesWhatReachesVlc() = session {
+        start()
+        player.setNormalizationGain(0.5f)
+        awaitLevel(50)
+        player.setVolume(1.5f)
+        awaitLevel(75)
+        player.pause()
+        awaitState(PlayerState.PAUSED)
+        val resuming = levelsDuring {
+            player.play()
+            awaitState(PlayerState.PLAYING)
+            awaitLevel(75)
+        }
+        assertRamped(resuming, 0, 75, "resume at the levelled volume")
+    }
 }

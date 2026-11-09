@@ -87,6 +87,7 @@ import dev.kobbler.app.ui.player.canRecoverSession
 import dev.kobbler.app.ui.player.back
 import dev.kobbler.app.ui.player.retryPlayback
 import dev.kobbler.app.ui.player.watchPlayback
+import dev.kobbler.app.ui.player.levelLoudness
 
 // -- Navigation destinations --
 
@@ -318,6 +319,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     // unopenable one showed as a spinner that never resolved. One collector for the app.
     if (player != null && api != null) {
         LaunchedEffect(player, api) { gps.watchPlayback(player, api) }
+        LaunchedEffect(player) { gps.levelLoudness(player) }
         PlaybackSessionHeartbeat(gps, player, api)
         dev.kobbler.app.ui.player.RouteDownloadsThroughProxy(gps, player, api)
     }
@@ -363,7 +365,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         // Everything the scaffold is covered by, in paint order. A covered layer stays
         // composed (the player must keep running) so it has to leave focus traversal
         // explicitly, or the D-pad walks into controls nobody can see.
-        val scaffoldCovered = gps.isFullscreen || gps.loadingError != null
+        val scaffoldCovered = gps.isFullscreen || gps.loadingError != null || gps.streamPicker != null
         if (isNonVideoPlayerScreen) {
             FocusScopeHost(id = nav.current) {
                 CompositionLocalProvider(dev.kobbler.app.ui.player.LocalSharedAudioPlayer provides audio) {
@@ -403,7 +405,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
             // Only the fullscreen player owns focus; the mini player is a passenger on
             // whatever screen is behind it and must not steal entry focus from it.
             FocusScopeHost(id = "video-surface", restoreEnabled = gps.isFullscreen) {
-                Box(Modifier.focusInert(gps.loadingError != null)) {
+                Box(Modifier.focusInert(gps.loadingError != null || gps.streamPicker != null)) {
                     PersistentVideoSurface(
                         player = player,
                         state = gps,
@@ -421,6 +423,8 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
                 }
             }
         }
+
+        dev.kobbler.app.ui.player.StreamPickerHost(gps, api)
 
         // Screenshot-friendly playback error dialog. Lives at scaffold level so
         // it shows even when no player surface is active (e.g. session creation
@@ -1100,7 +1104,7 @@ private fun ScreenContent(
     // The player paints over the whole scaffold and takes it out of focus traversal
     // while it is up. A page that first composed under it never got entry focus, so
     // uncovering has to be a restore trigger as well.
-    val covered = gps.isFullscreen || gps.loadingError != null
+    val covered = gps.isFullscreen || gps.loadingError != null || gps.streamPicker != null
     // State holder lives here so it survives the tab↔detail toggle
     val stateHolder = rememberSaveableStateHolder()
 

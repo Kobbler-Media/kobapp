@@ -145,6 +145,8 @@ class FakePlayer(private val clock: CoroutineScope = CoroutineScope(Dispatchers.
     override fun skip(deltaMs: Long) = seekTo(currentMs.value + deltaMs)
     override fun setVolume(volume: Float) { this.volume.value = volume }
     override fun setMuted(muted: Boolean) { isMuted.value = muted }
+    @Volatile var normalization = 1f
+    override fun setNormalizationGain(gain: Float) { normalization = gain }
     override fun volumeUp(step: Float) { }
     override fun volumeDown(step: Float) { }
     override fun setPlaybackSpeed(speed: Float) { playbackSpeed.value = speed }

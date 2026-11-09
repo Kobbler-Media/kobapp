@@ -12,7 +12,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.StreamOption
@@ -22,12 +21,9 @@ import dev.kobbler.app.data.TvShow
 import dev.kobbler.app.data.indexOfEpisode
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
-import dev.kobbler.app.ui.detail.StreamOptionsOverlay
 import dev.kobbler.app.ui.detail.TvShowDetailScreen
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.kobplayer.Player
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -63,8 +59,6 @@ fun InlineTvPlayer(
     // the first one's sources: the old guard compared streamingEpisodeId, which the
     // caller had already set to the episode it was about to search for.
     var streamSearchedEpisodeId by remember { mutableStateOf<String?>(null) }
-    var streamLoading by remember { mutableStateOf(false) }
-    var showStreamOptions by remember { mutableStateOf(false) }
     var cachingProviderId by remember { mutableStateOf<String?>(null) }
     var cachingTorrentId by remember { mutableStateOf<String?>(null) }
     var cachingOption by remember { mutableStateOf<StreamOption?>(null) }
@@ -87,9 +81,20 @@ fun InlineTvPlayer(
         gps.isPreparing = false
         gps.isFullscreen = false
     }
+    suspend fun episodeStreams(episodeId: String): StreamSearchResult {
+        streamResult?.takeIf { streamSearchedEpisodeId == episodeId }?.let { return it }
+        val found = runCatching { api.streamSearch(episodeId = episodeId) }
+            .getOrElse { StreamSearchResult(emptyList(), listOf("Search failed")) }
+        streamResult = found
+        streamSearchedEpisodeId = episodeId
+        return found
+    }
+
+    lateinit var pickEpisodeStream: (episodeId: String, fresh: Boolean) -> Unit
     val chooseRelease: () -> Unit = {
+        val episodeId = streamingEpisodeId
         cancelCaching()
-        showStreamOptions = true
+        if (episodeId != null) pickEpisodeStream(episodeId, false)
     }
     val startCaching: (DebridPlayback, WalkResult.Caching) -> Unit = { walk, c ->
         cachingProviderId = c.providerId
@@ -99,15 +104,33 @@ fun InlineTvPlayer(
         gps.beginCachingPreparation(title = show.title, onCancel = cancelCaching, onChooseRelease = chooseRelease)
     }
 
-    suspend fun episodeStreams(episodeId: String): StreamSearchResult {
-        streamResult?.takeIf { streamSearchedEpisodeId == episodeId }?.let { return it }
-        streamLoading = true
-        val found = runCatching { api.streamSearch(episodeId = episodeId) }
-            .getOrElse { StreamSearchResult(emptyList(), listOf("Search failed")) }
-        streamResult = found
-        streamSearchedEpisodeId = episodeId
-        streamLoading = false
-        return found
+    pickEpisodeStream = { episodeId, fresh ->
+        show.seasons.indexOfEpisode(episodeId)?.let { (sIdx, eIdx) ->
+            val season = show.seasons[sIdx]
+            val episode = season.episodes[eIdx]
+            gps.pickStream(
+                scope,
+                PickedRelease(episodeId, show.title, "S${season.number} E${episode.number} • ${episode.title}", show.posterUrl),
+                search = {
+                    if (fresh) streamSearchedEpisodeId = null
+                    episodeStreams(episodeId)
+                },
+                play = { option ->
+                    streamFromStart = false
+                    streamingEpisodeId = episodeId
+                    streamingSeasonIdx = sIdx
+                    streamingEpisodeIdx = eIdx
+                    tryPlayTvWithFallback(
+                        api = api, player = player, gps = gps, show = show,
+                        episodeId = episodeId, seasonIdx = sIdx, episodeIdx = eIdx,
+                        search = { episodeStreams(episodeId) },
+                        option = option,
+                        resumeSec = gps.switchFromSec(player, episodeId) ?: api.getEpisodeProgress(episodeId) ?: 0,
+                        onCaching = startCaching,
+                    )
+                },
+            )
+        }
     }
 
     LaunchedEffect(show.id) {
@@ -173,8 +196,9 @@ fun InlineTvPlayer(
     }
 
     DisposableEffect(show.id) {
-        gps.onSwitchStream = { showStreamOptions = true }
+        gps.onSwitchStream = { gps.mediaId?.let { pickEpisodeStream(it, false) } }
         onDispose {
+            gps.streamPicker = null
             if (gps.mediaId == prefetchedEpisodeId || gps.mediaId == streamingEpisodeId) {
                 gps.onSwitchStream = null
             }
@@ -285,8 +309,7 @@ fun InlineTvPlayer(
 
         var search: Job? = null
         // The search is seconds of provider round-trips and it is the whole wait on this
-        // path — streamLoading is only ever drawn by the options overlay, which is not
-        // open here, so the tap used to sit there looking dead.
+        // path, so without the shell the tap sat there looking dead.
         gps.beginPreparing(
             id = episodeId,
             newTitle = show.title,
@@ -294,7 +317,6 @@ fun InlineTvPlayer(
             newPosterUrl = show.posterUrl,
             onCancel = {
                 search?.cancel()
-                streamLoading = false
                 gps.cancelPreparing()
             },
         )
@@ -311,31 +333,12 @@ fun InlineTvPlayer(
         }
     }
 
-    // Warming finishes after the search returns, so an option listed as unknown can
-    // become verified-instant while the picker is open. Fold those in rather than
-    // leaving the badge stale for the life of the result.
-    // Only while the picker is open. This holds a connection, and `streamResult` is
-    // never cleared once an autoplay search has run — gating on it would keep the
-    // socket up for the life of the detail screen.
-    LaunchedEffect(showStreamOptions) {
-        if (!showStreamOptions) return@LaunchedEffect
-        api.libraryEvents().collect { frame ->
-            if (frame.kind != "stream_warm_ready") return@collect
-            val hash = frame.data["info_hash"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val providerId = frame.data["debrid_provider_id"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val fid = frame.data["file_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
-            streamResult = applyWarmReady(streamResult, hash, fid, providerId)
-        }
-    }
-
     val streamedEpisodeIds = remember(show) {
         show.seasons.flatMap { it.episodes }.filter { it.filePath == null }.mapNotNull { it.id }.toSet()
     }
 
     Box(Modifier.fillMaxSize()) {
-      // The overlay is painted over this, not instead of it — contain it or D-pad
-      // walks out of the overlay and back into the detail screen behind.
-      Box(Modifier.focusInert(showStreamOptions)) {
+      Box {
         TvShowDetailScreen(
             show = show.withReportedProgress(gps.reportedPositions),
             formFactor = formFactor,
@@ -392,46 +395,10 @@ fun InlineTvPlayer(
                 autoPlayDebridEpisode(sIdx, eIdx)
             } else null,
             onStreamEpisodePick = if (api.canStream && supportsVideoPlayback) { sIdx, eIdx ->
-                val episode = show.seasons.getOrNull(sIdx)?.episodes?.getOrNull(eIdx) ?: return@TvShowDetailScreen
-                val episodeId = episode.id ?: return@TvShowDetailScreen
-                streamingEpisodeId = episodeId
-                streamingSeasonIdx = sIdx
-                streamingEpisodeIdx = eIdx
-                showStreamOptions = true
-                streamLoading = true
-                scope.launch {
-                    streamResult = runCatching { api.streamSearch(episodeId = episodeId) }
-                        .getOrElse { StreamSearchResult(emptyList(), listOf("Search failed")) }
-                    streamSearchedEpisodeId = episodeId
-                    streamLoading = false
-                }
+                show.seasons.getOrNull(sIdx)?.episodes?.getOrNull(eIdx)?.id?.let { pickEpisodeStream(it, true) }
             } else null,
         )
       }
-
-        if (showStreamOptions) {
-            StreamOptionsOverlay(
-                options = streamResult?.options ?: emptyList(),
-                errors = streamResult?.errors ?: emptyList(),
-                loading = streamLoading,
-                onSelect = { option ->
-                    showStreamOptions = false
-                    streamFromStart = false
-                    val epId = streamingEpisodeId ?: return@StreamOptionsOverlay
-                    scope.launch {
-                        tryPlayTvWithFallback(
-                            api = api, player = player, gps = gps, show = show,
-                            episodeId = epId, seasonIdx = streamingSeasonIdx, episodeIdx = streamingEpisodeIdx,
-                            search = { episodeStreams(epId) },
-                            option = option,
-                            resumeSec = (api.getEpisodeProgress(epId) ?: 0),
-                            onCaching = startCaching,
-                        )
-                    }
-                },
-                onDismiss = { showStreamOptions = false },
-            )
-        }
 
     }
 }

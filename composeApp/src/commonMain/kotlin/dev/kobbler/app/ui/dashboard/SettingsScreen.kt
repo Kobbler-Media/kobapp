@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Crop
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.ClosedCaption
 import androidx.compose.material.icons.outlined.Edit
@@ -92,6 +93,7 @@ import dev.kobbler.app.ui.player.KEY_MATCH_DISPLAY_REFRESH
 import dev.kobbler.app.ui.player.matchDisplayRefreshSetting
 import dev.kobbler.app.ui.player.KEY_TRIM_BLACK_BARS
 import dev.kobbler.app.ui.player.trimBlackBarsSetting
+import dev.kobbler.app.ui.player.normalizeVolume
 import dev.kobbler.kobplayer.videoDecoderChoices
 import dev.kobbler.app.ui.player.audioOutputModeSetting
 import dev.kobbler.kobplayer.AudioOutputMode
@@ -359,6 +361,14 @@ fun SettingsScreen(
                 valueLabel = "${playbackSpeed}x",
                 options = SPEED_OPTIONS,
                 onSelect = { playbackSpeed = it; UserSettings.putString(KEY_DEFAULT_PLAYBACK_SPEED, it) },
+            )
+            SettingsDivider()
+            SettingsToggleRow(
+                icon = Icons.Outlined.GraphicEq,
+                title = "Level volume between titles",
+                key = "normalize-volume",
+                checked = normalizeVolume,
+                onToggle = { normalizeVolume = it },
             )
             // Only libVLC on Android exposes the output device.
             if (clientKind.startsWith("android")) {

@@ -235,7 +235,16 @@ internal class IosPlayer(
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, maxVolume)
         _volume.value = clamped
-        vlcMediaPlayer.audio?.volume = (clamped * 100).toInt()
+        vlcMediaPlayer.audio?.volume = userVolume()
+    }
+
+    private var normalization = 1f
+
+    private fun userVolume() = vlcVolume(_volume.value, normalization, maxVolume)
+
+    override fun setNormalizationGain(gain: Float) {
+        normalization = gain
+        if (!_isMuted.value) vlcMediaPlayer.audio?.volume = userVolume()
     }
 
     override fun setMuted(muted: Boolean) {
@@ -243,7 +252,7 @@ internal class IosPlayer(
         if (muted) {
             vlcMediaPlayer.audio?.volume = 0
         } else {
-            vlcMediaPlayer.audio?.volume = (_volume.value * 100).toInt()
+            vlcMediaPlayer.audio?.volume = userVolume()
         }
     }
 

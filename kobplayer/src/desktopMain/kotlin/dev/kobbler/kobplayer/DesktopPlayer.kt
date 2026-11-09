@@ -26,7 +26,6 @@ import java.nio.file.Paths
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.CoroutineContext
-import kotlin.math.roundToInt
 
 /**
  * Desktop VLC player implementation using vlcj.
@@ -187,7 +186,9 @@ internal class DesktopPlayer(
     private val gain = GainEnvelope(scope) { vlcPlayer.audio().setVolume(it) }
     internal val gainLevel: StateFlow<Int> get() = gain.level
 
-    private fun userGain() = (_volume.value * 100).roundToInt()
+    private var normalization = 1f
+
+    private fun userGain() = vlcVolume(_volume.value, normalization, maxVolume)
 
     init {
         if (video != null) {
@@ -444,8 +445,17 @@ internal class DesktopPlayer(
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, maxVolume)
         _volume.value = clamped
-        // A ramp reads the volume on every step, and a paused player sits at zero until
-        // the next fade-in, so only a steady playing gain is set directly.
+        applyUserGain()
+    }
+
+    override fun setNormalizationGain(gain: Float) {
+        normalization = gain
+        applyUserGain()
+    }
+
+    // A ramp reads the volume on every step, and a paused player sits at zero until
+    // the next fade-in, so only a steady playing gain is set directly.
+    private fun applyUserGain() {
         val audible = _state.value == PlayerState.PLAYING || _state.value == PlayerState.BUFFERING
         if (audible && !isPreloading.value && !gain.isRamping) gain.set(userGain())
     }

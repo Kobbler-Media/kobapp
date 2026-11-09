@@ -261,7 +261,18 @@ internal class WebPlayer(
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, maxVolume)
         _volume.value = clamped
-        videoElement.volume = clamped.toDouble()
+        applyVolume()
+    }
+
+    private var normalization = 1f
+
+    override fun setNormalizationGain(gain: Float) {
+        normalization = gain
+        applyVolume()
+    }
+
+    private fun applyVolume() {
+        videoElement.volume = (_volume.value * normalization).coerceIn(0f, 1f).toDouble()
     }
 
     override fun setMuted(muted: Boolean) {

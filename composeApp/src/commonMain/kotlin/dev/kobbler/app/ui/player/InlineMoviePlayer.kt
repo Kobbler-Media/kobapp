@@ -13,7 +13,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import dev.kobbler.kobfocus.focusInert
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.Movie
 import dev.kobbler.app.data.StreamOption
@@ -22,12 +21,9 @@ import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.platform.supportsVideoPlayback
 import dev.kobbler.app.ui.detail.MovieDetailScreen
-import dev.kobbler.app.ui.detail.StreamOptionsOverlay
 import dev.kobbler.app.ui.detail.streamingAvailability
 import dev.kobbler.app.ui.navigation.Destination
 import dev.kobbler.kobplayer.Player
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -76,7 +72,6 @@ fun InlineMoviePlayer(
     var streamResult by remember { mutableStateOf<StreamSearchResult?>(null) }
     var onDisk by remember { mutableStateOf<StreamOption?>(null) }
     var streamLoading by remember { mutableStateOf(false) }
-    var showStreamOptions by remember { mutableStateOf(false) }
     var cachingProviderId by remember { mutableStateOf<String?>(null) }
     var cachingTorrentId by remember { mutableStateOf<String?>(null) }
     var cachingOption by remember { mutableStateOf<StreamOption?>(null) }
@@ -168,6 +163,7 @@ fun InlineMoviePlayer(
         gps.isPreparing = false
         gps.isFullscreen = false
     }
+    lateinit var pickMovieStream: () -> Unit
     val startCaching: (DebridPlayback, WalkResult.Caching) -> Unit = { walk, c ->
         cachingProviderId = c.providerId
         cachingTorrentId = c.torrentId
@@ -178,7 +174,24 @@ fun InlineMoviePlayer(
             onCancel = cancelCaching,
             onChooseRelease = {
                 cancelCaching()
-                showStreamOptions = true
+                pickMovieStream()
+            },
+        )
+    }
+    pickMovieStream = {
+        gps.pickStream(
+            scope,
+            PickedRelease(movie.id, movie.title, movieSubtitle, movie.posterUrl),
+            search = { movieStreams() },
+            play = { option ->
+                debridFromStart = false
+                tryPlayWithFallback(
+                    api = api, player = player, gps = gps, movie = movie,
+                    search = { movieStreams() },
+                    option = option,
+                    resumeSec = gps.switchFromSec(player, movie.id) ?: movieProgress(api, movie),
+                    onCaching = startCaching,
+                )
             },
         )
     }
@@ -215,8 +228,11 @@ fun InlineMoviePlayer(
     }
 
     DisposableEffect(movie.id) {
-        if (isDebrid) gps.onSwitchStream = { showStreamOptions = true }
-        onDispose { if (gps.mediaId == movie.id) gps.onSwitchStream = null }
+        if (isDebrid) gps.onSwitchStream = { pickMovieStream() }
+        onDispose {
+            gps.streamPicker = null
+            if (gps.mediaId == movie.id) gps.onSwitchStream = null
+        }
     }
 
     LaunchedEffect(cachingProviderId, cachingTorrentId) {
@@ -276,26 +292,9 @@ fun InlineMoviePlayer(
         }
     }
 
-    // Warming finishes after the search returns, so an option listed as unknown can
-    // become verified-instant while the picker is open — fold those in rather than
-    // leaving the badge stale. Gated on the picker, not on `streamResult`: that is
-    // never cleared once an autoplay search has run, so it would hold the connection
-    // open for the life of the detail screen.
-    LaunchedEffect(showStreamOptions) {
-        if (!showStreamOptions) return@LaunchedEffect
-        api.libraryEvents().collect { frame ->
-            if (frame.kind != "stream_warm_ready") return@collect
-            val hash = frame.data["info_hash"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val providerId = frame.data["debrid_provider_id"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val fid = frame.data["file_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
-            streamResult = applyWarmReady(streamResult, hash, fid, providerId)
-        }
-    }
-
     val shown = movie.withReportedProgress(gps.reportedPositions)
     Box(Modifier.fillMaxSize()) {
-      // Contain the detail screen while the stream overlay is up.
-      Box(Modifier.focusInert(showStreamOptions)) {
+      Box {
         MovieDetailScreen(
             movie = shown,
             api = api,
@@ -361,32 +360,10 @@ fun InlineMoviePlayer(
             ),
             onStream = if (isDebrid && supportsVideoPlayback) autoPlayDebrid else null,
             onStreamPick = if (isDebrid && supportsVideoPlayback) {
-                { showStreamOptions = true }
+                { pickMovieStream() }
             } else null,
         )
       }
-
-        if (showStreamOptions) {
-            StreamOptionsOverlay(
-                options = streamResult?.options ?: emptyList(),
-                errors = streamResult?.errors ?: emptyList(),
-                loading = streamLoading,
-                onSelect = { option ->
-                    showStreamOptions = false
-                    debridFromStart = false
-                    scope.launch {
-                        tryPlayWithFallback(
-                            api = api, player = player, gps = gps, movie = movie,
-                            search = { movieStreams() },
-                            option = option,
-                            resumeSec = movieProgress(api, movie),
-                            onCaching = startCaching,
-                        )
-                    }
-                },
-                onDismiss = { showStreamOptions = false },
-            )
-        }
 
     }
 }
