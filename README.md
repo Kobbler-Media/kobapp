@@ -7,6 +7,15 @@ codebase, native UI on every target.
 **Kobapp is a client only.** It does nothing on its own — you need a running Kobbler server
 to point it at.
 
+## Install
+
+Android / Android TV: download an APK from [Releases](https://github.com/Kobbler-Media/kobapp/releases)
+and sideload it. `-universal.apk` runs on every device; the per-ABI APKs are smaller
+(`arm64-v8a` for almost any phone or recent TV box). For updates without re-sideloading, install
+the [kobup](https://github.com/Kobbler-Media/kobup) updater and point it at a kobup server.
+
+The web player needs nothing installed: your Kobbler server serves it at `/player/`.
+
 ## Platforms
 
 | Target      | Status | Notes |
@@ -182,6 +191,13 @@ plus a `KOBUP_TOKEN` in `.env` (see `.env.template`) or in the environment. `.ko
 
 Release builds are split per ABI (plus a universal APK); all of them go up as one release and
 kobup hands each device the split for its CPU.
+
+Add a `github` object to `.kobup.json` to attach the same signed APKs to a GitHub release too,
+tagged at the commit they were built from (needs the `gh` CLI, and HEAD pushed):
+
+```json
+"github": { "repo": "you/kobapp", "user": "<gh account>", "tagPrefix": "v" }
+```
 
 ## Contributing
 
