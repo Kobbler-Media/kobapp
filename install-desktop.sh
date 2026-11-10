@@ -8,9 +8,13 @@ APP_DIR="$PREFIX/share/kobapp"
 BIN_DIR="$PREFIX/bin"
 DESKTOP_DIR="$PREFIX/share/applications"
 
-./gradlew :composeApp:createReleaseDistributable --console=plain
-
-BUILT="composeApp/build/compose/binaries/main-release/app/kobapp"
+# Run from an extracted release tarball, the app is already built next to this script.
+if [[ -x kobapp/bin/kobapp ]]; then
+    BUILT="kobapp"
+else
+    ./gradlew :composeApp:createReleaseDistributable --console=plain
+    BUILT="composeApp/build/compose/binaries/main-release/app/kobapp"
+fi
 if [[ ! -d "$BUILT" ]]; then
     echo "error: gradle did not produce $BUILT" >&2
     exit 1

@@ -269,3 +269,21 @@ compose.desktop {
         }
     }
 }
+
+// The Linux download on a GitHub release: the release distributable beside install-desktop.sh,
+// which installs a `kobapp/` it finds next to itself instead of building one. x86_64 only, as the
+// bundled libvlc is.
+tasks.register<Tar>("packageLinuxTarball") {
+    dependsOn("createReleaseDistributable")
+    val name = "kobbler-$pkgVersion-linux-x86_64"
+    archiveFileName.set("$name.tar.gz")
+    compression = Compression.GZIP
+    destinationDirectory.set(layout.buildDirectory.dir("github"))
+    into(name) {
+        from(rootProject.file("install-desktop.sh"))
+        into("kobapp") { from(layout.buildDirectory.dir("compose/binaries/main-release/app/kobapp")) }
+    }
+    // Archives normalise every mode to 644; the launcher, the jlinked JVM and the installer
+    // must stay executable.
+    eachFile { if (file.canExecute()) permissions { unix("rwxr-xr-x") } }
+}

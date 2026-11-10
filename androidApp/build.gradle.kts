@@ -116,6 +116,9 @@ dependencies {
 // Needs .kobup.json in the repo root (copy .kobup.json.example) and KOBUP_TOKEN in .env.
 // Usage: ./gradlew :androidApp:publishToKobup
 val kobupPublishScript = file("${rootDir}/../kobup/gradle/publish-to-kobup.gradle.kts")
+// A GitHub release (the "github" block in .kobup.json) also carries the Linux desktop build.
+extra["kobupGithubExtraTasks"] = ":composeApp:packageLinuxTarball"
+extra["kobupGithubExtraDir"] = "composeApp/build/github"
 if (kobupPublishScript.exists()) apply(from = kobupPublishScript)
 tasks.matching { it.name == "publishToKobup" }.configureEach {
     doFirst {

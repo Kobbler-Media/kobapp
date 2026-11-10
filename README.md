@@ -14,6 +14,18 @@ and sideload it. `-universal.apk` runs on every device; the per-ABI APKs are sma
 (`arm64-v8a` for almost any phone or recent TV box). For updates without re-sideloading, install
 the [kobup](https://github.com/Kobbler-Media/kobup) updater and point it at a kobup server.
 
+Releases are signed with this certificate; `apksigner verify --print-certs <apk>` should show the
+same SHA-256 digest, and Android refuses an update signed by any other:
+
+```
+f9eb2181a9f70d167a894cfc92a687da17f8f9a86f46308cfb2af991d75c0351
+```
+
+Linux desktop (x86_64): download `-linux-x86_64.tar.gz` from the same release, extract it and run
+`./install-desktop.sh`. It installs under `~/.local` (set `PREFIX` to change that), adds a menu
+entry, and trains a startup cache on first launch. The bundled libvlc is built on Arch, so video
+playback is only expected to work on Arch and its derivatives.
+
 The web player needs nothing installed: your Kobbler server serves it at `/player/`.
 
 ## Platforms
