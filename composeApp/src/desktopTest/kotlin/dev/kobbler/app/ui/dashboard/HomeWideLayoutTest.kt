@@ -81,15 +81,15 @@ class HomeWideLayoutTest {
         assertTrue(top < 540.dp, "Recently Added starts at $top of a 540dp screen")
     }
 
-    /** An Up Next card is a Recently Added poster turned on its side. */
+    /** As wide as a Recently Added poster turned on its side, at the 16:9 of the backdrop it shows. */
     @Test
-    fun `up next cards are the posters below turned sideways`() {
+    fun `up next cards show the whole backdrop within the width of a sideways poster`() {
         for ((formFactor, width, height) in listOf(Triple(FormFactor.Desktop, 1920, 1080), Triple(FormFactor.TV, 960, 540))) {
             home(formFactor, width, height) {
                 val card = onNodeWithTag("$UpNextCardTag.1").getUnclippedBoundsInRoot()
                 val poster = onNodeWithTag("$RecentCardTag.1").getUnclippedBoundsInRoot()
-                assertEquals(poster.width.value, card.height.value, 2f, "$formFactor: card $card against poster $poster")
                 assertEquals(poster.width.value * 1.5f, card.width.value, 2f, "$formFactor: card $card against poster $poster")
+                assertEquals(card.width.value * 9f / 16f, card.height.value, 2f, "$formFactor: card $card against poster $poster")
             }
         }
     }

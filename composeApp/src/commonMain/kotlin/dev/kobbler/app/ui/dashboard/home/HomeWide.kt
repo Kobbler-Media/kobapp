@@ -419,12 +419,12 @@ private fun UpNextStrip(
                             progress = item.progress ?: 0f,
                             accentColor = colors.accentForMediaType(item.mediaType),
                             offline = continueAvailableOffline(item.mediaType, item.mediaId),
-                            aspectRatio = 3f / 2f,
                             onClick = { onClick(i) },
                             actions = rememberUpNextActions(item, api),
                             modifier = Modifier
-                                // A poster from the rows below turned on its side, so the
-                                // page reads as one grid rather than two sizes of card.
+                                // As wide as a poster from the rows below turned on its side, so
+                                // the page reads as one grid; the art keeps the backdrop's 16:9
+                                // because a narrower crop cuts off titles drawn into its edges.
                                 .width(KobappTheme.dimens.posterWidth * 1.5f)
                                 .testTag("$UpNextCardTag.$i")
                                 .focusKey("item.$i", preferredEntry = i == 0)
