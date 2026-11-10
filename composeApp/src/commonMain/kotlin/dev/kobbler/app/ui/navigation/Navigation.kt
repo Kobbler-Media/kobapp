@@ -14,6 +14,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material.icons.Icons
@@ -573,6 +574,7 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
     val scope = rememberCoroutineScope()
     val isTabScreen = nav.current is Destination.Tab
     var showSearch by nav::searchOpen
+    val tabStates = rememberSaveableStateHolder()
     val currentSection = nav.currentTab.section
     val bottomBarItems = remember(navConfig) { sidebarItemsFor(navConfig.bottomBarTabs) }
 
@@ -618,7 +620,7 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
                 ) {
                     CompositionLocalProvider(LocalKobappDimens provides adaptiveSpacing) {
                         ScreenContent(
-                            nav, api, formFactor, player, gps,
+                            nav, api, formFactor, player, gps, tabStates,
                             onMenuClick = { scope.launch { drawerState.open() } },
                             onSearchClick = { nav.openSearch() },
                             serverUrl = serverUrl, onLogout = onLogout,
@@ -669,6 +671,7 @@ internal fun DesktopScaffold(
     val rootFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var showSearch by nav::searchOpen
+    val tabStates = rememberSaveableStateHolder()
     val pageFocus = remember { PageFocusReturn() }
     var barFocused by remember { mutableStateOf(false) }
     val keyScope = rememberCoroutineScope()
@@ -995,7 +998,7 @@ internal fun DesktopScaffold(
                                         searchUi()
                                     } else {
                                         ScreenContent(
-                                            nav, api, formFactor, player, gps,
+                                            nav, api, formFactor, player, gps, tabStates,
                                             contentActive = zone == Zone.Content,
                                             onSearchClick = openSearch,
                                             homeTopBar = tabTopBar,
@@ -1105,6 +1108,7 @@ private fun ScreenContent(
     formFactor: FormFactor,
     player: dev.kobbler.kobplayer.Player?,
     gps: GlobalPlayerState,
+    stateHolder: SaveableStateHolder,
     modifier: Modifier = Modifier,
     contentActive: Boolean = true,
     onMenuClick: (() -> Unit)? = null,
@@ -1119,16 +1123,14 @@ private fun ScreenContent(
     // while it is up. A page that first composed under it never got entry focus, so
     // uncovering has to be a restore trigger as well.
     val covered = gps.isFullscreen || gps.loadingError != null || gps.streamPicker != null
-    // State holder lives here so it survives the tab↔detail toggle
-    val stateHolder = rememberSaveableStateHolder()
-
     Box(Modifier.fillMaxSize()) {
         // Only the visible layer is composed. Keeping the tab alive under a detail screen
         // left every card behind it a live D-pad target, and neither containment option
         // works there: canFocus=false doesn't cover descendants, while cancelling entry
         // aborts the whole focus search (the covered tab is a candidate in most
         // directions, so moveFocus just returned false and the D-pad went dead).
-        // SaveableStateProvider is what preserves scroll/selection across the visit.
+        // SaveableStateProvider is what preserves scroll/selection across the visit. Its
+        // holder is the scaffold's, since search replaces this whole composable.
         if (!isOnDetail) {
             stateHolder.SaveableStateProvider(nav.currentTab.title) {
                 FocusScopeHost(id = nav.currentTab.title, restoreEnabled = contentActive && !covered) {

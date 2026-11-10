@@ -49,7 +49,7 @@ fun TvShowsScreen(
     var nextCursor by remember { mutableStateOf<String?>(null) }
     var prevCursor by remember { mutableStateOf<String?>(null) }
     var isLoadingMore by remember { mutableStateOf(false) }
-    var filterIndex by remember { mutableIntStateOf(0) }
+    var filterIndex by rememberSaveable { mutableIntStateOf(0) }
     var genre by rememberSaveable { mutableStateOf<String?>(null) }
     var pickingCategory by remember { mutableStateOf(false) }
     // Scope and category are one choice: Continuing and a category do not stack.
@@ -114,15 +114,16 @@ fun TvShowsScreen(
     // grid before they land means inserting a rail above it afterwards, which shunts the
     // whole page down under the viewer's focus. Wait for them to settle first.
     val watchNextType = if (sportsOnly) MediaType.SportsEvent else MediaType.TvShow
-    // A category is a narrower question than the rails above the grid answer.
-    val watchNext = remember(homeState, genre, watchNextType) {
-        if (genre != null) emptyList()
+    // A category, or Continuing, is a narrower question than the rails above the grid answer.
+    val narrowed = genre != null || continuingOnly
+    val watchNext = remember(homeState, narrowed, watchNextType) {
+        if (narrowed) emptyList()
         else (homeState as? Async.Ready)?.value?.watchNext?.filter { it.mediaType == watchNextType } ?: emptyList()
     }
 
     // Recently added from cached dashboard data
     val (dashState, _) = rememberCached("dashboard") { api.getDashboard() }
-    val recentShows = if (genre != null) {
+    val recentShows = if (narrowed) {
         emptyList()
     } else if (sportsOnly) {
         (dashState as? Async.Ready)?.value?.sports ?: emptyList()
