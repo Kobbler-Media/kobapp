@@ -15,10 +15,12 @@ import androidx.compose.ui.test.performClick
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LocalAuthState
+import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.DataCache
 import dev.kobbler.app.ui.dashboard.LiveTvScreen
+import dev.kobbler.app.ui.dashboard.LiveTvTabKey
 import dev.kobbler.app.ui.player.StubServer
 import dev.kobbler.kobfocus.FocusScopeHost
 import io.ktor.client.HttpClient
@@ -89,6 +91,7 @@ class LiveTvPageTest {
         val outcome = Outcome()
         runUiTest(width = w, height = h) {
             DataCache.clear()
+            UserSettings.remove(LiveTvTabKey)
             StubServer(routes).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 setContent {

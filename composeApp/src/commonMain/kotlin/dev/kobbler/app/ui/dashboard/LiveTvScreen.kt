@@ -74,7 +74,7 @@ internal enum class LiveTvTab(val label: String) {
     OnNow("On now"), Guide("Guide"), Channels("Channels"), Recordings("Recordings"),
 }
 
-private const val LiveTvTabKey = "livetv.tab"
+internal const val LiveTvTabKey = "livetv.tab"
 
 /**
  * On now is the better front door, but only with suggestions in it; while they are still

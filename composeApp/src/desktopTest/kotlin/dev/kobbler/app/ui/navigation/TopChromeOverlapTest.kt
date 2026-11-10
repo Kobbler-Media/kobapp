@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.AuthState
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LocalAuthState
+import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.LocalTopChromeOverlap
@@ -35,6 +36,7 @@ import dev.kobbler.app.ui.dashboard.CalendarScreen
 import dev.kobbler.app.ui.dashboard.IptvScreen
 import dev.kobbler.app.ui.dashboard.LiveSeriesRuleScreen
 import dev.kobbler.app.ui.dashboard.LiveTvScreen
+import dev.kobbler.app.ui.dashboard.LiveTvTabKey
 import dev.kobbler.app.ui.dashboard.MoviesScreen
 import dev.kobbler.app.ui.dashboard.NotificationsScreen
 import dev.kobbler.app.ui.dashboard.SettingsScreen
@@ -110,6 +112,7 @@ class TopChromeOverlapTest {
     private fun check(case: Case) {
         runUiTest(width = 400, height = 800) {
             DataCache.clear()
+            UserSettings.remove(LiveTvTabKey)
             StubServer(TabPageStubs.routes).use { stub ->
                 val api = KobblerApi(HttpClient(), stub.url, "token")
                 setContent {

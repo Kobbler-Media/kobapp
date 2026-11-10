@@ -185,6 +185,11 @@ tasks.named<Test>("desktopTest") {
     systemProperty("kotlinx.coroutines.test.default_timeout", "5m")
     // The app's offline store lives under XDG_DATA_HOME; a test must never write into the real one.
     environment("XDG_DATA_HOME", layout.buildDirectory.dir("test-data").get().asFile.absolutePath)
+    // Settings are java.util.prefs, ~/.java by default: tests would rewrite the real app's
+    // settings and inherit whatever a previous run left behind.
+    val prefsRoot = layout.buildDirectory.dir("test-prefs").get().asFile
+    systemProperty("java.util.prefs.userRoot", prefsRoot.absolutePath)
+    doFirst { prefsRoot.deleteRecursively() }
 }
 
 // Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. install-desktop.sh trains
