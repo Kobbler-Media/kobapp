@@ -39,6 +39,7 @@ import dev.kobbler.app.ui.components.SegmentedFilter
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -197,14 +198,16 @@ internal fun DownloadsScreen(
                 title = "No downloads",
                 subtitle = "Downloads from Kobload will appear here",
             )
-            else -> LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
-                verticalArrangement = Arrangement.spacedBy(dimens.s2),
-                modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
-            ) {
-                items(rows, key = { it.id }) { row ->
-                    DownloadListItem(row, accent, onItemClick)
+            else -> FocusEdgeSlack {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6),
+                    verticalArrangement = Arrangement.spacedBy(dimens.s2),
+                    modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
+                ) {
+                    items(rows, key = { it.id }) { row ->
+                        DownloadListItem(row, accent, onItemClick)
+                    }
                 }
             }
         }

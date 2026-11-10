@@ -106,6 +106,7 @@ import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.app.ui.components.TvFocusScale
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.components.ConfirmDialog
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import kotlinx.coroutines.launch
 import dev.kobbler.app.ui.imePaddingUnlessTv
 
@@ -212,298 +213,300 @@ fun SettingsScreen(
     val displayServer = serverUrl.removePrefix("https://").removePrefix("http://")
 
     val scroll = rememberScrollState()
-    Column(
-        modifier = modifier
-            .scrollsUnderTopChrome(scroll)
-            .fillMaxSize()
-            .imePaddingUnlessTv()
-            .verticalScroll(scroll)
-            .padding(horizontal = gutter),
-    ) {
-        Spacer(Modifier.height(dimens.s4 + LocalTopChromeOverlap.current))
+    FocusEdgeSlack {
+        Column(
+            modifier = modifier
+                .scrollsUnderTopChrome(scroll)
+                .fillMaxSize()
+                .imePaddingUnlessTv()
+                .verticalScroll(scroll)
+                .padding(horizontal = gutter),
+        ) {
+            Spacer(Modifier.height(dimens.s4 + LocalTopChromeOverlap.current))
 
-        BrowseHeader(
-            title = "Settings",
-            accent = accent,
-            countLine = displayServer.takeIf { it.isNotBlank() },
-            compact = compact,
-        )
-
-        Spacer(Modifier.height(if (compact) dimens.s4 else dimens.s5))
-
-        if (active != null) {
-            ProfileHeroCard(
-                profile = active,
-                meta = active.email ?: displayServer,
-                onClick = { onOpenProfile?.invoke() ?: auth.showPicker() },
+            BrowseHeader(
+                title = "Settings",
+                accent = accent,
+                countLine = displayServer.takeIf { it.isNotBlank() },
+                compact = compact,
             )
-            Spacer(Modifier.height(dimens.s5))
-        }
 
-        if (onOpenWatchHistory != null) {
-            SettingsGroup(label = "Recommendations") {
-                SettingsRow(
-                    icon = Icons.Outlined.History,
-                    title = "Watch history",
-                    key = "history",
-                    value = "What For You learns from",
-                    onClick = onOpenWatchHistory,
-                )
-            }
-            Spacer(Modifier.height(dimens.s5))
-        }
+            Spacer(Modifier.height(if (compact) dimens.s4 else dimens.s5))
 
-        SettingsGroup(label = "Profiles") {
-            SettingsRow(
-                icon = Icons.Outlined.SwitchAccount,
-                title = if (auth.profiles.size > 1) "Switch profile" else "Pick profile",
-                key = "switch",
-                value = if (auth.profiles.size > 1) "${auth.profiles.size} on device" else null,
-                onClick = { auth.showPicker() },
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = Icons.Outlined.PersonAdd,
-                title = "Add profile",
-                key = "add",
-                value = "Link Kobbler user",
-                onClick = {
-                    auth.startPinLogin(PinLoginMode.Add)
-                    auth.showPicker()
-                },
-            )
-            if (auth.role == "admin") {
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Outlined.Groups,
-                    title = "Add household profiles",
-                    key = "household",
-                    value = householdMsg ?: "Link every Kobbler user at once",
-                    onClick = { showHousehold = true },
-                )
-            }
-            SettingsDivider()
-            SettingsToggleRow(
-                icon = Icons.Outlined.GroupWork,
-                title = "Show picker on launch",
-                key = "show-picker",
-                checked = auth.showPickerOnLaunch,
-                onToggle = { auth.updateShowPickerOnLaunch(it) },
-            )
             if (active != null) {
+                ProfileHeroCard(
+                    profile = active,
+                    meta = active.email ?: displayServer,
+                    onClick = { onOpenProfile?.invoke() ?: auth.showPicker() },
+                )
+                Spacer(Modifier.height(dimens.s5))
+            }
+
+            if (onOpenWatchHistory != null) {
+                SettingsGroup(label = "Recommendations") {
+                    SettingsRow(
+                        icon = Icons.Outlined.History,
+                        title = "Watch history",
+                        key = "history",
+                        value = "What For You learns from",
+                        onClick = onOpenWatchHistory,
+                    )
+                }
+                Spacer(Modifier.height(dimens.s5))
+            }
+
+            SettingsGroup(label = "Profiles") {
+                SettingsRow(
+                    icon = Icons.Outlined.SwitchAccount,
+                    title = if (auth.profiles.size > 1) "Switch profile" else "Pick profile",
+                    key = "switch",
+                    value = if (auth.profiles.size > 1) "${auth.profiles.size} on device" else null,
+                    onClick = { auth.showPicker() },
+                )
                 SettingsDivider()
                 SettingsRow(
-                    icon = Icons.Outlined.Lock,
-                    title = if (active.hasPin) "Change profile PIN" else "Set profile PIN",
-                    key = "set-pin",
-                    value = if (active.hasPin) "PIN required" else "Optional",
-                    onClick = { pinDialog = ProfilePinMode.Set },
+                    icon = Icons.Outlined.PersonAdd,
+                    title = "Add profile",
+                    key = "add",
+                    value = "Link Kobbler user",
+                    onClick = {
+                        auth.startPinLogin(PinLoginMode.Add)
+                        auth.showPicker()
+                    },
                 )
-                if (active.hasPin) {
+                if (auth.role == "admin") {
                     SettingsDivider()
                     SettingsRow(
-                        icon = Icons.Outlined.LockOpen,
-                        title = "Remove profile PIN",
-                        key = "clear-pin",
-                        onClick = { pinDialog = ProfilePinMode.Clear },
+                        icon = Icons.Outlined.Groups,
+                        title = "Add household profiles",
+                        key = "household",
+                        value = householdMsg ?: "Link every Kobbler user at once",
+                        onClick = { showHousehold = true },
+                    )
+                }
+                SettingsDivider()
+                SettingsToggleRow(
+                    icon = Icons.Outlined.GroupWork,
+                    title = "Show picker on launch",
+                    key = "show-picker",
+                    checked = auth.showPickerOnLaunch,
+                    onToggle = { auth.updateShowPickerOnLaunch(it) },
+                )
+                if (active != null) {
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Outlined.Lock,
+                        title = if (active.hasPin) "Change profile PIN" else "Set profile PIN",
+                        key = "set-pin",
+                        value = if (active.hasPin) "PIN required" else "Optional",
+                        onClick = { pinDialog = ProfilePinMode.Set },
+                    )
+                    if (active.hasPin) {
+                        SettingsDivider()
+                        SettingsRow(
+                            icon = Icons.Outlined.LockOpen,
+                            title = "Remove profile PIN",
+                            key = "clear-pin",
+                            onClick = { pinDialog = ProfilePinMode.Clear },
+                        )
+                    }
+                }
+                auth.profilesByRecentUse.filter { it.id != auth.currentProfileId }.forEach { other ->
+                    SettingsDivider()
+                    SettingsRow(
+                        icon = Icons.Outlined.PersonRemove,
+                        title = "Remove ${other.displayName}",
+                        key = "remove.${other.id}",
+                        value = other.email ?: other.apiUrl,
+                        danger = true,
+                        onClick = { removeTarget = other.id },
                     )
                 }
             }
-            auth.profilesByRecentUse.filter { it.id != auth.currentProfileId }.forEach { other ->
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Outlined.PersonRemove,
-                    title = "Remove ${other.displayName}",
-                    key = "remove.${other.id}",
-                    value = other.email ?: other.apiUrl,
-                    danger = true,
-                    onClick = { removeTarget = other.id },
+
+            Spacer(Modifier.height(dimens.s5))
+
+            SettingsGroup(label = "Playback") {
+                SettingsDropdownRow(
+                    icon = Icons.Outlined.Audiotrack,
+                    title = "Default audio language",
+                    key = "audio-lang",
+                    valueLabel = AUDIO_LANG_OPTIONS.firstOrNull { it.first == audioLang }?.second ?: "Auto",
+                    options = AUDIO_LANG_OPTIONS,
+                    onSelect = { audioLang = it; UserSettings.putString(KEY_DEFAULT_AUDIO_LANG, it) },
                 )
-            }
-        }
-
-        Spacer(Modifier.height(dimens.s5))
-
-        SettingsGroup(label = "Playback") {
-            SettingsDropdownRow(
-                icon = Icons.Outlined.Audiotrack,
-                title = "Default audio language",
-                key = "audio-lang",
-                valueLabel = AUDIO_LANG_OPTIONS.firstOrNull { it.first == audioLang }?.second ?: "Auto",
-                options = AUDIO_LANG_OPTIONS,
-                onSelect = { audioLang = it; UserSettings.putString(KEY_DEFAULT_AUDIO_LANG, it) },
-            )
-            SettingsDivider()
-            SettingsDropdownRow(
-                icon = Icons.Outlined.Subtitles,
-                title = "Default subtitle language",
-                key = "subtitle-lang",
-                valueLabel = SUBTITLE_LANG_OPTIONS.firstOrNull { it.first == subtitleLang }?.second ?: "None",
-                options = SUBTITLE_LANG_OPTIONS,
-                onSelect = { subtitleLang = it; UserSettings.putString(KEY_DEFAULT_SUBTITLE_LANG, it) },
-            )
-            SettingsDivider()
-            SettingsToggleRow(
-                icon = Icons.Outlined.ClosedCaption,
-                title = "Subtitles on by default",
-                key = "subtitles-enabled",
-                checked = subtitlesEnabled,
-                onToggle = {
-                    subtitlesEnabled = it
-                    UserSettings.putString(KEY_SUBTITLES_ENABLED, it.toString())
-                },
-            )
-            SettingsDivider()
-            SettingsDropdownRow(
-                icon = Icons.Outlined.Speed,
-                title = "Default playback speed",
-                key = "playback-speed",
-                valueLabel = "${playbackSpeed}x",
-                options = SPEED_OPTIONS,
-                onSelect = { playbackSpeed = it; UserSettings.putString(KEY_DEFAULT_PLAYBACK_SPEED, it) },
-            )
-            SettingsDivider()
-            SettingsToggleRow(
-                icon = Icons.Outlined.GraphicEq,
-                title = "Level volume between titles",
-                key = "normalize-volume",
-                checked = normalizeVolume,
-                onToggle = { normalizeVolume = it },
-            )
-            // Only libVLC on Android exposes the output device.
-            if (clientKind.startsWith("android")) {
                 SettingsDivider()
                 SettingsDropdownRow(
-                    icon = Icons.Outlined.Speaker,
-                    title = "Audio output",
-                    key = "audio-output",
-                    valueLabel = AUDIO_OUTPUT_OPTIONS.first { it.first == audioOutput }.second.substringBefore(" ("),
-                    options = AUDIO_OUTPUT_OPTIONS,
-                    onSelect = { audioOutput = it; Settings.putString(KEY_AUDIO_OUTPUT, it) },
+                    icon = Icons.Outlined.Subtitles,
+                    title = "Default subtitle language",
+                    key = "subtitle-lang",
+                    valueLabel = SUBTITLE_LANG_OPTIONS.firstOrNull { it.first == subtitleLang }?.second ?: "None",
+                    options = SUBTITLE_LANG_OPTIONS,
+                    onSelect = { subtitleLang = it; UserSettings.putString(KEY_DEFAULT_SUBTITLE_LANG, it) },
                 )
                 SettingsDivider()
                 SettingsToggleRow(
-                    icon = Icons.Outlined.Tv,
-                    title = "Match display refresh rate",
-                    key = "match-display-refresh",
-                    checked = matchDisplayRefresh,
+                    icon = Icons.Outlined.ClosedCaption,
+                    title = "Subtitles on by default",
+                    key = "subtitles-enabled",
+                    checked = subtitlesEnabled,
                     onToggle = {
-                        matchDisplayRefresh = it
-                        Settings.putString(KEY_MATCH_DISPLAY_REFRESH, it.toString())
+                        subtitlesEnabled = it
+                        UserSettings.putString(KEY_SUBTITLES_ENABLED, it.toString())
                     },
                 )
-            }
-            if (clientKind.startsWith("android") || clientKind == "desktop") {
-                SettingsDivider()
-                SettingsToggleRow(
-                    icon = Icons.Outlined.Crop,
-                    title = "Trim black bars",
-                    key = "trim-black-bars",
-                    checked = trimBlackBars,
-                    onToggle = {
-                        trimBlackBars = it
-                        Settings.putString(KEY_TRIM_BLACK_BARS, it.toString())
-                    },
-                )
-            }
-            if (decoderChoices.isNotEmpty()) {
                 SettingsDivider()
                 SettingsDropdownRow(
-                    icon = Icons.Outlined.Memory,
-                    title = "Video decoding",
-                    key = "video-decoding",
-                    valueLabel = decoderChoices.firstOrNull { it.decoding.key == videoDecoding }?.label ?: "Auto",
-                    options = decoderChoices.map { it.decoding.key to it.label },
-                    onSelect = { videoDecoding = it; Settings.putString(KEY_VIDEO_DECODING, it) },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(dimens.s5))
-
-        SettingsGroup(label = "Streaming") {
-            SettingsDropdownRow(
-                icon = Icons.Outlined.HighQuality,
-                title = "Streaming quality",
-                key = "quality",
-                valueLabel = when (streamingQuality) {
-                    "adaptive" -> "Adaptive"
-                    "1080" -> "Max 1080p"
-                    "720" -> "Max 720p"
-                    "480" -> "Max 480p"
-                    else -> "Auto"
-                },
-                options = QUALITY_OPTIONS,
-                onSelect = { streamingQuality = it; UserSettings.putString(KEY_STREAMING_QUALITY, it) },
-            )
-        }
-
-        Spacer(Modifier.height(dimens.s5))
-
-        dev.kobbler.app.ui.offline.OfflineSettings()
-
-        SettingsGroup(label = "Reader & TTS") {
-            SettingsTextInputRow(
-                icon = Icons.Outlined.RecordVoiceOver,
-                title = "Preferred TTS voice",
-                key = "tts-voice",
-                value = ttsVoice,
-                placeholder = "Voice name or ID",
-                onSave = { ttsVoice = it; UserSettings.putString(KEY_TTS_VOICE, it) },
-            )
-            SettingsDivider()
-            SettingsDropdownRow(
-                icon = Icons.Outlined.Speed,
-                title = "TTS speed",
-                key = "tts-speed",
-                valueLabel = "${ttsSpeed}x",
-                options = TTS_SPEED_OPTIONS,
-                onSelect = { ttsSpeed = it; UserSettings.putString(KEY_TTS_SPEED, it) },
-            )
-        }
-
-        Spacer(Modifier.height(dimens.s5))
-
-        SettingsGroup(label = "Server") {
-            SettingsRow(
-                icon = Icons.Outlined.Cloud,
-                title = "Connected to",
-                key = "server",
-                value = displayServer.ifBlank { "—" },
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = Icons.AutoMirrored.Outlined.Logout,
-                title = "Sign out",
-                key = "sign-out",
-                value = "Return to login",
-                danger = true,
-                onClick = { showLogoutConfirm = true },
-            )
-        }
-
-        Spacer(Modifier.height(dimens.s5))
-
-        SettingsGroup(label = "About") {
-            SettingsRow(
-                icon = Icons.Outlined.Info,
-                title = "Kobbler",
-                key = "version",
-                value = "v${AppVersion.versionName}",
-            )
-            // A TV is the one place a start-up timing is hardest to read and most worth
-            // reading, because adb is across the room. Blank until something has played.
-            dev.kobbler.app.ui.player.PlaybackTrace.last?.let { trace ->
-                SettingsRow(
                     icon = Icons.Outlined.Speed,
-                    title = "Last playback start",
-                    key = "playbacktrace",
-                    value = trace,
+                    title = "Default playback speed",
+                    key = "playback-speed",
+                    valueLabel = "${playbackSpeed}x",
+                    options = SPEED_OPTIONS,
+                    onSelect = { playbackSpeed = it; UserSettings.putString(KEY_DEFAULT_PLAYBACK_SPEED, it) },
+                )
+                SettingsDivider()
+                SettingsToggleRow(
+                    icon = Icons.Outlined.GraphicEq,
+                    title = "Level volume between titles",
+                    key = "normalize-volume",
+                    checked = normalizeVolume,
+                    onToggle = { normalizeVolume = it },
+                )
+                // Only libVLC on Android exposes the output device.
+                if (clientKind.startsWith("android")) {
+                    SettingsDivider()
+                    SettingsDropdownRow(
+                        icon = Icons.Outlined.Speaker,
+                        title = "Audio output",
+                        key = "audio-output",
+                        valueLabel = AUDIO_OUTPUT_OPTIONS.first { it.first == audioOutput }.second.substringBefore(" ("),
+                        options = AUDIO_OUTPUT_OPTIONS,
+                        onSelect = { audioOutput = it; Settings.putString(KEY_AUDIO_OUTPUT, it) },
+                    )
+                    SettingsDivider()
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.Tv,
+                        title = "Match display refresh rate",
+                        key = "match-display-refresh",
+                        checked = matchDisplayRefresh,
+                        onToggle = {
+                            matchDisplayRefresh = it
+                            Settings.putString(KEY_MATCH_DISPLAY_REFRESH, it.toString())
+                        },
+                    )
+                }
+                if (clientKind.startsWith("android") || clientKind == "desktop") {
+                    SettingsDivider()
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.Crop,
+                        title = "Trim black bars",
+                        key = "trim-black-bars",
+                        checked = trimBlackBars,
+                        onToggle = {
+                            trimBlackBars = it
+                            Settings.putString(KEY_TRIM_BLACK_BARS, it.toString())
+                        },
+                    )
+                }
+                if (decoderChoices.isNotEmpty()) {
+                    SettingsDivider()
+                    SettingsDropdownRow(
+                        icon = Icons.Outlined.Memory,
+                        title = "Video decoding",
+                        key = "video-decoding",
+                        valueLabel = decoderChoices.firstOrNull { it.decoding.key == videoDecoding }?.label ?: "Auto",
+                        options = decoderChoices.map { it.decoding.key to it.label },
+                        onSelect = { videoDecoding = it; Settings.putString(KEY_VIDEO_DECODING, it) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(dimens.s5))
+
+            SettingsGroup(label = "Streaming") {
+                SettingsDropdownRow(
+                    icon = Icons.Outlined.HighQuality,
+                    title = "Streaming quality",
+                    key = "quality",
+                    valueLabel = when (streamingQuality) {
+                        "adaptive" -> "Adaptive"
+                        "1080" -> "Max 1080p"
+                        "720" -> "Max 720p"
+                        "480" -> "Max 480p"
+                        else -> "Auto"
+                    },
+                    options = QUALITY_OPTIONS,
+                    onSelect = { streamingQuality = it; UserSettings.putString(KEY_STREAMING_QUALITY, it) },
                 )
             }
-        }
 
-        Spacer(Modifier.height(dimens.s7))
+            Spacer(Modifier.height(dimens.s5))
+
+            dev.kobbler.app.ui.offline.OfflineSettings()
+
+            SettingsGroup(label = "Reader & TTS") {
+                SettingsTextInputRow(
+                    icon = Icons.Outlined.RecordVoiceOver,
+                    title = "Preferred TTS voice",
+                    key = "tts-voice",
+                    value = ttsVoice,
+                    placeholder = "Voice name or ID",
+                    onSave = { ttsVoice = it; UserSettings.putString(KEY_TTS_VOICE, it) },
+                )
+                SettingsDivider()
+                SettingsDropdownRow(
+                    icon = Icons.Outlined.Speed,
+                    title = "TTS speed",
+                    key = "tts-speed",
+                    valueLabel = "${ttsSpeed}x",
+                    options = TTS_SPEED_OPTIONS,
+                    onSelect = { ttsSpeed = it; UserSettings.putString(KEY_TTS_SPEED, it) },
+                )
+            }
+
+            Spacer(Modifier.height(dimens.s5))
+
+            SettingsGroup(label = "Server") {
+                SettingsRow(
+                    icon = Icons.Outlined.Cloud,
+                    title = "Connected to",
+                    key = "server",
+                    value = displayServer.ifBlank { "—" },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.AutoMirrored.Outlined.Logout,
+                    title = "Sign out",
+                    key = "sign-out",
+                    value = "Return to login",
+                    danger = true,
+                    onClick = { showLogoutConfirm = true },
+                )
+            }
+
+            Spacer(Modifier.height(dimens.s5))
+
+            SettingsGroup(label = "About") {
+                SettingsRow(
+                    icon = Icons.Outlined.Info,
+                    title = "Kobbler",
+                    key = "version",
+                    value = "v${AppVersion.versionName}",
+                )
+                // A TV is the one place a start-up timing is hardest to read and most worth
+                // reading, because adb is across the room. Blank until something has played.
+                dev.kobbler.app.ui.player.PlaybackTrace.last?.let { trace ->
+                    SettingsRow(
+                        icon = Icons.Outlined.Speed,
+                        title = "Last playback start",
+                        key = "playbacktrace",
+                        value = trace,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(dimens.s7))
+        }
     }
 
     if (showHousehold) {

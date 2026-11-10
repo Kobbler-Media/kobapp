@@ -71,6 +71,7 @@ fun TvShowsScreen(
     // Leagues carry a hardcoded "continuing" status (thesportsdb.rs), so the filter
     // is meaningless for sports and the control is not offered there.
     val continuingOnly = !sportsOnly && filterIndex == 1
+    val showStatus = if (continuingOnly) "continuing" else null
 
     suspend fun fetch(cursor: String? = null, direction: String? = null, around: String? = null, aroundBefore: Int? = null): PaginatedShows =
         if (sportsOnly) {
@@ -78,7 +79,7 @@ fun TvShowsScreen(
         } else {
             api.getShowsList(
                 cursor = cursor, direction = direction, around = around, aroundBefore = aroundBefore,
-                status = if (continuingOnly) "continuing" else null,
+                status = showStatus,
                 genre = genre,
             )
         }
@@ -135,9 +136,9 @@ fun TvShowsScreen(
     val railsSettled = homeState !is Async.Loading && dashState !is Async.Loading
 
     // Alphabet letters
-    var letters by remember { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(Unit) {
-        try { letters = if (sportsOnly) api.getSportsLetters() else api.getTvLetters() } catch (_: Exception) {}
+    var letters by remember(genre, showStatus) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(genre, showStatus) {
+        try { letters = if (sportsOnly) api.getSportsLetters() else api.getTvLetters(genre, showStatus) } catch (_: Exception) {}
     }
 
     // Entry focus goes to the first row that actually exists, in reading order. A new
@@ -240,12 +241,13 @@ fun TvShowsScreen(
             FormFactor.Phone -> spacing.pageGutterPhone
             else -> spacing.pageGutter
         }
-        // first-by-letter/available-letters take no status (tv.rs:2794/2827), so the
-        // jump targets do not exist in the continuing-only list.
         // 22dp letters stacked 26 deep are a pointer/D-pad affordance; on touch they are
         // under half the minimum target and cost 44dp of a 360dp screen.
-        val showAlphabet = letters.isNotEmpty() && !continuingOnly && genre == null && formFactor != FormFactor.Phone
-        val railEnd = if (showAlphabet) gutter + AlphabetBarWidth else gutter
+        // The bar's slot is held before its letters arrive: the header ends at it, and
+        // letters landing late slid the selector sideways.
+        val alphabetSlot = formFactor != FormFactor.Phone
+        val showAlphabet = alphabetSlot && letters.isNotEmpty()
+        val railEnd = if (alphabetSlot) gutter + AlphabetBarWidth else gutter
         val density = LocalDensity.current
         var gridWidthPx by remember { mutableIntStateOf(0) }
         val railBleedEnd = railEnd + with(density) {
@@ -428,7 +430,7 @@ fun TvShowsScreen(
                     onLetterClick = { letter ->
                         scope.launch {
                             try {
-                                val firstByLetter = if (sportsOnly) api.getSportsFirstByLetter(letter) else api.getTvFirstByLetter(letter)
+                                val firstByLetter = if (sportsOnly) api.getSportsFirstByLetter(letter) else api.getTvFirstByLetter(letter, genre, showStatus)
                                 // around_before=0 makes the server drop the cursor and
                                 // return page one (kobbler movies.rs/tv.rs `else` branch),
                                 // so ask for one leading item and scroll past it.

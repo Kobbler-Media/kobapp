@@ -197,6 +197,7 @@ class SearchSuggestionsTest {
             SearchScope.Books to "book",
             SearchScope.LiveTv to "livetv",
             SearchScope.Iptv to "iptv",
+            SearchScope.Sports to "sports",
         )
         assertEquals(SearchScope.entries.toSet(), expected.keys)
         expected.forEach { (scope, media) ->

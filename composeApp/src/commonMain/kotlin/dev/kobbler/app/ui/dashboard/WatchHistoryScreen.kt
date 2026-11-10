@@ -54,6 +54,7 @@ import dev.kobbler.app.ui.components.SegmentedFilter
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
 import dev.kobbler.app.ui.components.tvFocusGlow
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import dev.kobbler.app.ui.safeBottomPadding
 import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
@@ -220,16 +221,18 @@ fun WatchHistoryScreen(
                 title = "Nothing here",
                 subtitle = "Titles you watch, and history imported from Trakt or Stremio, show up here",
             )
-            else -> LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(horizontal = gutter, vertical = dimens.s2),
-                verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(entries, key = { it.key() }) { entry ->
-                    val key = entry.key()
-                    HistoryRow(entry, checked = key in selected, enabled = !busy) {
-                        if (key in selected) selected.remove(key) else selected.add(key)
+            else -> FocusEdgeSlack {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2, bottom = dimens.s6),
+                    verticalArrangement = Arrangement.spacedBy(dimens.s1),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(entries, key = { it.key() }) { entry ->
+                        val key = entry.key()
+                        HistoryRow(entry, checked = key in selected, enabled = !busy) {
+                            if (key in selected) selected.remove(key) else selected.add(key)
+                        }
                     }
                 }
             }

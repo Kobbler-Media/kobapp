@@ -120,28 +120,30 @@ private fun WantedList(
                     else items.filter { it.mediaType == filter.mediaType }
                 }
                 val gridState = rememberLazyGridState()
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Adaptive(minSize = dimens.posterWidth),
-                    contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s4 + LocalTopChromeOverlap.current, bottom = dimens.s4),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.s3),
-                    verticalArrangement = Arrangement.spacedBy(dimens.s4),
-                    modifier = Modifier.scrollsUnderTopChrome(gridState).fillMaxSize(),
-                ) {
-                    items(filtered, key = { "${it.mediaType}-${it.id}" }) { item ->
-                        val accent = when (item.mediaType) {
-                            "movie" -> colors.accMovies
-                            "tv_show" -> colors.accTv
-                            else -> colors.accBooks
+                FocusEdgeSlack {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(minSize = dimens.posterWidth),
+                        contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s4 + LocalTopChromeOverlap.current, bottom = dimens.s6),
+                        horizontalArrangement = Arrangement.spacedBy(dimens.s3),
+                        verticalArrangement = Arrangement.spacedBy(dimens.s4),
+                        modifier = Modifier.scrollsUnderTopChrome(gridState).fillMaxSize(),
+                    ) {
+                        items(filtered, key = { "${it.mediaType}-${it.id}" }) { item ->
+                            val accent = when (item.mediaType) {
+                                "movie" -> colors.accMovies
+                                "tv_show" -> colors.accTv
+                                else -> colors.accBooks
+                            }
+                            PosterCard(
+                                title = item.title,
+                                imageUrl = item.coverUrl,
+                                subtitle = item.subtitle,
+                                accentColor = accent,
+                                onClick = { onItemClick(item) },
+                                modifier = Modifier.focusKey("wanted.${item.mediaType}.${item.id}"),
+                            )
                         }
-                        PosterCard(
-                            title = item.title,
-                            imageUrl = item.coverUrl,
-                            subtitle = item.subtitle,
-                            accentColor = accent,
-                            onClick = { onItemClick(item) },
-                            modifier = Modifier.focusKey("wanted.${item.mediaType}.${item.id}"),
-                        )
                     }
                 }
             }

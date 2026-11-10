@@ -7,6 +7,11 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.test.requestFocus
+import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.offline.ByteRanges
 import dev.kobbler.app.offline.JvmOfflineFs
 import dev.kobbler.app.offline.OfflineEngine
@@ -17,6 +22,7 @@ import dev.kobbler.app.offline.OfflineState
 import dev.kobbler.app.offline.OfflineStore
 import dev.kobbler.app.offline.Reachability
 import dev.kobbler.app.runUiTest
+import dev.kobbler.app.ui.assertRoomBelowLastDownStop
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.PosterCard
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +92,30 @@ class OfflineScreenTest {
         }
         val heading = onNodeWithText("Offline", useUnmergedTree = true).getUnclippedBoundsInRoot().left
         assertEquals(heading.value, onNodeWithText("Film", useUnmergedTree = true).getUnclippedBoundsInRoot().left.value, absoluteTolerance = 4f)
+    }
+
+    @Test
+    fun theLastRowLeavesRoomBelowForItsFocusRing() = runUiTest(height = 700) {
+        have(
+            done(OfflineKind.Movie, "m1", "Film"),
+            done(OfflineKind.Episode, "e1", "One", showId = "s1"),
+            done(OfflineKind.Book, "b1", "Novel"),
+            done(OfflineKind.Book, "c1", "Comic", format = "CBZ"),
+            done(OfflineKind.Audiobook, "a1", "Audio"),
+        )
+        var focus: FocusManager? = null
+        setContent {
+            KobappTheme(formFactor = FormFactor.TV) {
+                focus = LocalFocusManager.current
+                CompositionLocalProvider(LocalOfflineEngine provides engine) {
+                    OfflineScreen(onOpenMovie = {}, onOpenShow = {}, onOpenBook = {})
+                }
+            }
+        }
+        waitForIdle()
+        onNodeWithText("Film").requestFocus()
+        assertRoomBelowLastDownStop({ focus!! })
+        onNodeWithText("Audio").assertIsFocused()
     }
 
     @Test

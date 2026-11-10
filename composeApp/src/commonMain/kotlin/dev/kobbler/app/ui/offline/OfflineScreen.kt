@@ -4,6 +4,7 @@ import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import dev.kobbler.app.offline.OfflineKind
 import dev.kobbler.app.offline.OfflineState
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.BrowseHeader
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import dev.kobbler.app.ui.components.MediaCarousel
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.pageGutter
@@ -88,7 +90,12 @@ fun OfflineScreen(
         OfflineRow("Audiobooks", colors.accAudio, items.filter { it.kind == OfflineKind.Audiobook }.map { it.card(it.title, it.subtitle) { onOpenBook(it.mediaId) } }),
     ).filter { it.cards.isNotEmpty() }
 
-    LazyColumn(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(KobappTheme.dimens.s4)) {
+    FocusEdgeSlack {
+    LazyColumn(
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = KobappTheme.dimens.s6),
+        verticalArrangement = Arrangement.spacedBy(KobappTheme.dimens.s4),
+    ) {
         item(key = "header") {
             Column(Modifier.padding(horizontal = gutter, vertical = KobappTheme.dimens.s4)) {
                 BrowseHeader(
@@ -146,6 +153,7 @@ fun OfflineScreen(
                 }
             }
         }
+    }
     }
 }
 

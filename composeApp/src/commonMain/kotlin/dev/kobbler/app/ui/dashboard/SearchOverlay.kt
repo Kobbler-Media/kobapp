@@ -128,7 +128,7 @@ fun SearchOverlay(
     var liveLoading by remember { mutableStateOf(false) }
     var iptvLoading by remember { mutableStateOf(false) }
     val libraryHits = remember(session.library, scope) {
-        session.library?.let { it.topHits + it.remaining }.orEmpty().filter { scope.includes(it.type) }
+        session.library?.let { it.topHits + it.remaining }.orEmpty().filter(scope::includes)
     }
     val expandedSections = session.expanded
     val gridState = rememberLazyGridState(returning?.index ?: 0, returning?.offset ?: 0)
@@ -567,7 +567,7 @@ private fun SearchBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (phone) 8.dp else 12.dp),
     ) {
-        KobBackButton(onDismiss, modifier = Modifier.focusKey("back"))
+        if (!tv) KobBackButton(onDismiss, modifier = Modifier.focusKey("back"))
         Box(
             modifier = Modifier
                 .weight(1f)

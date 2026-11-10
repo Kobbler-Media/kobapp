@@ -104,8 +104,8 @@ fun MoviesScreen(
     // whole page down under the viewer's focus. Wait for them to settle first.
     val railsSettled = homeState !is Async.Loading && dashState !is Async.Loading
 
-    var letters by remember { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(Unit) { try { letters = api.getMovieLetters() } catch (_: Exception) {} }
+    var letters by remember(genre) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(genre) { try { letters = api.getMovieLetters(genre) } catch (_: Exception) {} }
 
     // Entry focus goes to the first row that actually exists, in reading order. A new
     // category re-arms it: the picker's dialog closes onto a selector that has just been
@@ -208,8 +208,11 @@ fun MoviesScreen(
         val accent = colors.accMovies
         // 22dp letters stacked 26 deep are a pointer/D-pad affordance; on touch they are
         // under half the minimum target and cost 44dp of a 360dp screen.
-        val showAlphabet = letters.isNotEmpty() && formFactor != FormFactor.Phone && genre == null
-        val railEnd = if (showAlphabet) gutter + AlphabetBarWidth else gutter
+        // The bar's slot is held before its letters arrive: the header ends at it, and
+        // letters landing late slid the selector sideways.
+        val alphabetSlot = formFactor != FormFactor.Phone
+        val showAlphabet = alphabetSlot && letters.isNotEmpty()
+        val railEnd = if (alphabetSlot) gutter + AlphabetBarWidth else gutter
         val density = LocalDensity.current
         var gridWidthPx by remember { mutableIntStateOf(0) }
         val railBleedEnd = railEnd + with(density) {
@@ -370,7 +373,7 @@ fun MoviesScreen(
                     onLetterClick = { letter ->
                         scope.launch {
                             try {
-                                val firstByLetter = api.getMovieFirstByLetter(letter)
+                                val firstByLetter = api.getMovieFirstByLetter(letter, genre)
                                 // around_before=0 makes the server drop the cursor and
                                 // return page one (kobbler movies.rs/tv.rs `else` branch),
                                 // so ask for one leading item and scroll past it.

@@ -16,6 +16,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.isPopup
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -108,6 +109,17 @@ class SearchScopeChipTest {
                     scopeChip().assertTextEquals(SearchScope.Books.label)
                     assertTrue(onAllNodes(hasAnyAncestor(isPopup())).fetchSemanticsNodes().isEmpty(), "the menu stayed open")
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `the bar has a back arrow except on tv, where the remote has one`() = eachFormFactor { ff ->
+        runUiTest(width = 1280, height = 900) {
+            StubServer(routes).use { stub ->
+                showSearch(stub, ff, query = "", scopes = withoutLive)
+                val arrows = onAllNodesWithContentDescription("Back").fetchSemanticsNodes().size
+                assertEquals(if (ff == FormFactor.TV) 0 else 1, arrows)
             }
         }
     }

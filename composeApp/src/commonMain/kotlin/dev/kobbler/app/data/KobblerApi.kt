@@ -1057,6 +1057,7 @@ data class SearchHitDto(
     @SerialName("logo_url") val logoUrl: String? = null,
     val network: String? = null,
     val path: String? = null,
+    val kind: String? = null,
     // TV season/episode fields from server
     @SerialName("display_title") val displayTitle: String? = null,
     @SerialName("show_id") val showId: String? = null,
@@ -2697,17 +2698,22 @@ class KobblerApi(
 
     // -- Alphabet navigation --
 
-    suspend fun getMovieLetters(): List<String> =
-        decode<AvailableLettersResponse>(get("/api/v1/admin/movies/available-letters")).letters
+    suspend fun getMovieLetters(genre: String? = null): List<String> =
+        decode<AvailableLettersResponse>(get("/api/v1/admin/movies/available-letters" + letterQuery("genre" to genre))).letters
 
-    suspend fun getMovieFirstByLetter(letter: String): FirstByLetterResponse =
-        decode<FirstByLetterResponse>(get("/api/v1/admin/movies/first-by-letter?letter=${letter.encodeURLParameter()}"))
+    suspend fun getMovieFirstByLetter(letter: String, genre: String? = null): FirstByLetterResponse =
+        decode<FirstByLetterResponse>(get("/api/v1/admin/movies/first-by-letter" + letterQuery("letter" to letter, "genre" to genre)))
 
-    suspend fun getTvLetters(): List<String> =
-        decode<AvailableLettersResponse>(get("/api/v1/admin/tv/shows/available-letters")).letters
+    suspend fun getTvLetters(genre: String? = null, status: String? = null): List<String> =
+        decode<AvailableLettersResponse>(get("/api/v1/admin/tv/shows/available-letters" + letterQuery("genre" to genre, "status" to status))).letters
 
-    suspend fun getTvFirstByLetter(letter: String): FirstByLetterResponse =
-        decode<FirstByLetterResponse>(get("/api/v1/admin/tv/shows/first-by-letter?letter=${letter.encodeURLParameter()}"))
+    suspend fun getTvFirstByLetter(letter: String, genre: String? = null, status: String? = null): FirstByLetterResponse =
+        decode<FirstByLetterResponse>(get("/api/v1/admin/tv/shows/first-by-letter" + letterQuery("letter" to letter, "genre" to genre, "status" to status)))
+
+    private fun letterQuery(vararg params: Pair<String, String?>): String =
+        params.filter { it.second != null }
+            .joinToString("&") { (k, v) -> "$k=${v!!.encodeURLParameter()}" }
+            .let { if (it.isEmpty()) "" else "?$it" }
 
     suspend fun getSportsLetters(): List<String> =
         decode<AvailableLettersResponse>(get("/api/v1/admin/sports/leagues/available-letters")).letters

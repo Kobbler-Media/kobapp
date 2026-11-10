@@ -54,6 +54,7 @@ import dev.kobbler.app.ui.components.EmptyState
 import dev.kobbler.app.ui.components.ErrorScreen
 import dev.kobbler.app.ui.components.LoadingScreen
 import dev.kobbler.app.ui.components.SectionHeading
+import dev.kobbler.app.ui.components.FocusEdgeSlack
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
@@ -146,41 +147,43 @@ fun ActivityScreen(
             else -> {
                 val grouped = remember(events.size, retryToken) { groupEventsByDay(events) }
                 val listState = rememberLazyListState()
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(
-                        start = gutter, end = gutter,
-                        top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                    modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
-                ) {
-                    grouped.forEach { (day, dayEvents) ->
-                        item(key = "h-$day") {
-                            Box(Modifier.padding(top = dimens.s3, bottom = dimens.s2)) {
-                                SectionHeading(
-                                    title = day,
-                                    accent = accent,
-                                )
+                FocusEdgeSlack {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(
+                            start = gutter, end = gutter,
+                            top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(dimens.s1),
+                        modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
+                    ) {
+                        grouped.forEach { (day, dayEvents) ->
+                            item(key = "h-$day") {
+                                Box(Modifier.padding(top = dimens.s3, bottom = dimens.s2)) {
+                                    SectionHeading(
+                                        title = day,
+                                        accent = accent,
+                                    )
+                                }
+                            }
+                            items(dayEvents, key = { it.id }) { event ->
+                                ActivityRow(event = event, accent = accent)
                             }
                         }
-                        items(dayEvents, key = { it.id }) { event ->
-                            ActivityRow(event = event, accent = accent)
-                        }
-                    }
 
-                    if (nextCursor != null) {
-                        item(key = "load-more") {
-                            LaunchedEffect(Unit) { loadMore() }
-                            Box(
-                                Modifier.fillMaxWidth().padding(vertical = dimens.s3),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    if (loadingMore) "Loading more…" else "",
-                                    color = colors.textLo,
-                                    style = KobappTheme.type.bodySm,
-                                )
+                        if (nextCursor != null) {
+                            item(key = "load-more") {
+                                LaunchedEffect(Unit) { loadMore() }
+                                Box(
+                                    Modifier.fillMaxWidth().padding(vertical = dimens.s3),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        if (loadingMore) "Loading more…" else "",
+                                        color = colors.textLo,
+                                        style = KobappTheme.type.bodySm,
+                                    )
+                                }
                             }
                         }
                     }

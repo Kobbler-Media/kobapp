@@ -14,8 +14,12 @@ import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
+import dev.kobbler.app.ui.navigation.Destination
+import dev.kobbler.app.ui.navigation.navConfigFor
+import dev.kobbler.app.ui.navigation.searchScopesFor
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -34,7 +38,7 @@ class SearchScopeTest {
 
     private val routes = mapOf<String, (com.sun.net.httpserver.HttpExchange) -> String>(
         "/api/v1/admin/search" to { _ ->
-            """{"top_hits":[{"type":"movie","id":"m1","title":"Blockbuster"},{"type":"tv_show","id":"s1","title":"Blockhead"}],"remaining":[{"type":"iptv_channel","id":"i5","title":"Block Sports HD"},{"type":"setting","id":"st1","title":"Blocklist settings"}]}"""
+            """{"top_hits":[{"type":"movie","id":"m1","title":"Blockbuster"},{"type":"tv_show","id":"s1","title":"Blockhead","kind":"tv"}],"remaining":[{"type":"tv_show","id":"sp1","title":"Block League","kind":"sport"},{"type":"iptv_channel","id":"i5","title":"Block Sports HD"},{"type":"setting","id":"st1","title":"Blocklist settings"}]}"""
         },
         "/api/v1/admin/livetv/guide" to { _ ->
             """{"channels":[{"channel":{"id":"c9","lcn":9,"name":"Nine"},"entries":[{"id":"g1","channel_id":"c9","start_time":"${now + 2.hours}","end_time":"${now + 3.hours}","title":"The Block"}]}]}"""
@@ -60,9 +64,11 @@ class SearchScopeTest {
         Case("live tv", SearchScope.LiveTv, shown = listOf("The Block", "Blocktown TV"), hidden = listOf("Blockbuster", "Blockhead", "Block Sports HD")),
         Case("iptv", SearchScope.Iptv, shown = listOf("Block Sports HD"), hidden = listOf("Blockbuster", "The Block", "Blocktown TV")),
         Case("movies", SearchScope.Movies, shown = listOf("Blockbuster"), hidden = listOf("Blockhead", "The Block", "Blocktown TV")),
-        Case("tv", SearchScope.Tv, shown = listOf("Blockhead"), hidden = listOf("Blockbuster", "The Block")),
+        Case("tv", SearchScope.Tv, shown = listOf("Blockhead"), hidden = listOf("Blockbuster", "The Block", "Block League")),
+        Case("sports", SearchScope.Sports, shown = listOf("Block League"), hidden = listOf("Blockhead", "Blockbuster", "The Block", "Block Sports HD")),
         Case("live tv widened", SearchScope.LiveTv, shown = listOf("The Block", "Blocktown TV", "Blockbuster", "Blockhead", "Block Sports HD"), hidden = listOf("Iptv_channel", "Blocklist settings"), pick = SearchScope.All),
         Case("all narrowed to tv", SearchScope.All, shown = listOf("Blockhead"), hidden = listOf("Blockbuster", "The Block", "Block Sports HD"), pick = SearchScope.Tv),
+        Case("sports widened", SearchScope.Sports, shown = listOf("Block League", "Blockhead", "Blockbuster"), hidden = listOf("Blocklist settings"), pick = SearchScope.All),
         Case(
             "no live tv",
             SearchScope.All,
@@ -71,6 +77,13 @@ class SearchScopeTest {
             hidden = listOf("The Block", "Blocktown TV", "Live TV", "Block Sports HD", "IPTV"),
         ),
     )
+
+    @Test
+    fun `sports opens its own scope, offered only where the sports tab is`() {
+        assertEquals(SearchScope.Sports, SearchScope.forTab(Destination.Tab.Sports))
+        assertTrue(SearchScope.Sports in searchScopesFor(navConfigFor(isKids = false)))
+        assertTrue(SearchScope.Sports !in searchScopesFor(navConfigFor(isKids = true)))
+    }
 
     @Test
     fun `search is scoped to where it was opened and widens to everything`() {

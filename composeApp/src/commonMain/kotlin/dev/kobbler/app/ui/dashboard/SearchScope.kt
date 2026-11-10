@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.data.SearchHitDto
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
@@ -29,16 +30,18 @@ enum class SearchScope(val label: String, val placeholder: String) {
     All("All", "Search movies, TV, books, authors…"),
     Movies("Movies", "Search movies…"),
     Tv("TV", "Search TV shows…"),
+    Sports("Sports", "Search sports…"),
     Books("Books", "Search books and authors…"),
     LiveTv("Live TV", "Search channels and the TV guide…"),
     Iptv("IPTV", "Search IPTV channels…"),
     ;
 
-    fun includes(libraryType: String): Boolean = when (this) {
-        All -> libraryType in TvTypes || libraryType in BookTypes || libraryType == "movie" || libraryType == "person"
-        Movies -> libraryType == "movie" || libraryType == "person"
-        Tv -> libraryType in TvTypes || libraryType == "person"
-        Books -> libraryType in BookTypes
+    fun includes(hit: SearchHitDto): Boolean = when (this) {
+        All -> hit.type in TvTypes || hit.type in BookTypes || hit.type == "movie" || hit.type == "person"
+        Movies -> hit.type == "movie" || hit.type == "person"
+        Tv -> (hit.type in TvTypes && hit.kind != SportKind) || hit.type == "person"
+        Sports -> hit.type == "tv_show" && hit.kind == SportKind
+        Books -> hit.type in BookTypes
         LiveTv, Iptv -> false
     }
 
@@ -48,7 +51,7 @@ enum class SearchScope(val label: String, val placeholder: String) {
             Movies -> setOf("movie")
             Tv -> setOf("tv")
             Books -> setOf("book")
-            LiveTv, Iptv -> emptySet()
+            Sports, LiveTv, Iptv -> emptySet()
         }
 
     val suggestionMediaTypes: Set<String>
@@ -56,6 +59,7 @@ enum class SearchScope(val label: String, val placeholder: String) {
             All -> setOf("movie", "tv", "book")
             Movies -> setOf("movie")
             Tv -> setOf("tv")
+            Sports -> setOf("sports")
             Books -> setOf("book")
             LiveTv -> setOf("livetv")
             Iptv -> setOf("iptv")
@@ -67,6 +71,7 @@ enum class SearchScope(val label: String, val placeholder: String) {
         fun forTab(tab: Destination.Tab): SearchScope = when (tab) {
             Destination.Tab.Movies -> Movies
             Destination.Tab.TvShows -> Tv
+            Destination.Tab.Sports -> Sports
             Destination.Tab.Books, Destination.Tab.Audiobooks -> Books
             Destination.Tab.LiveTv -> LiveTv
             Destination.Tab.Iptv -> Iptv
@@ -77,6 +82,7 @@ enum class SearchScope(val label: String, val placeholder: String) {
 
 private val TvTypes = setOf("tv_show", "tv_season", "tv_episode")
 private val BookTypes = setOf("book", "author", "series")
+private const val SportKind = "sport"
 
 internal const val LiveChannelResultType = "live_channel"
 internal const val IptvChannelResultType = "iptv_channel"
@@ -125,6 +131,7 @@ private val SearchScope.icon: ImageVector
         SearchScope.All -> Icons.Outlined.Search
         SearchScope.Movies -> Destination.Tab.Movies.icon
         SearchScope.Tv -> Destination.Tab.TvShows.icon
+        SearchScope.Sports -> Destination.Tab.Sports.icon
         SearchScope.Books -> Destination.Tab.Books.icon
         SearchScope.LiveTv -> Destination.Tab.LiveTv.icon
         SearchScope.Iptv -> Destination.Tab.Iptv.icon

@@ -99,27 +99,29 @@ fun NotificationsScreen(
                 )
             } else {
                 val listState = rememberLazyListState()
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s2),
-                    verticalArrangement = Arrangement.spacedBy(dimens.s1),
-                    modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
-                ) {
-                    items(notifications, key = { it.id }) { notification ->
-                        var isRead by remember(notification.id) { mutableStateOf(notification.read) }
-                        NotificationItem(
-                            notification = notification,
-                            isRead = isRead,
-                            accent = accent,
-                            onClick = {
-                                if (!isRead) {
-                                    isRead = true
-                                    scope.launch {
-                                        try { api.markNotificationRead(notification.id) } catch (_: Exception) {}
+                FocusEdgeSlack {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(start = gutter, end = gutter, top = dimens.s2 + LocalTopChromeOverlap.current, bottom = dimens.s6),
+                        verticalArrangement = Arrangement.spacedBy(dimens.s1),
+                        modifier = Modifier.scrollsUnderTopChrome(listState).fillMaxSize(),
+                    ) {
+                        items(notifications, key = { it.id }) { notification ->
+                            var isRead by remember(notification.id) { mutableStateOf(notification.read) }
+                            NotificationItem(
+                                notification = notification,
+                                isRead = isRead,
+                                accent = accent,
+                                onClick = {
+                                    if (!isRead) {
+                                        isRead = true
+                                        scope.launch {
+                                            try { api.markNotificationRead(notification.id) } catch (_: Exception) {}
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 }
             }

@@ -197,6 +197,7 @@ fun searchScopesFor(config: NavConfig): List<SearchScope> {
         when (it) {
             SearchScope.LiveTv -> Destination.Tab.LiveTv in tabs
             SearchScope.Iptv -> Destination.Tab.Iptv in tabs
+            SearchScope.Sports -> Destination.Tab.Sports in tabs
             else -> true
         }
     }
