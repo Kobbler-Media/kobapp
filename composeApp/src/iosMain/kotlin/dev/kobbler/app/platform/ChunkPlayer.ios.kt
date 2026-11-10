@@ -8,7 +8,9 @@ import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioPlayerDelegateProtocol
 import platform.Foundation.NSData
 import platform.Foundation.NSError
+import platform.Foundation.create
 import platform.darwin.NSObject
+import kotlin.concurrent.Volatile
 import kotlin.coroutines.resume
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)

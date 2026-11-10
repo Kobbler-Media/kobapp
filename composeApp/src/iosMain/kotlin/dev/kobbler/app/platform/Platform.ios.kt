@@ -10,6 +10,14 @@ import kotlinx.cinterop.usePinned
 import platform.Foundation.NSUserDefaults
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import platform.Foundation.NSData
+import platform.Foundation.NSLocale
+import platform.Foundation.countryCode
+import platform.Foundation.create
+import platform.Foundation.currentLocale
+import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.writeToFile
 
 actual fun defaultFormFactor(): FormFactor {
     // Use Desktop layout (sidebar) on iPad
@@ -19,7 +27,7 @@ actual fun defaultFormFactor(): FormFactor {
 }
 actual val supportsVideoPlayback: Boolean = false
 
-actual val deviceRegion: String? get() = platform.Foundation.NSLocale.currentLocale.countryCode
+actual val deviceRegion: String? get() = NSLocale.currentLocale.countryCode
 
 actual val deviceLabel: String
     get() = platform.UIKit.UIDevice.currentDevice.name
@@ -60,13 +68,13 @@ actual object FileCache {
     }
 
     actual fun get(key: String): ByteArray? {
-        val data = platform.Foundation.NSData.dataWithContentsOfFile("$cacheDir/$key") ?: return null
+        val data = NSData.dataWithContentsOfFile("$cacheDir/$key") ?: return null
         return data.toByteArray()
     }
 
     actual fun put(key: String, data: ByteArray) {
         val nsData = data.usePinned { pinned ->
-            platform.Foundation.NSData.create(bytes = pinned.addressOf(0), length = data.size.toULong())
+            NSData.create(bytes = pinned.addressOf(0), length = data.size.toULong())
         }
         nsData.writeToFile("$cacheDir/$key", true)
     }
@@ -76,7 +84,7 @@ actual object FileCache {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun platform.Foundation.NSData.toByteArray(): ByteArray {
+    private fun NSData.toByteArray(): ByteArray {
         val size = length.toInt()
         val result = ByteArray(size)
         if (size > 0) {

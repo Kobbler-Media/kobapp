@@ -2,7 +2,8 @@ package dev.kobbler.app.platform
 
 import kotlinx.cinterop.*
 import kotlinx.coroutines.delay
-import platform.AVFAudio.AVAudioCommonFormat
+import kotlin.concurrent.Volatile
+import platform.AVFAudio.AVAudioPCMFormatFloat32
 import platform.AVFAudio.AVAudioEngine
 import platform.AVFAudio.AVAudioFormat
 import platform.AVFAudio.AVAudioPCMBuffer
@@ -33,7 +34,7 @@ actual class PcmStreamPlayer actual constructor() {
         // Float32 mono — we convert from s16 on the fly because AVAudioFormat
         // for non-interleaved Int16 buffers is fiddly across iOS versions.
         val fmt = AVAudioFormat(
-            commonFormat = AVAudioCommonFormat.AVAudioPCMFormatFloat32,
+            commonFormat = AVAudioPCMFormatFloat32,
             sampleRate = sampleRate.toDouble(),
             channels = 1u,
             interleaved = false,
