@@ -19,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -48,6 +50,9 @@ fun KobTopBar(
 ) {
     val colors = KobappTheme.colors
     val accent = KobappTheme.accent
+    // Right from the last control otherwise wanders off to whatever lies furthest right on
+    // the page below, a browse grid's alphabet bar.
+    val barEnd = Modifier.focusProperties { right = FocusRequester.Cancel }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -112,7 +117,11 @@ fun KobTopBar(
             CastButton(Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None), colors.textMd)
         }
         Box {
-            IconButton(onClick = onNotificationsClick, modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)) {
+            IconButton(
+                onClick = onNotificationsClick,
+                modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)
+                    .then(if (onToggleFullscreen == null) barEnd else Modifier),
+            ) {
                 Icon(Icons.Outlined.Notifications, "Notifications", tint = colors.textMd)
             }
             if (notificationCount > 0) {
@@ -127,7 +136,7 @@ fun KobTopBar(
             }
         }
         if (onToggleFullscreen != null) {
-            IconButton(onClick = onToggleFullscreen, modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)) {
+            IconButton(onClick = onToggleFullscreen, modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None).then(barEnd)) {
                 Icon(
                     if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
                     contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",

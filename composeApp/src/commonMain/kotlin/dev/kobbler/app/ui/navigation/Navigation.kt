@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -667,6 +668,9 @@ internal fun DesktopScaffold(
     val rootFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var showSearch by nav::searchOpen
+    val pageFocus = remember { PageFocusReturn() }
+    var barFocused by remember { mutableStateOf(false) }
+    val keyScope = rememberCoroutineScope()
 
     val current = nav.current
     val isDetailScreen = remember(current) {
@@ -804,11 +808,12 @@ internal fun DesktopScaffold(
             showCast = true,
             transparent = transparent,
             isFullscreen = isFullscreen,
+            modifier = Modifier.onFocusChanged { barFocused = it.hasFocus },
             onSearchClick = openSearch,
             onToggleFullscreen = onToggleFullscreen?.let { toggle ->
                 {
                     toggle()
-                    rootFocus.requestFocus()
+                    keyScope.launch { pageFocus.returnFocus() }
                 }
             },
         )
@@ -887,6 +892,12 @@ internal fun DesktopScaffold(
                                     else -> null
                                 }
                                 when {
+                                    // Back to where the viewer came up from, rather than
+                                    // whatever happens to sit nearest below the control.
+                                    dir == FocusDirection.Down && barFocused -> {
+                                        keyScope.launch { pageFocus.returnFocus() }
+                                        true
+                                    }
                                     dir != null -> {
                                         val moved = focusManager.moveFocus(dir)
                                         when {
@@ -987,6 +998,7 @@ internal fun DesktopScaffold(
                                             contentActive = zone == Zone.Content,
                                             onSearchClick = openSearch,
                                             homeTopBar = tabTopBar,
+                                            pageFocus = pageFocus,
                                             serverUrl = serverUrl,
                                             onLogout = onLogout,
                                         )
@@ -1099,6 +1111,7 @@ private fun ScreenContent(
     serverUrl: String = "",
     onLogout: () -> Unit = {},
     homeTopBar: (@Composable (transparent: Boolean) -> Unit)? = null,
+    pageFocus: PageFocusReturn? = null,
 ) {
     val isOnDetail = nav.current !is Destination.Tab
     // The player paints over the whole scaffold and takes it out of focus traversal
@@ -1118,6 +1131,7 @@ private fun ScreenContent(
         if (!isOnDetail) {
             stateHolder.SaveableStateProvider(nav.currentTab.title) {
                 FocusScopeHost(id = nav.currentTab.title, restoreEnabled = contentActive && !covered) {
+                    pageFocus?.Track()
                     SingleTabContent(nav.currentTab, nav, api, player, gps, formFactor, modifier, onMenuClick, onSearchClick, serverUrl, onLogout, homeTopBar, isActive = true)
                 }
             }
@@ -1125,6 +1139,7 @@ private fun ScreenContent(
         if (isOnDetail) {
             Box(Modifier.fillMaxSize()) {
                 FocusScopeHost(id = nav.current, restoreEnabled = contentActive && !covered) {
+                    pageFocus?.Track()
                     DetailContent(nav, api, formFactor, player, gps, modifier)
                 }
             }
