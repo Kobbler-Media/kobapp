@@ -11,6 +11,9 @@ dependencyResolutionManagement {
         mavenLocal()
         google()
         mavenCentral()
+        providers.gradleProperty("kobvlc.maven").orNull?.let {
+            maven(it) { content { includeGroup("dev.kobbler.vlc") } }
+        }
         // libvlc as github.com/Kobbler-Media/kobvlc builds it, from that repo's releases.
         ivy("https://github.com/Kobbler-Media/kobvlc/releases/download") {
             patternLayout {

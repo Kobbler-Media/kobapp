@@ -13,7 +13,7 @@ to point it at.
 |-------------|--------|-------|
 | Android     | yes    | `minSdk` 24, `targetSdk` 36 |
 | Android TV  | yes    | D-pad focus navigation, TV-specific layouts |
-| Desktop     | yes    | Linux / macOS / Windows via JVM + Compose Desktop; video playback needs libvlc, with optional GPU decode on Linux; native window memory, MPRIS and screensaver-inhibit integration on Linux |
+| Desktop     | Linux  | JVM + Compose Desktop. Video plays through the libvlc [kobvlc](https://github.com/Kobbler-Media/kobvlc) builds, bundled with the app — built on Arch, so it runs on Arch and its derivatives — with optional VA-API GPU decode, MPRIS and screensaver inhibit. macOS and Windows: the app builds, but no libvlc is bundled for them and vlcj 5 needs VLC 4, not the VLC 3 that VideoLAN's installers ship, so expect no video playback |
 | iOS         | sources only | Swift sources under `iosApp/` are WIP and not buildable from a clean clone — no Xcode project file is committed yet |
 | Web (WASM)  | yes    | `wasmJs` browser target |
 
@@ -53,8 +53,9 @@ and set `KOBBLER_PIN_SERVICE_URL` on the server to match.
 - **Xcode** (and therefore macOS) to build the iOS target, which also needs its own Xcode
   project generated first — see the Platforms table above. The iOS targets are *only declared
   when the build host is a Mac*, so nothing iOS-related breaks the build elsewhere.
-- **libvlc** on the system for Desktop video playback. Arch: `sudo pacman -S vlc`.
-  Debian/Ubuntu: `sudo apt install vlc`.
+- **No system VLC** for Desktop. The build downloads kobvlc's Linux libvlc
+  (`libvlc-linux` in `gradle/libs.versions.toml`) from its GitHub releases and bundles it; the
+  distribution's VLC 3 is never used.
 
 No Android SDK or Xcode is needed to build and test the Desktop target, which is where most
 of the test suite runs.
@@ -67,6 +68,19 @@ of the test suite runs.
 ./gradlew :composeApp:wasmJsBrowserRun   # Web
 ./gradlew :androidApp:installDebug       # Android (USB-connected device or emulator)
 ```
+
+## Using a locally built kobvlc
+
+To try a change to [kobvlc](https://github.com/Kobbler-Media/kobvlc) before it is released,
+point the build at its `work/` output (absolute paths):
+
+```bash
+./gradlew :composeApp:run -Pkobvlc.linux=<kobvlc>/work/linux/pkg   # Desktop: linux/build.sh output
+./gradlew :androidApp:installDebug -Pkobvlc.maven=<kobvlc>/work/maven   # Android: android/build.sh output
+```
+
+For Android, also set `libvlc-android` in `gradle/libs.versions.toml` to the `VERSION` in
+kobvlc's `versions.env` if you bumped it.
 
 ## Test
 
@@ -134,8 +148,9 @@ host OS only (a jpackage limitation):
 Output lands in `composeApp/build/compose/binaries/main/`. The version comes from
 `version.properties` (`versionName`, with any `+sha` suffix stripped).
 
-System dependencies (libvlc) are not declared inside the .deb/.rpm — install VLC alongside
-the app on the target machine.
+The Linux packages carry kobvlc's libvlc in the app's resources rather than depending on a
+system VLC. That libvlc is built against Arch's libraries, so the packages target Arch and its
+derivatives.
 
 ## Release signing
 
