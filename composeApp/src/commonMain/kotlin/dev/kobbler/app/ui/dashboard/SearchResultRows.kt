@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.SportsScore
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tv
@@ -75,7 +76,7 @@ internal fun SearchResultRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Thumb(imageUrl, hit.type, accent)
+        Thumb(imageUrl, hit.sectionType, accent)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 displayTitle,
@@ -180,7 +181,7 @@ private fun Thumb(imageUrl: String?, type: String, accent: Color) {
 }
 
 internal fun sectionTitle(type: String): String = when (type) {
-    "movie" -> "Movies"; "tv_show" -> "TV Shows"; "tv_season" -> "Seasons"; "tv_episode" -> "Episodes"
+    "movie" -> "Movies"; "tv_show" -> "TV Shows"; "sport" -> "Sports"; "tv_season" -> "Seasons"; "tv_episode" -> "Episodes"
     "book" -> "Books"; "author" -> "Authors"; "series" -> "Series"; "person" -> "People"
     else -> type.replaceFirstChar { it.uppercase() }
 }
@@ -188,6 +189,7 @@ internal fun sectionTitle(type: String): String = when (type) {
 private fun typeIcon(type: String): ImageVector = when (type) {
     "movie" -> Icons.Outlined.Movie
     "tv_show", "tv_season" -> Icons.Outlined.Tv
+    "sport" -> Icons.Outlined.SportsScore
     "tv_episode" -> Icons.Outlined.PlayCircle
     "book" -> Icons.AutoMirrored.Outlined.MenuBook
     "author", "person" -> Icons.Outlined.Person
@@ -198,6 +200,7 @@ private fun typeIcon(type: String): ImageVector = when (type) {
 internal fun typeAccent(type: String, colors: KobappColors): Color = when (type) {
     "movie" -> colors.accMovies
     "tv_show", "tv_season", "tv_episode" -> colors.accTv
+    "sport" -> colors.accSports
     "book" -> colors.accBooks
     "author", "series" -> colors.accBooks.copy(alpha = 0.85f)
     "person" -> colors.accMovies.copy(alpha = 0.85f)

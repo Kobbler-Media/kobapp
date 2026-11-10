@@ -91,7 +91,7 @@ private fun LazyGridScope.sectionRows(
 ) {
     when (section) {
         is SearchSection.Library -> items(section.hits, key = { "lib-${it.type}-${it.id}" }) { hit ->
-            SearchResultRow(hit = hit, apiUrl = apiUrl, accent = typeAccent(hit.type, colors), key = "lib.${hit.type}.${hit.id}", onClick = { onResultClick(hit) })
+            SearchResultRow(hit = hit, apiUrl = apiUrl, accent = typeAccent(hit.sectionType, colors), key = "lib.${hit.type}.${hit.id}", onClick = { onResultClick(hit) })
         }
         is SearchSection.Discover -> {
             val accent = sectionAccent(section, colors)

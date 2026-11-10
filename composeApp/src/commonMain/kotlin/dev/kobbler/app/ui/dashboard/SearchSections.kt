@@ -150,13 +150,17 @@ fun searchJumps(layout: SearchLayout, expanded: Map<String, Boolean>): List<Sear
  * Discover titles the library already holds are dropped here too — the library row is the
  * better answer, and offering both reads as a duplicate rather than a choice.
  */
+/** Sports leagues are shows to the server; a reader looking for TV does not expect them there. */
+internal val SearchHitDto.sectionType: String
+    get() = if (type == "tv_show" && kind == "sport") "sport" else type
+
 fun searchSections(
     libraryHits: List<SearchHitDto>,
     discover: DiscoverSearchResults?,
     live: LiveSearchResults? = null,
     iptv: List<IptvChannel>? = null,
 ): List<SearchSection> {
-    val library = libraryHits.groupBy { it.type }.entries
+    val library = libraryHits.groupBy { it.sectionType }.entries
         .mapIndexed { rank, (type, hits) -> SearchSection.Library(type, hits, rank) }
     val discovered = discover?.let {
         val libKeys = { type: String ->
@@ -189,7 +193,7 @@ fun searchSections(
 }
 
 private fun libraryOrder(type: String): Int = when (type) {
-    "movie" -> 0; "tv_show" -> 10; "tv_season" -> 20; "tv_episode" -> 30
+    "movie" -> 0; "tv_show" -> 10; "sport" -> 15; "tv_season" -> 20; "tv_episode" -> 30
     "book" -> 40; "author" -> 50; "series" -> 60; "person" -> 70
     else -> 80
 }

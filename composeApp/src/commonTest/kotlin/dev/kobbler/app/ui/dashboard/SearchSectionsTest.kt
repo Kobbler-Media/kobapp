@@ -28,6 +28,19 @@ class SearchSectionsTest {
         wantStatus = null, isInLibrary = false,
     )
 
+    @Test
+    fun sportsLeaguesAreASectionOfTheirOwnAfterTvShows() {
+        val sections = searchSections(
+            listOf(
+                SearchHitDto(type = "tv_show", id = "sp1", title = "MotoGP", kind = "sport"),
+                SearchHitDto(type = "tv_show", id = "s1", title = "Motorheads", kind = "tv"),
+            ),
+            discover = null,
+        )
+        assertEquals(listOf("lib:tv_show", "lib:sport"), labels(sections))
+        assertEquals("Sports", sectionTitle("sport"))
+    }
+
     private fun labels(sections: List<SearchSection>) = sections.map {
         when (it) {
             is SearchSection.Library -> "lib:${it.type}"

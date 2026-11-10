@@ -39,8 +39,8 @@ enum class SearchScope(val label: String, val placeholder: String) {
     fun includes(hit: SearchHitDto): Boolean = when (this) {
         All -> hit.type in TvTypes || hit.type in BookTypes || hit.type == "movie" || hit.type == "person"
         Movies -> hit.type == "movie" || hit.type == "person"
-        Tv -> (hit.type in TvTypes && hit.kind != SportKind) || hit.type == "person"
-        Sports -> hit.type == "tv_show" && hit.kind == SportKind
+        Tv -> (hit.sectionType in TvTypes) || hit.type == "person"
+        Sports -> hit.sectionType == "sport"
         Books -> hit.type in BookTypes
         LiveTv, Iptv -> false
     }
@@ -82,7 +82,6 @@ enum class SearchScope(val label: String, val placeholder: String) {
 
 private val TvTypes = setOf("tv_show", "tv_season", "tv_episode")
 private val BookTypes = setOf("book", "author", "series")
-private const val SportKind = "sport"
 
 internal const val LiveChannelResultType = "live_channel"
 internal const val IptvChannelResultType = "iptv_channel"
