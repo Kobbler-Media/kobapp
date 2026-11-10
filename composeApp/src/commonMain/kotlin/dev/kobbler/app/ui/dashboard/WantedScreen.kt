@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
@@ -46,7 +47,7 @@ fun WantedScreen(
     onItemClick: (WantedItem) -> Unit = {},
     onDownloadClick: (DownloadTarget) -> Unit = {},
 ) {
-    var tab by remember(initialTab) { mutableStateOf(initialTab) }
+    var tab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
     val colors = KobappTheme.colors
     val tabSwitch: @Composable () -> Unit = {
         SegmentedFilter(
@@ -73,7 +74,7 @@ private fun WantedList(
     onItemClick: (WantedItem) -> Unit,
 ) {
     val (state, retry) = rememberCached("wanted") { api.getWantedItems() }
-    var selectedFilterIdx by remember { mutableIntStateOf(0) }
+    var selectedFilterIdx by rememberSaveable { mutableIntStateOf(0) }
     val colors = KobappTheme.colors
     val dimens = KobappTheme.dimens
     val compact = formFactor == FormFactor.Phone

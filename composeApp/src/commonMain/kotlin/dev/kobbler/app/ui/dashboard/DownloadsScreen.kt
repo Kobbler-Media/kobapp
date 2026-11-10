@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,7 +88,7 @@ internal fun DownloadsScreen(
     var rows by remember { mutableStateOf<List<DownloadRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var filterIdx by remember { mutableIntStateOf(0) }
+    var filterIdx by rememberSaveable { mutableIntStateOf(0) }
     val filter = DownloadFilter.entries[filterIdx]
 
     suspend fun fetch(): List<DownloadRow> =
