@@ -4,7 +4,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +25,7 @@ import uk.co.caprica.vlcj.player.base.VideoTrack
 import java.io.File
 import java.net.URI
 import java.nio.file.Paths
-import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.Executors
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.coroutines.CoroutineContext
 
@@ -54,19 +56,8 @@ internal class DesktopPlayer(
 
     private val logFile = vlcLogFile?.let { VlcLogFile(factory, it) }
 
-    val vlcPlayer: MediaPlayer = if (config.audioOnly) {
-        factory.mediaPlayers().newMediaPlayer()
-    } else {
-        factory.mediaPlayers().newEmbeddedMediaPlayer()
-    }.also {
-        // vlcj 5.0.0-M6's release() throws before freeing the player unless its clock
-        // was ever watched.
-        it.time().startWatching()
-    }
-
     internal val video: VlcVideoSink? = if (!config.audioOnly) {
         VlcVideoSink(
-            vlcPlayer,
             onPicture = { layout ->
                 pictureLayout = layout
                 updateVideoSize()
@@ -167,8 +158,9 @@ internal class DesktopPlayer(
     @Volatile
     private var pauseWhenPausable = false
 
-    private fun holdIfAsked() {
-        if (pausable && (isPreloading.value || pauseWhenPausable)) vlcPlayer.controls().setPause(true)
+    // On the lane, so a play given while the hold is on its way cancels it rather than racing it.
+    private fun holdIfAsked() = vlc {
+        if (pausable && (isPreloading.value || pauseWhenPausable)) controls().setPause(true)
     }
 
     // Events from an input we stopped or replaced trail in after it; until the next one
@@ -190,6 +182,167 @@ internal class DesktopPlayer(
 
     private fun userGain() = vlcVolume(_volume.value, normalization, maxVolume)
 
+    // VLC player events — the heart of our clean state machine. Only the current player's:
+    // one taken over while stuck can still report on the title it was stuck in.
+    private val events = object : MediaPlayerEventAdapter() {
+        override fun opening(mediaPlayer: MediaPlayer) {
+            if (mediaPlayer !== vlcPlayer) return
+            inputRetired = false
+        }
+
+        override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
+            if (mediaPlayer !== vlcPlayer) return
+            _durationMs.value = newLength.usToMs()
+        }
+
+        override fun trackAdded(mediaPlayer: MediaPlayer, trackType: TrackType, trackId: String) {
+            if (mediaPlayer !== vlcPlayer) return
+            when (trackType) {
+                TrackType.AUDIO -> reloadAudioTracks()
+                TrackType.TEXT -> reloadSubtitleTracks()
+                TrackType.VIDEO -> updateVideoSize()
+                else -> {}
+            }
+        }
+
+        override fun trackUpdated(mediaPlayer: MediaPlayer, trackType: TrackType, trackId: String) {
+            if (mediaPlayer !== vlcPlayer) return
+            if (trackType == TrackType.VIDEO) updateVideoSize()
+        }
+
+        override fun mediaPlayerReady(mediaPlayer: MediaPlayer?) {
+            if (mediaPlayer !== vlcPlayer) return
+            // Absorb VLC's READY state — this is the quirk that breaks mediamp.
+            // We just sync volume/mute and load chapters.
+            vlc {
+                gain.reapply()
+                if (_isMuted.value) audio().setMute(true)
+            }
+            loadChapters()
+        }
+
+        override fun playing(mediaPlayer: MediaPlayer) {
+            if (mediaPlayer !== vlcPlayer || inputRetired) return
+            _isBuffering.value = false
+            _bufferPercent.value = 1f
+            hasStartedPlaying = true
+
+            if (isPreloading.value || pauseWhenPausable) {
+                // A preload is opened like any other and held as soon as it can be, so
+                // position can't advance silently and audio can't reach the speaker
+                // before unmute. Mirrors AndroidPlayer's Playing handler.
+                holdIfAsked()
+                _state.value = PlayerState.PAUSED
+            } else {
+                _state.value = PlayerState.PLAYING
+                gain.rampTo(FADE_IN_MS, ::userGain)
+            }
+
+            reloadAudioTracks()
+            reloadSubtitleTracks()
+        }
+
+        override fun capabilitiesChanged(mediaPlayer: MediaPlayer, oldCapabilities: Capabilties, newCapabilities: Capabilties) {
+            if (mediaPlayer !== vlcPlayer || inputRetired) return
+            pausable = newCapabilities.canPause()
+            if (hasStartedPlaying) holdIfAsked()
+        }
+
+        override fun paused(mediaPlayer: MediaPlayer) {
+            if (mediaPlayer !== vlcPlayer || inputRetired) return
+            _state.value = PlayerState.PAUSED
+        }
+
+        override fun finished(mediaPlayer: MediaPlayer) {
+            if (mediaPlayer !== vlcPlayer || inputRetired) return
+            val next = stateOnStopping(_state.value, requested = false, _currentMs.value, _durationMs.value, sourceLive)
+            if (next == PlayerState.ERROR) _error.value = StreamStoppedShort(_currentMs.value, _durationMs.value, sourceLive)
+            _state.value = next
+        }
+
+        // vlcj fires `stopped` for explicit stop() *and* for media-swap during
+        // load(). Treating it as FINISHED triggered the auto-next-episode
+        // handler whenever the user switched audio tracks (which loads a new
+        // session URL). stop()/load() set state explicitly; leave it alone.
+
+        override fun error(mediaPlayer: MediaPlayer) {
+            if (mediaPlayer !== vlcPlayer) return
+            _error.value = RuntimeException("VLC playback error")
+            _state.value = PlayerState.ERROR
+        }
+
+        override fun bufferingChanged(mediaPlayer: MediaPlayer, newCache: Float) {
+            if (mediaPlayer !== vlcPlayer || inputRetired) return
+            // A fraction in libVLC 4, where 3 reported a percentage.
+            val filled = newCache.coerceIn(0f, 1f)
+            _bufferPercent.value = filled
+            if (!hasStartedPlaying) return
+            _isBuffering.value = filled < 1f
+            _state.value = stateOnBuffering(_state.value, full = filled >= 1f)
+        }
+
+        override fun positionChanged(mediaPlayer: MediaPlayer, newTimeUs: Long, newPosition: Double) {
+            if (mediaPlayer !== vlcPlayer || inputRetired) return
+            val newTime = newTimeUs.usToMs()
+            if (newTime != _currentMs.value) {
+                val resolved = stateAfterClockAdvance(_state.value, isPreloading.value)
+                if (resolved != _state.value) {
+                    _state.value = resolved
+                    _isBuffering.value = false
+                }
+            }
+            _currentMs.value = newTime
+            _positionReported.value = true
+        }
+    }
+
+    // libVLC is driven from one thread per player, so a call that never returns (a stop
+    // waiting on an input whose decoder deadlocked) would hold every command behind it.
+    // Not [scope]: release() cancels that, and the lane still has the release itself to run.
+    private val lane = CommandLane(
+        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+        wedgedAfterMs = WedgedVlcCallMs,
+        newEngine = ::newEngine,
+        onReplaced = { _, _ -> adoptFreshPlayer() },
+        resumeTitle = { resumeTitle() },
+    )
+
+    val vlcPlayer: MediaPlayer get() = lane.current
+
+    override val stalls: Flow<PlayerStall> get() = lane.stalls
+
+    private fun newEngine(): CommandLane.Engine<MediaPlayer> {
+        var runner: Thread? = null
+        val thread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc").apply { isDaemon = true; runner = this } }
+        val player = if (config.audioOnly) {
+            factory.mediaPlayers().newMediaPlayer()
+        } else {
+            factory.mediaPlayers().newEmbeddedMediaPlayer()
+        }
+        // vlcj 5.0.0-M6's release() throws before freeing the player unless its clock
+        // was ever watched.
+        player.time().startWatching()
+        player.events().addMediaPlayerEventListener(events)
+        video?.attach(player)
+        return CommandLane.Engine(
+            player,
+            thread.asCoroutineDispatcher(),
+            stuckIn = { runner?.stackTrace?.take(STUCK_FRAMES)?.joinToString("\n") { "at $it" }.orEmpty() },
+            // What sticks is vlcj's stop, waiting on a latch for an event that may never come:
+            // it gives up when interrupted.
+            unstick = { runner?.interrupt() },
+        ) {
+            it.events().removeMediaPlayerEventListener(events)
+            it.release()
+            video?.detach(it)
+            thread.shutdown()
+        }
+    }
+
+    internal fun vlc(block: MediaPlayer.() -> Unit) {
+        lane.post(block)
+    }
+
     init {
         if (video != null) {
             scope.launch {
@@ -202,113 +355,6 @@ internal class DesktopPlayer(
         }
 
         scope.launch { watchFrozenClock(_state, _currentMs, _isBuffering, _error, held = { isPreloading.value }) }
-
-        // VLC player events — the heart of our clean state machine
-        vlcPlayer.events().addMediaPlayerEventListener(object : MediaPlayerEventAdapter() {
-            override fun opening(mediaPlayer: MediaPlayer) {
-                inputRetired = false
-            }
-
-            override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
-                _durationMs.value = newLength.usToMs()
-            }
-
-            override fun trackAdded(mediaPlayer: MediaPlayer, trackType: TrackType, trackId: String) {
-                when (trackType) {
-                    TrackType.AUDIO -> reloadAudioTracks()
-                    TrackType.TEXT -> reloadSubtitleTracks()
-                    TrackType.VIDEO -> updateVideoSize()
-                    else -> {}
-                }
-            }
-
-            override fun trackUpdated(mediaPlayer: MediaPlayer, trackType: TrackType, trackId: String) {
-                if (trackType == TrackType.VIDEO) updateVideoSize()
-            }
-
-            override fun mediaPlayerReady(mediaPlayer: MediaPlayer?) {
-                // Absorb VLC's READY state — this is the quirk that breaks mediamp.
-                // We just sync volume/mute and load chapters.
-                vlcPlayer.submit {
-                    gain.reapply()
-                    if (_isMuted.value) vlcPlayer.audio().setMute(true)
-                }
-                loadChapters()
-            }
-
-            override fun playing(mediaPlayer: MediaPlayer) {
-                if (inputRetired) return
-                _isBuffering.value = false
-                _bufferPercent.value = 1f
-                hasStartedPlaying = true
-
-                if (isPreloading.value || pauseWhenPausable) {
-                    // A preload is opened like any other and held as soon as it can be, so
-                    // position can't advance silently and audio can't reach the speaker
-                    // before unmute. Mirrors AndroidPlayer's Playing handler.
-                    holdIfAsked()
-                    _state.value = PlayerState.PAUSED
-                } else {
-                    _state.value = PlayerState.PLAYING
-                    gain.rampTo(FADE_IN_MS, ::userGain)
-                }
-
-                reloadAudioTracks()
-                reloadSubtitleTracks()
-            }
-
-            override fun capabilitiesChanged(mediaPlayer: MediaPlayer, oldCapabilities: Capabilties, newCapabilities: Capabilties) {
-                if (inputRetired) return
-                pausable = newCapabilities.canPause()
-                if (hasStartedPlaying) holdIfAsked()
-            }
-
-            override fun paused(mediaPlayer: MediaPlayer) {
-                if (inputRetired) return
-                _state.value = PlayerState.PAUSED
-            }
-
-            override fun finished(mediaPlayer: MediaPlayer) {
-                if (inputRetired) return
-                val next = stateOnStopping(_state.value, requested = false, _currentMs.value, _durationMs.value, sourceLive)
-                if (next == PlayerState.ERROR) _error.value = StreamStoppedShort(_currentMs.value, _durationMs.value, sourceLive)
-                _state.value = next
-            }
-
-            // vlcj fires `stopped` for explicit stop() *and* for media-swap during
-            // load(). Treating it as FINISHED triggered the auto-next-episode
-            // handler whenever the user switched audio tracks (which loads a new
-            // session URL). stop()/load() set state explicitly; leave it alone.
-
-            override fun error(mediaPlayer: MediaPlayer) {
-                _error.value = RuntimeException("VLC playback error")
-                _state.value = PlayerState.ERROR
-            }
-
-            override fun bufferingChanged(mediaPlayer: MediaPlayer, newCache: Float) {
-                if (inputRetired) return
-                // A fraction in libVLC 4, where 3 reported a percentage.
-                val filled = newCache.coerceIn(0f, 1f)
-                _bufferPercent.value = filled
-                if (!hasStartedPlaying) return
-                _isBuffering.value = filled < 1f
-                _state.value = stateOnBuffering(_state.value, full = filled >= 1f)
-            }
-
-            override fun positionChanged(mediaPlayer: MediaPlayer, newTimeUs: Long, newPosition: Double) {
-                if (inputRetired) return
-                val newTime = newTimeUs.usToMs()
-                if (newTime != _currentMs.value) {
-                    val resolved = stateAfterClockAdvance(_state.value, isPreloading.value)
-                    if (resolved != _state.value) {
-                        _state.value = resolved
-                        _isBuffering.value = false
-                    }
-                }
-                _currentMs.value = newTime
-                _positionReported.value = true
-            }
-        })
     }
 
     // --- Commands ---
@@ -346,36 +392,64 @@ internal class DesktopPlayer(
                 gpuDecodeRequested = device.name != "none"
                 gain.set(0)
 
-                val options = vlcMediaOptions(source, config).toTypedArray()
-                vlcPlayer.submit {
-                    stopCurrentInput()
-                    vlcPlayer.setDecoderDevice(device)
-                    vlcPlayer.media().play(vlcMrl(source.url), *options)
-                    // Not :start-time: libVLC 4 makes that the title's start, and reports times
-                    // and length from it. A seek before play() has no input to land on.
-                    source.startTimeSec?.let { vlcPlayer.controls().setTime((it * 1000L).msToUs(), true) }
-                    // Re-apply mute after play — new media may reset audio state.
-                    // This prevents audio leaking during muted preload on detail pages.
-                    if (_isMuted.value) vlcPlayer.audio().setMute(true)
+                lane.replaceTitle(stop = { stopCurrentInput() }) {
+                    startTitle(source, device, source.startTimeSec?.let { it * 1000L })
                 }
             }
         }
     }
 
+    private fun MediaPlayer.startTitle(source: MediaSource.Url, device: DecoderDevice, atMs: Long?) {
+        setDecoderDevice(device)
+        media().play(vlcMrl(source.url), *vlcMediaOptions(source, config).toTypedArray())
+        // Not :start-time: libVLC 4 makes that the title's start, and reports times
+        // and length from it. A seek before play() has no input to land on.
+        atMs?.let { controls().setTime(it.msToUs(), true) }
+        // Re-apply mute after play — new media may reset audio state.
+        // This prevents audio leaking during muted preload on detail pages.
+        if (_isMuted.value) audio().setMute(true)
+    }
+
+    // On a fresh player that took over from one stuck mid-title, ahead of the command that
+    // was waiting on it. The stuck one is left alone: any call into it could hang as well.
+    private fun MediaPlayer.resumeTitle() {
+        val source = loadedSource ?: return
+        inputRetired = true
+        pausable = false
+        pauseWhenPausable = _state.value == PlayerState.PAUSED
+        startTitle(source, decoderDevice(source, decoding), _currentMs.value.takeUnless { source.live })
+    }
+
+    private fun adoptFreshPlayer() {
+        val speed = _playbackSpeed.value
+        vlc { controls().setRate(speed) }
+    }
+
     // Media handed to a libVLC 4 player that is still playing is swapped in gaplessly: the
     // player never leaves its playing state, so the new title reports no opening, playing,
     // pause or end, and nothing marks where the old input's events stop.
-    private fun stopCurrentInput() {
-        if (vlcPlayer.status().state() in inputGone) return
-        vlcPlayer.controls().stop()
+    private fun MediaPlayer.stopCurrentInput() {
+        if (status().state() in inputGone) return
+        controls().stop()
         val deadline = System.nanoTime() + STOP_WAIT_NS
-        while (vlcPlayer.status().state() !in inputGone && System.nanoTime() < deadline) Thread.sleep(10)
+        while (status().state() !in inputGone && System.nanoTime() < deadline) Thread.sleep(10)
     }
 
     override fun play() {
         pauseWhenPausable = false
         if (_state.value == PlayerState.PLAYING) gain.rampTo(FADE_IN_MS, ::userGain)
-        vlcPlayer.submit { vlcPlayer.controls().play() }
+        vlc {
+            // play() is lost on an input whose pause is still on its way; a resume queues
+            // behind it. play() still starts a title that stopped or ended.
+            controls().setPause(false)
+            controls().play()
+            // A title read as held before its hold landed never paused, so it reports no
+            // playing to resume with.
+            if (_state.value == PlayerState.PAUSED && status().state() == State.PLAYING && !isPreloading.value) {
+                _state.value = PlayerState.PLAYING
+                gain.rampTo(FADE_IN_MS, ::userGain)
+            }
+        }
     }
 
     override fun pause() {
@@ -384,16 +458,15 @@ internal class DesktopPlayer(
             return
         }
         // setPause(true), not pause(): that one toggles, and a second call unpauses.
-        val pauseNow = { vlcPlayer.submit { vlcPlayer.controls().setPause(true) } }
+        val pauseNow = { vlc { if (pausable) controls().setPause(true) else pauseWhenPausable = true } }
         if (_state.value == PlayerState.PLAYING) gain.rampTo(FADE_OUT_MS, { 0 }, pauseNow)
         else pauseNow()
     }
 
     override fun stop() {
         inputRetired = true
-        try {
-            vlcPlayer.submit { vlcPlayer.controls().stop() }
-        } catch (_: RejectedExecutionException) {}
+        loadedSource = null
+        lane.supersede { controls().stop() }
         _state.value = PlayerState.IDLE
         _currentMs.value = 0L
         _positionReported.value = false
@@ -420,9 +493,9 @@ internal class DesktopPlayer(
         if (clamped == _currentMs.value && _positionReported.value) return
 
         _currentMs.value = clamped
-        vlcPlayer.submit {
+        vlc {
             setTimeLock.withLock {
-                vlcPlayer.controls().setTime(clamped.msToUs())
+                controls().setTime(clamped.msToUs())
             }
         }
         video?.allowFrames(2)
@@ -434,9 +507,9 @@ internal class DesktopPlayer(
             _currentMs.value = (_currentMs.value + deltaMs)
                 .coerceIn(0, _durationMs.value.coerceAtLeast(0))
         }
-        vlcPlayer.submit {
+        vlc {
             setTimeLock.withLock {
-                vlcPlayer.controls().skipTime(deltaMs.msToUs())
+                controls().skipTime(deltaMs.msToUs())
             }
         }
         video?.allowFrames(2)
@@ -481,7 +554,7 @@ internal class DesktopPlayer(
     override fun volumeDown(step: Float) = setVolume(_volume.value - step)
 
     override fun setPlaybackSpeed(speed: Float) {
-        vlcPlayer.submit { vlcPlayer.controls().setRate(speed) }
+        vlc { controls().setRate(speed) }
         _playbackSpeed.value = speed
     }
 
@@ -534,9 +607,7 @@ internal class DesktopPlayer(
     }
 
     override suspend fun takeScreenshot(path: String) {
-        vlcPlayer.submit {
-            vlcPlayer.snapshots().save(File(path))
-        }
+        vlc { snapshots().save(File(path)) }
     }
 
     private var released = false
@@ -545,18 +616,8 @@ internal class DesktopPlayer(
         if (released) return
         released = true
         _currentMs.value = 0L
-        try {
-            vlcPlayer.submit { vlcPlayer.controls().stop() }
-        } catch (_: RejectedExecutionException) {
-        }
         video?.clear()
-        // Detached on purpose: release() has to outlive `scope`, which is cancelled
-        // right after. NonCancellable inside `scope` did this by breaking structured
-        // concurrency, which is now deprecated.
-        CoroutineScope(Dispatchers.IO).launch {
-            vlcPlayer.release()
-            logFile?.close()
-        }
+        lane.close { logFile?.close() }
         scope.cancel()
     }
 
@@ -607,6 +668,7 @@ internal class DesktopPlayer(
         private const val FADE_IN_MS = 260L
         private const val FADE_OUT_MS = 80L
         private const val STOP_WAIT_NS = 5_000_000_000L
+        private const val STUCK_FRAMES = 12
         private val inputGone = setOf(State.NOTHING_SPECIAL, State.STOPPED, State.ERROR)
 
         fun prepareLibraries() {

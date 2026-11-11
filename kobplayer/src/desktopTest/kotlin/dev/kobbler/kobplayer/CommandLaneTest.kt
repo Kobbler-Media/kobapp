@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.util.Collections
@@ -32,12 +33,15 @@ class CommandLaneTest {
     private class Native(val id: Int) {
         val ran: MutableList<String> = Collections.synchronizedList(mutableListOf())
         @Volatile var retired = false
+        @Volatile var askedToUnstick = false
     }
 
     private val made = AtomicInteger()
     private val replaced = Collections.synchronizedList(mutableListOf<Pair<Int, Int>>())
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val stuck = CountDownLatch(1)
+    private val stalls = Collections.synchronizedList(mutableListOf<PlayerStall>())
+    @Volatile private var unsticksWhenAsked = false
 
     private val lane = CommandLane(
         scope = scope,
@@ -45,14 +49,27 @@ class CommandLaneTest {
         newEngine = {
             val native = Native(made.incrementAndGet())
             val thread = Executors.newSingleThreadExecutor { Thread(it).apply { isDaemon = true } }
-            CommandLane.Engine(native, thread.asCoroutineDispatcher()) {
+            CommandLane.Engine(
+                native,
+                thread.asCoroutineDispatcher(),
+                stuckIn = { "native ${native.id}" },
+                unstick = {
+                    native.askedToUnstick = true
+                    if (unsticksWhenAsked) stuck.countDown()
+                },
+            ) {
                 it.retired = true
                 thread.shutdown()
             }
         },
         onReplaced = { old, new -> replaced += old.id to new.id },
         resumeTitle = { ran += "resume" },
+        releaseWaitMs = 600,
     )
+
+    init {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { lane.stalls.collect { stalls += it } }
+    }
 
     @AfterTest
     fun tearDown() {
@@ -197,5 +214,47 @@ class CommandLaneTest {
         Thread.sleep(1_000)
         assertEquals(1, made.get())
         assertEquals(emptyList(), replaced)
+    }
+
+    @Test
+    fun aStuckCallThatIsEscapedIsReportedWithHowLongAndWhere() {
+        postStuck()
+        lane.supersede { ran += "open B" }
+        eventually("the stall reported") { stalls.isNotEmpty() }
+        val stall = stalls.first()
+        assertEquals("native 1", stall.stuckIn)
+        assertNull(stall.released)
+        assertTrue(stall.stuckForMs >= 300, "stuck for ${stall.stuckForMs}ms")
+    }
+
+    @Test
+    fun anEscapedPlayerIsAskedToComeUnstuckAndReportedReleasedOnceItIs() {
+        unsticksWhenAsked = true
+        val first = lane.current
+        postStuck()
+        lane.supersede { ran += "open B" }
+        eventually("the old player retired") { first.retired }
+        assertTrue(first.askedToUnstick)
+        eventually("its release reported") { stalls.any { it.released == true } }
+    }
+
+    @Test
+    fun anEscapedPlayerThatStaysStuckIsReportedAsNeverReleased() {
+        val first = lane.current
+        postStuck()
+        lane.supersede { ran += "open B" }
+        eventually("reported as not released") { stalls.any { it.released == false } }
+        assertTrue(first.askedToUnstick)
+        assertTrue(!first.retired)
+    }
+
+    @Test
+    fun closingBehindAStuckCallAsksItToComeUnstuckAndRetiresIt() {
+        unsticksWhenAsked = true
+        val first = lane.current
+        postStuck()
+        lane.close()
+        eventually("retired after coming unstuck") { first.retired }
+        assertTrue(first.askedToUnstick)
     }
 }

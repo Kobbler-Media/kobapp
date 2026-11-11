@@ -5,12 +5,15 @@ import dev.kobbler.kobplayer.Chapter
 import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.NativePlayer
 import dev.kobbler.kobplayer.Player
+import dev.kobbler.kobplayer.PlayerStall
 import dev.kobbler.kobplayer.PlayerState
 import dev.kobbler.kobplayer.TrackInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -60,6 +63,9 @@ class FakePlayer(private val clock: CoroutineScope = CoroutineScope(Dispatchers.
         if (!javax.swing.SwingUtilities.isEventDispatchThread()) offMainCalls += call
         calls += call
     }
+
+    val stallFeed = MutableSharedFlow<PlayerStall>(extraBufferCapacity = 8)
+    override val stalls: Flow<PlayerStall> get() = stallFeed
 
     override val state = MutableStateFlow(PlayerState.IDLE)
     override val isPlaying = MutableStateFlow(false)

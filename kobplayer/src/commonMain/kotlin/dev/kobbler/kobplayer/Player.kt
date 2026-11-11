@@ -1,8 +1,10 @@
 package dev.kobbler.kobplayer
 
 import androidx.compose.runtime.Stable
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Playback state machine:
@@ -93,6 +95,19 @@ sealed class MediaSource {
          */
         val reopenAt: (suspend (playerMs: Long) -> Reopened?)? = null,
     ) : MediaSource()
+}
+
+/**
+ * A native player call that ran [stuckForMs] without returning, so that what waited on it
+ * moved to a fresh player. [stuckIn] is where the call was when given up on. [released] is
+ * null when it happens, then whether the stuck player came unstuck and was released.
+ */
+data class PlayerStall(val stuckForMs: Long, val stuckIn: String, val released: Boolean? = null) {
+    fun summary(): String = when (released) {
+        null -> "a native player call ran ${stuckForMs}ms without returning; what waited on it moved to a fresh player"
+        true -> "the player given up on after ${stuckForMs}ms came unstuck and was released"
+        false -> "the player given up on after ${stuckForMs}ms is still stuck, and keeps what it holds"
+    }
 }
 
 /** A reopened stream, and where on the original source's clock it begins. */
@@ -271,6 +286,9 @@ interface Player {
      * of their own are ready by definition.
      */
     val videoOutputReady: StateFlow<Boolean> get() = AlwaysReady
+
+    /** Each native call given up on, see [PlayerStall]. */
+    val stalls: Flow<PlayerStall> get() = emptyFlow()
 
     /** Release all resources. Called automatically by [rememberPlayer] on dispose. */
     fun release()

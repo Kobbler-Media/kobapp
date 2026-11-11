@@ -14,13 +14,13 @@ import uk.co.caprica.vlcj.binding.internal.libvlc_video_format_cb
 import uk.co.caprica.vlcj.binding.internal.libvlc_video_output_cleanup_cb
 import uk.co.caprica.vlcj.binding.lib.LibVlc
 import uk.co.caprica.vlcj.player.base.MediaPlayer
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 // Raw libvlc callbacks rather than vlcj's CallbackVideoSurface: that one hides the chroma
 // the decoder proposes and hands VLC a single buffer, so every frame was converted to RGB
 // on the CPU and copied again under the renderer's feet.
 internal class VlcVideoSink(
-    mediaPlayer: MediaPlayer,
     private val onPicture: (FrameLayout) -> Unit,
 ) {
     val frameVersion = mutableIntStateOf(0)
@@ -31,7 +31,13 @@ internal class VlcVideoSink(
     private val extraFrames = AtomicInteger(0)
 
     @Volatile
-    private var frames: FrameSet? = null
+    private var current: Binding? = null
+
+    // A player taken over while stuck can still call back whenever it comes unstuck: its
+    // callbacks stay reachable, and its pictures go to frames of its own, until it is released.
+    private val bindings = ConcurrentHashMap<MediaPlayer, Binding>()
+
+    private val frames: FrameSet? get() = current?.frames
 
     @Volatile
     private var blank = false
@@ -41,52 +47,67 @@ internal class VlcVideoSink(
     private var shownFrame: DecodedFrame? = null
     private var shownSerial = -1L
 
-    private val format = libvlc_video_format_cb { _, chroma, width, height, pitches, lines ->
-        val proposed = chroma.pointer.getString(0, "US-ASCII").take(4)
-        // vmem passes {coded, visible} for each: the track list learns the visible size an
-        // instant later, and a sink that asked it got the coded size whenever it won the race.
-        val (w, h) = negotiatedSize(width.getInt(0), height.getInt(0), width.getInt(4) to height.getInt(4))
-        val layout = FrameLayout(PixelFormat.forDecoderChroma(proposed, SkiaTextures.alpha16 != null), w, h)
-        chroma.pointer.write(0, layout.format.fourcc.toByteArray(Charsets.US_ASCII), 0, 4)
-        width.setInt(0, w)
-        height.setInt(0, h)
-        pitches.pointer.write(0, layout.planes.map { it.pitch }.toIntArray(), 0, layout.planes.size)
-        lines.pointer.write(0, layout.planes.map { it.lines }.toIntArray(), 0, layout.planes.size)
-        frames = FrameSet(layout)
-        onPicture(layout)
-        VlcPicturePool
-    }
-
-    private val cleanup = libvlc_video_output_cleanup_cb { frames?.vlcReleased() }
-
-    private val lock = libvlc_lock_callback_t { _, planes ->
-        val set = frames!!
-        val slot = set.mailbox.lock()
-        set.layout.planes.forEachIndexed { i, plane ->
-            planes.pointer.setPointer(i.toLong() * Native.POINTER_SIZE, set.slots[slot].share(plane.offset))
-        }
-        Pointer(slot + 1L)
-    }
-
-    private val unlock = libvlc_unlock_callback_t { _, picture, _ ->
-        frames?.mailbox?.unlock(slotOf(picture))
-    }
-
-    private val display = libvlc_display_callback_t { _, picture ->
-        if (renderingEnabled || extraFrames.getAndUpdate { if (it > 0) it - 1 else 0 } > 0) {
-            frames?.mailbox?.publish(slotOf(picture))
-            blank = false
-            frameVersion.intValue++
-        }
-    }
-
-    init {
-        listOf(format, cleanup, lock, unlock, display).forEach {
-            Native.setCallbackThreadInitializer(it, CallbackThreadInitializer(true, false, "vlc-video"))
-        }
+    fun attach(mediaPlayer: MediaPlayer) {
+        val binding = Binding()
+        bindings[mediaPlayer] = binding
+        current = binding
         val instance = mediaPlayer.mediaPlayerInstance()
-        LibVlc.libvlc_video_set_format_callbacks(instance, format, cleanup)
-        LibVlc.libvlc_video_set_callbacks(instance, lock, unlock, display, null)
+        LibVlc.libvlc_video_set_format_callbacks(instance, binding.format, binding.cleanup)
+        LibVlc.libvlc_video_set_callbacks(instance, binding.lock, binding.unlock, binding.display, null)
+    }
+
+    fun detach(mediaPlayer: MediaPlayer) {
+        bindings.remove(mediaPlayer)
+    }
+
+    private inner class Binding {
+        @Volatile
+        var frames: FrameSet? = null
+
+        val format = libvlc_video_format_cb { _, chroma, width, height, pitches, lines ->
+            val proposed = chroma.pointer.getString(0, "US-ASCII").take(4)
+            // vmem passes {coded, visible} for each: the track list learns the visible size an
+            // instant later, and a sink that asked it got the coded size whenever it won the race.
+            val (w, h) = negotiatedSize(width.getInt(0), height.getInt(0), width.getInt(4) to height.getInt(4))
+            val layout = FrameLayout(PixelFormat.forDecoderChroma(proposed, SkiaTextures.alpha16 != null), w, h)
+            chroma.pointer.write(0, layout.format.fourcc.toByteArray(Charsets.US_ASCII), 0, 4)
+            width.setInt(0, w)
+            height.setInt(0, h)
+            pitches.pointer.write(0, layout.planes.map { it.pitch }.toIntArray(), 0, layout.planes.size)
+            lines.pointer.write(0, layout.planes.map { it.lines }.toIntArray(), 0, layout.planes.size)
+            frames = FrameSet(layout)
+            if (this === current) onPicture(layout)
+            VlcPicturePool
+        }
+
+        val cleanup = libvlc_video_output_cleanup_cb { frames?.vlcReleased() }
+
+        val lock = libvlc_lock_callback_t { _, planes ->
+            val set = frames!!
+            val slot = set.mailbox.lock()
+            set.layout.planes.forEachIndexed { i, plane ->
+                planes.pointer.setPointer(i.toLong() * Native.POINTER_SIZE, set.slots[slot].share(plane.offset))
+            }
+            Pointer(slot + 1L)
+        }
+
+        val unlock = libvlc_unlock_callback_t { _, picture, _ ->
+            frames?.mailbox?.unlock(slotOf(picture))
+        }
+
+        val display = libvlc_display_callback_t { _, picture ->
+            if (this === current && (renderingEnabled || extraFrames.getAndUpdate { if (it > 0) it - 1 else 0 } > 0)) {
+                frames?.mailbox?.publish(slotOf(picture))
+                blank = false
+                frameVersion.intValue++
+            }
+        }
+
+        init {
+            listOf(format, cleanup, lock, unlock, display).forEach {
+                Native.setCallbackThreadInitializer(it, CallbackThreadInitializer(true, false, "vlc-video"))
+            }
+        }
     }
 
     fun allowFrames(count: Int) = extraFrames.set(count)

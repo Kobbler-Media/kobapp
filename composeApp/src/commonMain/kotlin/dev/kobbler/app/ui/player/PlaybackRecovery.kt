@@ -247,6 +247,7 @@ suspend fun GlobalPlayerState.watchPlayback(player: Player, api: KobblerApi) = c
         }
     }
     launch { learnBuffering(player, api) }
+    launch { reportStalls(player, api) }
     launch {
         player.error.collect { throwable ->
             if (throwable == null || loadingError != null || isRecovering) return@collect

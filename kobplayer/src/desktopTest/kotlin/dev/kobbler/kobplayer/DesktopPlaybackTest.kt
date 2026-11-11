@@ -20,24 +20,6 @@ import kotlin.test.assertTrue
 
 class DesktopPlaybackTest {
 
-    private fun withPlayer(
-        config: PlayerConfig = PlayerConfig(hardwareAcceleration = false),
-        block: suspend (DesktopPlayer) -> Unit,
-    ) {
-        DesktopPlayer.prepareLibraries()
-        val scope = Dispatchers.Default + SupervisorJob()
-        val player = DesktopPlayer(scope, config)
-        try {
-            runBlocking { withTimeout(20_000) { block(player) } }
-        } finally {
-            player.release()
-            scope.cancel()
-        }
-    }
-
-    private suspend fun <T> StateFlow<T>.await(what: String, predicate: (T) -> Boolean): T =
-        runCatching { withTimeout(10_000) { first(predicate) } }.getOrElse { error("$what; last $value") }
-
     @Test
     fun `reports times in milliseconds`() = withPlayer { player ->
         player.load(MediaSource.Url(resourceUrl("red_176x100_sar4-3.mkv")))
@@ -204,6 +186,31 @@ class DesktopPlaybackTest {
         player.currentMs.await("position advancing after play") { it > 500 }
         assertEquals(PlayerState.PLAYING, player.state.value)
     }
+
+    /**
+     * A title held as it opens reads as paused before the hold reaches the input. A play
+     * straight away cancelled the hold, found nothing paused to resume, and left the title
+     * playing under a paused state for good.
+     */
+    @Test
+    fun `a play the moment a held title reads as paused plays it`() = listOf(
+        { resourceUrl("red_176x100_subtitled.mkv") },
+        { served("red_176x100_subtitled.mkv") },
+    ).forEach { url -> listOf(false, true).forEach { preloaded ->
+        withPlayer { player ->
+            if (preloaded) player.setPreloading(true)
+            player.load(MediaSource.Url(url()))
+            if (!preloaded) player.pause()
+            player.state.await("paused") { it == PlayerState.PAUSED }
+            if (preloaded) player.setPreloading(false)
+            player.play()
+            player.state.await("playing, preloaded $preloaded") { it == PlayerState.PLAYING }
+            val from = player.currentMs.value
+            player.currentMs.await("position advancing, preloaded $preloaded") { it > from + 500 }
+            delay(500)
+            assertEquals(PlayerState.PLAYING, player.state.value, "preloaded $preloaded")
+        }
+    } }
 
     /** Hands out the first [fraction] of the file and then goes away, as a server restarting does. */
     private fun dying(resource: String, fraction: Double): String {

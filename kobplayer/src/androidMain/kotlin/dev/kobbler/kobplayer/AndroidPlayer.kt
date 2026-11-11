@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,10 +57,7 @@ private const val FrameRateProbeWindowMs = 4_000L
 // A remux opens with an ESAdded per stream, dozens in one burst: one refresh answers them all.
 private const val TrackRefreshSettleMs = 50L
 private const val AudioClockPollMs = 250L
-
-// A stop or seek answers in well under a second; one that has not after this is stuck in
-// libVLC, and whatever is waiting behind it moves to a fresh player.
-private const val WedgedVlcCallMs = 1_500L
+private const val StuckFrames = 12
 
 // A view rebuilt on the next frame has its surface within a few; past this the stream is
 // opened without one rather than held up.
@@ -117,10 +115,19 @@ internal class AndroidPlayer(
 
     val vlcPlayer: MediaPlayer get() = lane.current
 
+    override val stalls: Flow<PlayerStall> get() = lane.stalls
+
     private fun newEngine(): CommandLane.Engine<MediaPlayer> {
-        val thread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc").apply { isDaemon = true } }
+        var runner: Thread? = null
+        val thread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc").apply { isDaemon = true; runner = this } }
         val player = MediaPlayer(libVLC).also(::listenTo)
-        return CommandLane.Engine(player, thread.asCoroutineDispatcher()) {
+        // libvlcjni waits out a stop in native code, where nothing can interrupt it: a stuck
+        // player is retired if its call ever returns.
+        return CommandLane.Engine(
+            player,
+            thread.asCoroutineDispatcher(),
+            stuckIn = { runner?.stackTrace?.take(StuckFrames)?.joinToString("\n") { "at $it" }.orEmpty() },
+        ) {
             it.setEventListener(null)
             it.stop()
             it.release()
@@ -353,7 +360,13 @@ internal class AndroidPlayer(
     private fun resume() {
         vlc {
             pauseWhenPausable = false
+            // play() is lost on a player whose pause is still on its way; a resume queues
+            // behind it. play() still starts a title that stopped or ended.
+            this.resume()
             play()
+            // A title read as held before its hold landed never paused, so it reports no
+            // Playing to resume with.
+            if (_state.value == PlayerState.PAUSED && isPlaying && !isPreloading.value) _state.value = PlayerState.PLAYING
         }
         deferredRedraw?.let {
             it.cancel()
@@ -510,7 +523,7 @@ internal class AndroidPlayer(
                 MediaPlayer.Event.Playing -> {
                     // A preload is opened like any other and held as soon as it can be.
                     if (isPreloading.value || pauseWhenPausable) {
-                        pauseIfPlaying()
+                        holdIfAsked()
                         _state.value = PlayerState.PAUSED
                     } else {
                         _state.value = PlayerState.PLAYING
@@ -520,7 +533,7 @@ internal class AndroidPlayer(
                 }
                 MediaPlayer.Event.PausableChanged -> {
                     pausable = event.pausable
-                    if (pausable && (isPreloading.value || pauseWhenPausable)) pauseIfPlaying()
+                    if (pausable) holdIfAsked()
                 }
                 MediaPlayer.Event.Paused -> {
                     _state.value = PlayerState.PAUSED
@@ -735,6 +748,11 @@ internal class AndroidPlayer(
         vlc { if (isPlaying && pausable) pause() }
     }
 
+    // Asked again on the lane: a play given while the hold was on its way cancels it.
+    private fun holdIfAsked() {
+        vlc { if (isPlaying && pausable && (isPreloading.value || pauseWhenPausable)) pause() }
+    }
+
     override fun stop() {
         openedSource = null
         deferredRedraw?.cancel()
@@ -935,7 +953,6 @@ internal class AndroidPlayer(
     // shared, it drew bars around the new player's picture. So the new player gets a new
     // surface, and the stuck one's goes with the view that held it.
     private suspend fun adoptFreshPlayer(stuck: MediaPlayer) {
-        println("[kobplayer] libVLC player stuck in a call for ${WedgedVlcCallMs}ms; replaced")
         if (stuck.vlcVout.areViewsAttached()) stuck.vlcVout.detachViews()
         voutAttached = false
         surfaces.renew(FreshSurfaceWaitMs)

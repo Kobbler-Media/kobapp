@@ -4,6 +4,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.concurrent.atomics.AtomicInt
@@ -11,6 +14,14 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeSource
+
+// A stop or seek answers in well under a second; one that has not after this is stuck in
+// libVLC, and whatever is waiting behind it moves to a fresh player.
+internal const val WedgedVlcCallMs = 1_500L
+
+// An escaped player whose call has not returned by now likely never will: it, and whatever
+// it holds, stays until the process ends.
+internal const val StuckReleaseWaitMs = 30_000L
 
 /**
  * The one thread a native player is driven from, made so that nothing can hold it.
@@ -22,6 +33,10 @@ import kotlin.time.TimeSource
  * and the abandoned one is retired whenever its call does return. Unless the next thing
  * waiting is a new title, the fresh engine first runs [resumeTitle] to pick the current one
  * back up, so the commands that were waiting have something to act on.
+ *
+ * An escaped engine is asked to [Engine.unstick], and each escape is reported in [stalls]:
+ * once when it happens, and again once the engine is retired or after [releaseWaitMs] without.
+ * Closing behind a stuck call asks it to come unstuck too, so it can be retired.
  */
 @OptIn(ExperimentalAtomicApi::class)
 internal class CommandLane<T>(
@@ -30,8 +45,15 @@ internal class CommandLane<T>(
     private val newEngine: () -> Engine<T>,
     private val onReplaced: suspend (old: T, new: T) -> Unit,
     private val resumeTitle: T.() -> Unit = {},
+    private val releaseWaitMs: Long = StuckReleaseWaitMs,
 ) {
-    class Engine<T>(val target: T, val dispatcher: CoroutineDispatcher, val retire: (T) -> Unit)
+    class Engine<T>(
+        val target: T,
+        val dispatcher: CoroutineDispatcher,
+        val stuckIn: () -> String = { "" },
+        val unstick: () -> Unit = {},
+        val retire: (T) -> Unit,
+    )
 
     private class Command<T>(
         val generation: Int,
@@ -42,6 +64,9 @@ internal class CommandLane<T>(
 
     @kotlin.concurrent.Volatile private var engine = newEngine()
     val current: T get() = engine.target
+
+    private val stallReports = MutableSharedFlow<PlayerStall>(extraBufferCapacity = 8)
+    val stalls: Flow<PlayerStall> = stallReports.asSharedFlow()
 
     private val queue = Channel<Command<T>>(Channel.UNLIMITED)
     private val generation = AtomicInt(0)
@@ -96,22 +121,41 @@ internal class CommandLane<T>(
         val running = engine
         val job = scope.launch(running.dispatcher) { command.block(running.target) }
         val started = TimeSource.Monotonic.markNow()
+        var askedToUnstick = false
         while (withTimeoutOrNull(WatchSliceMs) { job.join() } == null) {
+            val stuckForMs = started.elapsedNow().inWholeMilliseconds
+            if (stuckForMs < wedgedAfterMs) continue
             val titleWaits = command.holdsUpTitle || generation.load() > command.generation
-            if ((titleWaits || (!closed && waiting.load() > 0)) && started.elapsedNow().inWholeMilliseconds >= wedgedAfterMs) {
-                replace(running)
+            if (titleWaits || (!closed && waiting.load() > 0)) {
+                replace(running, stuckForMs)
                 if (!titleWaits) run(Command(command.generation, resumeTitle, dropped = {}))
                 return
+            }
+            if (closed && !askedToUnstick) {
+                askedToUnstick = true
+                running.unstick()
             }
         }
     }
 
-    private suspend fun replace(stuck: Engine<T>) {
+    private suspend fun replace(stuck: Engine<T>, stuckForMs: Long) {
+        val stall = PlayerStall(stuckForMs, stuck.stuckIn())
         val fresh = newEngine()
         engine = fresh
         onReplaced(stuck.target, fresh.target)
+        report(stall)
+        stuck.unstick()
         // Queued behind the call it is stuck in: runs if that ever returns.
-        scope.launch(stuck.dispatcher) { stuck.retire(stuck.target) }
+        val retired = scope.launch(stuck.dispatcher) { stuck.retire(stuck.target) }
+        scope.launch {
+            val released = withTimeoutOrNull(releaseWaitMs) { retired.join() } != null
+            report(stall.copy(released = released))
+        }
+    }
+
+    private fun report(stall: PlayerStall) {
+        println("[kobplayer] ${stall.summary()}")
+        stallReports.tryEmit(stall)
     }
 
     private companion object {

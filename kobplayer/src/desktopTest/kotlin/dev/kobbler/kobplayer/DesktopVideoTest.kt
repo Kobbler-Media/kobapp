@@ -50,15 +50,6 @@ class DesktopVideoTest {
         return player.videoSize.value
     }
 
-    private fun awaitFrame(sink: VlcVideoSink): DecodedFrame? {
-        val deadline = System.nanoTime() + 10_000_000_000
-        while (System.nanoTime() < deadline) {
-            sink.latestFrame()?.let { return it }
-            Thread.sleep(20)
-        }
-        return null
-    }
-
     @Test
     fun playsFileUrlsInEveryFormJavaWritesThem() {
         DesktopPlayer.prepareLibraries()
