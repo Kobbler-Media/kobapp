@@ -2834,7 +2834,7 @@ class KobblerApi(
             return dev.kobbler.kobplayer.MediaSource.Url(url = it, networkCacheMs = LanNetworkCacheMs, mpegAudio = mpegAudio)
         }
         // The server's mp4 copy of an mp3 seeks by sample table on every player; the web
-        // element and MobileVLCKit otherwise land seconds off the time they report.
+        // element and libVLC otherwise land seconds off the time they report.
         val url = audioStreamUrl(bookId, file.id) + if (mpegAudio) "?container=mp4" else ""
         return dev.kobbler.kobplayer.MediaSource.Url(
             url = withHeldPlaybackToken(url),

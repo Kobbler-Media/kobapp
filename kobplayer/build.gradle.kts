@@ -10,6 +10,10 @@ plugins {
 // absent unless the host can build them.
 val hostIsMac = org.jetbrains.kotlin.konan.target.HostManager.hostIsMac
 
+// iOS links the static libvlc.xcframework kobvlc builds. -Pkobvlc.ios=<kobvlc>/work/ios/libvlc.xcframework
+// tries a local kobvlc build instead of the published one.
+val libvlcIosDir = layout.buildDirectory.dir("libvlc-ios")
+
 kotlin {
     targets.all {
         compilations.all {
@@ -35,8 +39,13 @@ kotlin {
     }
 
     if (hostIsMac) {
-        iosArm64()
-        iosSimulatorArm64()
+        mapOf(iosArm64() to "ios-arm64", iosSimulatorArm64() to "ios-arm64-simulator").forEach { (target, slice) ->
+            target.compilations.getByName("main").cinterops.create("libvlc") {
+                val dir = libvlcIosDir.get().dir("libvlc.xcframework/$slice")
+                includeDirs(dir.dir("Headers"))
+                extraOpts("-libraryPath", dir.asFile.path)
+            }
+        }
     }
 
     sourceSets {
@@ -95,4 +104,15 @@ val unpackLibvlc = tasks.register<Sync>("unpackLibvlc") {
 tasks.named<Test>("desktopTest") {
     dependsOn(unpackLibvlc)
     systemProperty("kobplayer.libvlc.dir", libvlcDir.get().dir("lib").asFile.path)
+}
+
+if (hostIsMac) {
+    val libvlcIos = configurations.create("libvlcIos") { isCanBeConsumed = false }
+    dependencies { libvlcIos("${libs.libvlc.ios.get()}@tar.gz") }
+    val unpackLibvlcIos = tasks.register<Sync>("unpackLibvlcIos") {
+        val local = providers.gradleProperty("kobvlc.ios").orNull
+        if (local != null) from(local) { into("libvlc.xcframework") } else from(provider { tarTree(libvlcIos.singleFile) })
+        into(libvlcIosDir)
+    }
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.CInteropProcess>().configureEach { inputs.files(unpackLibvlcIos) }
 }

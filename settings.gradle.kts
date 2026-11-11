@@ -28,6 +28,11 @@ dependencyResolutionManagement {
             metadataSources { artifact() }
             content { includeModule("dev.kobbler.vlc", "libvlc-linux-x64") }
         }
+        ivy("https://github.com/Kobbler-Media/kobvlc/releases/download") {
+            patternLayout { artifact("ios-v[revision]/[artifact]-[revision].[ext]") }
+            metadataSources { artifact() }
+            content { includeModule("dev.kobbler.vlc", "libvlc-ios") }
+        }
     }
 }
 

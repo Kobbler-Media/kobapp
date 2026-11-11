@@ -82,7 +82,7 @@ class FieldDecodeTest {
     }
 
     @Test
-    fun `an untested decoder is watched on field-coded sources, a known silent one on the rest`() {
+    fun `an untested decoder is watched on field-coded sources and a known silent one on the rest`() {
         assertTrue(watchesForSilentDecoder(fieldCoded = true, unknown))
         assertFalse(watchesForSilentDecoder(fieldCoded = false, unknown))
         // A field-coded source on a known silent decoder already opens in software.

@@ -35,7 +35,7 @@ The web player needs nothing installed: your Kobbler server serves it at `/playe
 | Android     | yes    | `minSdk` 24, `targetSdk` 36 |
 | Android TV  | yes    | D-pad focus navigation, TV-specific layouts |
 | Desktop     | Linux  | JVM + Compose Desktop. Video plays through the libvlc [kobvlc](https://github.com/Kobbler-Media/kobvlc) builds, bundled with the app — built on Arch, so it runs on Arch and its derivatives — with optional VA-API GPU decode, MPRIS and screensaver inhibit. macOS and Windows: the app builds, but no libvlc is bundled for them and vlcj 5 needs VLC 4, not the VLC 3 that VideoLAN's installers ship, so expect no video playback |
-| iOS         | builds, no playback | `iosApp/iosApp.xcodeproj` builds and runs on Apple Silicon simulators (CI smoke-tests it). No libVLC is bundled for iOS yet, so nothing plays. Intel Macs can only build for devices: Compose Multiplatform publishes no x86_64 simulator libraries |
+| iOS         | builds, playback untested | `iosApp/iosApp.xcodeproj` builds and runs on Apple Silicon simulators (CI smoke-tests it). Plays through libVLC 4 like the other targets, but no one has watched it play yet. Intel Macs can only build for devices: Compose Multiplatform publishes no x86_64 simulator libraries |
 | Web (WASM)  | yes    | `wasmJs` browser target |
 
 ## What it does
@@ -118,7 +118,7 @@ kobvlc's `versions.env` if you bumped it.
 | `composeApp`     | the app: data layer, all screens, platform `expect`/`actual` shims |
 | `androidApp`     | Android/Android TV entry point, Cast integration, packaging |
 | `iosApp`         | Xcode project wrapping the shared UI |
-| `kobplayer`      | multiplatform video/audio player abstraction (libVLC 4 on Desktop and Android through one shared `VlcPlayer`, HTML video on Web) |
+| `kobplayer`      | multiplatform video/audio player abstraction (libVLC 4 on Desktop, Android and iOS through one shared `VlcPlayer`, HTML video on Web) |
 | `kobpalette`     | colour extraction for artwork-derived theming |
 | `kobfocus`       | declarative D-pad focus graph used by the TV layouts |
 | `baselineprofile`| generates the Android baseline profile |

@@ -55,6 +55,11 @@ there.
 iOS targets are only declared when the build host is a Mac. Declaring them elsewhere makes
 `gradle build` fail on `:compileIosMainKotlinMetadata`.
 
+iOS plays through libVLC 4's C API (`IosPlayer`, by cinterop), statically linked from the
+`libvlc.xcframework` kobvlc builds (`libvlc-ios` in the version catalog). The archive names
+the SDK frameworks it needs itself, so neither Gradle nor the Xcode project lists them.
+`-Pkobvlc.ios=<kobvlc>/work/ios/libvlc.xcframework` builds against a local kobvlc build.
+
 ## mediamp workarounds (Desktop VLC)
 
 - `enableRendering`: the player ties it to `PLAYING`, but VLC's `PLAYING` is transient (it

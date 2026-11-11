@@ -150,7 +150,6 @@ data class Chapter(
  * when (val n = player.native) {
  *     is NativePlayer.Vlcj -> n.player.audio().equalizer()
  *     is NativePlayer.LibVlc -> ...
- *     is NativePlayer.VlcKit -> ...
  *     is NativePlayer.HtmlVideo -> ...
  *     is NativePlayer.None -> ...
  * }
@@ -162,20 +161,18 @@ sealed class NativePlayer {
 
     fun asVlcj(): Vlcj? = this as? Vlcj
     fun asLibVlc(): LibVlc? = this as? LibVlc
-    fun asVlcKit(): VlcKit? = this as? VlcKit
     fun asHtmlVideo(): HtmlVideo? = this as? HtmlVideo
 
     // Platform subclasses defined in platform source sets:
     // desktopMain:  class Vlcj(val player: EmbeddedMediaPlayer) : NativePlayer()
     // androidMain:  class LibVlc(val player: MediaPlayer, val libVLC: LibVLC) : NativePlayer()
-    // iosMain:      class VlcKit(val player: VLCMediaPlayer) : NativePlayer()
+    // iosMain:      class LibVlc(val player: CPointer<libvlc_media_player_t>, val libVLC: CPointer<libvlc_instance_t>) : NativePlayer()
     // wasmJsMain:   class HtmlVideo(val element: HTMLVideoElement) : NativePlayer()
 
     // Forward declarations so common code can reference them in `when` branches.
     // Properties are typed as Any here — use the platform-specific typed extensions below.
     class Vlcj internal constructor(val player: Any) : NativePlayer()
     class LibVlc internal constructor(val player: Any, val libVLC: Any) : NativePlayer()
-    class VlcKit internal constructor(val player: Any) : NativePlayer()
     class HtmlVideo internal constructor(val element: Any) : NativePlayer()
 }
 

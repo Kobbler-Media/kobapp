@@ -26,7 +26,7 @@ actual fun defaultFormFactor(): FormFactor {
         platform.UIKit.UIUserInterfaceIdiomPad
     ) FormFactor.Desktop else FormFactor.Phone
 }
-actual val supportsVideoPlayback: Boolean = false
+actual val supportsVideoPlayback: Boolean = true
 
 actual val deviceRegion: String? get() = NSLocale.currentLocale.countryCode
 

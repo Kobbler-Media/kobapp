@@ -24,10 +24,11 @@ dbus-java = "5.2.2"
 hlsjs = "1.7.4"
 # VLC 4 has no stable release yet. 3.x drops and stretches audio for seconds whenever a
 # Bluetooth sink wakes from idle (first play, every unpause); 4 resyncs without a glitch.
-# Built by github.com/Kobbler-Media/kobvlc from one VLC for both: libvlcjni's port to the
-# reworked libvlc API (MR !246) on Android, vlcj 5 on desktop.
+# Built by github.com/Kobbler-Media/kobvlc from one VLC for all three: libvlcjni's port to the
+# reworked libvlc API (MR !246) on Android, vlcj 5 on desktop, the C API itself on iOS.
 libvlc-android = "4.0.0-fb39292a-kob2"
 libvlc-linux = "4.0.0-fb39292a-kob2"
+libvlc-ios = "4.0.0-fb39292a-kob2"
 androidx-benchmark = "1.5.0"
 androidx-uiautomator = "2.4.0"
 androidx-test-junit = "1.3.0"
@@ -77,6 +78,7 @@ dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = 
 dbus-java-transport-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 libvlc-android = { module = "dev.kobbler.vlc:libvlc-all", version.ref = "libvlc-android" }
 libvlc-linux = { module = "dev.kobbler.vlc:libvlc-linux-x64", version.ref = "libvlc-linux" }
+libvlc-ios = { module = "dev.kobbler.vlc:libvlc-ios", version.ref = "libvlc-ios" }
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version.ref = "androidx-profileinstaller" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "androidx-benchmark" }

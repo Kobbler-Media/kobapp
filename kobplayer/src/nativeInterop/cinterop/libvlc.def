@@ -1,0 +1,5 @@
+package = libvlc
+headers = vlc/vlc.h
+headerFilter = vlc/*
+staticLibraries = libvlc.a
+nonStrictEnums = libvlc_state_t libvlc_track_type_t libvlc_stopping_reason_t libvlc_capability_t libvlc_list_action_t libvlc_video_fit_mode_t
