@@ -14,30 +14,22 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.interfaces.IVLCVout
-import java.io.File
 import java.util.concurrent.Executors
 import kotlin.coroutines.CoroutineContext
 
@@ -54,8 +46,6 @@ private const val PausedRedrawSettleMs = 1_000L
 private const val FrameRateProbeSettleMs = 1_000L
 private const val FrameRateProbeWindowMs = 4_000L
 
-// A remux opens with an ESAdded per stream, dozens in one burst: one refresh answers them all.
-private const val TrackRefreshSettleMs = 50L
 private const val AudioClockPollMs = 250L
 private const val StuckFrames = 12
 
@@ -63,21 +53,14 @@ private const val StuckFrames = 12
 // opened without one rather than held up.
 private const val FreshSurfaceWaitMs = 1_000L
 
-/**
- * Android VLC player implementation using libvlc-android.
- *
- * Uses libvlc for all codec handling — no hardware decoder dependency,
- * so EAC3, DTS, etc. just work.
- */
+private val VlcBinding.timeMs: Long? get() = timeUs.takeIf { it >= 0 }?.let { it / 1000 }
+
+/** libVLC 4 through libvlcjni, onto the app's own surfaces. */
 internal class AndroidPlayer(
     private val context: Context,
     parentContext: CoroutineContext,
-    private val config: PlayerConfig,
-) : Player {
-
-    private val scope = CoroutineScope(
-        parentContext + SupervisorJob(parentContext[Job])
-    )
+    config: PlayerConfig,
+) : VlcPlayer<LibVlcBinding>(parentContext, config) {
 
     // No --android-display-chroma: forcing one makes the display allocate packed RGB
     // for every picture, which at 1920x1088 is ~8 MB each and starves the pool the
@@ -99,155 +82,52 @@ internal class AndroidPlayer(
 
     // Releasing a player waits for its inputs to wind down, which takes as long as a
     // stalled network read does: on the main thread, a stream that hung while opening
-    // took the app down with an ANR. One serial thread keeps libVLC calls off the UI and
-    // the play/pause/seek that follow a load in order behind it, and anything that finds
-    // that thread stuck in a call gets a new player rather than waiting on it.
-    // View attach and detach stay on main: they touch the SurfaceHolder.
-    // Not [scope]: release() cancels that, and the lane still has the release itself to run.
-    // Its loop ends with the queue that close() closes.
-    private val lane = CommandLane(
-        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
-        wedgedAfterMs = WedgedVlcCallMs,
-        newEngine = ::newEngine,
-        onReplaced = { stuck, _ -> withContext(Dispatchers.Main) { adoptFreshPlayer(stuck) } },
-        resumeTitle = { resumeTitle() },
-    )
+    // took the app down with an ANR. So libVLC is called from the lane, and only view
+    // attach and detach stay on main: they touch the SurfaceHolder.
+    val vlcPlayer: MediaPlayer get() = binding.player
 
-    val vlcPlayer: MediaPlayer get() = lane.current
-
-    override val stalls: Flow<PlayerStall> get() = lane.stalls
-
-    private fun newEngine(): CommandLane.Engine<MediaPlayer> {
+    override fun newEngine(): CommandLane.Engine<LibVlcBinding> {
         var runner: Thread? = null
         val thread = Executors.newSingleThreadExecutor { Thread(it, "kobplayer-vlc").apply { isDaemon = true; runner = this } }
-        val player = MediaPlayer(libVLC).also(::listenTo)
-        // libvlcjni waits out a stop in native code, where nothing can interrupt it: a stuck
+        val events = Events()
+        val player = MediaPlayer(libVLC, events).also { events.player = it }
+        // libvlcjni waits out a release in native code, where nothing can interrupt it: a stuck
         // player is retired if its call ever returns.
         return CommandLane.Engine(
-            player,
+            LibVlcBinding(player),
             thread.asCoroutineDispatcher(),
             stuckIn = { runner?.stackTrace?.take(StuckFrames)?.joinToString("\n") { "at $it" }.orEmpty() },
         ) {
-            it.setEventListener(null)
-            it.stop()
             it.release()
             thread.shutdown()
         }
     }
 
-    private fun post(task: () -> Unit): Boolean = lane.post { task() }
-
-    private fun vlc(block: MediaPlayer.() -> Unit) {
-        lane.post(block)
-    }
-
-    private suspend fun <T> onVlc(block: MediaPlayer.() -> T): T? = lane.call(block)
-
-    @Volatile private var released = false
-
-    private fun postSettled(task: () -> Unit): Boolean {
-        if (released) return false
-        scope.launch {
-            delay(TrackRefreshSettleMs)
-            post(task)
-        }
-        return true
-    }
-
-    // A seek queued behind a stop that is waiting on a stalled read is stale by the time it runs.
-    private val seeks = LatestWins<Long>(::post) { vlcPlayer.setTime(it) }
     private val volumes = LatestWins<Int>(::post) { vlcPlayer.volume = it }
-    private val trackRefresh = LatestWins<Unit>(::postSettled) {
-        reloadTracks()
-        updateVideoSize()
-    }
 
     // Not settled like the refresh: a device chosen after the audio output has opened restarts it.
     private val audioRoute = LatestWins<Unit>(::post) { applyAudioOutput() }
 
-    // --- State flows ---
-
-    private val _state = MutableStateFlow(PlayerState.IDLE)
-    override val state: StateFlow<PlayerState> = _state.asStateFlow()
-
-    override val isPlaying: StateFlow<Boolean> = MutableStateFlow(false).also { sf ->
-        scope.launch {
-            _state.map { it == PlayerState.PLAYING }.distinctUntilChanged().collect { sf.value = it }
-        }
-    }
-
-    private val _currentMs = MutableStateFlow(0L)
-    override val currentMs: StateFlow<Long> = _currentMs.asStateFlow()
-
-    private val _positionReported = MutableStateFlow(false)
-    override val positionReported: StateFlow<Boolean> = _positionReported.asStateFlow()
-
-    private val _durationMs = MutableStateFlow(0L)
-    override val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
-
-    // TimeChanged rides on pictures, so with :no-video libVLC reports the clock only every
+    // libVLC's position report rides on pictures, so with :no-video it comes only every
     // several seconds and an audiobook's elapsed time visibly lurched. The poll is then the
-    // only clock: TimeChanged runs ahead of what is heard by the output latency, and the two
+    // only clock: the report runs ahead of what is heard by the output latency, and the two
     // taking turns walked the position back and forth.
     private val audioClock = PolledClock { SystemClock.elapsedRealtime() }
+
+    override fun publishPositionEvents() = !config.audioOnly
 
     init {
         if (config.audioOnly) scope.launch {
             _state.collectLatest { state ->
                 while (state == PlayerState.PLAYING) {
                     delay(AudioClockPollMs)
-                    val time = onVlc { time } ?: break
-                    if (time >= 0) {
-                        _currentMs.value = audioClock.publish(_currentMs.value, time)
-                        _positionReported.value = true
-                    }
+                    val time = onVlc { timeMs } ?: break
+                    _currentMs.value = audioClock.publish(_currentMs.value, time)
+                    _positionReported.value = true
                 }
             }
         }
     }
-
-    private val _error = MutableStateFlow<Throwable?>(null)
-    override val error: StateFlow<Throwable?> = _error.asStateFlow()
-
-    private val _isBuffering = MutableStateFlow(false)
-    override val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
-
-    private val _bufferPercent = MutableStateFlow(0f)
-    override val bufferPercent: StateFlow<Float> = _bufferPercent.asStateFlow()
-
-    private val _volume = MutableStateFlow(1f)
-    override val volume: StateFlow<Float> = _volume.asStateFlow()
-    override val maxVolume: Float = 2f
-
-    private val _isMuted = MutableStateFlow(false)
-    override val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
-
-    private val _audioTracks = MutableStateFlow<List<TrackInfo>>(emptyList())
-    override val audioTracks: StateFlow<List<TrackInfo>> = _audioTracks.asStateFlow()
-
-    private val _selectedAudioTrack = MutableStateFlow<TrackInfo?>(null)
-    override val selectedAudioTrack: StateFlow<TrackInfo?> = _selectedAudioTrack.asStateFlow()
-
-    private val _subtitleTracks = MutableStateFlow<List<TrackInfo>>(emptyList())
-    override val subtitleTracks: StateFlow<List<TrackInfo>> = _subtitleTracks.asStateFlow()
-
-    private val _selectedSubtitleTrack = MutableStateFlow<TrackInfo?>(null)
-    override val selectedSubtitleTrack: StateFlow<TrackInfo?> = _selectedSubtitleTrack.asStateFlow()
-
-    private val _chapters = MutableStateFlow<List<Chapter>>(emptyList())
-    override val chapters: StateFlow<List<Chapter>> = _chapters.asStateFlow()
-
-    private val _currentChapter = MutableStateFlow<Chapter?>(null)
-    override val currentChapter: StateFlow<Chapter?> = _currentChapter.asStateFlow()
-
-    private val _playbackSpeed = MutableStateFlow(1f)
-    override val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
-
-    private val _aspectRatio = MutableStateFlow(AspectRatio.FIT)
-    override val aspectRatio: StateFlow<AspectRatio> = _aspectRatio.asStateFlow()
-
-    private val _videoSize = MutableStateFlow(0 to 0)
-    override val videoSize: StateFlow<Pair<Int, Int>> = _videoSize.asStateFlow()
 
     override val native: NativePlayer get() = NativePlayer.LibVlc(vlcPlayer, libVLC)
 
@@ -272,11 +152,11 @@ internal class AndroidPlayer(
                 // A silent preload holds no audible claim: a call ending must not start it.
                 if (isPreloading.value) return@setOnAudioFocusChangeListener
                 when (focusResume.onChange(change, _state.value == PlayerState.PLAYING)) {
-                    FocusAction.Pause -> pauseIfPlaying()
+                    FocusAction.Pause -> super.pause()
                     FocusAction.Duck -> if (!_isMuted.value) volumes.offer((userVolume() * 0.3f).toInt())
                     FocusAction.Resume -> {
                         restoreVolume()
-                        resume()
+                        resumePlayback()
                     }
                     FocusAction.Restore -> restoreVolume()
                     FocusAction.None -> {}
@@ -291,10 +171,6 @@ internal class AndroidPlayer(
             hasAudioFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         }
     }
-
-    private var normalization = 1f
-
-    private fun userVolume() = vlcVolume(_volume.value, normalization, maxVolume)
 
     private fun restoreVolume() {
         volumes.offer(if (_isMuted.value) 0 else userVolume())
@@ -349,7 +225,7 @@ internal class AndroidPlayer(
 
     private fun redrawPicture() {
         awaitingPicture = true
-        vlc { if (isSeekable) setTime(time) }
+        vlc { if (player.isSeekable) player.setTime(player.time) }
         pictureTimeout?.cancel()
         pictureTimeout = scope.launch {
             delay(PictureReturnTimeoutMs)
@@ -357,17 +233,8 @@ internal class AndroidPlayer(
         }
     }
 
-    private fun resume() {
-        vlc {
-            pauseWhenPausable = false
-            // play() is lost on a player whose pause is still on its way; a resume queues
-            // behind it. play() still starts a title that stopped or ended.
-            this.resume()
-            play()
-            // A title read as held before its hold landed never paused, so it reports no
-            // Playing to resume with.
-            if (_state.value == PlayerState.PAUSED && isPlaying && !isPreloading.value) _state.value = PlayerState.PLAYING
-        }
+    private fun resumePlayback() {
+        super.play()
         deferredRedraw?.let {
             it.cancel()
             deferredRedraw = null
@@ -400,13 +267,6 @@ internal class AndroidPlayer(
     private var pendingSurfaceWidth = 0
     private var pendingSurfaceHeight = 0
 
-    /** True when the player is silently preloading (decode without render). */
-    internal val isPreloading = MutableStateFlow(false)
-
-    init {
-        scope.launch { watchFrozenClock(_state, _currentMs, _isBuffering, _error, held = { isPreloading.value }) }
-    }
-
     private val _contentFrameRate = MutableStateFlow(0f)
     internal val contentFrameRate: StateFlow<Float> = _contentFrameRate.asStateFlow()
 
@@ -420,13 +280,6 @@ internal class AndroidPlayer(
 
     override fun setMatchDisplayRefresh(enabled: Boolean) {
         _matchDisplayRefresh.value = enabled
-    }
-
-    private val _pictureCrop = MutableStateFlow<PictureCrop?>(null)
-    internal val pictureCrop: StateFlow<PictureCrop?> = _pictureCrop.asStateFlow()
-
-    override fun setPictureCrop(crop: PictureCrop?) {
-        _pictureCrop.value = crop
     }
 
     private fun updateModeSwitchAllowed() {
@@ -446,7 +299,7 @@ internal class AndroidPlayer(
 
     private suspend fun cleanPlaybackSample(): Pair<Long, Long>? {
         if (_state.value != PlayerState.PLAYING || _isBuffering.value || _playbackSpeed.value != 1f) return null
-        return onVlc { currentMedia?.stats?.displayedPictures?.let { it to SystemClock.elapsedRealtime() } }
+        return onVlc { media?.stats?.displayedPictures?.let { it to SystemClock.elapsedRealtime() } }
     }
 
     private val _decodedPicture = MutableStateFlow<DecodedPicture?>(null)
@@ -489,11 +342,6 @@ internal class AndroidPlayer(
 
     // --- Internal ---
 
-    @Volatile private var currentMedia: Media? = null
-    @Volatile private var openedSource: MediaSource.Url? = null
-    @Volatile private var stopRequested = false
-    @Volatile private var sourceLive = false
-
     private var fieldDecodeProbe: Job? = null
     @Volatile private var hasVideoTrack = false
     private var forceSoftwareDecode = false
@@ -503,96 +351,80 @@ internal class AndroidPlayer(
         if (!config.audioOnly) DeviceFieldDecode.selfTestIfUnknown(context)
     }
 
-    private fun listenTo(player: MediaPlayer) {
-        player.setEventListener { event ->
-            // An abandoned player's events are about a title nobody is watching any more.
-            if (player !== vlcPlayer) return@setEventListener
-            when (event.type) {
-                MediaPlayer.Event.Opening -> {
-                    stopRequested = false
-                    _positionReported.value = false
-                    _state.value = PlayerState.LOADING
-                    _isBuffering.value = true
-                }
-                MediaPlayer.Event.Buffering -> {
-                    val pct = event.buffering
-                    _bufferPercent.value = (pct / 100f).coerceIn(0f, 1f)
-                    _isBuffering.value = pct < 100f
-                    _state.value = stateOnBuffering(_state.value, full = pct >= 100f)
-                }
-                MediaPlayer.Event.Playing -> {
-                    // A preload is opened like any other and held as soon as it can be.
-                    if (isPreloading.value || pauseWhenPausable) {
-                        holdIfAsked()
-                        _state.value = PlayerState.PAUSED
-                    } else {
-                        _state.value = PlayerState.PLAYING
-                    }
-                    _isBuffering.value = false
-                    trackRefresh.offer(Unit)
-                }
-                MediaPlayer.Event.PausableChanged -> {
-                    pausable = event.pausable
-                    if (pausable) holdIfAsked()
-                }
-                MediaPlayer.Event.Paused -> {
-                    _state.value = PlayerState.PAUSED
-                }
-                MediaPlayer.Event.EndReached -> {
-                    val next = stateOnStopping(_state.value, stopRequested, _currentMs.value, _durationMs.value, sourceLive)
-                    if (next == PlayerState.ERROR) _error.value = StreamStoppedShort(_currentMs.value, _durationMs.value, sourceLive)
-                    _state.value = next
-                }
-                MediaPlayer.Event.EncounteredError -> {
-                    _error.value = RuntimeException("VLC playback error")
-                    _state.value = PlayerState.ERROR
-                }
-                MediaPlayer.Event.TimeChanged -> {
-                    val time = event.timeChanged
-                    if (awaitingPicture) markPictureReturned()
-                    if (time != _currentMs.value) {
-                        val resolved = stateAfterClockAdvance(_state.value, isPreloading.value)
-                        if (resolved != _state.value) {
-                            _state.value = resolved
-                            _isBuffering.value = false
-                        }
-                    }
-                    if (!config.audioOnly) _currentMs.value = publishedPosition(_currentMs.value, time)
-                    _positionReported.value = true
-                }
-                MediaPlayer.Event.LengthChanged -> {
-                    _durationMs.value = event.lengthChanged
-                    updateModeSwitchAllowed()
-                }
-                MediaPlayer.Event.ESAdded -> {
-                    if (event.esChangedType == IMedia.Track.Type.Audio) audioRoute.offer(Unit)
-                    if (event.esChangedType == IMedia.Track.Type.Video) hasVideoTrack = true
-                    trackRefresh.offer(Unit)
-                }
-                MediaPlayer.Event.ESSelected -> {
-                    if (event.esChangedType == IMedia.Track.Type.Audio) audioRoute.offer(Unit)
-                    trackRefresh.offer(Unit)
-                    if (event.esChangedType == IMedia.Track.Type.Video) deferredRedraw?.let {
-                        it.cancel()
-                        deferredRedraw = null
-                        redrawPicture()
-                    }
-                }
-                MediaPlayer.Event.Vout -> trackRefresh.offer(Unit)
+    private inner class Events : MediaPlayer.Listener {
+        @Volatile var player: MediaPlayer? = null
+
+        // An abandoned player's events are about a title nobody is watching any more.
+        private val current get() = player === vlcPlayer
+
+        override fun onStateChanged(state: Int) {
+            if (!current) return
+            when (state) {
+                MediaPlayer.State.Opening -> onOpening()
+                MediaPlayer.State.Playing -> onPlaying()
+                MediaPlayer.State.Paused -> onPaused()
+                MediaPlayer.State.Error -> onError()
             }
         }
+
+        override fun onMediaStopping(media: IMedia, reason: Int) {
+            if (current && reason != MediaPlayer.StoppingReason.Error) onStopping()
+        }
+
+        override fun onBufferingChanged(buffering: Float) {
+            if (current) onBuffering(buffering)
+        }
+
+        override fun onCapabilitiesChanged(oldCapabilities: Int, newCapabilities: Int) {
+            if (current) onPausable(newCapabilities and MediaPlayer.Capability.Pause != 0)
+        }
+
+        override fun onPositionChanged(time: Long, position: Double) {
+            if (current) onPosition(time)
+        }
+
+        override fun onLengthChanged(length: Long) {
+            if (current) onLength(length)
+        }
+
+        override fun onTrackListChanged(action: Int, type: Int, id: String) {
+            if (!current || action == MediaPlayer.ListAction.Removed) return
+            if (type == IMedia.Track.Type.Audio) audioRoute.offer(Unit)
+            if (type == IMedia.Track.Type.Video) hasVideoTrack = true
+            onTracksChanged()
+        }
+
+        override fun onTrackSelectionChanged(type: Int, unselectedId: String?, selectedId: String?) {
+            if (!current) return
+            if (type == IMedia.Track.Type.Audio) audioRoute.offer(Unit)
+            onTracksChanged()
+            if (type == IMedia.Track.Type.Video && selectedId != null) deferredRedraw?.let {
+                it.cancel()
+                deferredRedraw = null
+                redrawPicture()
+            }
+        }
+
+        override fun onVoutChanged(count: Int) {
+            if (current) onTracksChanged()
+        }
+    }
+
+    override fun onPosition(timeUs: Long) {
+        if (awaitingPicture) markPictureReturned()
+        super.onPosition(timeUs)
+    }
+
+    override fun onLength(lengthUs: Long) {
+        super.onLength(lengthUs)
+        updateModeSwitchAllowed()
     }
 
     // --- Commands ---
 
-    // Localhost auth proxy for VLC (libvlc 3.x can't send custom HTTP headers)
-
-    @Volatile private var spuDisabled = false
-
     override fun load(source: MediaSource) {
         when (source) {
             is MediaSource.Url -> {
-                sourceLive = source.live
                 forceSoftwareDecode = false
                 open(source)
                 armFieldDecodeProbe(source)
@@ -600,7 +432,7 @@ internal class AndroidPlayer(
         }
     }
 
-    private fun open(source: MediaSource.Url) {
+    override fun beforeOpen(source: MediaSource.Url) {
         deferredRedraw?.cancel()
         deferredRedraw = null
         hasVideoTrack = false
@@ -609,20 +441,8 @@ internal class AndroidPlayer(
         _decodedPicture.value = null
         _contentFrameRate.value = 0f
         armFrameRateProbe()
-        _state.value = PlayerState.LOADING
-        _isBuffering.value = true
-        _bufferPercent.value = 0f
         audioClock.reset()
-        _currentMs.value = source.startTimeSec?.let { it * 1000L } ?: 0L
-        _positionReported.value = false
-        _durationMs.value = 0L
         updateModeSwitchAllowed()
-        _error.value = null
-
-        val previous = currentMedia
-        val media = media(source)
-        openedSource = source
-        currentMedia = media
         // Before play(), never after. play() opens the elementary stream, and that
         // is the one moment a decoder is chosen; a window that arrives later is a
         // window MediaCodec was never offered.
@@ -630,38 +450,13 @@ internal class AndroidPlayer(
         // Only grab audio focus if not preloading (preload should not
         // steal focus from other apps like music players).
         if (!isPreloading.value) requestAudioFocus()
-        seeks.clear()
-        lane.replaceTitle(
-            stop = {
-                stopRequested = true
-                pausable = false
-                pauseWhenPausable = false
-                // Media handed to a libVLC 4 player that is still playing is swapped in gaplessly:
-                // the player never leaves its playing state, so the new title reports no opening
-                // and its end reads as the stop asked for here. stop() returns once it has stopped
-                // — or never, for a live stream the server ended in the same moment.
-                stop()
-            },
-        ) {
-            this.media = media
-            previous?.release()
-            play()
-            // Not :start-time: libVLC 4 clips the title there, reporting time and length from
-            // the start point. Before play() there is no input to take the seek; straight
-            // after, it is the first thing the input does once the demuxer is open. Fast, so
-            // a resume lands on the keyframe before the mark instead of decoding up to it.
-            source.startTimeSec?.let { setTime(it * 1000L, true) }
-        }
     }
 
+    override fun LibVlcBinding.startTitle(source: MediaSource.Url) = start(media(source))
+
     private fun media(source: MediaSource.Url): Media {
-        val headers = source.headers.mapKeys { it.key.lowercase() }
-        return Media(libVLC, Uri.parse(source.url)).apply {
-            addOption(":http-user-agent=${headers["user-agent"] ?: config.httpUserAgent}")
-            addOption(":network-caching=${source.networkCacheMs ?: config.networkCacheMs}")
-            addOption(":${vlcDemuxOption(source)}")
-            if (config.audioOnly) addOption(":no-video")
-            headers["referer"]?.let { addOption(":http-referrer=$it") }
+        return Media(Uri.parse(source.url)).apply {
+            vlcMediaOptions(source, config).forEach { addOption(":$it") }
             if (!config.hardwareAcceleration) {
                 addOption(":avcodec-hw=none")
             }
@@ -673,31 +468,6 @@ internal class AndroidPlayer(
             if (forceSoftwareDecode || softwareDecodeRequired(source.fieldCoded, fieldDecodeVerdict)) {
                 addOption(":no-hw-dec")
             }
-            source.audioLanguage?.let { addOption(":audio-language=$it") }
-            // `none` rather than `--no-spu`: no-spu disables the whole subtitle
-            // pipeline, so a viewer turning subtitles on later would be refused
-            // silently. This only declines the automatic pick.
-            if (source.subtitlesOff) addOption(":sub-language=none")
-            else source.subtitleOrdinal?.let { addOption(":sub-track=$it") }
-        }
-    }
-
-    // On a fresh player that took over from one stuck mid-title, ahead of the pause or seek
-    // that was waiting on it. The stuck player keeps its media: releasing it under a call
-    // still running in it is a native crash.
-    private fun MediaPlayer.resumeTitle() {
-        val source = openedSource ?: return
-        val atMs = _currentMs.value
-        stopRequested = false
-        pausable = false
-        pauseWhenPausable = _state.value == PlayerState.PAUSED
-        val media = media(source)
-        currentMedia = media
-        this.media = media
-        play()
-        if (!source.live) {
-            audioClock.seeked(atMs)
-            setTime(atMs, true)
         }
     }
 
@@ -721,56 +491,27 @@ internal class AndroidPlayer(
     // VLC's own clock: the published position rides on pictures, and here there are none.
     private suspend fun sampleDecoder(watch: SilentDecoderWatch) {
         delay(FieldDecodeProbePollMs)
-        val (clockMs, pictures) = onVlc { time to (currentMedia?.stats?.displayedPictures ?: 0L) } ?: return
+        val (clockMs, pictures) = onVlc { (timeMs ?: 0L) to (media?.stats?.displayedPictures ?: 0L) } ?: return
         watch.sample(clockMs, pictures, hasVideoTrack)
     }
 
     override fun play() {
         focusResume.forget()
         requestAudioFocus()
-        resume()
+        resumePlayback()
     }
 
     override fun pause() {
         focusResume.forget()
-        vlc {
-            if (pausable) pauseIfPlaying() else pauseWhenPausable = true
-        }
-    }
-
-    // libVLC 4 stops an input it cannot pause yet, and every stream is unpausable while
-    // it opens: a pause there threw the open away, and the play after it opened it again.
-    // One asked for early is held until the input can take it.
-    @Volatile private var pausable = false
-    @Volatile private var pauseWhenPausable = false
-
-    private fun pauseIfPlaying() {
-        vlc { if (isPlaying && pausable) pause() }
-    }
-
-    // Asked again on the lane: a play given while the hold was on its way cancels it.
-    private fun holdIfAsked() {
-        vlc { if (isPlaying && pausable && (isPreloading.value || pauseWhenPausable)) pause() }
+        super.pause()
     }
 
     override fun stop() {
-        openedSource = null
         deferredRedraw?.cancel()
         deferredRedraw = null
         fieldDecodeProbe?.cancel()
         frameRateProbe?.cancel()
-        seeks.clear()
-        lane.supersede {
-            stopRequested = true
-            pauseWhenPausable = false
-            stop()
-        }
-        _state.value = PlayerState.IDLE
-        _currentMs.value = 0L
-        _positionReported.value = false
-        _durationMs.value = 0L
-        _isBuffering.value = false
-        _bufferPercent.value = 0f
+        super.stop()
         focusResume.forget()
         abandonAudioFocus()
     }
@@ -778,24 +519,13 @@ internal class AndroidPlayer(
     override fun togglePlayPause() {
         focusResume.forget()
         when (playPauseIntent(_state.value)) {
-            PlayPauseIntent.Play -> resume()
-            // Not vlcPlayer.pause(): libvlc's is a toggle, so it restarts a stream that
-            // is not actually running. pause() carries that guard.
-            PlayPauseIntent.Pause -> pauseIfPlaying()
+            PlayPauseIntent.Play -> resumePlayback()
+            PlayPauseIntent.Pause -> super.pause()
             PlayPauseIntent.None -> {}
         }
     }
 
-    override fun seekTo(ms: Long) {
-        val clamped = clampSeekTarget(ms, _durationMs.value)
-        _currentMs.value = clamped
-        audioClock.seeked(clamped)
-        seeks.offer(clamped)
-    }
-
-    override fun skip(deltaMs: Long) {
-        seekTo(clampSeekTarget(_currentMs.value + deltaMs, _durationMs.value))
-    }
+    override fun onSeek(ms: Long) = audioClock.seeked(ms)
 
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0f, maxVolume)
@@ -836,22 +566,7 @@ internal class AndroidPlayer(
         }
     }
 
-    override fun volumeUp(step: Float) = setVolume(_volume.value + step)
-    override fun volumeDown(step: Float) = setVolume(_volume.value - step)
-
-    override fun setPlaybackSpeed(speed: Float) {
-        _playbackSpeed.value = speed
-        vlc { rate = speed }
-    }
-
-    override fun selectAudioTrack(track: TrackInfo?) {
-        _selectedAudioTrack.value = track
-        vlc {
-            if (track == null) unselectTrackType(IMedia.Track.Type.Audio) else selectTrack(track.id)
-            _selectedAudioTrack.value = track
-            applyAudioOutput()
-        }
-    }
+    override fun onAudioTrackSelected() = applyAudioOutput()
 
     override fun setAudioOutputMode(mode: AudioOutputMode) {
         audioOutputMode = mode
@@ -906,27 +621,6 @@ internal class AndroidPlayer(
         context.applicationContext.registerReceiver(wakeWatcher, IntentFilter(Intent.ACTION_SCREEN_ON))
     }
 
-    override fun selectSubtitleTrack(track: TrackInfo?) {
-        spuDisabled = track == null
-        _selectedSubtitleTrack.value = track
-        vlc {
-            if (track == null) unselectTrackType(IMedia.Track.Type.Text) else selectTrack(track.id)
-            _selectedSubtitleTrack.value = track
-        }
-    }
-
-    override fun setAspectRatio(ratio: AspectRatio) {
-        _aspectRatio.value = ratio
-    }
-
-    override fun setChapter(chapter: Chapter) {
-        val idx = _chapters.value.indexOf(chapter)
-        if (idx >= 0) {
-            _currentChapter.value = chapter
-            vlc { this.chapter = idx }
-        }
-    }
-
     override suspend fun takeScreenshot(path: String) {
         // libvlc-android doesn't have a direct screenshot API
         // Consumers can use the native player for platform-specific approaches
@@ -940,33 +634,27 @@ internal class AndroidPlayer(
         context.applicationContext.unregisterReceiver(wakeWatcher)
         abandonAudioFocus()
         vlcPlayer.detachViews()
-        val media = currentMedia
-        currentMedia = null
-        lane.close {
-            media?.release()
-            libVLC.release()
-        }
+        lane.close { libVLC.release() }
     }
 
     // Main thread, before the load or stop that found the old player stuck runs on the new one.
     // Its display is a layer on the surface that a detach never reaches while it is stuck:
     // shared, it drew bars around the new player's picture. So the new player gets a new
     // surface, and the stuck one's goes with the view that held it.
-    private suspend fun adoptFreshPlayer(stuck: MediaPlayer) {
-        if (stuck.vlcVout.areViewsAttached()) stuck.vlcVout.detachViews()
+    override suspend fun adoptFreshPlayer(stuck: LibVlcBinding) = withContext(Dispatchers.Main) {
+        val stuckVout = stuck.player.vlcVout
+        if (stuckVout.areViewsAttached()) stuckVout.detachViews()
         voutAttached = false
         surfaces.renew(FreshSurfaceWaitMs)
         attachVoutIfReady()
         post { route.reset() }
         audioRoute.offer(Unit)
         restoreVolume()
-        val speed = _playbackSpeed.value
-        vlc { rate = speed }
     }
 
     // --- Internal ---
 
-    private fun updateVideoSize() {
+    override fun updateVideoSize() {
         val track = (vlcPlayer.getSelectedTrack(IMedia.Track.Type.Video)
             ?: vlcPlayer.getTracks(IMedia.Track.Type.Video)?.firstOrNull()) as? IMedia.VideoTrack ?: return
         if (track.width > 0 && track.height > 0) {
@@ -978,25 +666,4 @@ internal class AndroidPlayer(
             _contentFrameRate.value = declared
         }
     }
-
-    private fun reloadTracks() {
-        _audioTracks.value = trackInfos(IMedia.Track.Type.Audio)
-        val currentAudio = vlcPlayer.getSelectedTrack(IMedia.Track.Type.Audio)?.id
-        _selectedAudioTrack.value = _audioTracks.value.find { it.id == currentAudio }
-
-        _subtitleTracks.value = trackInfos(IMedia.Track.Type.Text)
-
-        // VLC picks a default SPU track whenever the elementary streams are parsed, which
-        // lands after the app has already asked for none — leave it and its rendering
-        // stacks on top of the server-VTT overlay.
-        val currentSub = vlcPlayer.getSelectedTrack(IMedia.Track.Type.Text)?.id
-        if (spuDisabled && currentSub != null) vlcPlayer.unselectTrackType(IMedia.Track.Type.Text)
-        _selectedSubtitleTrack.value =
-            if (spuDisabled) null else _subtitleTracks.value.find { it.id == currentSub }
-    }
-
-    private fun trackInfos(type: Int): List<TrackInfo> =
-        vlcPlayer.getTracks(type).orEmpty().mapIndexed { index, track ->
-            TrackInfo(track.id, track.name ?: "Track ${index + 1}")
-        }
 }
