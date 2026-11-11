@@ -5,9 +5,9 @@ plugins {
     alias(libs.plugins.android.multiplatform.library)
 }
 
-// iOS needs an Apple host to build at all (Xcode toolchain, and MobileVLCKit via
-// CocoaPods for kobplayer). Declaring the targets off-Mac makes `gradle build` fail on
-// :compileIosMainKotlinMetadata, so they are simply absent unless the host can build them.
+// iOS needs an Apple host (the Xcode toolchain) to build at all. Declaring the targets
+// off-Mac makes `gradle build` fail on :compileIosMainKotlinMetadata, so they are simply
+// absent unless the host can build them.
 val hostIsMac = org.jetbrains.kotlin.konan.target.HostManager.hostIsMac
 
 kotlin {
@@ -35,12 +35,8 @@ kotlin {
     }
 
     if (hostIsMac) {
-        listOf(iosArm64(), iosSimulatorArm64()).forEach {
-            it.binaries.framework {
-                baseName = "KobPlayer"
-                isStatic = true
-            }
-        }
+        iosArm64()
+        iosSimulatorArm64()
     }
 
     sourceSets {
@@ -81,12 +77,6 @@ kotlin {
             implementation(kotlin("test-junit"))
             implementation(libs.junit)
             implementation(libs.robolectric)
-        }
-
-        if (hostIsMac) {
-            iosMain.dependencies {
-                // MobileVLCKit 3.3.15 via CocoaPods — configured in the iOS app's Podfile
-            }
         }
     }
 }

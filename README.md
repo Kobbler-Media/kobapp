@@ -35,7 +35,7 @@ The web player needs nothing installed: your Kobbler server serves it at `/playe
 | Android     | yes    | `minSdk` 24, `targetSdk` 36 |
 | Android TV  | yes    | D-pad focus navigation, TV-specific layouts |
 | Desktop     | Linux  | JVM + Compose Desktop. Video plays through the libvlc [kobvlc](https://github.com/Kobbler-Media/kobvlc) builds, bundled with the app — built on Arch, so it runs on Arch and its derivatives — with optional VA-API GPU decode, MPRIS and screensaver inhibit. macOS and Windows: the app builds, but no libvlc is bundled for them and vlcj 5 needs VLC 4, not the VLC 3 that VideoLAN's installers ship, so expect no video playback |
-| iOS         | sources only | Swift sources under `iosApp/` are WIP and not buildable from a clean clone — no Xcode project file is committed yet |
+| iOS         | builds, no playback | `iosApp/iosApp.xcodeproj` builds and runs on Apple Silicon simulators (CI smoke-tests it). No libVLC is bundled for iOS yet, so nothing plays. Intel Macs can only build for devices: Compose Multiplatform publishes no x86_64 simulator libraries |
 | Web (WASM)  | yes    | `wasmJs` browser target |
 
 ## What it does
@@ -71,9 +71,10 @@ and set `KOBBLER_PIN_SERVICE_URL` on the server to match.
 - **Android SDK** for the Android and Android TV targets. Point at it with the `ANDROID_HOME`
   environment variable, or create a `local.properties` in the repo root containing
   `sdk.dir=/path/to/Android/sdk`. `local.properties` is gitignored — it is machine-specific.
-- **Xcode** (and therefore macOS) to build the iOS target, which also needs its own Xcode
-  project generated first — see the Platforms table above. The iOS targets are *only declared
-  when the build host is a Mac*, so nothing iOS-related breaks the build elsewhere.
+- **Xcode** (and therefore macOS) to build the iOS target: open `iosApp/iosApp.xcodeproj`, or
+  run `iosApp/sim-smoke.sh`. Signing for a device needs `TEAM_ID = <your team>` in a gitignored
+  `iosApp/Configuration/Local.xcconfig`. The iOS targets are *only declared when the build host
+  is a Mac*, so nothing iOS-related breaks the build elsewhere.
 - **No system VLC** for Desktop. The build downloads kobvlc's Linux libvlc
   (`libvlc-linux` in `gradle/libs.versions.toml`) from its GitHub releases and bundles it; the
   distribution's VLC 3 is never used.
@@ -117,7 +118,7 @@ kobvlc's `versions.env` if you bumped it.
 | `composeApp`     | the app: data layer, all screens, platform `expect`/`actual` shims |
 | `androidApp`     | Android/Android TV entry point, Cast integration, packaging |
 | `iosApp`         | Xcode project wrapping the shared UI |
-| `kobplayer`      | multiplatform video/audio player abstraction (libvlc on Desktop, Media3 on Android, MobileVLCKit on iOS) |
+| `kobplayer`      | multiplatform video/audio player abstraction (libVLC 4 on Desktop and Android through one shared `VlcPlayer`, HTML video on Web) |
 | `kobpalette`     | colour extraction for artwork-derived theming |
 | `kobfocus`       | declarative D-pad focus graph used by the TV layouts |
 | `baselineprofile`| generates the Android baseline profile |

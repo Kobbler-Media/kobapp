@@ -47,9 +47,9 @@ val macPkgVersion: String = pkgVersion.split('.').toMutableList().also {
     if (it.firstOrNull() == "0") it[0] = "1"
 }.joinToString(".")
 
-// iOS needs an Apple host to build at all (Xcode toolchain, and MobileVLCKit via
-// CocoaPods for kobplayer). Declaring the targets off-Mac makes `gradle build` fail on
-// :compileIosMainKotlinMetadata, so they are simply absent unless the host can build them.
+// iOS needs an Apple host (the Xcode toolchain) to build at all. Declaring the targets
+// off-Mac makes `gradle build` fail on :compileIosMainKotlinMetadata, so they are simply
+// absent unless the host can build them.
 val hostIsMac = org.jetbrains.kotlin.konan.target.HostManager.hostIsMac
 
 kotlin {

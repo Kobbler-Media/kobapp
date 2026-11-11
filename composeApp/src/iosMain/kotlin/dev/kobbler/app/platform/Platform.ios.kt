@@ -11,6 +11,7 @@ import platform.Foundation.NSUserDefaults
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import platform.Foundation.NSBundle
 import platform.Foundation.NSData
 import platform.Foundation.NSLocale
 import platform.Foundation.countryCode
@@ -51,8 +52,9 @@ actual object Settings {
 }
 
 actual object AppVersion {
-    actual val versionCode: Int = 0
-    actual val versionName: String = "ios"
+    private val info = NSBundle.mainBundle.infoDictionary
+    actual val versionCode: Int = (info?.get("CFBundleVersion") as? String)?.toIntOrNull() ?: 0
+    actual val versionName: String = info?.get("CFBundleShortVersionString") as? String ?: "dev"
 }
 
 @OptIn(ExperimentalForeignApi::class)

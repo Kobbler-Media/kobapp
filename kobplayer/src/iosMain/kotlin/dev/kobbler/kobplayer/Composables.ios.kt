@@ -2,75 +2,21 @@ package dev.kobbler.kobplayer
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.interop.UIKitView
-import kotlinx.cinterop.ExperimentalForeignApi
-import platform.UIKit.UIView
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+
+// No libVLC on iOS until kobvlc builds one; the player is a VlcBinding over it, like Android's and desktop's.
+private const val NoLibVlc = "libVLC is not bundled for iOS yet"
 
 @Composable
-actual fun rememberPlayer(config: PlayerConfig): Player {
-    val scope = rememberCoroutineScope()
-    val player = remember {
-        IosPlayer(scope.coroutineContext, config)
-    }
-
-    DisposableEffect(player) {
-        onDispose { player.release() }
-    }
-
-    return player
-}
+actual fun rememberPlayer(config: PlayerConfig): Player = error(NoLibVlc)
 
 @Composable
-actual fun rememberPlayerFactory(): (PlayerConfig) -> Player {
-    val scope = rememberCoroutineScope()
-    return remember { { config -> IosPlayer(scope.coroutineContext, config) } }
-}
-
-@OptIn(ExperimentalForeignApi::class)
-@Composable
-actual fun VideoSurface(
-    player: Player,
-    modifier: Modifier,
-    overlay: @Composable (Player) -> Unit,
-) {
-    val ios = player as IosPlayer
-
-    Box(modifier) {
-        UIKitView(
-            factory = {
-                UIView().also { view ->
-                    ios.vlcMediaPlayer.drawable = view
-                }
-            },
-            modifier = Modifier.matchParentSize(),
-        )
-
-        overlay(player)
-    }
-}
+actual fun rememberPlayerFactory(): (PlayerConfig) -> Player = { error(NoLibVlc) }
 
 @Composable
-actual fun rememberPlayerAsync(config: PlayerConfig): Player? {
-    val scope = rememberCoroutineScope()
-    var player by remember { mutableStateOf<Player?>(null) }
+actual fun rememberPlayerAsync(config: PlayerConfig): Player? = null
 
-    LaunchedEffect(config) {
-        player = withContext(Dispatchers.Default) { IosPlayer(scope.coroutineContext, config) }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { player?.release() }
-    }
-
-    return player
+@Composable
+actual fun VideoSurface(player: Player, modifier: Modifier, overlay: @Composable (Player) -> Unit) {
+    Box(modifier) { overlay(player) }
 }

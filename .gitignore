@@ -42,3 +42,7 @@ docker-compose.local.yml
 
 # Test book assets (stage locally, see TestBookActivity)
 androidApp/src/debug/assets/testbook/
+
+# Xcode
+xcuserdata/
+iosApp/Configuration/Local.xcconfig

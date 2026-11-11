@@ -1,0 +1,6 @@
+PRODUCT_NAME = Kobbler
+PRODUCT_BUNDLE_IDENTIFIER = dev.kobbler.app
+TEAM_ID =
+
+// Signing for a device: put TEAM_ID = <your Apple team id> in Local.xcconfig beside this file.
+#include? "Local.xcconfig"
