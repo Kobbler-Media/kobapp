@@ -23,14 +23,15 @@ app=../build/ios/Build/Products/Debug-iphonesimulator/Kobbler.app
 
 xcrun simctl bootstatus "$udid" -b
 xcrun simctl install "$udid" "$app"
-xcrun simctl launch "$udid" "$BUNDLE"
+pid=$(xcrun simctl launch "$udid" "$BUNDLE" | awk '{print $NF}')
 sleep "$SETTLE"
 
 xcrun simctl io "$udid" screenshot "$OUT/screen.png"
 xcrun simctl spawn "$udid" log show --last 5m --style compact --predicate 'process == "Kobbler"' > "$OUT/app.log" || true
 cp ~/Library/Logs/DiagnosticReports/Kobbler-*.ips "$OUT/" 2>/dev/null || true
 
-if xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:$BUNDLE"; then
+# A simulator app is an ordinary process on the host.
+if kill -0 "$pid" 2>/dev/null; then
   echo "Kobbler is running after ${SETTLE}s"
 else
   echo "Kobbler is not running after ${SETTLE}s"
