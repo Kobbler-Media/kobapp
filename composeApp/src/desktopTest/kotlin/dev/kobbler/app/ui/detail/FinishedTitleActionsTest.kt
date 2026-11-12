@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.filterToOne
+import androidx.compose.ui.test.isNotEnabled
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.UiTimeoutMs
 import dev.kobbler.app.data.Book
@@ -76,6 +78,25 @@ class FinishedTitleActionsTest {
                 assertTrue(stubBodies().getValue("$SHOW_PATH/watch-state").contains("\"watched\":false"), "$formFactor did not reset")
                 openOverflowIfAny()
                 for (duplicate in listOf("Mark all unwatched", "Rewatch from the start")) assertTrue(!rowHas(duplicate), "$formFactor offers $duplicate")
+            }
+        }
+    }
+
+    @Test
+    fun `caught up on a show still airing, the row says when the next episode lands instead of Rewatch`() {
+        val caughtUp = showJson(
+            inLibrary = { s, e -> s < 4 || e == 1 },
+            watched = { s, e -> s < 4 || e == 1 },
+            resumes = false,
+            airs = { s, e -> "2099-03-04".takeIf { s == 4 && e == 2 } },
+        )
+        for ((formFactor, width) in formFactors) {
+            page(formFactor, width, mapOf(SHOW_PATH to { caughtUp }), content = { api ->
+                val show = runBlocking { api.getShow("show-1") }
+                TvShowDetailScreen(show = show, formFactor = formFactor, onBack = {}, onPlayEpisode = { _, _, _ -> }, api = api)
+            }) {
+                onAllNodesWithText("Airs Mar 4, 2099").filterToOne(isNotEnabled()).assertIsDisplayed()
+                assertTrue(onAllNodesWithText("Rewatch").fetchSemanticsNodes().isEmpty(), "$formFactor still offers Rewatch")
             }
         }
     }

@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.detail
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DownloadForOffline
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Download
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.ContinueEpisode
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TvShow
+import dev.kobbler.app.data.localToday
 import dev.kobbler.app.offline.downloadShow
 import dev.kobbler.app.offline.setAutoDownload
 import dev.kobbler.app.platform.supportsVideoPlayback
@@ -39,6 +41,7 @@ import dev.kobbler.app.ui.detail.actions.ShowActionState
 import dev.kobbler.app.ui.detail.actions.episodeAt
 import dev.kobbler.app.ui.detail.actions.firstEpisode
 import dev.kobbler.app.ui.detail.actions.showActions
+import dev.kobbler.app.ui.detail.tvshow.upcomingLabel
 import dev.kobbler.app.ui.offline.LocalOfflineEngine
 import dev.kobbler.app.ui.offline.episodesPlayableOffline
 import dev.kobbler.app.ui.offline.rememberShowDownloads
@@ -138,6 +141,12 @@ internal fun ShowActions(
                     startOver()
                     play(action.at, true)()
                 },
+            )
+            // Nothing to press until it lands; the pill keeps its place so the row reads the
+            // same as it will once there is something to play.
+            is ShowAction.Upcoming -> RowAction(
+                key = "action.upcoming", label = upcomingLabel(action.airDate, localToday()), icon = Icons.Outlined.Event,
+                onClick = {}, detail = tag(action.at), enabled = false,
             )
             is ShowAction.NextEpisode ->
                 RowAction("action.playNext", "Next episode", Icons.Outlined.SkipNext, play(action.at, false), detail = tag(action.at))

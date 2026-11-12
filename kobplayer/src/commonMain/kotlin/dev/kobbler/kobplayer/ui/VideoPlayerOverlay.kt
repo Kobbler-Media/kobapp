@@ -318,11 +318,13 @@ fun VideoPlayerOverlay(
                 // A TV exits with the remote's back key, which the host already
                 // handles; the arrow was a D-pad stop leading nowhere.
                 if (!tv) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = focusDecoration("back", 999f, 1.08f),
-                    ) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.primary)
+                    HoverLabel("Back") {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = focusDecoration("back", 999f, 1.08f),
+                        ) {
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.primary)
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                 }
@@ -690,20 +692,24 @@ fun VideoPlayerOverlay(
                             horizontalArrangement = Arrangement.spacedBy(40.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            IconButton(
-                                onClick = { onSeek((currentMs() - 10_000).coerceAtLeast(0)); onInteraction() },
-                                modifier = Modifier.size(56.dp).then(focusDecoration("rewind", 999f, 1.08f)),
-                            ) {
-                                Icon(Icons.Rounded.FastRewind, "Rewind 10s", tint = colors.primary, modifier = Modifier.size(36.dp))
+                            HoverLabel("Back 10 seconds") {
+                                IconButton(
+                                    onClick = { onSeek((currentMs() - 10_000).coerceAtLeast(0)); onInteraction() },
+                                    modifier = Modifier.size(56.dp).then(focusDecoration("rewind", 999f, 1.08f)),
+                                ) {
+                                    Icon(Icons.Rounded.FastRewind, "Rewind 10s", tint = colors.primary, modifier = Modifier.size(36.dp))
+                                }
                             }
 
                             Spacer(Modifier.width(88.dp))
 
-                            IconButton(
-                                onClick = { onSeek((currentMs() + 10_000).coerceAtMost(durationMs)); onInteraction() },
-                                modifier = Modifier.size(56.dp).then(focusDecoration("forward", 999f, 1.08f)),
-                            ) {
-                                Icon(Icons.Rounded.FastForward, "Forward 10s", tint = colors.primary, modifier = Modifier.size(36.dp))
+                            HoverLabel("Forward 10 seconds") {
+                                IconButton(
+                                    onClick = { onSeek((currentMs() + 10_000).coerceAtMost(durationMs)); onInteraction() },
+                                    modifier = Modifier.size(56.dp).then(focusDecoration("forward", 999f, 1.08f)),
+                                ) {
+                                    Icon(Icons.Rounded.FastForward, "Forward 10s", tint = colors.primary, modifier = Modifier.size(36.dp))
+                                }
                             }
                         }
                     }
@@ -872,15 +878,17 @@ fun VideoPlayerOverlay(
                         AspectRatioSelector(currentRatio = aspectRatio, colors = colors, onSelect = { onSetAspectRatio(it); onInteraction() }, focusDecoration = focusDecoration, tv = tv)
 
                         if (onToggleFullscreen != null) {
-                            IconButton(
-                                onClick = { onToggleFullscreen(); onInteraction() },
-                                modifier = Modifier.size(36.dp).then(focusDecoration("fullscreen", 999f, 1.08f)),
-                            ) {
-                                Icon(
-                                    if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                                    contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
-                                    tint = colors.primary, modifier = Modifier.size(22.dp),
-                                )
+                            HoverLabel(if (isFullscreen) "Exit fullscreen" else "Fullscreen") {
+                                IconButton(
+                                    onClick = { onToggleFullscreen(); onInteraction() },
+                                    modifier = Modifier.size(36.dp).then(focusDecoration("fullscreen", 999f, 1.08f)),
+                                ) {
+                                    Icon(
+                                        if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                                        contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
+                                        tint = colors.primary, modifier = Modifier.size(22.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -1138,14 +1146,16 @@ private fun BarPlayPause(
     focusDecoration: ControlFocus,
     onClick: () -> Unit,
 ) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp).focusRequester(focus).then(focusDecoration("playpause", 999f, 1.08f)),
-    ) {
-        Icon(
-            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            "Play/Pause", tint = colors.primary, modifier = Modifier.size(28.dp),
-        )
+    HoverLabel(if (isPlaying) "Pause" else "Play") {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(40.dp).focusRequester(focus).then(focusDecoration("playpause", 999f, 1.08f)),
+        ) {
+            Icon(
+                if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                "Play/Pause", tint = colors.primary, modifier = Modifier.size(28.dp),
+            )
+        }
     }
 }
 
@@ -1251,14 +1261,16 @@ internal fun TrackSelector(
         else -> colors.primaryDim
     }
     Box {
-        IconButton(
-            onClick = {
-                if (tv) onMenuToggle(!isOpen)
-                else { expandedLocal = true; onMenuToggle(true) }
-            },
-            modifier = Modifier.size(36.dp).focusRequester(triggerFocus).then(focusDecoration(focusKeyPrefix, 999f, 1.08f)),
-        ) {
-            Icon(icon, label, tint = tint, modifier = Modifier.size(20.dp))
+        HoverLabel(label, enabled = !isOpen) {
+            IconButton(
+                onClick = {
+                    if (tv) onMenuToggle(!isOpen)
+                    else { expandedLocal = true; onMenuToggle(true) }
+                },
+                modifier = Modifier.size(36.dp).focusRequester(triggerFocus).then(focusDecoration(focusKeyPrefix, 999f, 1.08f)),
+            ) {
+                Icon(icon, label, tint = tint, modifier = Modifier.size(20.dp))
+            }
         }
         if (!tv) DropdownMenu(
             expanded = expandedLocal, onDismissRequest = { expandedLocal = false; onMenuToggle(false) },
@@ -1312,26 +1324,28 @@ internal fun SpeedSelector(
     val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
     val isNonDefault = currentSpeed != 1.0f
     Box {
-        TextButton(
-            onClick = {
-                if (tv) {
-                    // One stop, no popup: the remote's OK walks the value forward and
-                    // wraps. The label on the button is the value, so the viewer sees
-                    // what the press did.
-                    val idx = speeds.indexOfFirst { it == currentSpeed }
-                    onSelect(speeds[(idx + 1) % speeds.size])
-                } else {
-                    expanded = true; onMenuToggle(true)
-                }
-            },
-            colors = ButtonDefaults.textButtonColors(contentColor = if (isNonDefault) colors.accent else colors.primaryDim),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            modifier = Modifier.height(36.dp).then(focusDecoration("speed", 999f, 1.03f)),
-        ) {
-            Text(
-                if (currentSpeed == 1.0f) "1x" else "${currentSpeed}x",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (isNonDefault) FontWeight.Bold else FontWeight.Medium),
-            )
+        HoverLabel("Playback speed", enabled = !expanded) {
+            TextButton(
+                onClick = {
+                    if (tv) {
+                        // One stop, no popup: the remote's OK walks the value forward and
+                        // wraps. The label on the button is the value, so the viewer sees
+                        // what the press did.
+                        val idx = speeds.indexOfFirst { it == currentSpeed }
+                        onSelect(speeds[(idx + 1) % speeds.size])
+                    } else {
+                        expanded = true; onMenuToggle(true)
+                    }
+                },
+                colors = ButtonDefaults.textButtonColors(contentColor = if (isNonDefault) colors.accent else colors.primaryDim),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.height(36.dp).then(focusDecoration("speed", 999f, 1.03f)),
+            ) {
+                Text(
+                    if (currentSpeed == 1.0f) "1x" else "${currentSpeed}x",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (isNonDefault) FontWeight.Bold else FontWeight.Medium),
+                )
+            }
         }
         if (!tv) DropdownMenu(
             expanded = expanded, onDismissRequest = { expanded = false; onMenuToggle(false) },
@@ -1378,11 +1392,13 @@ internal fun AspectRatioSelector(
             Text(label, style = MaterialTheme.typography.labelMedium, color = tint)
         }
     } else {
-        IconButton(
-            onClick = { onSelect(nextRatio) },
-            modifier = Modifier.size(36.dp).then(focusDecoration("aspect", 999f, 1.08f)),
-        ) {
-            Icon(icon, label, tint = tint, modifier = Modifier.size(20.dp))
+        HoverLabel("Aspect ratio: $label") {
+            IconButton(
+                onClick = { onSelect(nextRatio) },
+                modifier = Modifier.size(36.dp).then(focusDecoration("aspect", 999f, 1.08f)),
+            ) {
+                Icon(icon, label, tint = tint, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }
@@ -1443,14 +1459,16 @@ internal fun ChapterListButton(
     val regular = remember(chapters) { chapters.filterNot { it.detected } }
     val detected = remember(chapters) { chapters.filter { it.detected } }
     Box {
-        IconButton(
-            onClick = {
-                if (tv) onMenuToggle(!isOpen)
-                else { expandedLocal = true; onMenuToggle(true) }
-            },
-            modifier = Modifier.size(36.dp).focusRequester(triggerFocus).then(focusDecoration("chapters", 999f, 1.08f)),
-        ) {
-            Icon(Icons.AutoMirrored.Outlined.Toc, "Chapters", tint = colors.primary, modifier = Modifier.size(20.dp))
+        HoverLabel("Chapters", enabled = !isOpen) {
+            IconButton(
+                onClick = {
+                    if (tv) onMenuToggle(!isOpen)
+                    else { expandedLocal = true; onMenuToggle(true) }
+                },
+                modifier = Modifier.size(36.dp).focusRequester(triggerFocus).then(focusDecoration("chapters", 999f, 1.08f)),
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.Toc, "Chapters", tint = colors.primary, modifier = Modifier.size(20.dp))
+            }
         }
         DropdownMenu(
             expanded = !tv && expandedLocal, onDismissRequest = { expandedLocal = false; onMenuToggle(false) },

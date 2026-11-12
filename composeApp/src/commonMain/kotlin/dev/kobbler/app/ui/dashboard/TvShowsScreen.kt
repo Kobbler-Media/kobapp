@@ -42,6 +42,7 @@ fun TvShowsScreen(
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
     onShowClick: (TvShow) -> Unit,
+    onShowPlay: ((TvShow) -> Unit)? = null,
     onContinueClick: (ContinueItem) -> Unit = {},
     onSearchClick: (() -> Unit)? = null,
 ) {
@@ -351,6 +352,7 @@ fun TvShowsScreen(
                                     accentColor = accentColor,
                                     offline = showAvailableOffline(show.id),
                                     onClick = { onShowClick(show) },
+                                    contextMenuItems = rememberShowCardActions(show, api, onShowPlay),
                                     modifier = Modifier
                                         .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
                                         .focusKey("show.${show.id}", preferredEntry = recentIsEntry && idx == 0)
@@ -400,6 +402,7 @@ fun TvShowsScreen(
                         accentColor = accentColor,
                         offline = showAvailableOffline(show.id),
                         onClick = { onShowClick(show) },
+                        contextMenuItems = rememberShowCardActions(show, api, onShowPlay),
                         modifier = Modifier
                             .spotlightOn(pointer) { show.spotlight() }.showingBadge(swiper, show.spotlight())
                             .focusKey("grid.${show.id}", preferredEntry = gridIsEntry && index == 0)

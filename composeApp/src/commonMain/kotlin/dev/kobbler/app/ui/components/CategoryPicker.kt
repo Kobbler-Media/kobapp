@@ -210,8 +210,9 @@ private fun CategoryTile(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        val lit = focus.isFocused && focusDecorated()
         Box(Modifier.fillMaxSize().drawBehind {
-            drawRect(Color.Black.copy(alpha = if (focus.isFocused) 0.35f else 0.6f))
+            drawRect(Color.Black.copy(alpha = if (lit) 0.35f else 0.6f))
         })
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 16.dp)) {
             Text(

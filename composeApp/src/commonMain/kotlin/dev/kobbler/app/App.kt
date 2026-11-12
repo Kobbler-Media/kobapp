@@ -26,6 +26,13 @@ import dev.kobbler.app.platform.defaultFormFactor
 import dev.kobbler.app.platform.imageCacheDir
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.kobfocus.FocusScopeHost
+import dev.kobbler.kobfocus.FocusVisibility
+import dev.kobbler.kobfocus.LocalFocusVisibility
+import dev.kobbler.kobfocus.trackFocusVisibility
+import androidx.compose.material3.LocalRippleConfiguration
+import androidx.compose.material3.RippleConfiguration
+import androidx.compose.material3.RippleDefaults
+import androidx.compose.material.ripple.RippleAlpha
 import dev.kobbler.kobfocus.LocalFocusScopeStore
 import dev.kobbler.kobfocus.rememberFocusScopeStore
 import dev.kobbler.app.ui.auth.PinLoginScreen
@@ -62,10 +69,13 @@ fun App(
         lifecycle.currentStateFlow.collect { AppForeground.set(it.isAtLeast(Lifecycle.State.STARTED)) }
     }
 
+    val focusVisibility = remember { FocusVisibility(visible = formFactor == FormFactor.TV) }
     KobappTheme(formFactor = formFactor) {
         // The one full-screen background under every screen; the window draws none.
-        Box(Modifier.fillMaxSize().background(KobappTheme.colors.bg)) {
+        Box(Modifier.fillMaxSize().trackFocusVisibility(focusVisibility).background(KobappTheme.colors.bg)) {
             androidx.compose.runtime.CompositionLocalProvider(
+                LocalFocusVisibility provides focusVisibility,
+                LocalRippleConfiguration provides if (focusVisibility.visible) KeyedRipple else PointedRipple,
                 dev.kobbler.app.data.LocalAuthState provides auth,
                 LocalFocusScopeStore provides rememberFocusScopeStore(),
                 dev.kobbler.app.ui.navigation.LocalBackInterceptors provides
@@ -80,4 +90,12 @@ fun App(
             }
         }
     }
+}
+
+private val KeyedRipple = RippleConfiguration()
+
+// Material's own focus highlight: a pressed button keeps focus, and its tint would stay
+// on long after the finger has gone.
+private val PointedRipple = RippleDefaults.RippleAlpha.let {
+    RippleConfiguration(rippleAlpha = RippleAlpha(it.draggedAlpha, 0f, it.hoveredAlpha, it.pressedAlpha))
 }

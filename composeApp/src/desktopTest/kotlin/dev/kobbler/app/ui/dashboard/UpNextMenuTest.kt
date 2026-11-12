@@ -16,6 +16,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.semantics.SemanticsActions
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
@@ -27,6 +29,8 @@ import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import kotlin.test.Test
 import kotlin.test.assertTrue
+
+private const val UpNextDismissPath = "/api/v1/admin/up-next/dismiss"
 
 /** Up Next is where a title that will never be finished keeps turning up; holding it is how it goes. */
 @OptIn(ExperimentalTestApi::class)
@@ -45,6 +49,7 @@ class UpNextMenuTest {
         "/api/v1/admin/tv/episodes/race/watch-state" to { _ -> "{}" },
         "/api/v1/admin/tv/episodes/race/watch-state/earlier" to { _ -> """{"updated_count":3}""" },
         "/api/v1/admin/tv/episodes/e7/watch-state" to { _ -> "{}" },
+        UpNextDismissPath to { _ -> "" },
     )
 
     private fun home(formFactor: FormFactor, test: DesktopComposeUiTest.(StubServer) -> Unit) =
@@ -90,6 +95,30 @@ class UpNextMenuTest {
         pick(stub, "Mark watched", "/api/v1/admin/tv/episodes/e7/watch-state")
         val body = stub.requestBodies.getValue("/api/v1/admin/tv/episodes/e7/watch-state")
         assertTrue("\"watched\":true" in body, body)
+    }
+
+    @Test
+    fun `not interested takes a title off Up Next at once, on every form factor`() {
+        for ((formFactor, title, expected) in listOf(
+            Triple(FormFactor.Phone, "A Show", """"media_type":"episode","media_id":"e7""""),
+            Triple(FormFactor.TV, "A Film", """"media_type":"movie","media_id":"m1""""),
+        )) home(formFactor) { stub ->
+            val card = if (formFactor == FormFactor.Phone) onNodeWithText(title) else onNodeWithTag("$UpNextCardTag.0")
+            card.performTouchInput { longClick() }
+            waitForIdle()
+            pick(stub, "Not interested", UpNextDismissPath)
+            val body = stub.requestBodies.getValue(UpNextDismissPath)
+            assertTrue(expected in body, "$formFactor sent $body")
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText(title).fetchSemanticsNodes().isEmpty() }
+            assertTrue(onAllNodesWithText("MotoGP").fetchSemanticsNodes().isNotEmpty(), "$formFactor hid the rest of Up Next too")
+        }
+    }
+
+    @Test
+    fun `a right click on desktop opens the same menu`() = home(FormFactor.Desktop) { stub ->
+        onNodeWithTag("$UpNextCardTag.2").performMouseInput { rightClick() }
+        waitForIdle()
+        pick(stub, "Mark watched", "/api/v1/admin/tv/episodes/e7/watch-state")
     }
 
     @Test

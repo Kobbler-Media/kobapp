@@ -3880,6 +3880,17 @@ class KobblerApi(
 
     // -- Discover --
 
+    suspend fun dismissUpNext(mediaType: MediaType, mediaId: String) {
+        val kind = when (mediaType) {
+            MediaType.Movie -> "movie"
+            MediaType.TvShow -> "episode"
+            MediaType.SportsEvent -> "event"
+            MediaType.Book, MediaType.Audiobook -> return
+        }
+        post("/api/v1/admin/up-next/dismiss", buildJsonObject { put("media_type", kind); put("media_id", mediaId) }.toString())
+        DataCache.invalidate("home")
+    }
+
     suspend fun dismissRecommendation(item: DiscoverItem) {
         val tmdbId = item.providerId.toLongOrNull()?.takeIf { item.provider == "tmdb" } ?: return
         post("/api/v1/admin/discover/for-you/dismiss", recommendationBody(item.mediaType, tmdbId))

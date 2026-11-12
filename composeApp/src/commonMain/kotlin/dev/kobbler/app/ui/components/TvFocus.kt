@@ -1,5 +1,9 @@
 package dev.kobbler.app.ui.components
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -32,6 +36,7 @@ import androidx.compose.ui.zIndex
 import dev.kobbler.app.theme.LocalKobappColors
 import dev.kobbler.app.theme.LocalSection
 import dev.kobbler.app.theme.accentFor
+import dev.kobbler.kobfocus.LocalFocusVisibility
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -64,6 +69,9 @@ private const val FocusOutMillis = 250
  */
 val LocalTvFocusDecor = compositionLocalOf { true }
 
+@Composable
+fun focusDecorated(): Boolean = LocalTvFocusDecor.current && LocalFocusVisibility.current.visible
+
 class TvFocusState {
     var isFocused by mutableStateOf(false)
 }
@@ -73,14 +81,27 @@ fun rememberTvFocusState(): TvFocusState = remember { TvFocusState() }
 
 fun Modifier.tvClickable(state: TvFocusState, onClick: () -> Unit): Modifier = tvClickable(state, null, onClick)
 
-/** [onLongClick] answers a touch long-press and an OK button held down on a remote alike. */
+/** [onLongClick] answers a touch long-press, an OK button held down on a remote, and a right click alike. */
 fun Modifier.tvClickable(
     state: TvFocusState,
     onLongClick: (() -> Unit)?,
     onClick: () -> Unit,
 ): Modifier = this
     .onFocusChanged { state.isFocused = it.isFocused }
+    .then(if (onLongClick != null) Modifier.onSecondaryClick(onLongClick) else Modifier)
     .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+
+private fun Modifier.onSecondaryClick(action: () -> Unit): Modifier = pointerInput(action) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                event.changes.forEach { it.consume() }
+                action()
+            }
+        }
+    }
+}
 
 /**
  * Decoration driven by [state] rather than by a focus target below it, for elements whose
@@ -110,7 +131,7 @@ fun Modifier.tvAutoGlow(
  */
 @Composable
 fun tvFocusProgress(focused: Boolean): State<Float> = animateFloatAsState(
-    targetValue = if (focused && LocalTvFocusDecor.current) 1f else 0f,
+    targetValue = if (focused && focusDecorated()) 1f else 0f,
     animationSpec = tween(if (focused) FocusInMillis else FocusOutMillis),
 )
 
@@ -214,7 +235,7 @@ private class TvAutoGlowNode(
         get() = accentOverride.takeIf { it != Color.Unspecified }
             ?: currentValueOf(LocalKobappColors).accentFor(currentValueOf(LocalSection))
 
-    // Reading LocalTvFocusDecor from draw() would suppress the ring but not the fade, so
+    // Reading the decor switches from draw() would suppress the ring but not the fade, so
     // it is observed here instead: the node re-targets its own animation and the ring
     // eases out exactly as it does when focus genuinely leaves.
     override fun onAttach() = readDecor()
@@ -223,7 +244,7 @@ private class TvAutoGlowNode(
 
     private fun readDecor() {
         observeReads {
-            decorate = currentValueOf(LocalTvFocusDecor)
+            decorate = currentValueOf(LocalTvFocusDecor) && currentValueOf(LocalFocusVisibility).visible
             source?.let { focused = it.isFocused }
         }
         retarget()
@@ -280,7 +301,7 @@ private class TvAutoGlowNode(
 
 @Composable
 fun Modifier.tvMarquee(focused: Boolean): Modifier =
-    if (focused && LocalTvFocusDecor.current && !LocalCoveredByPlayer.current) {
+    if (focused && focusDecorated() && !LocalCoveredByPlayer.current) {
         // Twice is enough to read it. Forever repaints the whole window every frame for as
         // long as the card holds focus, which on a TV stick is a GPU kept flat out by a
         // viewer who has stopped to think.

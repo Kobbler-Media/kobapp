@@ -54,7 +54,7 @@ import dev.kobbler.app.data.HomeData
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.RecentlyAddedItem
 import dev.kobbler.app.data.UpNextItem
-import dev.kobbler.app.data.toUpNextItem
+import dev.kobbler.app.data.ContinueItem
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.PosterCard
 import dev.kobbler.app.ui.components.WideCard
@@ -76,13 +76,14 @@ import dev.kobbler.app.ui.components.bleedHorizontally
 fun HomePhone(
     homeData: HomeData,
     api: KobblerApi,
-    onContinueClick: (Int) -> Unit,
+    onContinueClick: (ContinueItem) -> Unit,
     onRecentClick: (RecentlyAddedItem) -> Unit,
     onDiscoverItemClick: (DiscoverItem) -> Unit,
 ) {
     val colors = KobappTheme.colors
     val gutter = KobappTheme.dimens.pageGutterPhone
-    val upNext = remember(homeData) { homeData.watchNext.map { it.toUpNextItem() } }
+    val queue = rememberUpNextQueue(homeData)
+    val upNext = queue.items
     val hero = upNext.firstOrNull()
     val stack = upNext.drop(1)
 
@@ -144,9 +145,9 @@ fun HomePhone(
                 item(key = "hero") {
                     PhoneHero(
                         item = hero,
-                        actions = rememberUpNextActions(hero, api),
+                        actions = rememberUpNextActions(hero, api, queue.hide),
                         height = heroHeight,
-                        onClick = { onContinueClick(0) },
+                        onClick = { hero.source?.let(onContinueClick) },
                         modifier = Modifier.showingBadge(spotlight, hero.spotlight()),
                     )
                 }
@@ -186,8 +187,8 @@ fun HomePhone(
                                         progress = item.progress ?: 0f,
                                         accentColor = colors.accentForMediaType(item.mediaType),
                                         offline = continueAvailableOffline(item.mediaType, item.mediaId),
-                                        onClick = { onContinueClick(i + 1) },
-                                        actions = rememberUpNextActions(item, api),
+                                        onClick = { item.source?.let(onContinueClick) },
+                                        actions = rememberUpNextActions(item, api, queue.hide),
                                         modifier = Modifier.width(cardWidth).showingBadge(spotlight, item.spotlight()),
                                     )
                                 }

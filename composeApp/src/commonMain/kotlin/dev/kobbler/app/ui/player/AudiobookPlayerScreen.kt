@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.player
 
 import androidx.compose.foundation.background
+import dev.kobbler.app.ui.components.LabelledIconButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -23,8 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -225,12 +224,7 @@ private fun TopBar(
     ) {
         val touch = LocalFormFactor.current != FormFactor.TV
         if (touch) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.focusKey("back").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-            ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = colors.textHi)
-            }
+            LabelledIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack, Modifier.focusKey("back"), tint = colors.textHi)
         }
         Column(Modifier.weight(1f).padding(horizontal = if (touch) 6.dp else KobappTheme.dimens.s2)) {
             Text(
@@ -249,20 +243,10 @@ private fun TopBar(
             )
         }
         CastButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), colors.textMd)
-        IconButton(
-            onClick = onAddBookmark,
-            modifier = Modifier.focusKey("bookmark").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.Outlined.BookmarkAdd, "Add bookmark", tint = colors.textMd)
-        }
+        LabelledIconButton(Icons.Outlined.BookmarkAdd, "Add bookmark", onAddBookmark, Modifier.focusKey("bookmark"), tint = colors.textMd)
         SleepTimerMenu(mode = sleepMode, remainingMs = sleepRemainingMs, onSelect = onSleepSelect)
         if (onOpenReader != null) {
-            IconButton(
-                onClick = onOpenReader,
-                modifier = Modifier.focusKey("reader").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-            ) {
-                Icon(Icons.AutoMirrored.Outlined.MenuBook, "Follow along", tint = colors.textHi)
-            }
+            LabelledIconButton(Icons.AutoMirrored.Outlined.MenuBook, "Follow along", onOpenReader, Modifier.focusKey("reader"), tint = colors.textHi)
         }
     }
 }

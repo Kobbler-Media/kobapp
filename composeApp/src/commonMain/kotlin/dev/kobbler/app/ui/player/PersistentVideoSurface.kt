@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.player
 
 import androidx.compose.animation.core.Animatable
+import dev.kobbler.kobplayer.ui.HoverLabel
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -401,22 +402,24 @@ fun PersistentVideoSurface(
                         ) {
                             MiniPlayPauseIcon(player)
                         }
-                        IconButton(
-                            onClick = { state.stop(player, api, scope) },
-                            modifier = Modifier.align(Alignment.TopEnd).size(36.dp)
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.1f),
-                        ) {
-                            Icon(Icons.Outlined.Close, "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        HoverLabel("Stop playing", Modifier.align(Alignment.TopEnd)) {
+                            IconButton(
+                                onClick = { state.stop(player, api, scope) },
+                                modifier = Modifier.size(36.dp).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.1f),
+                            ) {
+                                Icon(Icons.Outlined.Close, "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
                         }
-                        IconButton(
-                            onClick = {
-                                state.isFullscreen = true
-                                state.isMiniPlayer = false
-                            },
-                            modifier = Modifier.align(Alignment.TopStart).size(36.dp)
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.1f),
-                        ) {
-                            Icon(Icons.Outlined.Fullscreen, "Expand", tint = Color.White, modifier = Modifier.size(20.dp))
+                        HoverLabel("Full screen", Modifier.align(Alignment.TopStart)) {
+                            IconButton(
+                                onClick = {
+                                    state.isFullscreen = true
+                                    state.isMiniPlayer = false
+                                },
+                                modifier = Modifier.size(36.dp).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.1f),
+                            ) {
+                                Icon(Icons.Outlined.Fullscreen, "Expand", tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
                 }

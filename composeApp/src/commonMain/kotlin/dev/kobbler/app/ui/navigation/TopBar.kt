@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.navigation
 
 import dev.kobbler.app.ui.components.Edge
+import dev.kobbler.kobplayer.ui.HoverLabel
 import dev.kobbler.app.ui.components.edgeLine
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -117,12 +118,14 @@ fun KobTopBar(
             CastButton(Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None), colors.textMd)
         }
         Box {
-            IconButton(
-                onClick = onNotificationsClick,
-                modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)
-                    .then(if (onToggleFullscreen == null) barEnd else Modifier),
-            ) {
-                Icon(Icons.Outlined.Notifications, "Notifications", tint = colors.textMd)
+            HoverLabel("Notifications") {
+                IconButton(
+                    onClick = onNotificationsClick,
+                    modifier = Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None)
+                        .then(if (onToggleFullscreen == null) barEnd else Modifier),
+                ) {
+                    Icon(Icons.Outlined.Notifications, "Notifications", tint = colors.textMd)
+                }
             }
             if (notificationCount > 0) {
                 Box(

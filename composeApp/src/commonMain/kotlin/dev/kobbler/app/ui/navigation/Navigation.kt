@@ -1202,6 +1202,7 @@ private fun SingleTabContent(
                     modifier = modifier,
                     formFactor = formFactor,
                     onMovieClick = { movie -> nav.navigate(Destination.MovieDetail(movie.id)) },
+                    onMoviePlay = { movie -> nav.navigate(Destination.MovieDetail(movie.id, autoPlay = true)) },
                     onContinueClick = { item -> navigateContinueItem(nav, gps, item) },
                     onSearchClick = sectionSearch,
                 )
@@ -1216,6 +1217,7 @@ private fun SingleTabContent(
                     modifier = modifier,
                     formFactor = formFactor,
                     onShowClick = { show -> nav.navigate(Destination.TvShowDetail(show.id)) },
+                    onShowPlay = { show -> nav.navigate(Destination.TvShowDetail(show.id, autoPlay = true)) },
                     onContinueClick = { item -> navigateContinueItem(nav, gps, item) },
                     onSearchClick = sectionSearch,
                 )

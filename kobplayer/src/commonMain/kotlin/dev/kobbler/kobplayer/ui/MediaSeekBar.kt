@@ -1,5 +1,6 @@
 package dev.kobbler.kobplayer.ui
 
+import dev.kobbler.kobfocus.LocalFocusVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -103,7 +104,8 @@ fun MediaSeekBar(
     var isFocused by remember { mutableStateOf(false) }
     var keyFraction by remember { mutableStateOf<Float?>(null) }
 
-    val visuallyActive = isDragging || isHovered || isFocused
+    val focusShown = isFocused && LocalFocusVisibility.current.visible
+    val visuallyActive = isDragging || isHovered || focusShown
     val trackHeight by animateDpAsState(
         targetValue = if (visuallyActive) activeTrackHeight else idleTrackHeight,
         animationSpec = tween(150),
@@ -290,7 +292,7 @@ fun MediaSeekBar(
             val thumbR = currentThumbRadius.toPx()
             if (thumbR > 0f) {
                 val centre = Offset(activeWidth.coerceIn(thumbR, width - thumbR), trackH / 2)
-                if (isFocused) {
+                if (focusShown) {
                     drawCircle(color = activeColor.copy(alpha = 0.28f), radius = thumbR * 2.4f, center = centre)
                     drawCircle(color = activeColor.copy(alpha = 0.5f), radius = thumbR * 1.6f, center = centre)
                 }

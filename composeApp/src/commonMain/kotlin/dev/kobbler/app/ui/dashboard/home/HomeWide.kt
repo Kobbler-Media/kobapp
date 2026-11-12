@@ -52,7 +52,7 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LibraryStatus
 import dev.kobbler.app.data.RecentlyAddedItem
 import dev.kobbler.app.data.UpNextItem
-import dev.kobbler.app.data.toUpNextItem
+import dev.kobbler.app.data.ContinueItem
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
@@ -90,15 +90,16 @@ const val RecentCardTag = "recent-card"
 fun HomeWide(
     homeData: HomeData,
     api: KobblerApi,
-    onContinueClick: (Int) -> Unit,
+    onContinueClick: (ContinueItem) -> Unit,
     onRecentClick: (RecentlyAddedItem) -> Unit,
     onDiscoverItemClick: (DiscoverItem) -> Unit,
-    onContinueDetails: (Int) -> Unit = {},
+    onContinueDetails: (ContinueItem) -> Unit = {},
     topBar: (@Composable (transparent: Boolean) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     val tv = LocalFormFactor.current == FormFactor.TV
-    val upNext = remember(homeData) { homeData.watchNext.map { it.toUpNextItem() } }
+    val queue = rememberUpNextQueue(homeData)
+    val upNext = queue.items
 
     // By id, not position: returning to the page refetches and can reorder Up Next while
     // focus is restored to a hero button, which must still act on the same item. Like the
@@ -178,8 +179,8 @@ fun HomeWide(
                             ) {
                                 HomeBillboard(
                                     item = upNext[heroIndex],
-                                    onPlay = { onContinueClick(heroIndex) },
-                                    onDetails = { onContinueDetails(heroIndex) },
+                                    onPlay = { upNext[heroIndex].source?.let(onContinueClick) },
+                                    onDetails = { upNext[heroIndex].source?.let(onContinueDetails) },
                                     // The page-top hold covers the billboard too: it describes Up Next.
                                     onFocused = { focusedRow.intValue = upNextRow },
                                 )
@@ -188,7 +189,8 @@ fun HomeWide(
                                 UpNextStrip(
                                     items = upNext,
                                     api = api,
-                                    onClick = { idx -> onContinueClick(idx) },
+                                    onHide = queue.hide,
+                                    onClick = { idx -> upNext[idx].source?.let(onContinueClick) },
                                     spotlight = spotlight,
                                     onFocused = { i -> heroId.value = upNext[i].mediaId; focusedRow.intValue = upNextRow },
                                 )
@@ -383,6 +385,7 @@ private fun CenterFocusedPageRow(state: LazyListState, row: IntState, topRow: In
 private fun UpNextStrip(
     items: List<UpNextItem>,
     api: KobblerApi,
+    onHide: (String) -> Unit,
     spotlight: SpotlightState,
     onClick: (Int) -> Unit,
     onFocused: (Int) -> Unit,
@@ -420,7 +423,7 @@ private fun UpNextStrip(
                             accentColor = colors.accentForMediaType(item.mediaType),
                             offline = continueAvailableOffline(item.mediaType, item.mediaId),
                             onClick = { onClick(i) },
-                            actions = rememberUpNextActions(item, api),
+                            actions = rememberUpNextActions(item, api, onHide),
                             modifier = Modifier
                                 // As wide as a poster from the rows below turned on its side, so
                                 // the page reads as one grid; the art keeps the backdrop's 16:9

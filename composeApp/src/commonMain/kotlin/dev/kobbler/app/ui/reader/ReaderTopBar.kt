@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.reader
 
 import androidx.compose.foundation.layout.Row
+import dev.kobbler.app.ui.components.LabelledIconButton
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -14,8 +15,6 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -68,12 +67,7 @@ internal fun ReaderTopBar(
         val showBack = !tv
         val firstAction = if (showBack) remember { FocusRequester() } else entryFocus
         if (showBack) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.focusKey("back", focusRequester = entryFocus).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-            ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = theme.textColor)
-            }
+            LabelledIconButton(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack, Modifier.focusKey("back", focusRequester = entryFocus), tint = theme.textColor)
         }
         Text(
             title,
@@ -83,54 +77,29 @@ internal fun ReaderTopBar(
             modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
         )
         if (hasAudiobook) {
-            IconButton(
-                onClick = onListenAlong,
-                modifier = Modifier.focusKey("listenalong", focusRequester = firstAction).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-            ) {
-                Icon(
-                    Icons.Outlined.Headphones, "Listen Along",
-                    tint = if (syncMode == SyncMode.SYNCING) theme.linkColor else theme.textColor,
-                )
-            }
+            LabelledIconButton(
+                Icons.Outlined.Headphones, "Listen Along", onListenAlong,
+                Modifier.focusKey("listenalong", focusRequester = firstAction),
+                tint = if (syncMode == SyncMode.SYNCING) theme.linkColor else theme.textColor,
+            )
         }
-        IconButton(
-            onClick = onTts,
-            modifier = Modifier.focusKey("tts", focusRequester = if (hasAudiobook) remember { FocusRequester() } else firstAction).tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            val icon = when (ttsState) {
+        LabelledIconButton(
+            icon = when (ttsState) {
                 TtsState.IDLE -> Icons.Outlined.RecordVoiceOver
                 TtsState.LOADING -> Icons.Outlined.HourglassTop
                 TtsState.PLAYING -> Icons.Outlined.Pause
                 TtsState.PAUSED -> Icons.Outlined.PlayArrow
-            }
-            val tint = if (ttsState != TtsState.IDLE) theme.linkColor else theme.textColor
-            Icon(icon, "Read Aloud", tint = tint)
-        }
+            },
+            label = "Read Aloud",
+            onClick = onTts,
+            modifier = Modifier.focusKey("tts", focusRequester = if (hasAudiobook) remember { FocusRequester() } else firstAction),
+            tint = if (ttsState != TtsState.IDLE) theme.linkColor else theme.textColor,
+        )
         // Read-aloud follows the receiver picked here: the next read starts on it.
         CastButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), theme.textColor)
-        IconButton(
-            onClick = onSearch,
-            modifier = Modifier.focusKey("search").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.Outlined.Search, "Search", tint = theme.textColor)
-        }
-        IconButton(
-            onClick = onBookmark,
-            modifier = Modifier.focusKey("bookmark").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.Outlined.BookmarkBorder, "Bookmark", tint = theme.textColor)
-        }
-        IconButton(
-            onClick = onToc,
-            modifier = Modifier.focusKey("toc").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(@Suppress("DEPRECATION") Icons.Outlined.FormatListBulleted, "Contents", tint = theme.textColor)
-        }
-        IconButton(
-            onClick = onSettings,
-            modifier = Modifier.focusKey("settings").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-        ) {
-            Icon(Icons.Outlined.Settings, "Settings", tint = theme.textColor)
-        }
+        LabelledIconButton(Icons.Outlined.Search, "Search", onSearch, Modifier.focusKey("search"), tint = theme.textColor)
+        LabelledIconButton(Icons.Outlined.BookmarkBorder, "Bookmark", onBookmark, Modifier.focusKey("bookmark"), tint = theme.textColor)
+        LabelledIconButton(@Suppress("DEPRECATION") Icons.Outlined.FormatListBulleted, "Contents", onToc, Modifier.focusKey("toc"), tint = theme.textColor)
+        LabelledIconButton(Icons.Outlined.Settings, "Settings", onSettings, Modifier.focusKey("settings"), tint = theme.textColor)
     }
 }

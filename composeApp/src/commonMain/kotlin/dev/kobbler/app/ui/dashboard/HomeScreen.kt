@@ -55,15 +55,12 @@ fun HomeScreen(
     Column(modifier.fillMaxSize()) {
         if (topBar != null && homeState !is Async.Ready) topBar(false)
         AsyncContent(homeState, skeleton = { HomeSkeleton() }, onRetry = homeRetry, modifier = Modifier.weight(1f)) { homeData ->
-            val continueClick: (Int) -> Unit = { idx ->
-                homeData.watchNext.getOrNull(idx)?.let { onContinueClick(it) }
-            }
             when (formFactor) {
                 FormFactor.TV, FormFactor.Desktop -> HomeWide(
                     homeData = homeData,
                     api = api,
-                    onContinueClick = continueClick,
-                    onContinueDetails = { idx -> homeData.watchNext.getOrNull(idx)?.let(onContinueDetails) },
+                    onContinueClick = onContinueClick,
+                    onContinueDetails = onContinueDetails,
                     onRecentClick = onRecentClick,
                     onDiscoverItemClick = onDiscoverItemClick,
                     topBar = topBar,
@@ -89,7 +86,7 @@ fun HomeScreen(
                         HomePhone(
                             homeData = data,
                             api = api,
-                            onContinueClick = continueClick,
+                            onContinueClick = onContinueClick,
                             onRecentClick = onRecentClick,
                             onDiscoverItemClick = onDiscoverItemClick,
                         )

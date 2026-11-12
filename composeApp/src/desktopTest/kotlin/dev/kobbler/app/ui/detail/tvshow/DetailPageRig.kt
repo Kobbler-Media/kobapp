@@ -47,13 +47,14 @@ internal fun showJson(
     inLibrary: (season: Int, episode: Int) -> Boolean = { _, _ -> true },
     watched: (season: Int, episode: Int) -> Boolean = { s, _ -> s < 3 },
     resumes: Boolean = true,
+    airs: (season: Int, episode: Int) -> String? = { _, _ -> null },
 ): String = buildString {
     append("""{"id":"show-1","title":"Remote Show","year":2015,"kids_allowed":false,"content_rating":"TV-MA","seasons":[""")
     append(
         (1..4).joinToString(",") { s ->
             val eps = (1..3).joinToString(",") { e ->
                 """{"id":"e$s-$e","episode_identifier":"$e","episode_sort_order":$e,"title":"S${s}E$e title",
-                   "runtime":45,"is_in_library":${inLibrary(s, e)},"watched":${watched(s, e)}}"""
+                   "runtime":45,"is_in_library":${inLibrary(s, e)},"watched":${watched(s, e)}${airs(s, e)?.let { ""","air_date":"$it"""" }.orEmpty()}}"""
             }
             """{"id":"season-$s","season_identifier":"$s","season_sort_order":$s,"episodes":[$eps]}"""
         },

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -59,8 +58,8 @@ import dev.kobbler.app.theme.Section
 import dev.kobbler.app.data.SkipSegment
 import dev.kobbler.app.theme.accentFor
 import dev.kobbler.app.ui.components.KobButton
+import dev.kobbler.app.ui.components.LabelledIconButton
 import dev.kobbler.app.ui.components.KobButtonStyle
-import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
 import dev.kobbler.kobplayer.TrackInfo
@@ -725,37 +724,10 @@ fun FullscreenVideoPlayer(
                     }
                 },
                 extraControls = {
-                    val skipPrevious = state.onSkipPrevious
-                    if (skipPrevious != null) {
-                        IconButton(
-                            onClick = skipPrevious,
-                            modifier = Modifier
-                                .focusKey("ctrl.prevepisode")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(Icons.Outlined.SkipPrevious, "Previous episode", tint = colors.textHi)
-                        }
-                    }
-                    val skipNext = state.onSkipNext
-                    if (skipNext != null) {
-                        IconButton(
-                            onClick = skipNext,
-                            modifier = Modifier
-                                .focusKey("ctrl.nextepisode")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(Icons.Outlined.SkipNext, "Next episode", tint = colors.textHi)
-                        }
-                    }
+                    state.onSkipPrevious?.let { LabelledIconButton(Icons.Outlined.SkipPrevious, "Previous episode", it, Modifier.focusKey("ctrl.prevepisode")) }
+                    state.onSkipNext?.let { LabelledIconButton(Icons.Outlined.SkipNext, "Next episode", it, Modifier.focusKey("ctrl.nextepisode")) }
                     if (canPickEpisode) {
-                        IconButton(
-                            onClick = { sidePanel = SidePanel.Episodes },
-                            modifier = Modifier
-                                .focusKey("ctrl.episodes")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(Icons.AutoMirrored.Outlined.PlaylistPlay, "Episodes", tint = colors.textHi)
-                        }
+                        LabelledIconButton(Icons.AutoMirrored.Outlined.PlaylistPlay, "Episodes", { sidePanel = SidePanel.Episodes }, Modifier.focusKey("ctrl.episodes"))
                     }
                     if (isLiveTv) {
                         LiveEdgeIndicator(
@@ -766,61 +738,37 @@ fun FullscreenVideoPlayer(
                             onJumpToLive = { seekPlayerTo(player.durationMs.value) },
                         )
                         val liveSid = state.liveSessionId
-                        IconButton(
+                        LabelledIconButton(
+                            icon = Icons.Outlined.FiberManualRecord,
+                            label = if (recordRequested) "Recording" else "Record",
+                            modifier = Modifier.focusKey("ctrl.record"),
                             onClick = {
-                                val sid = liveSid ?: return@IconButton
-                                recordRequested = true
-                                scope.launch {
-                                    runCatching { api.recordLiveSession(sid, state.liveNowGuideId) }
-                                        .onFailure { recordRequested = false }
+                                if (liveSid != null) {
+                                    recordRequested = true
+                                    scope.launch {
+                                        runCatching { api.recordLiveSession(liveSid, state.liveNowGuideId) }
+                                            .onFailure { recordRequested = false }
+                                    }
                                 }
                             },
                             enabled = liveSid != null && !recordRequested,
-                            modifier = Modifier
-                                .focusKey("ctrl.record")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(
-                                Icons.Outlined.FiberManualRecord,
-                                if (recordRequested) "Recording" else "Record",
-                                tint = if (recordRequested) colors.err else colors.textHi,
-                            )
-                        }
-                        IconButton(
-                            onClick = openChannelPanel,
-                            modifier = Modifier
-                                .focusKey("ctrl.channels")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(Icons.Outlined.Tv, "Channels", tint = colors.textHi)
-                        }
+                            tint = if (recordRequested) colors.err else colors.textHi,
+                        )
+                        LabelledIconButton(Icons.Outlined.Tv, "Channels", openChannelPanel, Modifier.focusKey("ctrl.channels"))
                     }
                     if (state.isDebrid && state.onSwitchStream != null) {
-                        IconButton(
-                            onClick = { state.onSwitchStream?.invoke() },
-                            modifier = Modifier
-                                .focusKey("ctrl.switchstream")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(Icons.Outlined.SwapHoriz, "Switch stream", tint = colors.textHi)
-                        }
+                        LabelledIconButton(Icons.Outlined.SwapHoriz, "Switch stream", { state.onSwitchStream?.invoke() }, Modifier.focusKey("ctrl.switchstream"))
                     }
                     val keepSession = state.sessionId?.takeIf { state.isDebrid }
                     if (keepSession != null) {
                         val kept = state.keeps[keepSession]
-                        IconButton(
+                        LabelledIconButton(
+                            icon = if (kept?.state == KeepState.Done) Icons.Outlined.LibraryAddCheck else Icons.Outlined.LibraryAdd,
+                            label = keepLabel(kept),
+                            modifier = Modifier.focusKey("ctrl.keep"),
                             onClick = { state.keep(api, keepSession) },
                             enabled = kept == null || kept.state == KeepState.Failed,
-                            modifier = Modifier
-                                .focusKey("ctrl.keep")
-                                .tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
-                        ) {
-                            Icon(
-                                if (kept?.state == KeepState.Done) Icons.Outlined.LibraryAddCheck else Icons.Outlined.LibraryAdd,
-                                keepLabel(kept),
-                                tint = colors.textHi,
-                            )
-                        }
+                        )
                     }
                 },
             )

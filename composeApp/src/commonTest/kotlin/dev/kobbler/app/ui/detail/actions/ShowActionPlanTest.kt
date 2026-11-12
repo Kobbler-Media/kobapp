@@ -14,10 +14,12 @@ import dev.kobbler.app.ui.detail.actions.ShowAction.Play
 import dev.kobbler.app.ui.detail.actions.ShowAction.Resume
 import dev.kobbler.app.ui.detail.actions.ShowAction.Rewatch
 import dev.kobbler.app.ui.detail.actions.ShowAction.StartOver
+import dev.kobbler.app.ui.detail.actions.ShowAction.Upcoming
 import dev.kobbler.app.ui.detail.actions.ShowAction.Stream
 import dev.kobbler.app.ui.detail.actions.ShowAction.WantEpisode
 import dev.kobbler.app.ui.detail.actions.ShowAction.WantShow
 import dev.kobbler.app.ui.detail.actions.ShowAction.Watchlist
+import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -28,17 +30,20 @@ class ShowActionPlanTest {
         file: (Int, Int) -> Boolean = { _, _ -> true },
         continueAt: Triple<Int, Int, Int>? = null,
         sport: Boolean = false,
+        airs: (Int, Int) -> LocalDate? = { _, _ -> null },
     ) = TvShow(
         id = "show", title = "VisionQuest", year = 2026, posterUrl = "", isSport = sport,
         seasons = (0..2).map { s ->
             Season(number = s, episodes = (1..2).map { e ->
-                Episode(id = "e$s-$e", number = e, title = "", filePath = "/e$s-$e.mkv".takeIf { file(s, e) }, isWatched = watched(s, e))
+                Episode(id = "e$s-$e", number = e, title = "", filePath = "/e$s-$e.mkv".takeIf { file(s, e) }, isWatched = watched(s, e), airDate = airs(s, e))
             })
         },
         continueEpisode = continueAt?.let { (s, e, pos) -> ContinueEpisode(s, e, "e$s-${e + 1}", pos) },
     )
 
     private val everythingWatched = show(watched = { _, _ -> true })
+    private val nextWeek = LocalDate(2026, 11, 19)
+    private val allButTheLast: (Int, Int) -> Boolean = { s, e -> s < 2 || e == 1 }
     private val online = ShowActionState(show = show(), canWant = true, downloads = ShowDownloads(allHeld = false, following = false))
     private fun at(s: Int, e: Int) = EpisodeRef(s, e)
 
@@ -69,6 +74,26 @@ class ShowActionPlanTest {
             "all watched skips a season with no files",
             online.copy(show = show(watched = { _, _ -> true }, file = { s, _ -> s != 1 })),
             listOf(Rewatch(at(2, 0)), DownloadAll, AutoDownload, WantShow, Watchlist),
+        ),
+        Case(
+            "caught up on a show still airing, the next episode's date stands in for Rewatch",
+            online.copy(show = show(watched = allButTheLast, file = allButTheLast, airs = { s, e -> nextWeek.takeIf { s == 2 && e == 2 } })),
+            listOf(Upcoming(at(2, 1), nextWeek), DownloadAll, AutoDownload, StartOver, WantShow, Watchlist),
+        ),
+        Case(
+            "caught up with no date for the next episode yet still rewatches",
+            online.copy(show = show(watched = allButTheLast, file = allButTheLast)),
+            listOf(Rewatch(at(1, 0)), DownloadAll, AutoDownload, WantShow, Watchlist),
+        ),
+        Case(
+            "an aired date on an episode watched out of order does not hold back Rewatch",
+            online.copy(show = show(watched = { s, e -> !(s == 1 && e == 1) }, file = { s, e -> !(s == 1 && e == 1) }, airs = { _, _ -> nextWeek })),
+            listOf(Rewatch(at(1, 1)), DownloadAll, AutoDownload, WantShow, Watchlist),
+        ),
+        Case(
+            "a show yet to air leads with its premiere date",
+            online.copy(show = show(file = { _, _ -> false }, airs = { s, e -> nextWeek.takeIf { s == 1 && e == 1 } })),
+            listOf(Upcoming(at(1, 0), nextWeek), WantShow, Watchlist),
         ),
         Case(
             "no playable files leaves what the server can still do",

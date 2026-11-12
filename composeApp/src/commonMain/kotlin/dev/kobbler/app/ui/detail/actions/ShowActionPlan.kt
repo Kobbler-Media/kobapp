@@ -6,6 +6,7 @@ import dev.kobbler.app.ui.detail.isWantedNow
 import dev.kobbler.app.ui.detail.isWatchedNow
 import dev.kobbler.app.ui.detail.actions.ShowAction.*
 import dev.kobbler.app.ui.player.resumeRequestSeconds
+import kotlinx.datetime.LocalDate
 
 internal data class EpisodeRef(val seasonIdx: Int, val episodeIdx: Int)
 
@@ -17,6 +18,7 @@ internal sealed interface ShowAction {
     data class Stream(override val at: EpisodeRef, val positionSeconds: Int) : OnEpisode
     data class Play(override val at: EpisodeRef) : OnEpisode
     data class Rewatch(override val at: EpisodeRef) : OnEpisode
+    data class Upcoming(override val at: EpisodeRef, val airDate: LocalDate) : OnEpisode
     data class NextEpisode(override val at: EpisodeRef) : OnEpisode
     data class FromStart(override val at: EpisodeRef) : OnEpisode
     data class WantEpisode(override val at: EpisodeRef, val episodeId: String) : OnEpisode
@@ -91,7 +93,19 @@ private fun ShowActionState.lead(playable: (Episode) -> Boolean, unwatched: (Epi
         pick(season.episodes).takeIf { it >= 0 }?.let { return Play(EpisodeRef(selectedSeasonIdx, it)) }
     }
     show.firstEpisode(unwatched)?.let { return Play(it) }
+    upcoming()?.let { return it }
     return show.firstEpisode(playable)?.let { Rewatch(it) }
+}
+
+/** Caught up on a show still airing: Rewatch would start it over a week before the next one lands. */
+private fun ShowActionState.upcoming(): Upcoming? {
+    val order = show.seasons.indices.filter { show.seasons[it].number > 0 }
+        .flatMap { s -> show.seasons[s].episodes.indices.map { EpisodeRef(s, it) } }
+    val lastWatched = order.indexOfLast { show.episodeAt(it)!!.isWatchedNow(watched) }
+    val next = order.getOrNull(lastWatched + 1) ?: return null
+    val episode = show.episodeAt(next)!!
+    if (episode.filePath != null) return null
+    return episode.airDate?.let { Upcoming(next, it) }
 }
 
 internal fun TvShow.episodeAt(at: EpisodeRef): Episode? = seasons.getOrNull(at.seasonIdx)?.episodes?.getOrNull(at.episodeIdx)

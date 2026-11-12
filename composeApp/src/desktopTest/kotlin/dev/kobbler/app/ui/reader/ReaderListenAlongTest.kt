@@ -7,7 +7,8 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -83,10 +84,10 @@ class ReaderListenAlongTest {
     }
 
     private fun ComposeUiTest.pressListenAlong() {
-        onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        onAllNodes(isRoot()).onFirst().performKeyInput { pressKey(Key.DirectionUp) }
         waitForIdle()
         onNodeWithContentDescription("Listen Along").requestFocus()
-        onRoot().performKeyInput { pressKey(Key.Enter) }
+        onAllNodes(isRoot()).onFirst().performKeyInput { pressKey(Key.Enter) }
         waitForIdle()
     }
 

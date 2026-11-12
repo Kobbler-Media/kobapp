@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.focusDecorated
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.BorderStroke
@@ -175,7 +176,7 @@ internal fun OverflowItem(
             .focusKey("action.more.$key")
             .then(if (isEntry && entry != null) Modifier.focusRequester(entry.requester) else Modifier)
             .onFocusChanged { focused = it.isFocused }
-            .background(if (focused) accent.copy(alpha = 0.18f) else Color.Transparent),
+            .background(if (focused && focusDecorated()) accent.copy(alpha = 0.18f) else Color.Transparent),
     )
 }
 

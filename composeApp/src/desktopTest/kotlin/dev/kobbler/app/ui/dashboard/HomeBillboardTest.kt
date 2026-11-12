@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -99,7 +100,7 @@ class HomeBillboardTest {
     }
 
     private fun DesktopComposeUiTest.billboard(tag: String, text: String) =
-        onAllNodes(hasTestTag(tag) and hasText(text, substring = true)).fetchSemanticsNodes().size == 1
+        onAllNodes(hasTestTag(tag) and hasAnyDescendant(hasText(text, substring = true)), useUnmergedTree = true).fetchSemanticsNodes().size == 1
 
     @Test
     fun `the billboard describes whichever up next card has focus`() = home { _, _ ->
@@ -125,11 +126,22 @@ class HomeBillboardTest {
     fun `stepping between items never moves the billboard`() = home { _, _ ->
         val bounds = List(3) { i ->
             if (i > 0) press(listOf(Key.DirectionRight))
-            listOf(HomeHeroTag, HomeBillboardPlayTag, HomeBillboardDetailsTag, HomeBillboardProgressTag)
-                .associateWith { onNodeWithTag(it).getUnclippedBoundsInRoot().let { b -> b.left to b.top } }
+            listOf(HomeHeroTag, HomeBillboardPlayTag, HomeBillboardDetailsTag).associateWith { onNodeWithTag(it).getUnclippedBoundsInRoot() } +
+                (HomeBillboardProgressTag to onNodeWithTag(HomeBillboardProgressTag, useUnmergedTree = true).getUnclippedBoundsInRoot().let { it.copy(right = it.left) })
         }
         assertEquals(bounds[0], bounds[1], "Play → Read moved the billboard")
         assertEquals(bounds[0], bounds[2], "Play → Resume moved the billboard")
+    }
+
+    /** As on a details page, how far in you are rides inside the Play button rather than beside it. */
+    @Test
+    fun `progress sits inside the play button`() = home { _, _ ->
+        press(listOf(Key.DirectionRight, Key.DirectionRight))
+        val play = onNodeWithTag(HomeBillboardPlayTag).getUnclippedBoundsInRoot()
+        val progress = onNodeWithTag(HomeBillboardProgressTag, useUnmergedTree = true).getUnclippedBoundsInRoot()
+        check(progress.left >= play.left && progress.right <= play.right && progress.top >= play.top && progress.bottom <= play.bottom) {
+            "progress $progress is outside the play button $play"
+        }
     }
 
     /** Whichever card Up is pressed from, and whichever button is nearer, the row is entered on Play. */
@@ -176,7 +188,7 @@ class HomeBillboardTest {
                         onContinueClick = {},
                         onRecentClick = {},
                         onDiscoverItemClick = {},
-                        onContinueDetails = { detailsFor = homeData.value.watchNext[it].id },
+                        onContinueDetails = { detailsFor = it.id },
                     )
                 }
             }

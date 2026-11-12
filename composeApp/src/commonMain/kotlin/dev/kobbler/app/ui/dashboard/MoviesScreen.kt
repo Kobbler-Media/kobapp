@@ -42,6 +42,7 @@ fun MoviesScreen(
     modifier: Modifier = Modifier,
     formFactor: FormFactor = FormFactor.Desktop,
     onMovieClick: (Movie) -> Unit,
+    onMoviePlay: ((Movie) -> Unit)? = null,
     onContinueClick: (ContinueItem) -> Unit = {},
     onSearchClick: (() -> Unit)? = null,
 ) {
@@ -315,6 +316,7 @@ fun MoviesScreen(
                                     accentColor = accent,
                                     offline = isAvailableOffline(OfflineKind.Movie, movie.id),
                                     onClick = { onMovieClick(movie) },
+                                    contextMenuItems = rememberMovieCardActions(movie, api, onMoviePlay),
                                     modifier = Modifier
                                         .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
                                         .focusKey("movie.${movie.id}", preferredEntry = recentIsEntry && idx == 0)
@@ -356,6 +358,7 @@ fun MoviesScreen(
                         accentColor = accent,
                         offline = isAvailableOffline(OfflineKind.Movie, movie.id),
                         onClick = { onMovieClick(movie) },
+                        contextMenuItems = rememberMovieCardActions(movie, api, onMoviePlay),
                         modifier = Modifier
                             .spotlightOn(pointer) { movie.spotlight() }.showingBadge(swiper, movie.spotlight())
                             .focusKey("grid.${movie.id}", preferredEntry = gridIsEntry && index == 0)

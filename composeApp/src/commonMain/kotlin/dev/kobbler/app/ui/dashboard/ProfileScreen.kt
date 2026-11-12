@@ -1,7 +1,6 @@
 package dev.kobbler.app.ui.dashboard
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import dev.kobbler.app.ui.components.tvFocusProgress
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -366,10 +365,7 @@ private fun ProfileRow(
     val titleColor = if (danger) colors.err else colors.textHi
     val interaction = remember { MutableInteractionSource() }
     val isFocused by interaction.collectIsFocusedAsState()
-    val focusProgress = animateFloatAsState(
-        targetValue = if (isFocused) 1f else 0f,
-        animationSpec = tween(if (isFocused) 120 else 220),
-    )
+    val focusProgress = tvFocusProgress(isFocused)
     Row(
         modifier = Modifier
             .fillMaxWidth()

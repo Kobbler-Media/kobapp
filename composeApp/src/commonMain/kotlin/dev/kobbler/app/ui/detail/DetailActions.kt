@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.detail
 
+import dev.kobbler.app.ui.components.focusDecorated
+import dev.kobbler.kobplayer.ui.HoverLabel
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -30,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -60,6 +63,8 @@ internal fun PrimaryAction(
     detail: String? = null,
     progress: Float? = null,
     remaining: String? = null,
+    reserveProgress: Boolean = false,
+    progressModifier: Modifier = Modifier,
 ) {
     val colors = KobappTheme.colors
     val fg = colors.bg
@@ -81,9 +86,15 @@ internal fun PrimaryAction(
                     Text(detail, style = KobappTheme.type.body, color = fg.copy(alpha = 0.72f), maxLines = 1)
                 }
             }
-            if (progress != null || remaining != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (progress != null) {
+            val hasProgress = progress != null || remaining != null
+            if (hasProgress || reserveProgress) {
+                // Reserved, the line is laid out empty so Play and Resume are the same size.
+                Row(
+                    progressModifier.alpha(if (hasProgress) 1f else 0f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (progress != null || reserveProgress) {
                         Box(
                             Modifier
                                 .weight(1f)
@@ -92,7 +103,7 @@ internal fun PrimaryAction(
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(fg.copy(alpha = 0.3f)),
                         ) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(fg))
+                            Box(Modifier.fillMaxHeight().fillMaxWidth((progress ?: 0f).coerceIn(0f, 1f)).background(fg))
                         }
                     }
                     if (remaining != null) {
@@ -132,7 +143,7 @@ internal fun LabelledAction(
  * is focused or hovered. Labelled in place, four of these pushed Resume's row onto a
  * second line; opening out on focus re-flowed the row on every keypress; unlabelled, a
  * remote user is left guessing at glyphs. The caption takes no layout space, so focus
- * moves nothing. Touch has neither state, so a phone keeps the description alone.
+ * moves nothing. Touch has neither state, so on a phone a hold names it instead.
  */
 @Composable
 internal fun IconAction(
@@ -149,40 +160,43 @@ internal fun IconAction(
     var focused by remember { mutableStateOf(false) }
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
-    val showCaption = captioned && LocalFormFactor.current != FormFactor.Phone && (focused || hovered)
+    val phone = LocalFormFactor.current == FormFactor.Phone
+    val showCaption = captioned && !phone && ((focused && focusDecorated()) || hovered)
     val captionAlpha by animateFloatAsState(if (showCaption) 1f else 0f)
-    Layout(
-        content = {
-            KobButton(
-                onClick = onClick,
-                style = style,
-                accent = accent,
-                enabled = enabled,
-                cornerRadiusDp = PillRadius,
-                modifier = modifier
-                    .onFocusChanged { focused = it.isFocused }
-                    .hoverable(hover)
-                    .semantics { contentDescription = label },
-            ) {
-                Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+    HoverLabel(label, enabled = captioned && phone) {
+        Layout(
+            content = {
+                KobButton(
+                    onClick = onClick,
+                    style = style,
+                    accent = accent,
+                    enabled = enabled,
+                    cornerRadiusDp = PillRadius,
+                    modifier = modifier
+                        .onFocusChanged { focused = it.isFocused }
+                        .hoverable(hover)
+                        .semantics { contentDescription = label },
+                ) {
+                    Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+                }
+                if (captioned) {
+                    Text(
+                        label,
+                        style = KobappTheme.type.bodySm,
+                        color = KobappTheme.colors.textMd,
+                        maxLines = 1,
+                        modifier = Modifier.graphicsLayer { alpha = captionAlpha }.clearAndSetSemantics { },
+                    )
+                }
+            },
+        ) { measurables, constraints ->
+            val button = measurables[0].measure(constraints)
+            val caption = measurables.getOrNull(1)?.measure(Constraints())
+            val gap = CaptionGap.roundToPx()
+            layout(button.width, button.height) {
+                button.place(0, 0)
+                caption?.place((button.width - caption.width) / 2, button.height + gap)
             }
-            if (captioned) {
-                Text(
-                    label,
-                    style = KobappTheme.type.bodySm,
-                    color = KobappTheme.colors.textMd,
-                    maxLines = 1,
-                    modifier = Modifier.graphicsLayer { alpha = captionAlpha }.clearAndSetSemantics { },
-                )
-            }
-        },
-    ) { measurables, constraints ->
-        val button = measurables[0].measure(constraints)
-        val caption = measurables.getOrNull(1)?.measure(Constraints())
-        val gap = CaptionGap.roundToPx()
-        layout(button.width, button.height) {
-            button.place(0, 0)
-            caption?.place((button.width - caption.width) / 2, button.height + gap)
         }
     }
 }

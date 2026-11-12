@@ -11,4 +11,12 @@ internal fun airDateLabel(date: LocalDate, today: LocalDate): String = when {
     else -> "Airs ${monthDay(date)}, ${date.year}"
 }
 
+internal fun upcomingLabel(date: LocalDate, today: LocalDate): String = when {
+    date < today -> "Coming soon"
+    date == today -> "Airs today"
+    date.toEpochDays() - today.toEpochDays() == 1L -> "Airs tomorrow"
+    date.year == today.year -> "Airs ${monthDay(date)}"
+    else -> "Airs ${monthDay(date)}, ${date.year}"
+}
+
 internal fun monthDay(date: LocalDate): String = "${monthNameShort(date.month.number)} ${date.day}"
