@@ -2,6 +2,7 @@ package dev.kobbler.app.data
 
 import dev.kobbler.app.platform.browserCapabilities
 import dev.kobbler.app.platform.connectRoundTripMs
+import dev.kobbler.kobplayer.Loudness
 import dev.kobbler.kobplayer.deviceDecodesInterlaced
 import dev.kobbler.kobplayer.deviceHdrFormats
 import dev.kobbler.app.platform.AppVersion
@@ -403,6 +404,7 @@ data class SessionResponse(
     @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
     @SerialName("thumbnails_url") val thumbnailsUrl: String? = null,
     val lufs: Double? = null,
+    @SerialName("downmix_peak_db") val downmixPeakDb: Double? = null,
     val chapters: List<SessionChapter> = emptyList(),
     @SerialName("skip_segments") val skipSegments: List<SkipSegment> = emptyList(),
     /** Where the timeline begins. See [rebaseSeconds] — an echo is not a rebase. */
@@ -670,7 +672,11 @@ data class AudioFileDto(
     @SerialName("file_name") val fileName: String,
     @SerialName("duration_seconds") val durationSeconds: Double? = null,
     val available: Boolean = true,
-)
+    val lufs: Double? = null,
+    @SerialName("downmix_peak_db") val downmixPeakDb: Double? = null,
+) {
+    val loudness: Loudness? get() = lufs?.let { Loudness(it, downmixPeakDb) }
+}
 
 @Serializable
 data class UnifiedChapterDto(
@@ -4389,6 +4395,7 @@ class KobblerApi(
         val skipSegments: List<SkipSegment> = emptyList(),
         val thumbnailsUrl: String? = null,
         val lufs: Double? = null,
+        val downmixPeakDb: Double? = null,
         val audioTracks: List<AudioTrackDto> = emptyList(),
         val subtitles: List<PlaybackSubtitleTrackDto> = emptyList(),
         /** Audio stream index the server actually picked (matches one in audioTracks). */
@@ -4419,7 +4426,9 @@ class KobblerApi(
          */
         val method: String? = null,
         val durationSeconds: Double = 0.0,
-    )
+    ) {
+        val loudness: Loudness? get() = lufs?.let { Loudness(it, downmixPeakDb) }
+    }
 
     /**
      * Get a streaming session for a movie. Returns URL + session ID, or null.
@@ -4662,6 +4671,7 @@ class KobblerApi(
             skipSegments = skipSegments,
             thumbnailsUrl = thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
             lufs = lufs,
+            downmixPeakDb = downmixPeakDb,
             audioTracks = audioTracks,
             subtitles = subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
             selectedAudioIndex = preferredAudioStreamIndex ?: selectedAudioIndex,

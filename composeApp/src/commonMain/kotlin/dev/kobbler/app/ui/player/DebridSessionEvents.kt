@@ -4,6 +4,7 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LibraryEventFrame
 import dev.kobbler.app.data.SessionChapter
 import dev.kobbler.app.data.ThumbnailsProbe
+import dev.kobbler.kobplayer.Loudness
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.doubleOrNull
@@ -41,6 +42,8 @@ internal suspend fun applyDebridSessionFrame(
             val chapters = frame.data["chapters"] ?: return
             state.chapters = chapterJson.decodeFromJsonElement(ListSerializer(SessionChapter.serializer()), chapters)
         }
-        "loudness" -> frame.data["lufs"]?.jsonPrimitive?.doubleOrNull?.let { state.lufs = it }
+        "loudness" -> frame.data["lufs"]?.jsonPrimitive?.doubleOrNull?.let {
+            state.loudness = Loudness(it, frame.data["downmix_peak_db"]?.jsonPrimitive?.doubleOrNull)
+        }
     }
 }

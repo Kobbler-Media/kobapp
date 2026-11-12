@@ -1,23 +1,36 @@
 package dev.kobbler.kobplayer
 
 import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class LoudnessGainTest {
 
+    private fun db(gain: Float) = 20 * log10(gain.toDouble())
+
     @Test
-    fun aTitleIsLevelledTowardsTheTargetWithItsBoostCapped() {
+    fun aTitleIsLevelledTowardsTheTargetWithItsBoostCappedByItsDownmixPeak() {
         val cases = listOf(
-            -14.0 to 1.0,
-            -8.0 to 0.501,
-            -17.0 to 1.413,
-            -30.0 to 1.413,
+            Loudness(-14.0, -3.0) to 0.0,
+            Loudness(-8.0, -0.1) to -6.0,
+            Loudness(-23.04, -1.6) to 0.6,
+            Loudness(-23.04, -6.0) to 5.0,
+            Loudness(-30.0, -20.0) to 6.0,
+            Loudness(-16.0, 0.5) to 0.0,
         )
-        for ((lufs, gain) in cases) {
-            val actual = loudnessGain(lufs)
-            assertTrue(abs(actual - gain) < 0.002, "$lufs LUFS: expected $gain, got $actual")
+        for ((loudness, expectedDb) in cases) {
+            val actual = db(loudnessGain(loudness))
+            assertTrue(abs(actual - expectedDb) < 0.01, "$loudness: expected $expectedDb dB, got $actual dB")
+        }
+    }
+
+    @Test
+    fun aTitleWhosePeakIsNotMeasuredYetKeepsTheOldCeiling() {
+        for ((lufs, expectedDb) in listOf(-14.0 to 0.0, -8.0 to -6.0, -17.0 to 3.0, -30.0 to 3.0)) {
+            val actual = db(loudnessGain(Loudness(lufs)))
+            assertTrue(abs(actual - expectedDb) < 0.01, "$lufs LUFS: expected $expectedDb dB, got $actual dB")
         }
         assertEquals(1f, loudnessGain(null))
     }

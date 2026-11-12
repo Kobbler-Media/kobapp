@@ -32,6 +32,7 @@ import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
 import dev.kobbler.app.ui.player.LocalSharedAudioPlayer
 import dev.kobbler.app.ui.player.ProgressSaveScope
+import dev.kobbler.app.ui.player.levelPlayer
 import dev.kobbler.app.ui.player.RESUME_MIN_SECONDS
 import dev.kobbler.app.ui.player.settleAt
 import kotlinx.coroutines.CoroutineScope
@@ -159,6 +160,9 @@ class AudiobookPlayerState internal constructor(
      * half a second before seeking, which meant any source slower than that to open began
      * the book again from the top.
      */
+    /** Levels each file by its own measured loudness for as long as the book is open. */
+    suspend fun levelLoudness() = levelPlayer(player) { audioFiles.getOrNull(currentFileIndex)?.loudness }
+
     suspend fun playFileAt(index: Int, positionMs: Long) {
         val file = audioFiles.getOrNull(index) ?: return
         currentFileIndex = index
@@ -379,6 +383,7 @@ fun rememberAudiobookState(
         launch { player.state.collect { state.playerState = it } }
         launch { player.currentMs.collect { state.currentMs = it } }
         launch { player.playbackSpeed.collect { state.playbackSpeed = it } }
+        launch { state.levelLoudness() }
     }
 
     LaunchedEffect(book.id) {

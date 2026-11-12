@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LibraryEventFrame
+import dev.kobbler.kobplayer.Loudness
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -24,8 +25,8 @@ class DebridSessionEventsTest {
             state, api, "s1",
             frame("chapters", """{"chapters":[{"index":0,"title":"Opening","start_seconds":0.0,"end_seconds":90.0}]}"""),
         )
-        applyDebridSessionFrame(state, api, "s1", frame("loudness", """{"lufs":-21.5}"""))
+        applyDebridSessionFrame(state, api, "s1", frame("loudness", """{"lufs":-21.5,"downmix_peak_db":-2.0}"""))
         assertEquals(listOf("Opening"), state.chapters.map { it.title })
-        assertEquals(-21.5, state.lufs)
+        assertEquals(Loudness(-21.5, -2.0), state.loudness)
     }
 }

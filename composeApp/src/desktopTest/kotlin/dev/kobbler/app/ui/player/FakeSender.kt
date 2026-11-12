@@ -5,6 +5,7 @@ import dev.kobbler.app.platform.CastDevice
 import dev.kobbler.app.platform.CastEvent
 import dev.kobbler.app.platform.CastLoad
 import dev.kobbler.app.platform.CastSender
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -27,7 +28,8 @@ internal class FakeSender(
     var toggles = 0
     var stopped = false
     val sent = mutableListOf<String>()
-    val payloads = mutableListOf<Pair<String, String>>()
+    // Sent from the controller's coroutines while a test thread polls it.
+    val payloads = CopyOnWriteArrayList<Pair<String, String>>()
 
     override fun start() { started = true }
     override suspend fun load(load: CastLoad) { loads += load }

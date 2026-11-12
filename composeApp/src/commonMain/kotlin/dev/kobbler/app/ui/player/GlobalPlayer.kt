@@ -10,6 +10,7 @@ import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.data.CastTracks
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TvShow
+import dev.kobbler.kobplayer.Loudness
 import dev.kobbler.app.ui.navigation.Destination
 import kotlinx.coroutines.CancellationException
 import dev.kobbler.app.platform.AppVersion
@@ -160,7 +161,7 @@ class GlobalPlayerState {
     // The library file behind the current session, when it is a local one. Skip
     // detection addresses its events to a file id, so a player has to know its own.
     var fileId by mutableStateOf<String?>(null)
-    var lufs by mutableStateOf<Double?>(null)
+    var loudness by mutableStateOf<Loudness?>(null)
     // Source video dimensions reported by the server. Drive aspect-ratio bucket
     // lookup before the player reports videoSize. Null until session is loaded
     // (or for sessions where server hasn't probed yet — falls back to player).
@@ -490,7 +491,7 @@ class GlobalPlayerState {
         skipSegments = session?.skipSegments ?: emptyList()
         thumbnailsUrl = session?.thumbnailsUrl
         fileId = session?.fileId
-        lufs = session?.lufs
+        loudness = session?.loudness
         videoWidth = session?.videoWidth
         videoHeight = session?.videoHeight
         picture = session?.picture
@@ -675,7 +676,7 @@ class GlobalPlayerState {
         skipSegments = emptyList()
         thumbnailsUrl = null
         fileId = null
-        lufs = null
+        loudness = null
         videoWidth = null
         videoHeight = null
         picture = null
