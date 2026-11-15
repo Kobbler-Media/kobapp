@@ -102,6 +102,9 @@ internal class WebPlayer(
     private val _videoSize = MutableStateFlow(0 to 0)
     override val videoSize: StateFlow<Pair<Int, Int>> = _videoSize.asStateFlow()
 
+    private val _pictureCrop = MutableStateFlow<PictureCrop?>(null)
+    val pictureCrop: StateFlow<PictureCrop?> = _pictureCrop.asStateFlow()
+
     override val native: NativePlayer get() = NativePlayer.HtmlVideo(videoElement)
 
     /** Where the stream was asked to open, held until the element can be seeked. */
@@ -119,6 +122,10 @@ internal class WebPlayer(
         val dur = videoElement.duration
         val element = if (!dur.isNaN() && dur.isFinite()) (dur * 1000).toLong() + offsetMs else 0L
         _durationMs.value = maxOf(element, source?.durationHintMs ?: 0L)
+    }
+
+    private fun reportVideoSize() {
+        _videoSize.value = videoElement.videoWidth to videoElement.videoHeight
     }
 
     init {
@@ -149,8 +156,10 @@ internal class WebPlayer(
         videoElement.addEventListener("progress") {
             updateBufferPercent()
         }
+        videoElement.addEventListener("resize") { reportVideoSize() }
         videoElement.addEventListener("loadedmetadata") {
             reportDuration()
+            reportVideoSize()
             // The element has no open-time equivalent of VLC's `start-time`, and a seek
             // before the metadata arrives is dropped. This is the first moment one lands,
             // and it is still ahead of the first frame the viewer sees.
@@ -301,11 +310,10 @@ internal class WebPlayer(
 
     override fun setAspectRatio(ratio: AspectRatio) {
         _aspectRatio.value = ratio
-        videoElement.style.objectFit = when (ratio) {
-            AspectRatio.FIT -> "contain"
-            AspectRatio.STRETCH -> "fill"
-            AspectRatio.CROP -> "cover"
-        }
+    }
+
+    override fun setPictureCrop(crop: PictureCrop?) {
+        _pictureCrop.value = crop
     }
 
     override fun setChapter(chapter: Chapter) {

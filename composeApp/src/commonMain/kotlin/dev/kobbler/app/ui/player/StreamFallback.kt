@@ -33,7 +33,7 @@ internal fun fallbackCandidates(
     skip: Set<String> = emptySet(),
 ): List<StreamOption> {
     val start = from?.let { f -> options.indexOfFirst { it.id == f.id }.coerceAtLeast(0) } ?: 0
-    val rest = options.drop(start).filter { it.id !in skip && it.id != from?.id }
+    val rest = options.drop(start).filter { it.id !in skip && it.id != from?.id && !it.reportedBad }
     val (uncached, held) = rest.partition { it.availability == AVAILABILITY_UNCACHED }
     val (failed, fresh) = held.partition { it.playback == PLAYBACK_FAILED }
     return listOfNotNull(from) + fresh + failed + uncached

@@ -12,6 +12,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -59,19 +63,21 @@ class StreamOptionsPageTest {
         var dismissed = 0
         lateinit var focus: FocusManager
         val picked = mutableListOf<String>()
+        val reports = mutableListOf<Pair<String, Boolean>>()
     }
 
-    private fun DesktopComposeUiTest.showPage(formFactor: FormFactor): Page {
+    private fun DesktopComposeUiTest.showPage(formFactor: FormFactor, options: List<StreamOption> = listOf(remux, web)): Page {
         val page = Page()
         setContent {
             CompositionLocalProvider(LocalBackInterceptors provides page.backs) {
                 KobappTheme(formFactor = formFactor) {
                     page.focus = LocalFocusManager.current
                     StreamOptionsOverlay(
-                        options = listOf(remux, web),
+                        options = options,
                         errors = emptyList(),
                         loading = false,
                         onSelect = { page.picked += it.id },
+                        onReport = { option, bad -> page.reports += option.id to bad },
                         onDismiss = { page.dismissed++ },
                     )
                 }
@@ -117,6 +123,31 @@ class StreamOptionsPageTest {
             onNodeWithText(remux.releaseTitle).assertIsDisplayed()
             onAllNodesWithText("match", substring = true).assertCountEquals(0)
         }
+    }
+
+    @Test
+    fun `a copy can be reported bad from its row without playing it, and a reported one taken back`() = runUiTest(412, 900) {
+        val page = showPage(FormFactor.Phone, listOf(remux, web.copy(reportedBad = true, playback = "failed", group = "failed")))
+        onNodeWithText("Reported bad", substring = true).assertIsDisplayed()
+
+        onNodeWithContentDescription("Report bad copy").performClick()
+        onNodeWithContentDescription("Undo report").performClick()
+        waitForIdle()
+
+        assertEquals(listOf("remux" to true, "web" to false), page.reports.toList())
+        assertEquals(emptyList(), page.picked.toList())
+    }
+
+    @Test
+    fun `a remote reaches the report button from its row`() = runUiTest(1280, 720) {
+        val page = showPage(FormFactor.TV)
+        runOnIdle { page.focus.moveFocus(FocusDirection.Right) }
+        waitForIdle()
+        // The button's label is up as a window of its own, which takes no keys.
+        onAllNodes(isRoot()).onFirst().performKeyInput { pressKey(Key.Enter) }
+        waitForIdle()
+        assertEquals(listOf("remux" to true), page.reports.toList())
+        assertEquals(emptyList(), page.picked.toList())
     }
 
     @Test

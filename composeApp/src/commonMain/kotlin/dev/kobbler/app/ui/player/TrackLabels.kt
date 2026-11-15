@@ -27,9 +27,19 @@ internal fun List<TrackInfo>.labelledBy(server: List<PlaybackSubtitleTrackDto>):
     return zip(ordered).mapIndexed { i, (own, dto) -> own.copy(label = dto.label(i), language = dto.language ?: own.language) }
 }
 
-internal fun List<TrackInfo>.forcedBy(server: List<PlaybackSubtitleTrackDto>): TrackInfo? {
+/**
+ * The track shown without being asked for: a forced one always, otherwise the viewer's
+ * language under audio in another. A track the release merely flags default is not it.
+ */
+internal fun List<TrackInfo>.unaskedBy(
+    server: List<PlaybackSubtitleTrackDto>,
+    foreignAudio: Boolean,
+    language: String?,
+): TrackInfo? {
     val ordered = alignedWith(server) ?: return null
-    return getOrNull(ordered.indexOfFirst { it.isForced })
+    val forced = ordered.indexOfFirst { it.isForced }
+    val wanted = if (forced < 0 && foreignAudio) ordered.indexOfFirst { sameLanguage(it.language, language) } else forced
+    return getOrNull(wanted)
 }
 
 private fun List<TrackInfo>.alignedWith(server: List<PlaybackSubtitleTrackDto>) =

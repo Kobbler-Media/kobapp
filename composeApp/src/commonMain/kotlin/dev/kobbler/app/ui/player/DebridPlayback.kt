@@ -66,14 +66,27 @@ internal class DebridPlayback(
     private var retry: Job? = null
     private var switchingMidway = false
 
-    /** Spent since the viewer last chose: an explicit pick buys a fresh budget. */
+    // A release the viewer chose is the only one this walk plays: when it will not, they
+    // are shown what else there is rather than handed something they did not ask for.
+    private var pinned = false
+
+    /** Spent since a release was last named: a pick, a reopen or a finished cache buys a fresh budget. */
     private var walked = 0
     private var resolved = 0
     private var resumeSec = 0
 
+    /** Play [picked] and nothing else, or with none whatever plays best. */
+    suspend fun start(picked: StreamOption?, resumeSec: Int) {
+        if (picked == null) return walk(null, resumeSec)
+        pinned = true
+        claim = null
+        local = null
+        walk(picked, resumeSec)
+    }
+
     // The first automatic start claims a stream warmed for this title, if there is one,
     // else the release already on disk, before anything is searched.
-    suspend fun start(from: StreamOption?, resumeSec: Int) {
+    private suspend fun walk(from: StreamOption?, resumeSec: Int) {
         this.resumeSec = resumeSec
         if (from == null && (startClaimed(resumeSec) || startLocal(resumeSec))) return
         claim = null
@@ -82,8 +95,8 @@ internal class DebridPlayback(
             resolved = 0
         }
         val result = walkStreamOptions(
-            candidates = fallbackCandidates(searched(), from, skip = tried),
-            resolve = { resolve(it, resumeSec) },
+            candidates = if (pinned) listOfNotNull(from) else fallbackCandidates(searched(), from, skip = tried),
+            resolve = { resolving(it, resumeSec) },
             attempts = MAX_AUTO_FALLBACK + 1 - walked,
             resolves = MAX_WALK_RESOLVES - resolved,
             onAttemptFailed = { gps.preparingNote = NEXT_STREAM_NOTE },
@@ -103,9 +116,15 @@ internal class DebridPlayback(
                 }
             }
             is WalkResult.Caching -> onCaching(result)
-            is WalkResult.Exhausted -> giveUp(result.lastError, lostMidway = switchingMidway)
+            is WalkResult.Exhausted -> {
+                if (pinned) runCatching { searched() }.onFailure { if (it is CancellationException) throw it }
+                giveUp(result.lastError, lostMidway = switchingMidway)
+            }
         }
     }
+
+    private suspend fun resolving(option: StreamOption, resumeSec: Int): StreamResolveResult =
+        watchingPauses({ api.streamPause(option.debridProviderId) }, { gps.preparingNote = it }) { resolve(option, resumeSec) }
 
     private suspend fun searched(): List<StreamOption> =
         (found ?: search().also { found = it }).options
@@ -125,7 +144,7 @@ internal class DebridPlayback(
     private suspend fun startLocal(resumeSec: Int): Boolean {
         val option = local?.also { local = null }?.invoke() ?: return false
         val ready = try {
-            resolve(option, resumeSec) as? StreamResolveResult.Ready
+            resolving(option, resumeSec) as? StreamResolveResult.Ready
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -140,7 +159,7 @@ internal class DebridPlayback(
     }
 
     /** Pick the walk up again once [option] has finished caching. */
-    fun resumeCached(option: StreamOption, resumeSec: suspend () -> Int) = relaunch { start(option, resumeSec()) }
+    fun resumeCached(option: StreamOption, resumeSec: suspend () -> Int) = relaunch { walk(option, resumeSec()) }
 
     fun onPlaying(sessionId: String?) {
         if (sessionId == null || sessionId == playedSession || current == null) return
@@ -183,8 +202,8 @@ internal class DebridPlayback(
         relaunch {
             val untried = searched().any { it.id !in tried }
             when {
-                reopen -> start(lost, resumeSec)
-                untried && walked < MAX_AUTO_FALLBACK + 1 && resolved < MAX_WALK_RESOLVES -> start(null, resumeSec)
+                reopen -> walk(lost, resumeSec)
+                !pinned && untried && walked < MAX_AUTO_FALLBACK + 1 && resolved < MAX_WALK_RESOLVES -> walk(null, resumeSec)
                 else -> giveUp(cause, lostMidway = midway)
             }
         }

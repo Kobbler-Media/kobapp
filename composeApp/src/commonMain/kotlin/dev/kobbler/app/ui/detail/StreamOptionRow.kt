@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,12 +33,15 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.kobbler.kobfocus.focusKey
+import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
 import dev.kobbler.app.ui.components.KobChip
 import dev.kobbler.app.ui.components.KobChipStyle
+import dev.kobbler.app.ui.components.LabelledIconButton
 import dev.kobbler.app.ui.components.TvFocusScale
 import dev.kobbler.app.ui.components.rememberTvFocusState
 import dev.kobbler.app.ui.components.tvClickable
@@ -50,6 +57,7 @@ internal fun StreamOptionRow(
     accent: Color,
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
+    onReport: ((bad: Boolean) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     val compact = LocalFormFactor.current == FormFactor.Phone
@@ -58,74 +66,95 @@ internal fun StreamOptionRow(
     val shape = RoundedCornerShape(10.dp)
     val meta = streamMeta(option)
 
+    // The report button sits beside the row's own focus target, not inside it: a focusable
+    // ancestor swallows a D-pad press aimed at its descendants.
     Row(
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp),
-        modifier = modifier
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
             .fillMaxWidth()
+            .focusKeyGroup("row.${option.id}")
+            .focusGroup()
             .tvFocusGlow(focus, cornerRadiusDp = 10f, scale = TvFocusScale.Subtle)
             .clip(shape)
-            .background(colors.elev1)
-            .pointerHoverIcon(PointerIcon.Hand)
-            .tvClickable(focus, onLongClick = { whole = !whole }, onClick = onSelect)
-            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = 12.dp),
+            .background(colors.elev1),
     ) {
-        KobChip(
-            text = option.quality.resolution ?: "SD",
-            style = KobChipStyle.AccentTint,
-            accent = accent,
-            modifier = Modifier.widthIn(min = if (compact) 58.dp else 68.dp),
-        )
-
-        Column(Modifier.weight(1f)) {
-            Text(
-                option.releaseTitle,
-                style = KobappTheme.type.body.copy(fontWeight = FontWeight.Medium),
-                color = colors.textHi,
-                maxLines = if (whole) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.tvMarquee(focus.isFocused && !whole),
+        Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp),
+            modifier = modifier
+                .weight(1f)
+                .clip(shape)
+                .pointerHoverIcon(PointerIcon.Hand)
+                .tvClickable(focus, onLongClick = { whole = !whole }, onClick = onSelect)
+                .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = 12.dp),
+        ) {
+            KobChip(
+                text = option.quality.resolution ?: "SD",
+                style = KobChipStyle.AccentTint,
+                accent = accent,
+                modifier = Modifier.widthIn(min = if (compact) 58.dp else 68.dp),
             )
-            packFileName(option)?.let {
+
+            Column(Modifier.weight(1f)) {
                 Text(
-                    "↳ $it",
-                    style = KobappTheme.type.caption,
-                    color = colors.textLo,
+                    option.releaseTitle,
+                    style = KobappTheme.type.body.copy(fontWeight = FontWeight.Medium),
+                    color = colors.textHi,
                     maxLines = if (whole) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.tvMarquee(focus.isFocused && !whole),
                 )
-            }
-            val chips = streamChips(option)
-            if (chips.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    chips.forEach { StreamChip(it, accent) }
+                packFileName(option)?.let {
+                    Text(
+                        "↳ $it",
+                        style = KobappTheme.type.caption,
+                        color = colors.textLo,
+                        maxLines = if (whole) Int.MAX_VALUE else 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-            }
-            if (compact && meta.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    meta.forEachIndexed { i, part ->
-                        if (i > 0) Text("·", style = KobappTheme.type.caption, color = colors.textXlo)
-                        Text(part, style = KobappTheme.type.caption, color = colors.textLo, maxLines = 1)
+                val chips = streamChips(option)
+                if (chips.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        chips.forEach { StreamChip(it, accent) }
+                    }
+                }
+                if (compact && meta.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        meta.forEachIndexed { i, part ->
+                            if (i > 0) Text("·", style = KobappTheme.type.caption, color = colors.textXlo)
+                            Text(part, style = KobappTheme.type.caption, color = colors.textLo, maxLines = 1)
+                        }
                     }
                 }
             }
+
+            if (!compact && meta.isNotEmpty()) {
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 96.dp)) {
+                    meta.forEachIndexed { i, part ->
+                        Text(
+                            part,
+                            style = if (i == 0) KobappTheme.type.body.copy(fontWeight = FontWeight.Medium) else KobappTheme.type.caption,
+                            color = if (i == 0) colors.textHi else colors.textLo,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+
         }
 
-        if (!compact && meta.isNotEmpty()) {
-            Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(min = 96.dp)) {
-                meta.forEachIndexed { i, part ->
-                    Text(
-                        part,
-                        style = if (i == 0) KobappTheme.type.body.copy(fontWeight = FontWeight.Medium) else KobappTheme.type.caption,
-                        color = if (i == 0) colors.textHi else colors.textLo,
-                        maxLines = 1,
-                    )
-                }
+        if (onReport != null && option.infoHash != null) {
+            val end = Modifier.padding(end = if (compact) 4.dp else 8.dp).focusKey("report")
+            if (option.reportedBad) {
+                LabelledIconButton(Icons.AutoMirrored.Outlined.Undo, "Undo report", { onReport(false) }, end, tint = colors.textMd)
+            } else {
+                LabelledIconButton(Icons.Outlined.Flag, "Report bad copy", { onReport(true) }, end, tint = colors.textLo)
             }
         }
     }

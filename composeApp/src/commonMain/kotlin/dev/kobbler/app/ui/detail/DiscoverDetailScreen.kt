@@ -205,6 +205,7 @@ fun DiscoverDetailScreen(
                 loading = streams.loading,
                 onSelect = streams::playPicked,
                 onDismiss = { streams.showOptions = false },
+                onReport = streams::report,
             )
         }
     }

@@ -16,6 +16,7 @@ import dev.kobbler.app.data.isWantedStatus
 import dev.kobbler.app.data.StreamSearchResult
 import dev.kobbler.app.data.StreamTarget
 import dev.kobbler.app.ui.navigation.Destination
+import dev.kobbler.app.ui.player.reporting
 import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.app.ui.player.DebridPlayback
 import dev.kobbler.app.ui.player.InstantStart
@@ -66,6 +67,10 @@ internal class DiscoverStreams(
         private set
     private var pickedFor: DiscoverEpisodeRef? = null
     private var search: Pair<DiscoverEpisodeRef?, Deferred<StreamSearchResult>>? = null
+
+    fun report(option: StreamOption, bad: Boolean) {
+        scope.launch { result = api.reporting(result, option, bad) }
+    }
 
     private fun searchFor(episode: DiscoverEpisodeRef?): Deferred<StreamSearchResult> {
         search?.takeIf { it.first == episode }?.let { return it.second }

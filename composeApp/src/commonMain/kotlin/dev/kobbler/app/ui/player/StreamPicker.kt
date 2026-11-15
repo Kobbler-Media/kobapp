@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
@@ -12,7 +13,9 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamSearchResult
 import dev.kobbler.app.ui.detail.StreamOptionsOverlay
+import dev.kobbler.app.ui.detail.withReport
 import dev.kobbler.kobfocus.FocusScopeHost
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.contentOrNull
@@ -76,6 +79,7 @@ fun StreamPickerHost(gps: GlobalPlayerState, api: KobblerApi) {
             picker.result = applyWarmReady(picker.result, hash, fid, providerId)
         }
     }
+    val scope = rememberCoroutineScope()
     val dismiss = { gps.streamPicker = null }
     // Drawn outside the scaffold, whose key handler is what carries a remote's Back to
     // InterceptBack, so the press is caught here.
@@ -87,10 +91,21 @@ fun StreamPickerHost(gps: GlobalPlayerState, api: KobblerApi) {
                 loading = picker.result == null,
                 onSelect = picker.onSelect,
                 onDismiss = dismiss,
+                onReport = { option, bad -> scope.launch { picker.result = api.reporting(picker.result, option, bad) } },
             )
         }
     }
 }
+
+internal suspend fun KobblerApi.reporting(found: StreamSearchResult?, option: StreamOption, bad: Boolean): StreamSearchResult? =
+    try {
+        reportBadCopy(option, bad)
+        found?.withReport(option, bad)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        found?.copy(errors = found.errors + "Couldn't save that report — try again.")
+    }
 
 /** A switch of the release already playing picks up at the playhead, not the last save. */
 internal fun GlobalPlayerState.switchFromSec(player: dev.kobbler.kobplayer.Player?, id: String): Int? =

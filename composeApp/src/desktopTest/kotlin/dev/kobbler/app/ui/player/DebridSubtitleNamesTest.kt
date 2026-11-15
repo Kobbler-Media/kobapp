@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.UserSettings
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.ui.dashboard.KEY_DEFAULT_AUDIO_LANG
 import dev.kobbler.kobplayer.TrackInfo
 import io.ktor.client.HttpClient
 import kotlin.test.Test
@@ -32,12 +35,17 @@ class DebridSubtitleNamesTest {
         isDebrid = true
     }
 
+    private val unforcedFrame = subtitlesFrame.replace("\"is_forced\":true", "\"is_forced\":false")
+
+    private fun audio(language: String?) = AudioTrackDto(streamIndex = 1, language = language)
+
     private fun play(
         state: GlobalPlayerState,
         player: FakePlayer,
+        frame: String = subtitlesFrame,
         whilePlaying: androidx.compose.ui.test.ComposeUiTest.() -> Unit,
     ) {
-        StubServer(mapOf("/api/v1/admin/stream/s1/status" to { _ -> subtitlesFrame })).use { server ->
+        StubServer(mapOf("/api/v1/admin/stream/s1/status" to { _ -> frame })).use { server ->
             runUiTest {
                 setContent {
                     Box(Modifier.size(960.dp, 540.dp)) {
@@ -97,5 +105,40 @@ class DebridSubtitleNamesTest {
             waitForIdle()
         }
         assertEquals("t1", player.selectedSubtitleTrack.value?.id)
+    }
+
+    private fun unforced(audioLanguage: String?, preferred: String?): String? {
+        UserSettings.bind { "debrid-subtitle-test" }
+        if (preferred != null) UserSettings.putString(KEY_DEFAULT_AUDIO_LANG, preferred)
+        try {
+            val player = FakePlayer().apply { subtitleTracks.value = vlcTracks }
+            val state = debridState().apply {
+                serverAudioTracks = listOf(audio(audioLanguage))
+                selectedServerAudioIndex = 1
+            }
+            play(state, player, unforcedFrame) {
+                waitUntil(timeoutMillis = UiTimeoutMs) { state.serverSubtitleTracks.isNotEmpty() }
+                waitForIdle()
+            }
+            return player.selectedSubtitleTrack.value?.id
+        } finally {
+            UserSettings.remove(KEY_DEFAULT_AUDIO_LANG)
+            UserSettings.bind { null }
+        }
+    }
+
+    @Test
+    fun `audio in another language switches on subtitles in the viewer's`() {
+        assertEquals("t1", unforced(audioLanguage = "rus", preferred = "eng"))
+    }
+
+    @Test
+    fun `audio the viewer understands leaves unforced subtitles off`() {
+        assertEquals(null, unforced(audioLanguage = "eng", preferred = "eng"))
+    }
+
+    @Test
+    fun `untagged audio is not taken for a foreign language`() {
+        assertEquals(null, unforced(audioLanguage = null, preferred = "eng"))
     }
 }

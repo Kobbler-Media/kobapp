@@ -16,6 +16,7 @@ import java.util.concurrent.Executors
 import uk.co.caprica.vlcj.player.base.State
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DesktopPlaybackTest {
@@ -36,6 +37,20 @@ class DesktopPlaybackTest {
         assertEquals(PlayerState.PLAYING, player.state.value)
         assertEquals(1f, player.bufferPercent.value)
         assertEquals(false, player.isBuffering.value)
+    }
+
+    /**
+     * `sub-language=none` only declines VLC's own language pick: a track the file flags
+     * default is still switched on by the demuxer, so a release with a default SDH track
+     * opened with subtitles showing although none were asked for.
+     */
+    @Test
+    fun `subtitles asked off stay off when the file flags a track default`() = withPlayer { player ->
+        player.load(MediaSource.Url(resourceUrl("red_176x100_default_subtitle.mkv"), subtitlesOff = true))
+        player.state.await("playing") { it == PlayerState.PLAYING }
+        player.subtitleTracks.await("subtitle track listed") { it.isNotEmpty() }
+        player.currentMs.await("under way") { it > 1_500 }
+        assertNull(player.selectedSubtitleTrack.value)
     }
 
     /**

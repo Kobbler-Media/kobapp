@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.ProviderPause
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamQuality
 import dev.kobbler.app.data.StreamResolveResult
@@ -134,6 +135,13 @@ class StreamWalkTest {
     }
 
     @Test
+    fun aCopyTheViewerReportedBadIsNeverWalkedOntoButCanStillBePicked() {
+        val list = listOf(option("a"), option("b").copy(reportedBad = true), option("c"))
+        assertEquals(listOf("a", "c"), fallbackCandidates(list, from = null).map { it.id })
+        assertEquals(listOf("b", "c"), fallbackCandidates(list, from = list[1]).map { it.id })
+    }
+
+    @Test
     fun uncachedOptionsGoLastAndOnlyOneIsAskedToCache() = runTest {
         val list = listOf(
             option("a").copy(availability = "uncached"),
@@ -203,5 +211,28 @@ class StreamWalkTest {
         advanceUntilIdle()
         assertEquals(0, s.inFlight)
         assertTrue(s.started == listOf("a"), "kept walking after the cancel: ${s.started}")
+    }
+
+    @Test
+    fun aResolveSaysWhatTheProviderMakesItWaitOutAndNothingWhenItIsOnlySlow() = runTest {
+        val notes = mutableListOf<String>()
+        assertEquals("slow", watchingPauses({ null }, { notes += it }) { delay(35_000); "slow" })
+        assertEquals(emptyList(), notes)
+
+        var left = 27
+        val paused = suspend { ProviderPause("adds_paused", left).also { left -= 3 } }
+        assertEquals("held", watchingPauses(paused, { notes += it }) { delay(5_000); "held" })
+        assertEquals(listOf(27, 24).map { pauseNote(ProviderPause("adds_paused", it)) }, notes)
+
+        assertEquals("quick", watchingPauses({ error("asked about a resolve that had already answered") }, { notes += it }) { delay(1_000); "quick" })
+    }
+
+    @Test
+    fun aPauseNoteSaysWhyAndForHowLong() {
+        val adds = pauseNote(ProviderPause("adds_paused", 27))
+        val limited = pauseNote(ProviderPause("rate_limited", 4))
+        assertTrue("27s" in adds && "pausing" in adds, adds)
+        assertTrue("4s" in limited && "limiting" in limited, limited)
+        assertTrue("9s" in pauseNote(ProviderPause("something_new", 9)))
     }
 }

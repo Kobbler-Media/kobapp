@@ -5,11 +5,14 @@ import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.Episode
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.ProviderPause
 import dev.kobbler.app.data.Season
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamQuality
 import dev.kobbler.app.data.TvShow
+import dev.kobbler.app.data.StreamResolveResult
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -97,7 +100,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(options) }, option = options.first(),
+                    search = { found(options) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (gps.sessionId != "s2" || stub.outcome("s2") == null) delay(20)
@@ -112,6 +115,85 @@ class DebridFallbackTest {
     }
 
     @Test
+    fun `a picked release that will not resolve stops at the dialog instead of playing another`() {
+        val refused = """{"error":"Real-Debrid refused this release. Try a different source.","reason":"blocked"}"""
+        val resolve = resolveBy { hash -> if (hash == "h1") refused else session(hash.removePrefix("h")) }
+        val codes = { _: String, body: String -> if (body.contains("\"h1\"")) 502 else null }
+        StubServer(routes(resolve), codeFor = codes).also { stub = it }.use { stub ->
+            val player = FakePlayer()
+            watched(stub, player) { api, gps ->
+                tryPlayTvWithFallback(
+                    api = api, player = player, gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options) }, picked = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+
+                val help = assertNotNull(gps.failureHelp, "a refused pick did not end in the dialog")
+                assertEquals(listOf("h1"), resolved.toList(), "walked on from the release the viewer chose")
+                assertNull(player.loadedUrl, "played a release nobody picked")
+                assertEquals(listOf("o2", "o3"), help.alternatives.map { it.id })
+            }
+        }
+    }
+
+    @Test
+    fun `a picked release that keeps dropping ends in the dialog, not on the release on disk`() {
+        val player = FakePlayer().apply { durationMs.value = 3_600_000 }
+        val minted = mutableMapOf<String, Int>()
+        val resolve = resolveBy { hash ->
+            val n = minted.merge(hash, 1, Int::plus)!!
+            session(hash.removePrefix("h") + if (n > 1) "b" else "")
+        }
+        val onDisk = """{"id":"local-h3-1","release_title":"Show.S01E01.v3","debrid_provider":"realdebrid",
+            "debrid_provider_id":"p1","info_hash":"h3","cached":true,"availability":"ready"}"""
+        val withLocal = routes(resolve) + ("/api/v1/admin/stream/local" to { _: HttpExchange -> onDisk })
+        StubServer(withLocal).also { stub = it }.use { stub ->
+            watched(stub, player) { api, gps ->
+                tryPlayTvWithFallback(
+                    api = api, player = player, gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options) }, picked = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+                while (stub.outcome("s1") == null) delay(20)
+                player.currentMs.value = 600_000
+                player.error.value = RuntimeException("connection reset")
+                while (gps.sessionId != "s1b" || stub.outcome("s1b") == null) delay(20)
+                player.currentMs.value = 900_000
+                player.error.value = RuntimeException("connection reset again")
+                while (gps.failureHelp == null) delay(20)
+
+                assertEquals(listOf("h1", "h1"), resolved.toList(), "left the release the viewer chose")
+                assertEquals(listOf("o2", "o3"), gps.failureHelp!!.alternatives.map { it.id })
+            }
+        }
+    }
+
+    @Test
+    fun `an alternative picked from the dialog is the only release tried`() {
+        val refused = """{"error":"Real-Debrid refused this release. Try a different source.","reason":"blocked"}"""
+        val resolve = resolveBy { hash -> if (hash == "h3") session("3") else refused }
+        val codes = { _: String, body: String -> if (body.contains("\"h3\"")) null else 502 }
+        StubServer(routes(resolve), codeFor = codes).also { stub = it }.use { stub ->
+            watched(stub, FakePlayer()) { api, gps ->
+                tryPlayTvWithFallback(
+                    api = api, player = FakePlayer(), gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options) }, picked = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+                val first = assertNotNull(gps.failureHelp)
+                first.onPickAlternative!!(options[1])
+                while (resolved.size < 2 || gps.failureHelp === first || gps.failureHelp == null) delay(20)
+
+                assertEquals(listOf("h1", "h2"), resolved.toList(), "an alternative that failed walked on to the next")
+                assertEquals(listOf("o3"), gps.failureHelp!!.alternatives.map { it.id })
+            }
+        }
+    }
+
+    @Test
     fun `when nothing plays the dialog says why and offers a download`() {
         val refused = """{"error":"Real-Debrid refused this release. Try a different source.","reason":"blocked"}"""
         val codes = mapOf("/api/v1/admin/stream/resolve" to 502)
@@ -120,7 +202,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = FakePlayer(), gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(options) }, option = options.first(),
+                    search = { found(options) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
 
@@ -147,6 +229,71 @@ class DebridFallbackTest {
         }
     }
 
+    /** kobload holds an add for half a minute while the debrid account pauses them, which was this client's whole socket timeout. */
+    @Test
+    fun `a resolve is given longer than an ordinary call`() {
+        val slow = { _: HttpExchange -> Thread.sleep(1_500); session("1") }
+        StubServer(mapOf("/api/v1/admin/stream/resolve" to slow)).use { stub ->
+            val impatient = HttpClient { install(HttpTimeout) { socketTimeoutMillis = 500; requestTimeoutMillis = 500 } }
+            val api = KobblerApi(impatient, stub.url, "token")
+            assertIs<StreamResolveResult.Ready>(runBlocking { api.streamResolve(options.first(), "episode", "ep-1") })
+        }
+    }
+
+    @Test
+    fun `a resolve the debrid account is pausing says so while it waits`() {
+        var noted: String? = null
+        var gpsSeen: GlobalPlayerState? = null
+        val held = { _: HttpExchange -> Thread.sleep(PAUSE_CHECK_AFTER_MS + 700); noted = gpsSeen?.preparingNote; session("1") }
+        val pause = { _: HttpExchange -> """{"pause":{"reason":"adds_paused","seconds":27}}""" }
+        StubServer(routes(held) + ("/api/v1/admin/stream/pause" to pause)).use { stub ->
+            val player = FakePlayer().apply { durationMs.value = 3_600_000 }
+            watched(stub, player) { api, gps ->
+                gpsSeen = gps
+                tryPlayTvWithFallback(
+                    api = api, player = player, gps = gps, show = show,
+                    episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
+                    search = { found(options) }, picked = options.first(),
+                    onCaching = { _, _ -> error("nothing here needs caching") },
+                )
+                while (gps.sessionId != "s1") delay(20)
+                assertEquals(pauseNote(ProviderPause("adds_paused", 27)), noted)
+            }
+        }
+    }
+
+    @Test
+    fun `a server that cannot say whether the account is paused reads as not paused`() {
+        val paused = { _: HttpExchange -> """{"pause":{"reason":"rate_limited","seconds":4}}""" }
+        val clear = { _: HttpExchange -> """{"pause":null}""" }
+        fun asked(routes: Map<String, (HttpExchange) -> String>) = StubServer(routes).use { stub ->
+            runBlocking { KobblerApi(HttpClient(), stub.url, "token").streamPause("p1") }
+        }
+        assertEquals(ProviderPause("rate_limited", 4), asked(mapOf("/api/v1/admin/stream/pause" to paused)))
+        assertNull(asked(mapOf("/api/v1/admin/stream/pause" to clear)))
+        assertNull(asked(emptyMap()))
+    }
+
+    @Test
+    fun `a bad copy report names the release file, and a search says which copies are reported`() {
+        val listed = """{"options":[{"id":"o1","release_title":"Show.S01E01","debrid_provider":"realdebrid","debrid_provider_id":"p1",
+            "info_hash":"h1","files":[{"id":4,"path":"e1.mkv"}],"playback":"failed","reported_bad":true}],"errors":[]}"""
+        val routes = mapOf<String, (HttpExchange) -> String>(
+            "/api/v1/admin/stream/bad" to { _ -> "" },
+            "/api/v1/admin/stream/search" to { _ -> listed },
+        )
+        StubServer(routes, codes = mapOf("/api/v1/admin/stream/bad" to 204)).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val found = runBlocking { api.streamSearch(episodeId = "ep-1") }.options.single()
+            assertTrue(found.reportedBad)
+            runBlocking { api.reportBadCopy(found, bad = false) }
+            assertEquals(
+                """{"debrid_provider_id":"p1","info_hash":"h1","file_id":4,"bad":false}""",
+                stub.requestBodies.getValue("/api/v1/admin/stream/bad"),
+            )
+        }
+    }
+
     private fun resolvedStart(stub: StubServer) =
         Json.parseToJsonElement(stub.requestBodies.getValue("/api/v1/admin/stream/resolve"))
             .jsonObject["start_time"]?.jsonPrimitive?.content?.toInt()
@@ -167,7 +314,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(candidates) }, option = candidates.first(),
+                    search = { found(candidates) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (stub.outcome("s1") == null) delay(20)
@@ -214,7 +361,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = FakePlayer(), gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { StreamSearchResult(emptyList(), listOf("No debrid providers configured")) }, option = null,
+                    search = { StreamSearchResult(emptyList(), listOf("No debrid providers configured")) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 val help = assertNotNull(gps.failureHelp)
@@ -257,7 +404,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(options) }, option = options.first(),
+                    search = { found(options) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (stub.outcome("s1") == null) delay(20)
@@ -287,7 +434,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(options) }, option = options.first(),
+                    search = { found(options) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (stub.outcome("s2") == null) delay(20)
@@ -316,7 +463,7 @@ class DebridFallbackTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(options.take(1)) }, option = options.first(),
+                    search = { found(options.take(1)) }, picked = null,
                     onCaching = { _, _ -> error("nothing here needs caching") },
                 )
                 while (gps.failureHelp == null) delay(20)

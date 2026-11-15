@@ -124,7 +124,7 @@ fun InlineTvPlayer(
                         api = api, player = player, gps = gps, show = show,
                         episodeId = episodeId, seasonIdx = sIdx, episodeIdx = eIdx,
                         search = { episodeStreams(episodeId) },
-                        option = option,
+                        picked = option,
                         resumeSec = gps.switchFromSec(player, episodeId) ?: api.getEpisodeProgress(episodeId) ?: 0,
                         onCaching = startCaching,
                     )
@@ -182,7 +182,7 @@ fun InlineTvPlayer(
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = episodeId, seasonIdx = streamingSeasonIdx, episodeIdx = streamingEpisodeIdx,
-                    search = { episodeStreams(episodeId) }, option = null,
+                    search = { episodeStreams(episodeId) }, picked = null,
                     resumeSec = api.getEpisodeProgress(episodeId) ?: cachedSec,
                     onCaching = startCaching,
                     claim = { gps.instant.claim(api, StreamTarget.episode(episodeId)) },
@@ -195,8 +195,12 @@ fun InlineTvPlayer(
         }
     }
 
-    DisposableEffect(show.id) {
+    // A stop clears the switch, and the next play from this screen has to put it back.
+    LaunchedEffect(show.id, gps.mediaId) {
         gps.onSwitchStream = { gps.mediaId?.let { pickEpisodeStream(it, false) } }
+    }
+
+    DisposableEffect(show.id) {
         onDispose {
             gps.streamPicker = null
             if (gps.mediaId == prefetchedEpisodeId || gps.mediaId == streamingEpisodeId) {
@@ -324,7 +328,7 @@ fun InlineTvPlayer(
             tryPlayTvWithFallback(
                 api = api, player = player, gps = gps, show = show,
                 episodeId = episodeId, seasonIdx = sIdx, episodeIdx = eIdx,
-                search = { episodeStreams(episodeId) }, option = null,
+                search = { episodeStreams(episodeId) }, picked = null,
                 resumeSec = if (fromStart) 0 else (api.getEpisodeProgress(episodeId) ?: 0),
                 onCaching = startCaching,
                 claim = { gps.instant.claim(api, StreamTarget.episode(episodeId)) },
@@ -508,7 +512,7 @@ private fun playNeighbourEpisode(
                         api = api, player = player, gps = gps, show = show,
                         episodeId = epId, seasonIdx = sIdx, episodeIdx = eIdx,
                         search = { searchResult ?: api.streamSearch(episodeId = epId) },
-                        option = null,
+                        picked = null,
                         resumeSec = (api.getEpisodeProgress(epId) ?: 0),
                         onCaching = { walk, c -> onStartCaching(walk, c, sIdx, eIdx, epId) },
                         claim = { claimed },
@@ -564,7 +568,7 @@ internal suspend fun tryPlayTvWithFallback(
     seasonIdx: Int,
     episodeIdx: Int,
     search: suspend () -> StreamSearchResult,
-    option: StreamOption?,
+    picked: StreamOption?,
     resumeSec: Int = 0,
     onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
     claim: (suspend () -> InstantStart?)? = null,
@@ -606,6 +610,6 @@ internal suspend fun tryPlayTvWithFallback(
         claim = claim,
         local = local,
     )
-    walk.start(option, resumeSec)
+    walk.start(picked, resumeSec)
 }
 

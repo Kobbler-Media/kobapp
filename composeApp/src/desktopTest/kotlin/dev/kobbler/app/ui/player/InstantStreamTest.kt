@@ -94,7 +94,7 @@ class InstantStreamTest {
         tryPlayTvWithFallback(
             api = api, player = player, gps = gps, show = show,
             episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-            search = { error("searched although a stream was warm") }, option = null,
+            search = { error("searched although a stream was warm") }, picked = null,
             onCaching = { _, _ -> error("cached") },
             claim = { gps.instant.claim(api, target) },
         )
@@ -121,7 +121,7 @@ class InstantStreamTest {
                 tryPlayTvWithFallback(
                     api = api, player = player, gps = gps, show = show,
                     episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                    search = { found(listOf(debridOption("h1"))) }, option = null,
+                    search = { found(listOf(debridOption("h1"))) }, picked = null,
                     onCaching = { _, _ -> error("cached") },
                     claim = { gps.instant.claim(api, target) },
                 )

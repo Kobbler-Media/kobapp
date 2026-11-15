@@ -61,7 +61,7 @@ class DebridGiveUpTest {
                     tryPlayTvWithFallback(
                         api = api, player = player, gps = gps, show = show,
                         episodeId = "ep-17", seasonIdx = 0, episodeIdx = 0,
-                        search = { found(listOf(only)) }, option = only,
+                        search = { found(listOf(only)) }, picked = only,
                         onCaching = { _, _ -> error("nothing here needs caching") },
                     )
                     while (gps.failureHelp == null) delay(20)
@@ -113,7 +113,7 @@ class DebridGiveUpTest {
                     tryPlayTvWithFallback(
                         api = api, player = player, gps = gps, show = show,
                         episodeId = "ep-17", seasonIdx = 0, episodeIdx = 0,
-                        search = { found(listOf(only, second)) }, option = only,
+                        search = { found(listOf(only, second)) }, picked = null,
                         onCaching = { _, _ -> error("nothing here needs caching") },
                     )
                     while (resolves.get() < 2) delay(20)

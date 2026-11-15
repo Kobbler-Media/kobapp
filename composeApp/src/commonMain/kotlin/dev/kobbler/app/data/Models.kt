@@ -721,6 +721,7 @@ data class StreamOption(
     val availability: String? = null,
     val group: String? = null,
     val audioLanguages: List<String> = emptyList(),
+    val reportedBad: Boolean = false,
 )
 
 @Immutable
@@ -746,6 +747,8 @@ sealed interface ThumbnailsProbe {
     data object Pending : ThumbnailsProbe
     data object Gone : ThumbnailsProbe
 }
+
+data class ProviderPause(val reason: String, val seconds: Int)
 
 sealed interface StreamResolveResult {
     data class Ready(val session: KobblerApi.StreamSession) : StreamResolveResult

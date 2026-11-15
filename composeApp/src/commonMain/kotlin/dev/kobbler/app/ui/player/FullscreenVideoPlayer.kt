@@ -297,7 +297,7 @@ fun FullscreenVideoPlayer(
         api.debridSessionEvents(sid).collect { frame ->
             // Guarded whole: the key does not change for the life of the session, so an
             // unexpected payload would otherwise end the collector for good.
-            runCatching { applyDebridSessionFrame(state, api, sid, frame) }
+            runCatching { applyDebridSessionFrame(state, api, sid, frame, player) }
         }
     }
 
@@ -466,15 +466,21 @@ fun FullscreenVideoPlayer(
         }
     }
 
-    // A debrid stream opens with subtitles off: whether a track is forced is only known once
-    // the server has read the tracks' text, which is after the player has opened. The server
-    // switches forced tracks on for a library file at open time; this is the same rule, late.
+    // A debrid stream opens with subtitles off: whether a track is forced, or what language
+    // it is in, is only known once the server has read the tracks' text, which is after the
+    // player has opened. The server decides this for a library file at open time; this is
+    // the same rule, late.
     var viewerPickedSubtitles by remember(state.sessionId) { mutableStateOf(false) }
-    LaunchedEffect(state.sessionId, state.serverSubtitleTracks) {
+    val playingAudio = state.serverAudioTracks.firstOrNull { it.streamIndex == state.selectedServerAudioIndex }
+    LaunchedEffect(state.sessionId, state.serverSubtitleTracks, playingAudio) {
         val server = state.serverSubtitleTracks
-        if (!state.isDebrid || state.renderableServerSubtitles.isNotEmpty() || server.none { it.isForced }) return@LaunchedEffect
-        val forced = player.subtitleTracks.mapNotNull { it.forcedBy(server) }.first()
-        if (!viewerPickedSubtitles && player.selectedSubtitleTrack.value == null) player.selectSubtitleTrack(forced)
+        if (!state.isDebrid || state.renderableServerSubtitles.isNotEmpty() || server.isEmpty()) return@LaunchedEffect
+        val prefs = dev.kobbler.app.data.TrackPrefs.current()
+        val foreignAudio = prefs.subtitlesEnabled && playingAudio?.isForeignTo(prefs.audioLanguage) == true
+        val language = prefs.subtitleLanguage ?: prefs.audioLanguage
+        if (!foreignAudio && server.none { it.isForced }) return@LaunchedEffect
+        val wanted = player.subtitleTracks.mapNotNull { it.unaskedBy(server, foreignAudio, language) }.first()
+        if (!viewerPickedSubtitles && player.selectedSubtitleTrack.value == null) player.selectSubtitleTrack(wanted)
     }
 
     val renderableServerSubs = state.renderableServerSubtitles

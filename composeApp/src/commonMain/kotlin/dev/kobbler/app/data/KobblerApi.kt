@@ -60,6 +60,12 @@ private val json = Json { ignoreUnknownKeys = true }
  */
 const val BookFetchTimeoutMs = 5 * 60 * 1000L
 
+/**
+ * A resolve waits on the debrid service through kobload, which holds an add for half a
+ * minute when the account is pausing them. The server gives kobload 55 s; this outlasts it.
+ */
+const val StreamResolveTimeoutMs = 65_000L
+
 /** Read size for the TTS event stream. One `audio` event is several hundred KB of base64. */
 private const val TtsStreamChunkBytes = 64 * 1024
 
@@ -546,6 +552,7 @@ data class StreamOptionDto(
     val availability: String? = null,
     val group: String? = null,
     @SerialName("audio_languages") val audioLanguages: List<String> = emptyList(),
+    @SerialName("reported_bad") val reportedBad: Boolean = false,
 )
 
 @Serializable
@@ -562,6 +569,12 @@ data class StreamSearchResponseDto(
     @SerialName("preferred_info_hash") val preferredInfoHash: String? = null,
     @SerialName("preferred_file_id") val preferredFileId: Int? = null,
 )
+
+@Serializable
+data class StreamPauseResponseDto(val pause: StreamPauseDto? = null)
+
+@Serializable
+data class StreamPauseDto(val reason: String, val seconds: Int)
 
 @Serializable
 data class StreamResolveStatusResponseDto(
@@ -2276,12 +2289,18 @@ class KobblerApi(
         null
     }
 
-    private suspend fun post(path: String, body: String): String = write("POST", path, body) {
+    private suspend fun post(path: String, body: String, timeoutMs: Long? = null): String = write("POST", path, body) {
         timed {
             httpClient.post("$apiUrl$path") {
                 header(HttpHeaders.Authorization, "Bearer $token")
                 contentType(ContentType.Application.Json)
                 setBody(body)
+                timeoutMs?.let {
+                    timeout {
+                        requestTimeoutMillis = it
+                        socketTimeoutMillis = it
+                    }
+                }
             }.checkedBody()
         }
     }
@@ -3803,6 +3822,7 @@ class KobblerApi(
             availability = availability,
             group = group,
             audioLanguages = audioLanguages,
+            reportedBad = reportedBad,
         )
     }
 
@@ -4257,7 +4277,7 @@ class KobblerApi(
             estimatedDuration?.let { put("estimated_duration", it) }
             putStreamTarget(target, startTime)
         }
-        val respText = post("/api/v1/admin/stream/resolve", body.toString())
+        val respText = post("/api/v1/admin/stream/resolve", body.toString(), StreamResolveTimeoutMs)
         val disc = decode<StreamResolveDiscriminatorDto>(respText)
         if (disc.sessionId != null) {
             // Cached / instant — returns a full playback session
@@ -4352,6 +4372,23 @@ class KobblerApi(
             get("/api/v1/admin/stream/resolve/status?provider_id=${providerId.encodeURLParameter()}&torrent_id=${torrentId.encodeURLParameter()}")
         )
         return StreamCachingStatus(status = resp.status, progress = resp.progress, message = resp.message)
+    }
+
+    /** What the debrid account is making a resolve wait out; a server too old to say reads as nothing. */
+    suspend fun streamPause(providerId: String): ProviderPause? = quiet(null) {
+        decode<StreamPauseResponseDto>(get("/api/v1/admin/stream/pause?provider_id=${providerId.encodeURLParameter()}"))
+            .pause?.let { ProviderPause(it.reason, it.seconds) }
+    }
+
+    /** The viewer's word that a copy is bad (out of sync, the wrong cut), or taking it back. */
+    suspend fun reportBadCopy(option: StreamOption, bad: Boolean) {
+        val body = buildJsonObject {
+            put("debrid_provider_id", option.debridProviderId)
+            put("info_hash", option.infoHash)
+            put("file_id", option.fileId)
+            put("bad", bad)
+        }
+        post("/api/v1/admin/stream/bad", body.toString())
     }
 
     /** Delete a debrid stream session. */

@@ -117,6 +117,42 @@ class StreamSwitchTest {
         }
     }
 
+    /** Stopping cleared the switch for good: a title played again from the same screen had no way to change release. */
+    private fun ComposeUiTest.keepsTheSwitchAcrossAStop(
+        mediaId: String,
+        screen: (KobblerApi, GlobalPlayerState, FakePlayer) -> @androidx.compose.runtime.Composable () -> Unit,
+    ) = StubServer(routes()).use { stub ->
+        val api = KobblerApi(HttpClient(), stub.url, "token").apply { canStream = true }
+        val gps = GlobalPlayerState()
+        val player = FakePlayer().also { it.durationMs.value = 3_000_000 }
+        setContent { screen(api, gps, player)() }
+        waitForIdle()
+        onNodeWithContentDescription("From start").performClick()
+        waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == mediaId && gps.isFullscreen }
+
+        runOnIdle { gps.stop(player, api, gps.teardownScope) }
+        waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == null }
+        onNodeWithContentDescription("From start").performClick()
+        waitUntil(timeoutMillis = UiTimeoutMs) { gps.mediaId == mediaId && gps.isFullscreen }
+        waitForIdle()
+
+        assertTrue(gps.isDebrid && gps.onSwitchStream != null, "no way to switch release on the second play")
+    }
+
+    @Test
+    fun anEpisodePlayedAgainAfterAStopCanStillSwitchRelease() = runUiTest {
+        keepsTheSwitchAcrossAStop("ep-1") { api, gps, player ->
+            { InlineTvPlayer(show = startedShow, api = api, formFactor = FormFactor.TV, player = player, gps = gps, onBack = {}) }
+        }
+    }
+
+    @Test
+    fun aMoviePlayedAgainAfterAStopCanStillSwitchRelease() = runUiTest {
+        keepsTheSwitchAcrossAStop("m1") { api, gps, player ->
+            { InlineMoviePlayer(movie = movie, api = api, formFactor = FormFactor.TV, player = player, gps = gps, onBack = {}) }
+        }
+    }
+
     @Test
     fun aReleasePickedFromTheEpisodeListOpensThePlayerWhileItResolves() = runUiTest {
         val resolving = CountDownLatch(1)

@@ -188,7 +188,7 @@ fun InlineMoviePlayer(
                 tryPlayWithFallback(
                     api = api, player = player, gps = gps, movie = movie,
                     search = { movieStreams() },
-                    option = option,
+                    picked = option,
                     resumeSec = gps.switchFromSec(player, movie.id) ?: movieProgress(api, movie),
                     onCaching = startCaching,
                 )
@@ -219,7 +219,7 @@ fun InlineMoviePlayer(
         } else {
             tryPlayWithFallback(
                 api = api, player = player, gps = gps, movie = movie,
-                search = { movieStreams() }, option = null,
+                search = { movieStreams() }, picked = null,
                 resumeSec = movieProgress(api, movie),
                 onCaching = startCaching,
                 claim = { gps.instant.claim(api, StreamTarget.movie(movie.id)) },
@@ -227,8 +227,12 @@ fun InlineMoviePlayer(
         }
     }
 
-    DisposableEffect(movie.id) {
+    // A stop clears the switch, and the next play from this screen has to put it back.
+    LaunchedEffect(movie.id, gps.mediaId, isDebrid) {
         if (isDebrid) gps.onSwitchStream = { pickMovieStream() }
+    }
+
+    DisposableEffect(movie.id) {
         onDispose {
             gps.streamPicker = null
             if (gps.mediaId == movie.id) gps.onSwitchStream = null
@@ -282,7 +286,7 @@ fun InlineMoviePlayer(
             resolving = scope.launch {
                 tryPlayWithFallback(
                     api = api, player = player, gps = gps, movie = movie,
-                    search = { movieStreams() }, option = null,
+                    search = { movieStreams() }, picked = null,
                     resumeSec = if (fromStart) 0 else movieProgress(api, movie),
                     onCaching = startCaching,
                     claim = { gps.instant.claim(api, StreamTarget.movie(movie.id)) },
@@ -374,7 +378,7 @@ private suspend fun tryPlayWithFallback(
     gps: GlobalPlayerState,
     movie: Movie,
     search: suspend () -> StreamSearchResult,
-    option: StreamOption?,
+    picked: StreamOption?,
     resumeSec: Int = 0,
     onCaching: (DebridPlayback, WalkResult.Caching) -> Unit,
     claim: (suspend () -> InstantStart?)? = null,
@@ -399,7 +403,7 @@ private suspend fun tryPlayWithFallback(
         claim = claim,
         local = local,
     )
-    walk.start(option, resumeSec)
+    walk.start(picked, resumeSec)
 }
 
 private suspend fun playDebridSession(

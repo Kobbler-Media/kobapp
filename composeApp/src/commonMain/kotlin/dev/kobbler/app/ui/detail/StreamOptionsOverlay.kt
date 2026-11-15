@@ -49,6 +49,7 @@ fun StreamOptionsOverlay(
     loading: Boolean,
     onSelect: (StreamOption) -> Unit,
     onDismiss: () -> Unit,
+    onReport: ((StreamOption, bad: Boolean) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
     val formFactor = LocalFormFactor.current
@@ -93,7 +94,7 @@ fun StreamOptionsOverlay(
         when {
             loading -> LoadingState()
             options.isEmpty() -> EmptyState(icon = Icons.Outlined.CloudOff, title = "No streams found")
-            else -> StreamList(options, accent, gutter, firstStreamFocus, onSelect)
+            else -> StreamList(options, accent, gutter, firstStreamFocus, onSelect, onReport)
         }
     }
 }
@@ -126,6 +127,7 @@ private fun StreamList(
     gutter: Dp,
     firstStreamFocus: FocusRequester,
     onSelect: (StreamOption) -> Unit,
+    onReport: ((StreamOption, bad: Boolean) -> Unit)?,
 ) {
     val first = options.first().id
     LazyColumn(
@@ -142,6 +144,7 @@ private fun StreamList(
                     option = option,
                     accent = accent,
                     onSelect = { onSelect(option) },
+                    onReport = onReport?.let { report -> { bad -> report(option, bad) } },
                     modifier = Modifier
                         .focusKey("option.${option.id}")
                         .then(if (option.id == first) Modifier.focusRequester(firstStreamFocus) else Modifier),

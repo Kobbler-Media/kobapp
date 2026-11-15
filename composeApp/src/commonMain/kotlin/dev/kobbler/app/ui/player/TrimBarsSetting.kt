@@ -10,3 +10,5 @@ const val KEY_TRIM_BLACK_BARS = "pref_trim_black_bars"
 fun trimBlackBarsSetting(): Boolean = Settings.getString(KEY_TRIM_BLACK_BARS) == "true"
 
 fun PictureArea.toCrop() = PictureCrop(x, y, width, height)
+
+internal fun GlobalPlayerState.pictureCrop(): PictureCrop? = picture?.takeIf { trimBlackBarsSetting() }?.toCrop()

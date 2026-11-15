@@ -2,9 +2,13 @@ package dev.kobbler.app.ui.player
 
 import dev.kobbler.app.data.ApiException
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.ProviderPause
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamResolveResult
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 
@@ -38,6 +42,35 @@ internal sealed interface WalkResult {
         override val tried: List<StreamOption>,
         override val attempts: Int,
     ) : WalkResult
+}
+
+internal const val PAUSE_CHECK_AFTER_MS = 1_500L
+internal const val PAUSE_CHECK_EVERY_MS = 3_000L
+
+internal fun pauseNote(pause: ProviderPause): String {
+    val why = when (pause.reason) {
+        "adds_paused" -> "is pausing new requests on your account"
+        "rate_limited" -> "is limiting requests right now"
+        else -> "is making requests wait"
+    }
+    return "Your debrid service $why. Trying again in about ${pause.seconds}s…"
+}
+
+// A resolve blocks for as long as kobload waits the provider out, up to half a minute,
+// and only the server knows that is what it is doing.
+internal suspend fun <T> watchingPauses(pause: suspend () -> ProviderPause?, note: (String) -> Unit, block: suspend () -> T): T = coroutineScope {
+    val watch = launch {
+        delay(PAUSE_CHECK_AFTER_MS)
+        while (true) {
+            pause()?.let { note(pauseNote(it)) }
+            delay(PAUSE_CHECK_EVERY_MS)
+        }
+    }
+    try {
+        block()
+    } finally {
+        watch.cancel()
+    }
 }
 
 private enum class Refusal { Skip, Stop, Attempt }

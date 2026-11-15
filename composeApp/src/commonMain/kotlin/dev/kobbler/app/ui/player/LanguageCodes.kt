@@ -43,6 +43,12 @@ internal fun AudioTrackDto.speaks(preferred: String?): Boolean {
     return sameLanguage(tag, preferred)
 }
 
+/** Audio known to be in another language; a track that names none is given the benefit of the doubt. */
+internal fun AudioTrackDto.isForeignTo(preferred: String?): Boolean {
+    val tag = language?.trim()?.lowercase()
+    return !preferred.isNullOrBlank() && !tag.isNullOrEmpty() && tag !in UntaggedCodes && !speaks(preferred)
+}
+
 private val CommentaryMarkers = listOf("commentary", "commentaries", "audio description", "descriptive", "described video")
 
 // Sport ships the race as commentary beside a feed with none; that feed is never the one wanted.

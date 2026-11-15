@@ -57,7 +57,7 @@ class DebridAudioLanguageTest {
                         tryPlayTvWithFallback(
                             api = api, player = player, gps = GlobalPlayerState(), show = show,
                             episodeId = "ep-1", seasonIdx = 0, episodeIdx = 0,
-                            search = { found(listOf(option)) }, option = option,
+                            search = { found(listOf(option)) }, picked = option,
                             onCaching = { _, _ -> error("cached") },
                         )
                         while (player.loadedSource == null) delay(10)

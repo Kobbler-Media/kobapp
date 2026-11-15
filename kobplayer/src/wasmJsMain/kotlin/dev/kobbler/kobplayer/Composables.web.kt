@@ -9,12 +9,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import org.w3c.dom.HTMLVideoElement
+import kotlin.math.roundToInt
 
 @Composable
 actual fun rememberPlayer(config: PlayerConfig): Player {
@@ -43,6 +47,10 @@ actual fun VideoSurface(
     overlay: @Composable (Player) -> Unit,
 ) {
     val video = (player as WebPlayer).videoElement
+    val ratio by player.aspectRatio.collectAsState()
+    val videoSize by player.videoSize.collectAsState()
+    val crop by player.pictureCrop.collectAsState()
+    var bounds by remember { mutableStateOf(Rect.Zero) }
 
     DisposableEffect(video) {
         video.style.apply {
@@ -54,23 +62,53 @@ actual fun VideoSurface(
         onDispose { video.parentElement?.removeChild(video) }
     }
 
+    LaunchedEffect(video, bounds, ratio, videoSize, crop) {
+        video.place(bounds, ratio, videoSize, crop, kotlinx.browser.window.devicePixelRatio)
+    }
+
     // The <video> sits under Compose's canvas, so the canvas is cleared to transparent
     // over it and the element is kept on the same rectangle.
     Box(
         modifier
-            .onGloballyPositioned { coords ->
-                val bounds = coords.boundsInWindow()
-                val scale = kotlinx.browser.window.devicePixelRatio
-                video.style.apply {
-                    left = "${bounds.left / scale}px"
-                    top = "${bounds.top / scale}px"
-                    width = "${bounds.width / scale}px"
-                    height = "${bounds.height / scale}px"
-                }
-            }
+            .onGloballyPositioned { bounds = it.boundsInWindow() }
             .drawBehind { drawRect(Color.Transparent, blendMode = BlendMode.Clear) },
     ) {
         overlay(player)
+    }
+}
+
+// Trimming lays the whole frame out past the surface and clips it back, since object-fit
+// can only scale the frame as a whole.
+private fun HTMLVideoElement.place(
+    bounds: Rect,
+    ratio: AspectRatio,
+    videoSize: Pair<Int, Int>,
+    crop: PictureCrop?,
+    scale: Double,
+) {
+    val (videoWidth, videoHeight) = videoSize
+    val trimmed = crop != null && videoWidth > 0 && videoHeight > 0
+    val width = bounds.width.roundToInt()
+    val height = bounds.height.roundToInt()
+    val frame = if (trimmed) videoFrameRect(ratio, videoWidth, videoHeight, width, height, crop) else FrameRect(0, 0, width, height)
+    val shown = frame.visibleIn(width, height)
+    fun px(value: Number) = "${value.toDouble() / scale}px"
+    style.apply {
+        left = px(bounds.left + frame.left)
+        top = px(bounds.top + frame.top)
+        this.width = px(frame.width)
+        this.height = px(frame.height)
+        objectFit = when {
+            trimmed -> "fill"
+            ratio == AspectRatio.FIT -> "contain"
+            ratio == AspectRatio.STRETCH -> "fill"
+            else -> "cover"
+        }
+        setProperty(
+            "clip-path",
+            "inset(${px(shown.top)} ${px(frame.width - shown.left - shown.width)} " +
+                "${px(frame.height - shown.top - shown.height)} ${px(shown.left)})",
+        )
     }
 }
 

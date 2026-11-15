@@ -281,6 +281,9 @@ internal abstract class VlcPlayer<B : VlcBinding>(
         inputRetired = true
         sourceLive = source.live
         loadedSource = source
+        // `sub-language=none` stops VLC choosing by language, not the demuxer switching on
+        // a track the file flags default.
+        spuDisabled = source.subtitlesOff
         _state.value = PlayerState.LOADING
         _isBuffering.value = true
         _bufferPercent.value = 0f
