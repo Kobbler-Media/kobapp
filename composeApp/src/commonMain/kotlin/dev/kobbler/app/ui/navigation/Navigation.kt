@@ -965,7 +965,7 @@ internal fun DesktopScaffold(
 
                 // Adaptive card sizing: measure content width, compute card sizes.
                 // No BoxWithConstraints (subcomposition breaks focus traversal).
-                val baseSpacing = KobappDimensDefault
+                val baseSpacing = KobappTheme.dimens
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 var contentWidthDp by remember { mutableStateOf(0.dp) }
                 val adaptiveSpacing = remember(contentWidthDp, baseSpacing, formFactor) {

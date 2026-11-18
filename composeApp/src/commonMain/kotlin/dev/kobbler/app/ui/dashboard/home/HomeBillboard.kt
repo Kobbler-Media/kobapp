@@ -11,7 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
@@ -33,7 +34,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.kobbler.app.data.MediaType
 import dev.kobbler.app.data.UpNextItem
 import dev.kobbler.app.theme.KobappTheme
@@ -51,7 +51,7 @@ const val HomeBillboardProgressTag = "home-billboard-progress"
 
 private val Legible = Shadow(Color.Black.copy(alpha = 0.75f), Offset(0f, 2f), blurRadius = 12f)
 private val ButtonRadius = 24.dp
-private val PlayWidth = 200.dp
+private val ButtonWidth = 180.dp
 
 @Composable
 internal fun HomeBillboard(
@@ -64,14 +64,12 @@ internal fun HomeBillboard(
     val colors = KobappTheme.colors
     // Every slot is laid out even when empty, and both buttons are a fixed width whatever
     // their label, so stepping between items never resizes the block and nothing shifts.
-    Column(modifier.widthIn(max = 720.dp)) {
+    Column(modifier) {
         Text(
             item.title,
             color = colors.textHi,
-            style = KobappTheme.type.h1.copy(
+            style = KobappTheme.heroTitle.copy(
                 fontFamily = NewsreaderFamily,
-                fontSize = 46.sp,
-                lineHeight = 50.sp,
                 fontWeight = FontWeight.Medium,
                 shadow = Legible,
             ),
@@ -85,7 +83,7 @@ internal fun HomeBillboard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(KobappTheme.dimens.s4))
         val play = remember { FocusRequester() }
         // Coming up from Up Next the nearest button is often Details; the row is always
         // entered on Play.
@@ -93,8 +91,9 @@ internal fun HomeBillboard(
             Modifier
                 .focusKeyGroup("billboard")
                 .focusProperties { onEnter = { play.requestFocus() } }
-                .focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .focusGroup()
+                .height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(KobappTheme.dimens.s3),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PrimaryAction(
@@ -106,7 +105,7 @@ internal fun HomeBillboard(
                 reserveProgress = true,
                 progressModifier = Modifier.testTag(HomeBillboardProgressTag),
                 modifier = Modifier
-                    .width(PlayWidth)
+                    .width(ButtonWidth)
                     .testTag(HomeBillboardPlayTag)
                     .focusKey("play", focusRequester = play, entryEligible = false)
                     .onFocusChanged { if (it.isFocused) onFocused() },
@@ -116,7 +115,8 @@ internal fun HomeBillboard(
                 style = KobButtonStyle.Ghost,
                 cornerRadiusDp = ButtonRadius.value,
                 modifier = Modifier
-                    .width(170.dp)
+                    .width(ButtonWidth)
+                    .fillMaxHeight()
                     // The backdrop's scrims fade out toward the right; a bright picture there
                     // would swallow a bare outline.
                     .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(ButtonRadius))
@@ -127,7 +127,7 @@ internal fun HomeBillboard(
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(detailsLabel(item.mediaType), style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold))
                 }
             }

@@ -13,6 +13,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -47,6 +48,8 @@ import dev.kobbler.app.ui.dashboard.home.HomeWide
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
+import androidx.compose.ui.unit.dp
+import dev.kobbler.app.theme.KobappDimensDefault
 import kotlin.test.assertEquals
 
 /** The billboard above Up Next describes the focused card and offers Play and its details page. */
@@ -64,12 +67,12 @@ class HomeBillboardTest {
             """"recently_added":[{"item_type":"movie","id":"r1","title":"Recent 1","subtitle":"2024","link":"/movies/r1"}],"sections":[]}"""
 
     private fun home(
-        later: String = discover(fresh, reading, following),
+        first: String = discover(fresh, reading, following),
+        later: String = first,
         test: DesktopComposeUiTest.(nav: NavigationState, discoverHits: AtomicInteger) -> Unit,
     ) = runUiTest(width = 960, height = 540) {
         DataCache.clear()
         val hits = AtomicInteger()
-        val first = discover(fresh, reading, following)
         StubServer(mapOf("/api/v1/admin/discover" to { _ -> if (hits.incrementAndGet() == 1) first else later })).use { stub ->
             val nav = NavigationState()
             setContent {
@@ -87,7 +90,7 @@ class HomeBillboardTest {
                     }
                 }
             }
-            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("Fresh").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithTag("$UpNextCardTag.0").fetchSemanticsNodes().isNotEmpty() }
             waitUntil(timeoutMillis = UiTimeoutMs) { runCatching { onNodeWithTag("$UpNextCardTag.0").assertIsFocused() }.isSuccess }
             test(nav, hits)
         }
@@ -127,10 +130,35 @@ class HomeBillboardTest {
         val bounds = List(3) { i ->
             if (i > 0) press(listOf(Key.DirectionRight))
             listOf(HomeHeroTag, HomeBillboardPlayTag, HomeBillboardDetailsTag).associateWith { onNodeWithTag(it).getUnclippedBoundsInRoot() } +
-                (HomeBillboardProgressTag to onNodeWithTag(HomeBillboardProgressTag, useUnmergedTree = true).getUnclippedBoundsInRoot().let { it.copy(right = it.left) })
+                onAllNodesWithTag(HomeBillboardProgressTag, useUnmergedTree = true).fetchSemanticsNodes().map { HomeBillboardProgressTag to it.boundsInRoot.left }
         }
-        assertEquals(bounds[0], bounds[1], "Play → Read moved the billboard")
-        assertEquals(bounds[0], bounds[2], "Play → Resume moved the billboard")
+        assertEquals(bounds[1][HomeBillboardProgressTag], bounds[2][HomeBillboardProgressTag], "Read → Resume moved the progress line")
+        val billboard = bounds.map { it - HomeBillboardProgressTag }
+        assertEquals(billboard[0], billboard[1], "Play → Read moved the billboard")
+        assertEquals(billboard[0], billboard[2], "Play → Resume moved the billboard")
+    }
+
+    /** Resume says how long is left, and Play is exactly as big as Resume either way. */
+    @Test
+    fun `the time left shows inside a play button the same size as one without`() = home { _, _ ->
+        val play = onNodeWithTag(HomeBillboardPlayTag).getUnclippedBoundsInRoot()
+        press(listOf(Key.DirectionRight, Key.DirectionRight))
+        val resume = onNodeWithTag(HomeBillboardPlayTag).getUnclippedBoundsInRoot()
+        assertEquals(play, resume, "Play and Resume differ")
+        val left = onNode(hasText("30m left"), useUnmergedTree = true).getUnclippedBoundsInRoot()
+        check(left.right - left.left > 16.dp && left.bottom - left.top > 10.dp && left.top >= resume.top && left.bottom <= resume.bottom && left.left >= resume.left && left.right <= resume.right) { "the time left $left does not show inside $resume" }
+    }
+
+    /** The billboard has the whole width of the page; a title is only cut short where the page ends. */
+    @Test
+    fun `a long title runs to the page edge before it is cut short`() = home(
+        first = discover("""{"media_type":"movie","media_id":"m9","title":"${"A Very Long Title Indeed ".repeat(4).trim()}","link":"/movies/m9"}"""),
+    ) { _, _ ->
+        val hero = onNodeWithTag(HomeHeroTag).getUnclippedBoundsInRoot()
+        val title = onAllNodes(hasText("A Very Long Title", substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().maxBy { it.boundsInRoot.top.let { top -> -top } }
+        val right = with(density) { title.boundsInRoot.right.toDp() }
+        check(right >= hero.right - KobappDimensDefault.pageGutterTv - 1.dp) { "the title stops at $right, short of the page edge in $hero" }
     }
 
     /** As on a details page, how far in you are rides inside the Play button rather than beside it. */

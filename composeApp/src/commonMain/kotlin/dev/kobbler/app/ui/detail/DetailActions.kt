@@ -77,38 +77,57 @@ internal fun PrimaryAction(
         modifier = modifier,
     ) {
         Icon(icon, null, tint = fg, modifier = Modifier.size(22.dp))
-        // Two short lines rather than one long one: the pill stays narrow enough to share
-        // a phone's row with the other actions and still say how much is left.
-        Column(Modifier.width(IntrinsicSize.Max), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(label, style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold), color = fg, maxLines = 1)
-                if (detail != null) {
-                    Text(detail, style = KobappTheme.type.body, color = fg.copy(alpha = 0.72f), maxLines = 1)
-                }
+        val hasProgress = progress != null || remaining != null
+        Box(contentAlignment = Alignment.CenterStart) {
+            // Reserved, an invisible two-line copy sizes the button so Play matches Resume
+            // while its single line sits centred instead of riding above an empty one.
+            if (reserveProgress && !hasProgress) {
+                ActionLines(label, detail, 0f, " ", fg, Modifier.alpha(0f).clearAndSetSemantics { })
             }
-            val hasProgress = progress != null || remaining != null
-            if (hasProgress || reserveProgress) {
-                // Reserved, the line is laid out empty so Play and Resume are the same size.
-                Row(
-                    progressModifier.alpha(if (hasProgress) 1f else 0f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (progress != null || reserveProgress) {
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .widthIn(min = 56.dp)
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(fg.copy(alpha = 0.3f)),
-                        ) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth((progress ?: 0f).coerceIn(0f, 1f)).background(fg))
-                        }
+            ActionLines(label, detail, progress, remaining, fg, progressModifier = progressModifier)
+        }
+    }
+}
+
+// Two short lines rather than one long one: the pill stays narrow enough to share a phone's
+// row with the other actions and still say how much is left.
+@Composable
+private fun ActionLines(
+    label: String,
+    detail: String?,
+    progress: Float?,
+    remaining: String?,
+    fg: Color,
+    modifier: Modifier = Modifier,
+    progressModifier: Modifier = Modifier,
+) {
+    Column(modifier.width(IntrinsicSize.Max), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(label, style = KobappTheme.type.body.copy(fontWeight = FontWeight.SemiBold), color = fg, maxLines = 1)
+            if (detail != null) {
+                Text(detail, style = KobappTheme.type.body, color = fg.copy(alpha = 0.72f), maxLines = 1)
+            }
+        }
+        if (progress != null || remaining != null) {
+            Row(
+                progressModifier,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (progress != null) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .widthIn(min = 56.dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(fg.copy(alpha = 0.3f)),
+                    ) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(fg))
                     }
-                    if (remaining != null) {
-                        Text(remaining, style = KobappTheme.type.caption, color = fg.copy(alpha = 0.72f), maxLines = 1)
-                    }
+                }
+                if (remaining != null) {
+                    Text(remaining, style = KobappTheme.type.caption, color = fg.copy(alpha = 0.72f), maxLines = 1)
                 }
             }
         }

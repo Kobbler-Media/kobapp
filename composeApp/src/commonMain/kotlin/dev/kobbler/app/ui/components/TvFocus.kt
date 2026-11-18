@@ -88,7 +88,7 @@ fun Modifier.tvClickable(
     onClick: () -> Unit,
 ): Modifier = this
     .onFocusChanged { state.isFocused = it.isFocused }
-    .then(if (onLongClick != null) Modifier.onSecondaryClick(onLongClick) else Modifier)
+    .then(if (onLongClick != null) Modifier.trackConfirmHold().onSecondaryClick(onLongClick) else Modifier)
     .combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
 private fun Modifier.onSecondaryClick(action: () -> Unit): Modifier = pointerInput(action) {

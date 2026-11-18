@@ -1,6 +1,9 @@
 package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.ui.components.focusDecorated
+import dev.kobbler.app.ui.components.ConfirmKeyHold
+import dev.kobbler.app.ui.components.HeldConfirmSwallower
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.BorderStroke
@@ -95,6 +98,7 @@ internal fun OverflowMenu(
     // focus until asked. The first item composed claims the requester, so the item list
     // stays free to be conditional and the menu opens on its top entry.
     val entry = remember(expanded) { OverflowEntry() }
+    val heldConfirm = remember(expanded) { HeldConfirmSwallower(expanded && ConfirmKeyHold.held) }
     LaunchedEffect(expanded) {
         if (!expanded) return@LaunchedEffect
         repeat(10) {
@@ -112,6 +116,7 @@ internal fun OverflowMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = close,
+        modifier = Modifier.onPreviewKeyEvent(heldConfirm::onPreviewKey),
         shape = KobappTheme.shapes.small,
         containerColor = colors.elev2,
         // Material's own surface treatment shows through as a pale outline behind the

@@ -17,6 +17,9 @@ import dev.kobbler.app.platform.FormFactor
 val LocalFormFactor = staticCompositionLocalOf { FormFactor.Desktop }
 
 val KobappDimensDefault = KobappDimens()
+
+// Nothing on a TV is touched: the floor is tv-material3's 40dp button, not a fingertip.
+val KobappDimensTv = KobappDimens(minTouchTarget = 40.dp)
 val KobappShapesDefault = KobappShapes()
 
 val cardShape = RoundedCornerShape(8.dp)
@@ -78,7 +81,7 @@ fun KobappTheme(
     content: @Composable () -> Unit,
 ) {
     val type = if (formFactor == FormFactor.TV) KobappTextStylesTv else KobappTextStylesDefault
-    val dimens = KobappDimensDefault
+    val dimens = if (formFactor == FormFactor.TV) KobappDimensTv else KobappDimensDefault
     val shapes = KobappShapesDefault
     val colorScheme = remember(colors) { materialColorSchemeFrom(colors) }
     val typography = remember(type) { materialTypographyFrom(type) }
@@ -123,13 +126,7 @@ object KobappTheme {
         }
     val heroTitle: TextStyle
         @Composable @ReadOnlyComposable get() = LocalKobappType.current.let {
-            when (LocalFormFactor.current) {
-                FormFactor.Desktop -> it.hero
-                FormFactor.TV -> it.display.copy(
-                    fontSize = it.display.fontSize * 0.8f,
-                    lineHeight = it.display.lineHeight * 0.8f,
-                )
-                FormFactor.Phone -> it.h1
-            }
+            if (LocalFormFactor.current == FormFactor.Phone) it.h1
+            else it.display.copy(fontSize = it.display.fontSize * 0.8f, lineHeight = it.display.lineHeight * 0.8f)
         }
 }

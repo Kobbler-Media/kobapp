@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class DiscoverMoviePageTest {
 
-    private val synopsis = "A robot left to clean up an abandoned Earth falls for a visiting probe."
+    private val synopsis = "A robot left to clean up an abandoned Earth falls for a visiting probe, and follows her across the galaxy."
 
     private fun routes(details: String = "") = mapOf<String, (HttpExchange) -> String>(
         "/api/v1/admin/discover/movie/tmdb/10681" to { _ ->

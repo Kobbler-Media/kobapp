@@ -7,13 +7,13 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.kobbler.app.data.AudioFileDto
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.UnifiedChapterDto
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.theme.KobappTextStylesTv
 import dev.kobbler.app.ui.components.fontSize
 import dev.kobbler.app.ui.player.audiobook.AudiobookPlayerState
 import io.ktor.client.HttpClient
@@ -53,7 +53,7 @@ class AudiobookFormFactorTest {
             }
         }
 
-        assertEquals(28.sp, fontSize(book.title))
+        assertEquals(KobappTextStylesTv.h2.fontSize, fontSize(book.title))
     }
 
     /** A remote cannot scroll a column it has no focus target in, so the transport has to fit. */

@@ -26,6 +26,8 @@ import dev.kobbler.app.ui.dashboard.home.HomePhone
 import dev.kobbler.app.ui.dashboard.home.HomeWide
 import dev.kobbler.app.ui.dashboard.home.UpNextCardTag
 import dev.kobbler.app.ui.player.StubServer
+import dev.kobbler.app.ui.components.holdOk
+import dev.kobbler.app.ui.components.pressOkInMenu
 import io.ktor.client.HttpClient
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -86,6 +88,16 @@ class UpNextMenuTest {
         onAllNodes(isRoot()).onFirst().performKeyInput { keyUp(Key.DirectionCenter) }
         waitForIdle()
         pick(stub, "Mark earlier episodes watched", "/api/v1/admin/tv/episodes/race/watch-state/earlier")
+    }
+
+    @Test
+    fun `letting go of a held OK leaves the menu open for a fresh press`() = home(FormFactor.TV) { stub ->
+        holdOk(onNodeWithTag("$UpNextCardTag.1"))
+        val picked = stub.requestBodies.keys.filter { "watch-state" in it || it == UpNextDismissPath }
+        assertTrue(picked.isEmpty(), "releasing OK picked $picked")
+        assertTrue(onAllNodesWithText("Not interested").fetchSemanticsNodes().isNotEmpty(), "releasing OK closed the menu")
+        pressOkInMenu()
+        waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/tv/episodes/race/watch-state" in stub.requestBodies }
     }
 
     @Test

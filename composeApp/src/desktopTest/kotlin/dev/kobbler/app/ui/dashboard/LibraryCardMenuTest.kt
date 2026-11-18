@@ -15,6 +15,8 @@ import dev.kobbler.app.runUiTest
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.DataCache
 import dev.kobbler.app.ui.player.StubServer
+import dev.kobbler.app.ui.components.holdOk
+import dev.kobbler.app.ui.components.pressOkInMenu
 import dev.kobbler.kobfocus.FocusScopeHost
 import io.ktor.client.HttpClient
 import kotlin.test.Test
@@ -29,7 +31,7 @@ class LibraryCardMenuTest {
         var played: String? = null
     }
 
-    private fun browse(shows: Boolean, test: DesktopComposeUiTest.(Rig) -> Unit) = runUiTest(width = 1280, height = 900) {
+    private fun browse(shows: Boolean, formFactor: FormFactor = FormFactor.Desktop, test: DesktopComposeUiTest.(Rig) -> Unit) = runUiTest(width = 1280, height = 900) {
         DataCache.clear()
         val page = """{"items":[{"id":"x1","title":"Holdable","year":2020}]}"""
         StubServer(
@@ -47,7 +49,7 @@ class LibraryCardMenuTest {
             val rig = Rig(stub)
             val api = KobblerApi(HttpClient(), stub.url, "token")
             setContent {
-                KobappTheme(formFactor = FormFactor.Desktop) {
+                KobappTheme(formFactor = formFactor) {
                     FocusScopeHost(id = "browse") {
                         if (shows) TvShowsScreen(api = api, onShowClick = {}, onShowPlay = { rig.played = it.id })
                         else MoviesScreen(api = api, onMovieClick = {}, onMoviePlay = { rig.played = it.id })
@@ -86,6 +88,15 @@ class LibraryCardMenuTest {
             val body = rig.stub.requestBodies.getValue("/api/v1/admin/watchlist")
             assertTrue(""""media_type":"${if (shows) "show" else "movie"}"""" in body, body)
         }
+    }
+
+    @Test
+    fun `letting go of a held OK leaves the menu open for a fresh press`() = browse(shows = false, formFactor = FormFactor.TV) { rig ->
+        holdOk(onAllNodesWithText("Holdable").onFirst())
+        assertEquals(null, rig.played, "releasing OK picked Play")
+        assertTrue(onAllNodesWithText("Mark watched").fetchSemanticsNodes().isNotEmpty(), "releasing OK closed the menu")
+        pressOkInMenu()
+        assertEquals("x1", rig.played)
     }
 
     @Test

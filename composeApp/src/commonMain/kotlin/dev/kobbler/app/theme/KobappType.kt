@@ -115,54 +115,55 @@ val KobappTextStylesDefault = KobappTextStyles(
     ),
 )
 
-// 10-foot scale: androidx.tv.material3's type scale, which is what Google TV apps are built
-// on. A 1080p TV is xhdpi (960x540dp), so 1sp = 2px. It is the M3 baseline with the TV's
-// 12sp floor applied — labelSm takes labelMedium's 12sp rather than labelSmall's 11sp.
+// 10-foot scale. A 1080p TV is xhdpi, 960x540dp, so viewing distance is already in the dp
+// and the phone scale reads as zoomed in there. These are the sizes TV apps set in 960dp:
+// tv-material3's bodyMedium/labelLarge 14sp for body and buttons, 18sp row headings, 28sp
+// detail titles, nothing under the 12sp floor. The reader keeps its larger book face.
 val KobappTextStylesTv = KobappTextStyles(
     hero = TextStyle(
         fontFamily = GeistFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 72.sp,
-        lineHeight = 76.sp,
-        letterSpacing = (-0.03).em,
+        fontSize = 45.sp,
+        lineHeight = 52.sp,
+        letterSpacing = (-0.025).em,
     ),
     display = TextStyle(
         fontFamily = GeistFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.025).em,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = (-0.02).em,
     ),
     h1 = TextStyle(
         fontFamily = GeistFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
-        letterSpacing = (-0.02).em,
-    ),
-    h2 = TextStyle(
-        fontFamily = GeistFamily,
-        fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
+        letterSpacing = (-0.015).em,
     ),
-    h3 = TextStyle(
+    h2 = TextStyle(
         fontFamily = GeistFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
     ),
-    body = TextStyle(
+    h3 = TextStyle(
         fontFamily = GeistFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
         lineHeight = 24.sp,
     ),
-    bodySm = TextStyle(
+    body = TextStyle(
         fontFamily = GeistFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
+    ),
+    bodySm = TextStyle(
+        fontFamily = GeistFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
     ),
     caption = TextStyle(
         fontFamily = GeistFamily,
@@ -173,8 +174,8 @@ val KobappTextStylesTv = KobappTextStyles(
     label = TextStyle(
         fontFamily = GeistFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
         letterSpacing = 0.08.em,
     ),
     labelSm = TextStyle(
@@ -182,7 +183,7 @@ val KobappTextStylesTv = KobappTextStyles(
         fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.08.em,
+        letterSpacing = 0.06.em,
     ),
     readerTitle = TextStyle(
         fontFamily = NewsreaderFamily,
