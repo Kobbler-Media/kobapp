@@ -33,10 +33,13 @@ internal fun sameLanguage(a: String?, b: String?): Boolean =
 private val UntaggedCodes = setOf("und", "unk", "mis", "zxx")
 private val TitleWordBreak = Regex("[^a-z0-9]+")
 
+internal fun isUntagged(language: String?): Boolean =
+    language?.trim()?.lowercase().let { it.isNullOrEmpty() || it in UntaggedCodes }
+
 // Muxers often leave the tag empty and name the language only in the title ("AC3 [English]").
 internal fun AudioTrackDto.speaks(preferred: String?): Boolean {
     val tag = language?.trim()?.lowercase()
-    if (tag.isNullOrEmpty() || tag in UntaggedCodes) {
+    if (isUntagged(tag)) {
         val words = title?.lowercase()?.split(TitleWordBreak).orEmpty()
         return words.any { it.length > 2 && sameLanguage(it, preferred) }
     }
@@ -46,7 +49,7 @@ internal fun AudioTrackDto.speaks(preferred: String?): Boolean {
 /** Audio known to be in another language; a track that names none is given the benefit of the doubt. */
 internal fun AudioTrackDto.isForeignTo(preferred: String?): Boolean {
     val tag = language?.trim()?.lowercase()
-    return !preferred.isNullOrBlank() && !tag.isNullOrEmpty() && tag !in UntaggedCodes && !speaks(preferred)
+    return !preferred.isNullOrBlank() && !isUntagged(tag) && !speaks(preferred)
 }
 
 private val CommentaryMarkers = listOf("commentary", "commentaries", "audio description", "descriptive", "described video")

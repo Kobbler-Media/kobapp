@@ -477,9 +477,9 @@ fun FullscreenVideoPlayer(
         if (!state.isDebrid || state.renderableServerSubtitles.isNotEmpty() || server.isEmpty()) return@LaunchedEffect
         val prefs = dev.kobbler.app.data.TrackPrefs.current()
         val foreignAudio = prefs.subtitlesEnabled && playingAudio?.isForeignTo(prefs.audioLanguage) == true
-        val language = prefs.subtitleLanguage ?: prefs.audioLanguage
+        val languages = listOfNotNull(prefs.subtitleLanguage, prefs.audioLanguage).distinct()
         if (!foreignAudio && server.none { it.isForced }) return@LaunchedEffect
-        val wanted = player.subtitleTracks.mapNotNull { it.unaskedBy(server, foreignAudio, language) }.first()
+        val wanted = player.subtitleTracks.mapNotNull { it.unaskedBy(server, foreignAudio, languages) }.first()
         if (!viewerPickedSubtitles && player.selectedSubtitleTrack.value == null) player.selectSubtitleTrack(wanted)
     }
 

@@ -28,17 +28,21 @@ internal fun List<TrackInfo>.labelledBy(server: List<PlaybackSubtitleTrackDto>):
 }
 
 /**
- * The track shown without being asked for: a forced one always, otherwise the viewer's
- * language under audio in another. A track the release merely flags default is not it.
+ * The track shown without being asked for: a forced one in a language the viewer reads,
+ * otherwise their first language under audio in another. A track the release merely
+ * flags default is not it. Mirrors the server's `decide_subtitles`.
  */
 internal fun List<TrackInfo>.unaskedBy(
     server: List<PlaybackSubtitleTrackDto>,
     foreignAudio: Boolean,
-    language: String?,
+    languages: List<String>,
 ): TrackInfo? {
     val ordered = alignedWith(server) ?: return null
-    val forced = ordered.indexOfFirst { it.isForced }
-    val wanted = if (forced < 0 && foreignAudio) ordered.indexOfFirst { sameLanguage(it.language, language) } else forced
+    // Releases ship a forced track per dubbed language; one the viewer can't read translates nothing.
+    val forced = ordered.indexOfFirst { track ->
+        track.isForced && (isUntagged(track.language) || languages.isEmpty() || languages.any { sameLanguage(track.language, it) })
+    }
+    val wanted = if (forced < 0 && foreignAudio) ordered.indexOfFirst { sameLanguage(it.language, languages.firstOrNull()) } else forced
     return getOrNull(wanted)
 }
 

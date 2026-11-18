@@ -80,4 +80,22 @@ class TrackLabelsTest {
         assertEquals(listOf("XYZ", "PT-BR"), subs.subtitleTrackInfos().map { it.label })
         assertEquals(listOf("XYZ Stereo"), listOf(AudioTrackDto(streamIndex = 1, language = "xyz")).audioTrackInfos().map { it.label })
     }
+
+    @Test
+    fun `a forced track is shown unasked only in a language the viewer reads`() {
+        val vlc = listOf(TrackInfo("t1", "Track 1"), TrackInfo("t2", "Track 2"))
+        fun shown(forcedLanguage: String?, vararg reads: String) = vlc.unaskedBy(
+            listOf(
+                PlaybackSubtitleTrackDto(streamIndex = 2, language = forcedLanguage, isForced = true),
+                PlaybackSubtitleTrackDto(streamIndex = 3, language = "eng"),
+            ),
+            foreignAudio = false,
+            languages = reads.toList(),
+        )?.id
+        assertEquals(null, shown("cze", "eng"), "Czech forced under English")
+        assertEquals("t1", shown("en", "eng"))
+        assertEquals("t1", shown("eng", "fre", "eng"), "the audio language is read too")
+        assertEquals("t1", shown(null, "eng"), "an untagged forced track is given the benefit of the doubt")
+        assertEquals("t1", shown("cze"), "no language preference, nothing to rule it out")
+    }
 }
