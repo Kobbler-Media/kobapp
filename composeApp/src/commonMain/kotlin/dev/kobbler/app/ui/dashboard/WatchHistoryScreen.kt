@@ -60,14 +60,14 @@ import dev.kobbler.app.ui.safeTopPadding
 import dev.kobbler.kobfocus.focusKey
 import kotlinx.coroutines.launch
 
-private val Sources = listOf("All" to null, "Library" to "local", "Trakt" to "trakt", "Stremio" to "stremio")
+private val Sources = listOf("All" to null, "Library" to "local", "Stremio" to "stremio")
 private const val PageSize = 100
 
 private fun WatchHistoryEntry.key() = "$mediaType.${tmdbId ?: title}"
 
 /**
  * Everything recommendations learn from, for clearing out what was never this viewer's:
- * an imported Trakt or Stremio history can carry a whole household. Hiding is reversible
+ * an imported Stremio history can carry a whole household. Hiding is reversible
  * and only stops a title seeding For You; removing clears the watch state itself.
  */
 @Composable
@@ -219,7 +219,7 @@ fun WatchHistoryScreen(
             entries.isEmpty() -> EmptyState(
                 icon = Icons.Outlined.History,
                 title = "Nothing here",
-                subtitle = "Titles you watch, and history imported from Trakt or Stremio, show up here",
+                subtitle = "Titles you watch, and history imported from Stremio, show up here",
             )
             else -> FocusEdgeSlack {
                 LazyColumn(

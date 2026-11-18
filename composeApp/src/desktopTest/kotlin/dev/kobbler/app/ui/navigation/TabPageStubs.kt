@@ -34,7 +34,7 @@ internal object TabPageStubs {
         "/api/v1/admin/tv/shows" to { _ -> list(30, ""","total_count":30""") { """{"id":"s$it","title":"Show $it","year":2020}""" } },
         "/api/v1/admin/dashboard" to { _ -> "{}" },
         "/api/v1/library/books" to { _ -> list(30, ""","total_count":30""") { """{"id":"b$it","title":"Book $it","authors":[]}""" } },
-        "/api/v1/admin/watch-history" to { _ -> list(30, ""","total":30""") { """{"media_type":"movie","tmdb_id":$it,"title":"Seen $it","sources":["trakt"]}""" } },
+        "/api/v1/admin/watch-history" to { _ -> list(30, ""","total":30""") { """{"media_type":"movie","tmdb_id":$it,"title":"Seen $it","sources":["local"]}""" } },
         "/api/v1/admin/wanted" to { _ -> list(30) { """{"id":"w$it","title":"Want $it","want_status":"wanted"}""" } },
         "/api/v1/admin/downloads" to { _ -> list(30) { """{"id":"d$it","name":"Download $it","status":"downloading"}""" } },
         "/api/v1/library/activity" to { _ -> list(40) { """{"id":"a$it","event_kind":"watched","title":"Watched $it","created_at":"2026-10-22T10:00:00Z"}""" } },

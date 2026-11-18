@@ -20,7 +20,7 @@ class WatchHistoryScreenTest {
 
     private val history = """{"items":[
         {"media_type":"tv","tmdb_id":1,"title":"Bluey","sources":["stremio"]},
-        {"media_type":"movie","tmdb_id":2,"title":"Frozen","sources":["trakt"]}
+        {"media_type":"movie","tmdb_id":2,"title":"Frozen","sources":["local"]}
     ],"total":2}"""
     private val both = """{"items":[{"media_type":"tv","tmdb_id":1},{"media_type":"movie","tmdb_id":2}]"""
 
