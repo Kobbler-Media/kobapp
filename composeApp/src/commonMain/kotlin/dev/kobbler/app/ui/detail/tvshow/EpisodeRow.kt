@@ -1,7 +1,9 @@
 package dev.kobbler.app.ui.detail.tvshow
 
 import dev.kobbler.app.ui.components.CardMenu
+import androidx.compose.material.icons.outlined.VisibilityOff
 import dev.kobbler.app.ui.components.CardAction
+import dev.kobbler.app.ui.components.WatchedMark
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -37,7 +39,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
@@ -198,7 +199,7 @@ private fun EpisodeRow(
     val menuAnchor = remember { FocusRequester() }
     val menuActions = buildList {
         if (onToggleWatched != null) {
-            add(CardAction(if (watched) "Mark unwatched" else "Mark watched", { scope.launch { runCatching { onToggleWatched(!watched) } } }, Icons.Outlined.Check))
+            add(CardAction(if (watched) "Mark unwatched" else "Mark watched", { scope.launch { runCatching { onToggleWatched(!watched) } } }, if (watched) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility))
         }
         if (onMarkEarlierWatched != null) {
             add(CardAction("Mark earlier episodes watched", { scope.launch { onMarkEarlierWatched() } }, Icons.Outlined.DoneAll))
@@ -267,7 +268,7 @@ private fun EpisodeRow(
 
         if (onToggleWatched != null) {
             IconBtn(
-                icon = if (watched) Icons.Outlined.Check else Icons.Outlined.Visibility,
+                icon = if (watched) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                 description = if (watched) "Mark unwatched" else "Mark watched",
                 focusKey = "watched",
                 tint = if (watched) colors.ok else colors.textLo,
@@ -445,19 +446,7 @@ internal fun EpisodeThumbnail(
                 )
             }
         }
-        if (watched && !airsSoon) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(18.dp)
-                    .clip(CircleShape)
-                    .background(colors.ok),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Outlined.Check, null, tint = colors.bg, modifier = Modifier.size(12.dp))
-            }
-        }
+        if (watched && !airsSoon) WatchedMark(Modifier.align(Alignment.TopEnd).padding(4.dp))
     }
 }
 

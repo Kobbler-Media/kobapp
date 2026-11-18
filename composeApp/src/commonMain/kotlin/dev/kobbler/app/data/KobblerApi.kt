@@ -167,6 +167,7 @@ data class RecentItem(
     @SerialName("backdrop_url") val backdropUrl: String? = null,
     val link: String,
     @SerialName("added_at") val addedAt: String? = null,
+    val watched: Boolean = false,
 )
 
 @Serializable
@@ -186,6 +187,7 @@ data class RecentMovie(
     @SerialName("poster_url") val posterUrl: String? = null,
     @SerialName("backdrop_url") val backdropUrl: String? = null,
     @SerialName("added_at") val addedAt: String? = null,
+    val watched: Boolean = false,
 )
 
 @Serializable
@@ -199,6 +201,7 @@ data class RecentTvEntry(
     @SerialName("episode_identifier") val episodeIdentifier: String,
     @SerialName("episode_title") val episodeTitle: String? = null,
     @SerialName("added_at") val addedAt: String? = null,
+    val watched: Boolean = false,
 )
 
 // -- Movie detail DTO --
@@ -990,6 +993,7 @@ data class MovieListDto(
     @SerialName("logo_url") val logoUrl: String? = null,
     @SerialName("is_in_library") val isInLibrary: Boolean = false,
     @SerialName("want_status") val wantStatus: String = "",
+    val watched: Boolean? = null,
 )
 
 @Serializable
@@ -1024,6 +1028,7 @@ data class ShowListDto(
     val status: String? = null,
     val network: String? = null,
     @SerialName("content_category") val contentCategory: String? = null,
+    val watched: Boolean = false,
 )
 
 // -- Calendar DTOs --
@@ -1932,6 +1937,7 @@ private fun RecentMovie.toMovie(base: String): Movie = Movie(
     year = year ?: 0,
     posterUrl = resolveUrl(base, posterUrl),
     backdropUrl = resolveUrlOrNull(base, backdropUrl),
+    isWatched = watched,
 )
 
 private fun RecentTvEntry.toTvShow(base: String): TvShow = TvShow(
@@ -1941,6 +1947,7 @@ private fun RecentTvEntry.toTvShow(base: String): TvShow = TvShow(
     posterUrl = resolveUrl(base, showPosterUrl),
     backdropUrl = resolveUrlOrNull(base, showBackdropUrl),
     network = formatEpisodeLabel(episodeIdentifier, episodeTitle).ifEmpty { null },
+    isWatched = watched,
 )
 
 private fun RecentBook.toBook(base: String): Book = Book(
@@ -2088,6 +2095,7 @@ private fun RecentItem.toRecentlyAddedItem(base: String): RecentlyAddedItem = Re
     imageUrl = resolveUrl(base, imageUrl),
     backdropUrl = resolveUrlOrNull(base, backdropUrl),
     link = link,
+    watched = watched,
 )
 
 // -- API client --
@@ -2661,6 +2669,7 @@ class KobblerApi(
         Movie(
             id = it.id, title = it.title, year = it.year ?: 0,
             posterUrl = resolveUrl(apiUrl, it.posterUrl), backdropUrl = resolveUrlOrNull(apiUrl, it.backdropUrl),
+            isWatched = it.watched ?: false,
         )
     }
 
@@ -2711,6 +2720,7 @@ class KobblerApi(
             id = it.id, title = it.title, year = it.year ?: 0,
             posterUrl = resolveUrl(apiUrl, it.posterUrl), backdropUrl = resolveUrlOrNull(apiUrl, it.backdropUrl),
             network = it.network,
+            isWatched = it.watched,
         )
     }
 

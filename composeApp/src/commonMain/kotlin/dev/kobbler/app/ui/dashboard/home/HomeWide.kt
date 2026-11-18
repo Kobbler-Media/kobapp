@@ -215,6 +215,7 @@ fun HomeWide(
                                         subtitle = item.subtitle,
                                         accentColor = colors.accentForRecentlyAdded(item.itemType),
                                         offline = recentAvailableOffline(item.itemType, item.id),
+                                        watched = item.watched,
                                         onClick = { onRecentClick(item) },
                                         modifier = Modifier
                                             .testTag("$RecentCardTag.$c")

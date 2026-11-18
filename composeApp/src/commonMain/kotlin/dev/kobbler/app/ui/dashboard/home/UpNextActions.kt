@@ -1,7 +1,7 @@
 package dev.kobbler.app.ui.dashboard.home
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.runtime.Composable
@@ -46,11 +46,11 @@ private fun upNextActions(item: UpNextItem, api: KobblerApi, scope: CoroutineSco
     val notInterested = action("Not interested", Icons.Outlined.VisibilityOff, hides = true) { api.dismissUpNext(item.mediaType, item.mediaId) }
     return when (item.mediaType) {
         MediaType.Movie -> listOf(
-            action("Mark watched", Icons.Outlined.Check, hides = true) { api.setMovieWatched(item.mediaId, true) },
+            action("Mark watched", Icons.Outlined.Visibility, hides = true) { api.setMovieWatched(item.mediaId, true) },
             notInterested,
         )
         MediaType.TvShow, MediaType.SportsEvent -> listOf(
-            action("Mark watched", Icons.Outlined.Check) { api.setEpisodeWatched(item.mediaId, true) },
+            action("Mark watched", Icons.Outlined.Visibility) { api.setEpisodeWatched(item.mediaId, true) },
             action("Mark earlier episodes watched", Icons.Outlined.DoneAll) { api.markEarlierEpisodesWatched(item.mediaId) },
             notInterested,
         )

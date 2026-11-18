@@ -213,6 +213,7 @@ fun HomePhone(
                             subtitle = item.subtitle,
                             accentColor = colors.accentForRecentlyAdded(item.itemType),
                             offline = recentAvailableOffline(item.itemType, item.id),
+                            watched = item.watched,
                             onClick = { onRecentClick(item) },
                             width = cardWidth,
                             modifier = Modifier.showingBadge(spotlight, item.spotlight()),

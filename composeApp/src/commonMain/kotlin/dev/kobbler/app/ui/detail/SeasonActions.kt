@@ -1,12 +1,12 @@
 package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.ui.offline.SeasonDownloadItems
+import androidx.compose.material.icons.outlined.Visibility
 import dev.kobbler.app.ui.offline.seasonHasDownloadActions
 
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -46,7 +46,7 @@ internal fun seasonMenu(
         if (canMark) {
             OverflowItem(
                 key = "markSeasonWatched",
-                icon = Icons.Outlined.Check,
+                icon = Icons.Outlined.Visibility,
                 label = "Mark season ${season.number} watched",
                 accent = accent,
                 onClick = {

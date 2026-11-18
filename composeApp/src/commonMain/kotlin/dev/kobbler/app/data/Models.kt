@@ -105,6 +105,8 @@ data class TvShow(
     val inWatchlist: Boolean = false,
     val nextAiring: String? = null,
     val isSport: Boolean = false,
+    /** On a Recently Added rail: the episode that put the show there has been watched; elsewhere: every library episode has. */
+    val isWatched: Boolean = false,
 )
 
 @Immutable
@@ -642,6 +644,7 @@ data class RecentlyAddedItem(
     val imageUrl: String,
     val backdropUrl: String? = null,
     val link: String? = null,
+    val watched: Boolean = false,
 )
 
 @Immutable

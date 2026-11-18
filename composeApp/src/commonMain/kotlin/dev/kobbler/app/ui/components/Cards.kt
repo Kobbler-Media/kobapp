@@ -52,6 +52,7 @@ fun PosterCard(
     onClick: () -> Unit = {},
     width: Dp? = null,
     offline: Boolean = false,
+    watched: Boolean = false,
 ) {
     val dimens = KobappTheme.dimens
     val colors = KobappTheme.colors
@@ -116,14 +117,17 @@ fun PosterCard(
                 }
                 if (offline) OfflineBadge(label = null)
             }
-            // top-right library status pill
-            if (statusBadge != null) {
-                val pill = when (statusBadge) {
-                    LibraryStatus.InLibrary -> PillStatus.InLibrary
-                    LibraryStatus.Wanted -> PillStatus.Wanted
-                    LibraryStatus.NotInLibrary -> PillStatus.NotInLibrary
+            // top-right library status pill, with the watched mark under it
+            Column(Modifier.padding(6.dp).align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (statusBadge != null) {
+                    val pill = when (statusBadge) {
+                        LibraryStatus.InLibrary -> PillStatus.InLibrary
+                        LibraryStatus.Wanted -> PillStatus.Wanted
+                        LibraryStatus.NotInLibrary -> PillStatus.NotInLibrary
+                    }
+                    StatusPill(pill)
                 }
-                StatusPill(pill, Modifier.padding(6.dp).align(Alignment.TopEnd))
+                if (watched) WatchedMark()
             }
             if (progress != null) {
                 Box(

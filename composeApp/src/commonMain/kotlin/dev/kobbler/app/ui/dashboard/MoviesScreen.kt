@@ -315,6 +315,7 @@ fun MoviesScreen(
                                     subtitle = if (movie.year != 0) movie.year.toString() else null,
                                     accentColor = accent,
                                     offline = isAvailableOffline(OfflineKind.Movie, movie.id),
+                                    watched = movie.isWatched,
                                     onClick = { onMovieClick(movie) },
                                     contextMenuItems = rememberMovieCardActions(movie, api, onMoviePlay),
                                     modifier = Modifier
@@ -357,6 +358,7 @@ fun MoviesScreen(
                         subtitle = if (movie.year != 0) movie.year.toString() else null,
                         accentColor = accent,
                         offline = isAvailableOffline(OfflineKind.Movie, movie.id),
+                        watched = movie.isWatched,
                         onClick = { onMovieClick(movie) },
                         contextMenuItems = rememberMovieCardActions(movie, api, onMoviePlay),
                         modifier = Modifier

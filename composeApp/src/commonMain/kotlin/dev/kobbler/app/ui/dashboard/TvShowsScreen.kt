@@ -351,6 +351,7 @@ fun TvShowsScreen(
                                     subtitle = show.network ?: "",
                                     accentColor = accentColor,
                                     offline = showAvailableOffline(show.id),
+                                    watched = show.isWatched,
                                     onClick = { onShowClick(show) },
                                     contextMenuItems = rememberShowCardActions(show, api, onShowPlay),
                                     modifier = Modifier
@@ -401,6 +402,7 @@ fun TvShowsScreen(
                         imageUrl = show.posterUrl,
                         accentColor = accentColor,
                         offline = showAvailableOffline(show.id),
+                        watched = show.isWatched,
                         onClick = { onShowClick(show) },
                         contextMenuItems = rememberShowCardActions(show, api, onShowPlay),
                         modifier = Modifier
