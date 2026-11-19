@@ -32,6 +32,7 @@ class CastOptionsProvider : OptionsProvider {
         return CastOptions.Builder()
             .setReceiverApplicationId(appId)
             .setCastMediaOptions(media)
+            .setStopReceiverApplicationWhenEndingSession(true)
             .build()
     }
 
