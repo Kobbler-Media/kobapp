@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard
 
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.runtime.getValue
@@ -106,8 +107,7 @@ class SearchScopeTest {
                         scope = scope,
                         scopes = case.scopes,
                         onScopeChange = { scope = it },
-                        query = "block",
-                        onQueryChange = {},
+                        query = rememberTextFieldState("block"),
                         onDismiss = {},
                         onResultClick = {},
                         formFactor = formFactor,

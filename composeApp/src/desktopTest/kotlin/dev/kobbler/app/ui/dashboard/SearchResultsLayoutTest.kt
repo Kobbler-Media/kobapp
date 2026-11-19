@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard
 
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -63,8 +64,7 @@ class SearchResultsLayoutTest {
                     scope = SearchScope.All,
                     scopes = SearchScope.entries - SearchScope.LiveTv - SearchScope.Iptv,
                     onScopeChange = {},
-                    query = "block",
-                    onQueryChange = {},
+                    query = rememberTextFieldState("block"),
                     onDismiss = {},
                     onResultClick = {},
                     formFactor = formFactor,

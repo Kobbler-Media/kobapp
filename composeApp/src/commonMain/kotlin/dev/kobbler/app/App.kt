@@ -29,13 +29,10 @@ import dev.kobbler.kobfocus.FocusScopeHost
 import dev.kobbler.kobfocus.FocusVisibility
 import dev.kobbler.kobfocus.LocalFocusVisibility
 import dev.kobbler.kobfocus.trackFocusVisibility
-import androidx.compose.material3.LocalRippleConfiguration
-import androidx.compose.material3.RippleConfiguration
-import androidx.compose.material3.RippleDefaults
-import androidx.compose.material.ripple.RippleAlpha
 import dev.kobbler.kobfocus.LocalFocusScopeStore
 import dev.kobbler.kobfocus.rememberFocusScopeStore
 import dev.kobbler.app.ui.auth.PinLoginScreen
+import dev.kobbler.app.ui.focusRippleLocals
 import dev.kobbler.app.ui.auth.ProfilePickerScreen
 import dev.kobbler.app.ui.components.RefreshWatchStateOnFocus
 import dev.kobbler.app.ui.navigation.AdaptiveScaffold
@@ -75,7 +72,7 @@ fun App(
         Box(Modifier.fillMaxSize().trackFocusVisibility(focusVisibility).background(KobappTheme.colors.bg)) {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalFocusVisibility provides focusVisibility,
-                LocalRippleConfiguration provides if (focusVisibility.visible) KeyedRipple else PointedRipple,
+                *focusRippleLocals(keyed = focusVisibility.visible),
                 dev.kobbler.app.data.LocalAuthState provides auth,
                 LocalFocusScopeStore provides rememberFocusScopeStore(),
                 dev.kobbler.app.ui.navigation.LocalBackInterceptors provides
@@ -90,12 +87,4 @@ fun App(
             }
         }
     }
-}
-
-private val KeyedRipple = RippleConfiguration()
-
-// Material's own focus highlight: a pressed button keeps focus, and its tint would stay
-// on long after the finger has gone.
-private val PointedRipple = RippleDefaults.RippleAlpha.let {
-    RippleConfiguration(rippleAlpha = RippleAlpha(it.draggedAlpha, 0f, it.hoveredAlpha, it.pressedAlpha))
 }

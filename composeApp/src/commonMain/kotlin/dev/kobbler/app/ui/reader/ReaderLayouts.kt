@@ -61,7 +61,7 @@ internal class ReaderLayouts(
         val windowed = saved?.let {
             val page = request.anchor?.let { at -> saved.pageOf(at.block, at.offset) } ?: saved.size - 1
             layoutWindow(
-                view.blocks, book.manifest.styles, spec.typography, spec.pageSize, spec.density, spec.resolver, spec.direction,
+                view.blocks, book.manifest.styles, spec.typography, spec.pageSize, spec.density, spec.resolver, spec.direction, spec.locales,
                 saved, page..page + 1,
             )
         }
@@ -71,7 +71,7 @@ internal class ReaderLayouts(
             val relay = launch { for (layout in early) publish(key, layout) }
             try {
                 layoutChapter(
-                    view.blocks, book.manifest.styles, spec.typography, spec.pageSize, spec.density, spec.resolver, spec.direction,
+                    view.blocks, book.manifest.styles, spec.typography, spec.pageSize, spec.density, spec.resolver, spec.direction, spec.locales,
                     early = request.anchor.takeIf { windowed == null },
                     onEarly = { early.trySend(it) },
                 )

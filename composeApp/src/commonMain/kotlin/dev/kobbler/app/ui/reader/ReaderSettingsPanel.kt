@@ -58,6 +58,7 @@ import dev.kobbler.app.ui.components.KobChipStyle
 import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.app.ui.safeBottomPadding
+import dev.kobbler.app.ui.components.controlledSliderState
 
 @Composable
 internal fun ReaderSettingsPanel(
@@ -165,9 +166,8 @@ internal fun ReaderSettingsPanel(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.BrightnessLow, null, tint = theme.textColor.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
                 Slider(
-                    value = brightness,
+                    state = controlledSliderState(brightness, valueRange = 0.15f..1f),
                     onValueChange = onBrightnessChange,
-                    valueRange = 0.15f..1f,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp).focusKey("brightness")
                         .verticalKeysMoveFocus().tvAutoGlow(cornerRadiusDp = 999f, scale = 1f),
                     colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),
@@ -323,10 +323,8 @@ private fun ThemedSlider(
     focusRequester: FocusRequester = remember { FocusRequester() },
 ) {
     Slider(
-        value = value,
+        state = controlledSliderState(value, valueRange, steps),
         onValueChange = onValueChange,
-        valueRange = valueRange,
-        steps = steps,
         modifier = Modifier.focusKey(key, focusRequester = focusRequester).verticalKeysMoveFocus()
             .tvAutoGlow(cornerRadiusDp = 999f, scale = 1f),
         colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),

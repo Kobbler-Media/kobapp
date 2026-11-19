@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AdminPanelSettings
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,7 +61,6 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.kobbler.kobfocus.focusKey
@@ -71,7 +72,7 @@ import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.auth.MAX_PIN_LENGTH
 import dev.kobbler.app.ui.auth.MIN_PIN_LENGTH
 import dev.kobbler.app.ui.auth.isPinComplete
-import dev.kobbler.app.ui.auth.isPinInputAllowed
+import dev.kobbler.app.ui.auth.PinInputTransformation
 import dev.kobbler.app.ui.auth.ProfileAvatar
 import dev.kobbler.app.ui.components.BrowseHeader
 import dev.kobbler.app.ui.components.KobBackHeader
@@ -568,7 +569,8 @@ internal fun ProfilePinDialog(
     onConfirm: (String) -> Unit,
 ) {
     val colors = KobappTheme.colors
-    var pin by remember { mutableStateOf("") }
+    val pinField = rememberTextFieldState()
+    val pin = pinField.text.toString()
     val title = if (mode == ProfilePinMode.Set) "Set profile PIN" else "Remove profile PIN"
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -583,17 +585,15 @@ internal fun ProfilePinDialog(
                 )
                 if (mode == ProfilePinMode.Set) {
                     Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = pin,
-                        onValueChange = { if (isPinInputAllowed(it)) pin = it },
-                        singleLine = true,
+                    OutlinedSecureTextField(
+                        state = pinField,
+                        inputTransformation = PinInputTransformation,
                         placeholder = { Text("PIN ($MIN_PIN_LENGTH-$MAX_PIN_LENGTH chars, no spaces)", color = colors.textLo) },
-                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done,
                         ),
-                        keyboardActions = KeyboardActions(onAny = { if (isPinComplete(pin)) onConfirm(pin) }),
+                        onKeyboardAction = { if (isPinComplete(pin)) onConfirm(pin) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = accent,
                             unfocusedBorderColor = colors.lineSoft,

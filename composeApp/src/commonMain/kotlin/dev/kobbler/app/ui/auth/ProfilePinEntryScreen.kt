@@ -7,8 +7,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.then
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -54,6 +58,10 @@ internal fun isPinInputAllowed(value: String): Boolean =
 internal fun isPinComplete(value: String): Boolean =
     value.length >= MIN_PIN_LENGTH && isPinInputAllowed(value)
 
+internal val PinInputTransformation = InputTransformation {
+    if (!isPinInputAllowed(asCharSequence().toString())) revertAllChanges()
+}
+
 @Composable
 fun ProfilePinEntryScreen(
     auth: AuthState,
@@ -68,7 +76,8 @@ fun ProfilePinEntryScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
 
-    var pin by remember { mutableStateOf("") }
+    val pinField = rememberTextFieldState()
+    val pin = pinField.text.toString()
     var error by remember { mutableStateOf<String?>(null) }
     var submitting by remember { mutableStateOf(false) }
 
@@ -101,7 +110,7 @@ fun ProfilePinEntryScreen(
                 submitting = false
                 if (ok) onSuccess()
                 else {
-                    pin = ""
+                    pinField.clearText()
                     error = "Incorrect PIN"
                 }
             }
@@ -145,20 +154,17 @@ fun ProfilePinEntryScreen(
         }
 
         BasicTextField(
-            value = pin,
-            onValueChange = { v ->
-                if (isPinInputAllowed(v)) {
-                    pin = v
-                    error = null
-                }
+            state = pinField,
+            inputTransformation = remember {
+                PinInputTransformation.then(InputTransformation { if (changes.changeCount > 0) error = null })
             },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done,
             ),
-            keyboardActions = KeyboardActions(onAny = { onSubmit() }),
+            onKeyboardAction = { onSubmit() },
             enabled = !submitting,
-            singleLine = true,
+            lineLimits = TextFieldLineLimits.SingleLine,
             modifier = Modifier
                 .focusKey("pin")
                 .focusRequester(focusRequester)

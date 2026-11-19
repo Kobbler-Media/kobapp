@@ -35,7 +35,7 @@ class LayoutWindowTest {
     private fun window(blocks: List<Block>, breaks: PageBreaks, pages: IntRange, typography: ReaderTypography = LayoutRig.typography) = runBlocking {
         layoutWindow(
             blocks, listOf(PackTextStyle()), typography, IntSize(LayoutRig.Width, height),
-            LayoutRig.density, LayoutRig.resolver, LayoutDirection.Ltr, breaks, pages,
+            LayoutRig.density, LayoutRig.resolver, LayoutDirection.Ltr, LayoutRig.locales, breaks, pages,
         )
     }
 
@@ -77,7 +77,7 @@ class LayoutWindowTest {
         val full = runBlocking {
             layoutChapter(
                 blocks, listOf(PackTextStyle()), LayoutRig.typography, IntSize(LayoutRig.Width, height),
-                LayoutRig.density, LayoutRig.resolver, early = anchor, onEarly = { early += it },
+                LayoutRig.density, LayoutRig.resolver, LayoutDirection.Ltr, LayoutRig.locales, early = anchor, onEarly = { early += it },
             )
         }
         val first = early.single()

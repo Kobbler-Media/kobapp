@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.navigation
 
+import androidx.compose.foundation.text.input.TextFieldState
 import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.foundation.clickable
 import dev.kobbler.app.offline.Offline
@@ -214,7 +215,7 @@ class NavigationState {
     // Search is a page but not a Destination, so the stack alone would land BACK from a
     // result on whatever tab was underneath. The depth of the page it opened is kept instead.
     var searchOpen by mutableStateOf(false)
-    var searchQuery by mutableStateOf("")
+    val searchQuery = TextFieldState()
     var searchScope by mutableStateOf(SearchScope.All)
     val searchSession = SearchSession()
     private var searchResultDepth = -1
@@ -586,7 +587,6 @@ private fun MobileScaffold(nav: NavigationState, navConfig: NavConfig, api: Kobb
             scopes = searchScopesFor(navConfig),
             session = nav.searchSession,
             query = nav.searchQuery,
-            onQueryChange = { nav.searchQuery = it },
             onDismiss = { showSearch = false },
             onResultClick = { result -> navigateToSearchResult(nav, result) },
             onDiscoverItemClick = { item -> nav.navigateFromSearch(discoverItemDestination(item)) },
@@ -719,7 +719,6 @@ internal fun DesktopScaffold(
             scopes = searchScopesFor(navConfig),
             session = nav.searchSession,
             query = nav.searchQuery,
-            onQueryChange = { nav.searchQuery = it },
             onDismiss = closeSearch,
             onResultClick = { result ->
                 navigateToSearchResult(nav, result)

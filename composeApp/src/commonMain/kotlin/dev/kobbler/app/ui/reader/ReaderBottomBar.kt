@@ -24,6 +24,7 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.app.ui.safeBottomPadding
+import dev.kobbler.app.ui.components.controlledSliderState
 
 @Composable
 internal fun ReaderBottomBar(
@@ -47,7 +48,7 @@ internal fun ReaderBottomBar(
         if (showSlider && totalChapters > 1) {
             var dragged by remember { mutableStateOf<Float?>(null) }
             Slider(
-                value = dragged ?: (currentChapter.toFloat() / (totalChapters - 1).coerceAtLeast(1)),
+                state = controlledSliderState(dragged ?: (currentChapter.toFloat() / (totalChapters - 1).coerceAtLeast(1))),
                 onValueChange = { dragged = it },
                 onValueChangeFinished = {
                     dragged?.let(onSliderChange)

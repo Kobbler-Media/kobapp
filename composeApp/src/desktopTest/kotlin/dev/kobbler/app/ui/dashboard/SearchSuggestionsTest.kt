@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard
 
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Rect
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.platform.LocalFocusManager
 import dev.kobbler.app.UiTimeoutMs
@@ -58,9 +60,8 @@ class SearchSuggestionsTest {
     )
 
     private fun overlay(
-        query: String,
+        query: TextFieldState,
         scope: SearchScope,
-        picked: MutableList<String>,
         formFactor: FormFactor = FormFactor.Desktop,
         keyboardShown: Boolean = false,
         autoFocusQuery: Boolean = false,
@@ -78,7 +79,6 @@ class SearchSuggestionsTest {
                         scope = scope,
                         onScopeChange = {},
                         query = query,
-                        onQueryChange = { picked += it },
                         onDismiss = {},
                         onResultClick = {},
                         formFactor = formFactor,
@@ -115,7 +115,7 @@ class SearchSuggestionsTest {
         )
         val failures = cases.mapNotNull { (ff, keyboard, where) ->
             runCatching {
-                overlay("break", SearchScope.All, mutableListOf(), formFactor = ff, keyboardShown = keyboard) {
+                overlay(TextFieldState("break"), SearchScope.All, formFactor = ff, keyboardShown = keyboard) {
                     awaitText("Jailbreak")
                     waitUntil(timeoutMillis = UiTimeoutMs) { requests.isNotEmpty() }
                     waitForIdle()
@@ -143,7 +143,7 @@ class SearchSuggestionsTest {
 
     @Test
     fun `shows and movies are suggested before anything else`() {
-        overlay("break", SearchScope.All, mutableListOf()) {
+        overlay(TextFieldState("break"), SearchScope.All) {
             awaitText("Breaking Chaos")
             val order = listOf("Breaking Bad", "Breakin'", "Breaking Chaos").map { title ->
                 onAllNodes(hasText(title) and hasAnyAncestor(hasTestTag(SearchSuggestionStripTag)), useUnmergedTree = true)
@@ -155,21 +155,33 @@ class SearchSuggestionsTest {
 
     @Test
     fun `an empty query offers trending titles in the strip`() {
-        val picked = mutableListOf<String>()
-        overlay("", SearchScope.All, picked) {
+        val query = TextFieldState()
+        overlay(query, SearchScope.All) {
             awaitText("The Last of Us")
             assertInStripOnly("The Last of Us")
+            assertEquals("q=&media=movie,tv,book&limit=8", requests.single())
             onNodeWithText("The Last of Us").performClick()
             waitForIdle()
         }
-        assertEquals(listOf("The Last of Us"), picked)
-        assertEquals("q=&media=movie,tv,book&limit=8", requests.single())
+        assertEquals("The Last of Us", query.text.toString())
+    }
+
+    @Test
+    fun `typing in the field asks for suggestions of what was typed`() {
+        val query = TextFieldState()
+        overlay(query, SearchScope.Movies) {
+            awaitText("The Last of Us")
+            onNodeWithTag(SearchFieldTag, useUnmergedTree = true).performTextInput("break")
+            awaitText("Breaking Bad")
+            assertEquals("break", query.text.toString())
+            assertTrue("q=break&media=movie&limit=8" in requests, "requests: $requests")
+        }
     }
 
     @Test
     fun `the arrow keys walk from the field through the strip to the results`() {
         var focus: FocusManager? = null
-        overlay("break", SearchScope.All, mutableListOf(), autoFocusQuery = true, onFocusManager = { focus = it }) {
+        overlay(TextFieldState("break"), SearchScope.All, autoFocusQuery = true, onFocusManager = { focus = it }) {
             awaitText("Breaking Bad")
             awaitText("Jailbreak")
             waitUntil(timeoutMillis = UiTimeoutMs) { count(hasTestTag(SearchFieldTag) and isFocused()) == 1 }
@@ -201,14 +213,14 @@ class SearchSuggestionsTest {
         )
         assertEquals(SearchScope.entries.toSet(), expected.keys)
         expected.forEach { (scope, media) ->
-            val picked = mutableListOf<String>()
-            overlay("break", scope, picked) {
+            val query = TextFieldState("break")
+            overlay(query, scope) {
                 awaitText("Breaking Bad")
+                assertTrue(requests.isNotEmpty() && requests.all { it == "q=break&media=$media&limit=8" }, "$scope requests: $requests")
                 onNodeWithText("Breaking Bad").performClick()
                 waitForIdle()
             }
-            assertEquals(listOf("Breaking Bad"), picked, "$scope")
-            assertTrue(requests.isNotEmpty() && requests.all { it == "q=break&media=$media&limit=8" }, "$scope requests: $requests")
+            assertEquals("Breaking Bad", query.text.toString(), "$scope")
         }
     }
 }

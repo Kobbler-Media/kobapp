@@ -66,7 +66,6 @@ class OfflineRoutes(
 private val SpritePath = Regex("^$ThumbnailsDir/[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$")
 
 // Uuid.random() draws from a cryptographically secure source; another app must not guess it.
-@OptIn(kotlin.uuid.ExperimentalUuidApi::class)
 private val ProxySecret: String = kotlin.uuid.Uuid.random().toHexString()
 
 fun offlineBase(port: Int) = "http://127.0.0.1:$port/${OfflineRoutes.RoutePrefix}/$ProxySecret/"

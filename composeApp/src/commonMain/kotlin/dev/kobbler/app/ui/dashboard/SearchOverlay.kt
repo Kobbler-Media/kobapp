@@ -27,6 +27,11 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
@@ -100,8 +105,7 @@ fun SearchOverlay(
     api: KobblerApi,
     scope: SearchScope,
     onScopeChange: (SearchScope) -> Unit,
-    query: String,
-    onQueryChange: (String) -> Unit,
+    query: TextFieldState,
     onDismiss: () -> Unit,
     onResultClick: (SearchResult) -> Unit,
     onDiscoverItemClick: (DiscoverItem) -> Unit = {},
@@ -121,7 +125,8 @@ fun SearchOverlay(
     val searchesLive = scope == SearchScope.LiveTv || (scope == SearchScope.All && SearchScope.LiveTv in scopes)
     val searchesIptv = scope == SearchScope.Iptv || (scope == SearchScope.All && SearchScope.Iptv in scopes)
 
-    val searchKey = SearchKey(query, scope, searchesLive, searchesIptv)
+    val text = query.text.toString()
+    val searchKey = SearchKey(text, scope, searchesLive, searchesIptv)
     val returning = remember { session.takeReturn(searchKey) }
     var libraryLoading by remember { mutableStateOf(false) }
     var discoverLoading by remember { mutableStateOf(false) }
@@ -140,7 +145,7 @@ fun SearchOverlay(
     // the field and into the list.
     var focusResults by remember { mutableStateOf(false) }
     val layout = remember(libraryHits, session.discover, session.live, session.iptv) {
-        searchLayout(searchSections(libraryHits, session.discover, session.live, session.iptv), query)
+        searchLayout(searchSections(libraryHits, session.discover, session.live, session.iptv), text)
     }
     val firstResultKey = layout.firstRowKey
 
@@ -154,7 +159,7 @@ fun SearchOverlay(
         discoverLoading = false
         liveLoading = false
         iptvLoading = false
-        if (query.isBlank()) return@LaunchedEffect
+        if (text.isBlank()) return@LaunchedEffect
         if (!resumed) {
             delay(250)
             expandedSections.clear()
@@ -164,28 +169,28 @@ fun SearchOverlay(
             if (scope.searchesLibrary) {
                 libraryLoading = true
                 launch {
-                    try { session.library = api.search(query, limit = 50) } catch (_: Exception) {}
+                    try { session.library = api.search(text, limit = 50) } catch (_: Exception) {}
                     libraryLoading = false
                 }
             }
             if (scope.discoverMediaTypes.isNotEmpty()) {
                 discoverLoading = true
                 launch {
-                    try { session.discover = api.searchDiscover(query, scope.discoverMediaTypes) } catch (_: Exception) {}
+                    try { session.discover = api.searchDiscover(text, scope.discoverMediaTypes) } catch (_: Exception) {}
                     discoverLoading = false
                 }
             }
             if (searchesLive) {
                 liveLoading = true
                 launch {
-                    session.live = searchLive(api, query)
+                    session.live = searchLive(api, text)
                     liveLoading = false
                 }
             }
             if (searchesIptv) {
                 iptvLoading = true
                 launch {
-                    session.iptv = searchIptv(api, query)
+                    session.iptv = searchIptv(api, text)
                     iptvLoading = false
                 }
             }
@@ -193,12 +198,12 @@ fun SearchOverlay(
         session.completeKey = searchKey
     }
 
-    LaunchedEffect(query.trim(), scope) {
-        val key = query.trim() to scope
+    LaunchedEffect(text.trim(), scope) {
+        val key = text.trim() to scope
         if (session.suggestionsKey == key) return@LaunchedEffect
         if (session.suggestionsKey?.first?.isBlank() != key.first.isBlank()) session.suggestions = emptyList()
         delay(150)
-        session.suggestions = fetchSuggestions(api, query, scope)
+        session.suggestions = fetchSuggestions(api, text, scope)
         session.suggestionsKey = key
     }
 
@@ -212,22 +217,22 @@ fun SearchOverlay(
     }
 
     val handleResultClick: (SearchHitDto) -> Unit = { hit ->
-        commitRecent(query)
+        commitRecent(text)
         onResultClick(hit.toSearchResult(api.apiUrl))
         onDismiss()
     }
     val handleDiscoverClick: (DiscoverItem) -> Unit = { item ->
-        commitRecent(query)
+        commitRecent(text)
         onDiscoverItemClick(item)
         onDismiss()
     }
     val handleLiveClick: (LiveChannel) -> Unit = { channel ->
-        commitRecent(query)
+        commitRecent(text)
         onResultClick(SearchResult(type = LiveChannelResultType, id = channel.id, title = channel.name))
         onDismiss()
     }
     val handleIptvClick: (IptvChannel) -> Unit = { channel ->
-        commitRecent(query)
+        commitRecent(text)
         onResultClick(SearchResult(type = IptvChannelResultType, id = channel.id, title = channel.name))
         onDismiss()
     }
@@ -240,9 +245,9 @@ fun SearchOverlay(
         }
         SearchContent(
             query = query,
-            onQueryChange = { onQueryChange(it); focusResults = false },
-            onSubmit = { commitRecent(query); focusResults = formFactor != FormFactor.Phone },
-            onClear = { onQueryChange("") },
+            onTyped = { focusResults = false },
+            onSubmit = { commitRecent(text); focusResults = formFactor != FormFactor.Phone },
+            onClear = { query.clearText() },
             onDismiss = onDismiss,
             focusRequester = focusRequester,
             scope = scope,
@@ -262,8 +267,8 @@ fun SearchOverlay(
             onLiveClick = { leaving { handleLiveClick(it) } },
             onIptvClick = { leaving { handleIptvClick(it) } },
             recents = recents,
-            suggestions = session.suggestions.filterNot { it.title.equals(query.trim(), ignoreCase = true) },
-            onPickRecent = { onQueryChange(it); focusResults = formFactor != FormFactor.Phone },
+            suggestions = session.suggestions.filterNot { it.title.equals(text.trim(), ignoreCase = true) },
+            onPickRecent = { query.setTextAndPlaceCursorAtEnd(it); focusResults = formFactor != FormFactor.Phone },
             onClearRecents = {
                 recents = emptyList()
                 UserSettings.remove(RECENT_KEY)
@@ -345,8 +350,8 @@ fun SearchOverlay(
 
 @Composable
 private fun SearchContent(
-    query: String,
-    onQueryChange: (String) -> Unit,
+    query: TextFieldState,
+    onTyped: () -> Unit,
     onSubmit: () -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit,
@@ -378,8 +383,8 @@ private fun SearchContent(
     val phone = formFactor == FormFactor.Phone
     val tv = formFactor == FormFactor.TV
 
-    val nothing = !loading && layout.top.isEmpty() && layout.sections.isEmpty() && query.isNotBlank()
-    val jumps = if (query.isBlank()) emptyList() else searchJumps(layout, expandedSections)
+    val nothing = !loading && layout.top.isEmpty() && layout.sections.isEmpty() && query.text.isNotBlank()
+    val jumps = if (query.text.isBlank()) emptyList() else searchJumps(layout, expandedSections)
     val coroutineScope = rememberCoroutineScope()
     val focusScope = LocalFocusScope.current
     val onJump: (SearchJump) -> Unit = { jump ->
@@ -396,7 +401,7 @@ private fun SearchContent(
     Column(Modifier.fillMaxSize().imePaddingUnlessTv()) {
         SearchBar(
             query = query,
-            onQueryChange = onQueryChange,
+            onTyped = onTyped,
             onSubmit = onSubmit,
             onClear = onClear,
             onDismiss = onDismiss,
@@ -449,7 +454,7 @@ private fun SearchContent(
             // fixed item up here, a source answering late slots in above whatever row was
             // first and the grid scrolls to keep that row, shoving the new results off the top.
             fullWidthItem(key = "top") { Spacer(Modifier.height(4.dp)) }
-            if (query.isBlank()) {
+            if (query.text.isBlank()) {
                 if (recents.isNotEmpty()) {
                     fullWidthItem(key = "recents-head") {
                         SearchTermsHeader("RECENT SEARCHES", Icons.Outlined.History, onClear = onClearRecents)
@@ -540,8 +545,8 @@ private fun FocusFirstResult(armed: Boolean, key: String?, onDone: () -> Unit) {
 
 @Composable
 private fun SearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
+    query: TextFieldState,
+    onTyped: () -> Unit,
     onSubmit: () -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit,
@@ -589,7 +594,7 @@ private fun SearchBar(
                     modifier = Modifier.size(18.dp),
                 )
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) {
+                    if (query.text.isEmpty()) {
                         Text(
                             placeholder,
                             style = KobappTheme.type.bodySm,
@@ -601,9 +606,11 @@ private fun SearchBar(
                     }
                     KeyboardCompletions(keyboardSuggestions, onPickSuggestion) {
                         BasicTextField(
-                            value = query,
-                            onValueChange = onQueryChange,
-                            singleLine = true,
+                            state = query,
+                            inputTransformation = remember(onTyped) {
+                                InputTransformation { if (changes.changeCount > 0) onTyped() }
+                            },
+                            lineLimits = TextFieldLineLimits.SingleLine,
                             textStyle = KobappTheme.type.body.copy(color = colors.textHi),
                             cursorBrush = SolidColor(KobappTheme.colors.accHome),
                             // A single-line text field consumes DPAD down, which would
@@ -622,16 +629,14 @@ private fun SearchBar(
                             ),
                             // The TV IME's tick only dismisses if something actually
                             // handles the action.
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onAny = {
-                                    onSubmit()
-                                    keyboardController?.hide()
-                                },
-                            ),
+                            onKeyboardAction = {
+                                onSubmit()
+                                keyboardController?.hide()
+                            },
                         )
                     }
                 }
-                if (query.isNotEmpty()) {
+                if (query.text.isNotEmpty()) {
                     IconBubble(icon = Icons.Outlined.Close, onClick = onClear, tint = colors.textLo, key = "clear", size = 28.dp)
                 }
                 scopeChip?.invoke()
@@ -639,7 +644,7 @@ private fun SearchBar(
         }
         if (phone) {
             val voiceLauncher = dev.kobbler.app.platform.rememberVoiceInputLauncher { spoken ->
-                onQueryChange(spoken)
+                query.setTextAndPlaceCursorAtEnd(spoken)
                 onSubmit()
             }
             if (voiceLauncher != null && voiceLauncher.isAvailable) {

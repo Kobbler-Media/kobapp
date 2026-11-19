@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard
 
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,8 +81,7 @@ class SearchScopeChipTest {
                     scope = scope,
                     scopes = scopes,
                     onScopeChange = { scope = it },
-                    query = query,
-                    onQueryChange = {},
+                    query = rememberTextFieldState(query),
                     onDismiss = {},
                     onResultClick = {},
                     formFactor = formFactor,

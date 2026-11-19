@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.reader
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.GenericFontFamily
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -16,6 +17,7 @@ internal data class LayoutSpec(
     val pageSize: IntSize,
     val density: Density,
     val direction: LayoutDirection,
+    val locales: LocaleList,
     val resolver: FontFamily.Resolver,
 ) {
     val drawable: Boolean get() = pageSize.width > 0 && pageSize.height > 0
@@ -30,6 +32,7 @@ internal data class LayoutSpec(
         listOf(
             AppVersion.versionCode,
             pageSize.width, pageSize.height, density.density, density.fontScale, direction,
+            locales.joinToString(",") { it.toLanguageTag() },
             theme.fontSize.value, theme.lineHeight.value, theme.horizontalPadding, theme.paragraphSpacing,
             theme.fontFamily.stableName(),
             typography.book.aspects.filter { it.movesText }.map { it.key }.sorted(), typography.justify,

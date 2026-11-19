@@ -16,7 +16,11 @@ val releaseStoreFile: String? = providers.gradleProperty("kobapp.storeFile").orN
 
 android {
     namespace = "dev.kobbler.app.android"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk {
+        version = release(libs.versions.android.compileSdk.get().toInt()) {
+            minorApiLevel = libs.versions.android.compileSdkMinor.get().toInt()
+        }
+    }
 
     defaultConfig {
         applicationId = "dev.kobbler.app"

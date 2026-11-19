@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.reader
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.createFontFamilyResolver
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -16,7 +17,7 @@ import kotlin.test.assertNotEquals
 
 class LayoutSpecTest {
     private val base = LayoutSpec(
-        ReaderTypography(ReaderTheme.Dark), IntSize(1080, 2000), Density(2.75f), LayoutDirection.Ltr, createFontFamilyResolver(),
+        ReaderTypography(ReaderTheme.Dark), IntSize(1080, 2000), Density(2.75f), LayoutDirection.Ltr, LocaleList("en-US"), createFontFamilyResolver(),
     )
 
     private fun ReaderTypography.withTheme(change: ReaderTheme.() -> ReaderTheme) = copy(theme = theme.change())
@@ -37,6 +38,7 @@ class LayoutSpecTest {
             base.copy(pageSize = IntSize(1080, 1999)),
             base.copy(density = Density(2.75f, fontScale = 1.15f)),
             base.copy(direction = LayoutDirection.Rtl),
+            base.copy(locales = LocaleList("de-DE")),
             base.copy(typography = base.typography.withTheme { copy(fontSize = 17.sp) }),
             base.copy(typography = base.typography.withTheme { copy(lineHeight = 30.sp) }),
             base.copy(typography = base.typography.withTheme { copy(horizontalPadding = 24) }),

@@ -24,6 +24,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLocaleList
 import androidx.compose.ui.unit.IntSize
 import dev.kobbler.app.ui.reader.layout.ChapterLayout
 import dev.kobbler.app.ui.reader.layout.PageView
@@ -70,7 +71,7 @@ internal fun ReaderPagedBody(
         val nextView = rememberChapterView(book, shown.last + 1)
         val scope = rememberCoroutineScope()
         val layouts = remember(book) { ReaderLayouts(book, scope) }
-        val spec = LayoutSpec(typography, pageSize, LocalDensity.current, LocalLayoutDirection.current, LocalFontFamilyResolver.current)
+        val spec = LayoutSpec(typography, pageSize, LocalDensity.current, LocalLayoutDirection.current, LocalLocaleList.current, LocalFontFamilyResolver.current)
         val laidOut = current.takeIf { fitted == null }
         val prevLaidOut = prevView.takeIf { it?.page == null }
         val nextLaidOut = nextView.takeIf { it?.page == null }

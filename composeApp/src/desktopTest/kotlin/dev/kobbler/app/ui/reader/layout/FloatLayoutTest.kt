@@ -150,7 +150,7 @@ class FloatLayoutTest {
             val window = runBlocking {
                 layoutWindow(
                     blocks, listOf(PackTextStyle()), LayoutRig.typography, IntSize(LayoutRig.Width, pageHeightFor(10)),
-                    LayoutRig.density, LayoutRig.resolver, LayoutDirection.Ltr, chapter.breaks, p..p,
+                    LayoutRig.density, LayoutRig.resolver, LayoutDirection.Ltr, LayoutRig.locales, chapter.breaks, p..p,
                 )
             }
             val page = assertNotNull(window, "window $p was refused").pages[p]
@@ -164,7 +164,7 @@ class FloatLayoutTest {
         val chapter = runBlocking {
             layoutChapter(
                 listOf(float(), prose(120)), listOf(PackTextStyle()), LayoutRig.typography, IntSize(LayoutRig.Width, tall),
-                LayoutRig.density, LayoutRig.resolver, LayoutDirection.Rtl,
+                LayoutRig.density, LayoutRig.resolver, LayoutDirection.Rtl, LayoutRig.locales,
             )
         }
         val page = chapter.pages[0]

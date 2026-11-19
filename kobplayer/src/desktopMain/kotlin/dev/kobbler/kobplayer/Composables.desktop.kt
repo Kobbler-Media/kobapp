@@ -12,7 +12,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.skiaCanvas
 import org.jetbrains.skia.Rect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,7 +69,7 @@ actual fun VideoSurface(
             clipRect {
                 drawIntoCanvas {
                     val rect = Rect.makeXYWH(frame.left.toFloat(), frame.top.toFloat(), frame.width.toFloat(), frame.height.toFloat())
-                    video.draw(it.nativeCanvas, rect)
+                    video.draw(it.skiaCanvas, rect)
                 }
             }
         }

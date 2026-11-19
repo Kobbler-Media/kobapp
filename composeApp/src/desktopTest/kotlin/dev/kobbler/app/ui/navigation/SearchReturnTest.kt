@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.navigation
 
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
@@ -60,7 +61,7 @@ class SearchReturnTest {
     fun `back from a result restores the results and focuses the result that was opened`() = runUiTest(width = 1280, height = 720) {
         StubServer(routes).use { stub ->
             val nav = NavigationState().apply {
-                searchQuery = "block"
+                searchQuery.setTextAndPlaceCursorAtEnd("block")
                 searchOpen = true
             }
             setContent {
@@ -95,7 +96,7 @@ class SearchReturnTest {
                 onAllNodes(isFocused() and hasSetTextAction()).fetchSemanticsNodes().isEmpty(),
                 "the query field took focus and would raise the keyboard",
             )
-            assertEquals("block", nav.searchQuery)
+            assertEquals("block", nav.searchQuery.text.toString())
             assertEquals(1, searches.get(), "results were fetched again")
         }
     }

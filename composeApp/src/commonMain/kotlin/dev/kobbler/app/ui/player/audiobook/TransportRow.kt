@@ -44,6 +44,7 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.kobplayer.PlayerState
+import dev.kobbler.app.ui.components.controlledSliderState
 
 @Composable
 fun TransportRow(
@@ -213,7 +214,7 @@ private fun VolumeMenu(volume: Float, onVolumeChange: (Float) -> Unit) {
             containerColor = colors.elev2,
         ) {
             Slider(
-                value = volume,
+                state = controlledSliderState(volume),
                 onValueChange = onVolumeChange,
                 modifier = Modifier
                     .width(180.dp)

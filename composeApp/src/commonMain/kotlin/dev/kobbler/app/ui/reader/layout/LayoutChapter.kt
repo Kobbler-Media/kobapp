@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.reader.layout
 
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -24,7 +25,8 @@ suspend fun layoutChapter(
     pageSize: IntSize,
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
-    layoutDirection: LayoutDirection = LayoutDirection.Ltr,
+    layoutDirection: LayoutDirection,
+    locales: LocaleList,
     early: BlockOffset? = null,
     onEarly: (ChapterLayout) -> Unit = {},
 ): ChapterLayout = withContext(Dispatchers.Default) {
@@ -39,7 +41,7 @@ suspend fun layoutChapter(
             }
         }
     }
-    val pages = paginator(blocks, styles, typography, pageSize, density, fontFamilyResolver, layoutDirection, onPage = onPage).run()
+    val pages = paginator(blocks, styles, typography, pageSize, density, fontFamilyResolver, layoutDirection, locales, onPage = onPage).run()
     ChapterLayout(pages, pageSize)
 }
 
@@ -56,6 +58,7 @@ suspend fun layoutWindow(
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     layoutDirection: LayoutDirection,
+    locales: LocaleList,
     breaks: PageBreaks,
     window: IntRange,
 ): ChapterLayout? = withContext(Dispatchers.Default) {
@@ -63,7 +66,7 @@ suspend fun layoutWindow(
     val last = window.last.coerceIn(first, breaks.size - 1)
     if (breaks.block(first) !in blocks.indices) return@withContext null
     val laidOut = paginator(
-        blocks, styles, typography, pageSize, density, fontFamilyResolver, layoutDirection,
+        blocks, styles, typography, pageSize, density, fontFamilyResolver, layoutDirection, locales,
         start = breaks.resumeAt(first),
         pageLimit = last - first + 1,
     ).run()
@@ -84,13 +87,14 @@ private suspend fun paginator(
     density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     layoutDirection: LayoutDirection,
+    locales: LocaleList,
     start: PageStart = PageStart(),
     pageLimit: Int = Int.MAX_VALUE,
     onPage: (List<PageLayout>) -> Unit = {},
 ): Paginator {
     val context = currentCoroutineContext()
     // A shared TextMeasurer's cache is not thread-safe; this one is private to the call and uncached.
-    val textMeasurer = TextMeasurer(fontFamilyResolver, density, layoutDirection, cacheSize = 0)
+    val textMeasurer = TextMeasurer(fontFamilyResolver, locales, density, layoutDirection, cacheSize = 0)
     val measurer = BlockMeasurer(styles, typography, pageSize, density, textMeasurer)
     return Paginator(blocks, measurer, pageSize.height.toFloat(), { context.ensureActive() }, start, pageLimit, onPage)
 }

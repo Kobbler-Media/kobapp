@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.dashboard
 
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -36,8 +37,7 @@ class SearchResultClickTest {
                         scope = SearchScope.All,
                         scopes = SearchScope.entries,
                         onScopeChange = {},
-                        query = "raymond",
-                        onQueryChange = {},
+                        query = rememberTextFieldState("raymond"),
                         onDismiss = {},
                         onResultClick = { clicked += it },
                         formFactor = FormFactor.TV,

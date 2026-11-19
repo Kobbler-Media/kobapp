@@ -1,5 +1,6 @@
 package dev.kobbler.app.ui.navigation
 
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.kobbler.app.ui.dashboard.SearchScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,7 +16,7 @@ class SearchBackTest {
 
     private fun searchedFor(query: String, dest: Destination) = NavigationState().apply {
         searchOpen = true
-        searchQuery = query
+        searchQuery.setTextAndPlaceCursorAtEnd(query)
         navigateFromSearch(dest)
     }
 
@@ -26,7 +27,7 @@ class SearchBackTest {
 
         assertEquals(true, nav.goBack())
         assertEquals(true, nav.searchOpen)
-        assertEquals("wall", nav.searchQuery)
+        assertEquals("wall", nav.searchQuery.text.toString())
         assertEquals(Destination.Tab.Home, nav.current)
     }
 

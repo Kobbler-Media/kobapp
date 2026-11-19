@@ -33,6 +33,7 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import dev.kobbler.kobplayer.Player
 import dev.kobbler.kobplayer.PlayerState
+import dev.kobbler.app.ui.components.controlledSliderState
 
 @Composable
 internal fun ListenAlongBar(player: Player?, theme: ReaderTheme, onStop: () -> Unit) {
@@ -65,7 +66,7 @@ internal fun ListenAlongBar(player: Player?, theme: ReaderTheme, onStop: () -> U
             )
         }
         Slider(
-            value = if (spDur > 0) spMs.toFloat() / spDur else 0f,
+            state = controlledSliderState(if (spDur > 0) spMs.toFloat() / spDur else 0f),
             onValueChange = { player.seekTo((it * spDur).toLong()) },
             modifier = Modifier.weight(1f).height(24.dp),
             colors = SliderDefaults.colors(thumbColor = theme.linkColor, activeTrackColor = theme.linkColor),

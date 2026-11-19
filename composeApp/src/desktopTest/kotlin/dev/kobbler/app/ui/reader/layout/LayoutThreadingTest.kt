@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.reader.layout
 
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import dev.kobbler.app.ui.reader.layout.LayoutRig.prose
 import dev.kobbler.app.ui.reader.pack.PackTextStyle
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ class LayoutThreadingTest {
     private suspend fun layOut() = layoutChapter(
         tenThousandWords, listOf(PackTextStyle()), LayoutRig.typography,
         IntSize(LayoutRig.Width, LayoutRig.pageHeightFor(20)), LayoutRig.density, LayoutRig.resolver,
+        LayoutDirection.Ltr, LayoutRig.locales,
     )
 
     @Test
