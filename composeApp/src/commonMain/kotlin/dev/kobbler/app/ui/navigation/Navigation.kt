@@ -1060,25 +1060,14 @@ private fun navigateContinueItem(
             stream = false,
         )
     }
-    when {
-        link.startsWith("/movies/") -> nav.navigate(Destination.MovieDetail(link.removePrefix("/movies/"), autoPlay = autoPlay))
-        link.startsWith("/tv/episodes/") -> {
-            nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/episodes/"), autoPlay = autoPlay, isEpisodeId = true))
+    val destination = when (val d = linkDestination(link, autoPlay)) {
+        is Destination.BookDetail if autoPlay -> when (item.mediaType) {
+            dev.kobbler.app.data.MediaType.Audiobook -> Destination.AudiobookPlayer(d.bookId)
+            else -> Destination.BookReader(d.bookId)
         }
-        link.startsWith("/tv/") -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/"), autoPlay = autoPlay))
-        link.startsWith("/sports/events/") -> {
-            nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/events/"), autoPlay = autoPlay, isEpisodeId = true))
-        }
-        link.startsWith("/sports/") -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/"), autoPlay = autoPlay))
-        link.startsWith("/library/books/") -> {
-            val bookId = link.removePrefix("/library/books/")
-            when {
-                !autoPlay -> nav.navigate(Destination.BookDetail(bookId))
-                item.mediaType == dev.kobbler.app.data.MediaType.Audiobook -> nav.navigate(Destination.AudiobookPlayer(bookId))
-                else -> nav.navigate(Destination.BookReader(bookId))
-            }
-        }
+        else -> d
     }
+    destination?.let(nav::navigate)
 }
 
 private fun navigateToSearchResult(nav: NavigationState, result: dev.kobbler.app.data.SearchResult) {
@@ -1180,12 +1169,9 @@ private fun SingleTabContent(
                 isActive = isActive,
                 onDiscoverItemClick = { item -> nav.navigate(discoverItemDestination(item)) },
                 onRecentClick = { item ->
-                    val link = item.link
+                    val linked = item.link?.let(::linkDestination)
                     when {
-                        link?.startsWith("/movies/") == true -> nav.navigate(Destination.MovieDetail(link.removePrefix("/movies/")))
-                        link?.startsWith("/tv/") == true -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/tv/")))
-                        link?.startsWith("/sports/") == true -> nav.navigate(Destination.TvShowDetail(link.removePrefix("/sports/")))
-                        link?.startsWith("/library/books/") == true -> nav.navigate(Destination.BookDetail(link.removePrefix("/library/books/")))
+                        linked != null -> nav.navigate(linked)
                         item.itemType == "movie" -> nav.navigate(Destination.MovieDetail(item.id))
                         item.itemType == "episode" || item.itemType == "event" -> nav.navigate(Destination.TvShowDetail(item.id))
                         item.itemType == "book" -> nav.navigate(Destination.BookDetail(item.id))
@@ -1308,14 +1294,7 @@ private fun SingleTabContent(
                     api = api,
                     modifier = modifier,
                     formFactor = formFactor,
-                    onItemClick = { item ->
-                        when {
-                            item.link.startsWith("/movies/") -> nav.navigate(Destination.MovieDetail(item.link.removePrefix("/movies/")))
-                            item.link.startsWith("/tv/episodes/") -> nav.navigate(Destination.TvShowDetail(item.link.removePrefix("/tv/episodes/"), isEpisodeId = true))
-                            item.link.startsWith("/sports/events/") -> nav.navigate(Destination.TvShowDetail(item.link.removePrefix("/sports/events/"), isEpisodeId = true))
-                            item.link.startsWith("/library/") -> nav.navigate(Destination.BookDetail(item.link.removePrefix("/library/")))
-                        }
-                    },
+                    onItemClick = { item -> linkDestination(item.link)?.let(nav::navigate) },
                 )
             }
         }
