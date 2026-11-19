@@ -94,7 +94,8 @@ fun PersistentVideoSurface(
             CastExpandedController(
                 session = cast,
                 subtitle = cast.subtitle,
-                artUrl = state.backdropUrl ?: state.posterUrl,
+                posterUrl = state.posterUrl,
+                backdropUrl = state.backdropUrl,
                 onPlayPause = { state.onCastPlayPause?.invoke() },
                 onSeekTo = { ms -> state.onCastSeek?.invoke(ms) },
                 onDisconnect = { state.onCastDisconnect?.invoke() },

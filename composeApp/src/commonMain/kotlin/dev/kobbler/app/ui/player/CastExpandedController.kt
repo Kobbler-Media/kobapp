@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,7 +45,8 @@ import dev.kobbler.kobfocus.focusKeyGroup
 fun CastExpandedController(
     session: CastSessionDto,
     subtitle: String?,
-    artUrl: String?,
+    posterUrl: String?,
+    backdropUrl: String?,
     onPlayPause: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onDisconnect: () -> Unit,
@@ -94,17 +96,19 @@ fun CastExpandedController(
             }
 
             Spacer(Modifier.height(24.dp))
+            val art = castArt(posterUrl, backdropUrl)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
+                    .testTag(CastArtTag)
+                    .then(if (art?.tall == true) Modifier.height(320.dp) else Modifier.fillMaxWidth())
+                    .aspectRatio(art?.aspect ?: (16f / 9f))
                     .clip(RoundedCornerShape(12.dp))
                     .background(colors.elev2),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Outlined.Cast, contentDescription = null, tint = colors.accCal, modifier = Modifier.size(48.dp))
-                if (artUrl != null) {
-                    FadeInImage(model = artUrl, contentDescription = null, modifier = Modifier.fillMaxSize())
+                if (art != null) {
+                    FadeInImage(model = art.url, contentDescription = null, modifier = Modifier.fillMaxSize())
                 }
             }
 

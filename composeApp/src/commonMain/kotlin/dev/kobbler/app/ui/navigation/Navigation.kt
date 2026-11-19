@@ -357,116 +357,118 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
         availableUpdate = dev.kobbler.app.data.KobupUpdater.checkForUpdate()
     }
 
-    Column(Modifier.fillMaxSize()) {
-        dev.kobbler.app.ui.components.UpdateBanner(update = availableUpdate)
+    CompositionLocalProvider(dev.kobbler.app.ui.player.LocalGlobalPlayerState provides gps) {
+        Column(Modifier.fillMaxSize()) {
+            dev.kobbler.app.ui.components.UpdateBanner(update = availableUpdate)
 
-        Box(Modifier.fillMaxSize().weight(1f)) {
-        // Reader-type destinations (audiobook, book, comic) take the whole screen
-        // instead of overlaying the scaffold. Stacking the scaffold underneath
-        // leaks taps and TV-remote focus into hidden screens; replacing it avoids
-        // both. The `player` instance is hoisted above this branch so audio
-        // continues uninterrupted across the swap.
-        // Everything the scaffold is covered by, in paint order. A covered layer stays
-        // composed (the player must keep running) so it has to leave focus traversal
-        // explicitly, or the D-pad walks into controls nobody can see.
-        val scaffoldCovered = gps.isFullscreen || gps.loadingError != null || gps.streamPicker != null
-        if (isNonVideoPlayerScreen) {
-            FocusScopeHost(id = nav.current) {
-                CompositionLocalProvider(dev.kobbler.app.ui.player.LocalSharedAudioPlayer provides audio) {
-                    PlayerContent(nav, api, formFactor, onToggleFullscreen, isFullscreen)
+            Box(Modifier.fillMaxSize().weight(1f)) {
+            // Reader-type destinations (audiobook, book, comic) take the whole screen
+            // instead of overlaying the scaffold. Stacking the scaffold underneath
+            // leaks taps and TV-remote focus into hidden screens; replacing it avoids
+            // both. The `player` instance is hoisted above this branch so audio
+            // continues uninterrupted across the swap.
+            // Everything the scaffold is covered by, in paint order. A covered layer stays
+            // composed (the player must keep running) so it has to leave focus traversal
+            // explicitly, or the D-pad walks into controls nobody can see.
+            val scaffoldCovered = gps.isFullscreen || gps.loadingError != null || gps.streamPicker != null
+            if (isNonVideoPlayerScreen) {
+                FocusScopeHost(id = nav.current) {
+                    CompositionLocalProvider(dev.kobbler.app.ui.player.LocalSharedAudioPlayer provides audio) {
+                        PlayerContent(nav, api, formFactor, onToggleFullscreen, isFullscreen)
+                    }
                 }
-            }
-        } else {
-            // Composed but unpainted under the player: anything it repaints holds an
-            // adaptive-refresh panel at 60Hz, and 24fps film judders there.
-            // Derived: a cast session is replaced with a fresh copy on every position update.
-            val casting by remember(gps) { derivedStateOf { gps.castSession != null } }
-            val coveredByPlayer = rememberPlayerCoversScreen(
-                gps.isFullscreen && player != null && gps.isActive && !casting,
-            )
-            Box(Modifier.focusInert(scaffoldCovered).hiddenWhenCovered(coveredByPlayer)) {
-                CompositionLocalProvider(LocalCoveredByPlayer provides coveredByPlayer) {
-                    when (formFactor) {
-                        FormFactor.Phone -> MobileScaffold(nav, navConfig, api, formFactor, player, gps, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
-                        FormFactor.TV, FormFactor.Desktop -> DesktopScaffold(nav, navConfig, api, formFactor, player, gps, onToggleFullscreen, isFullscreen, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
+            } else {
+                // Composed but unpainted under the player: anything it repaints holds an
+                // adaptive-refresh panel at 60Hz, and 24fps film judders there.
+                // Derived: a cast session is replaced with a fresh copy on every position update.
+                val casting by remember(gps) { derivedStateOf { gps.castSession != null } }
+                val coveredByPlayer = rememberPlayerCoversScreen(
+                    gps.isFullscreen && player != null && gps.isActive && !casting,
+                )
+                Box(Modifier.focusInert(scaffoldCovered).hiddenWhenCovered(coveredByPlayer)) {
+                    CompositionLocalProvider(LocalCoveredByPlayer provides coveredByPlayer) {
+                        when (formFactor) {
+                            FormFactor.Phone -> MobileScaffold(nav, navConfig, api, formFactor, player, gps, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
+                            FormFactor.TV, FormFactor.Desktop -> DesktopScaffold(nav, navConfig, api, formFactor, player, gps, onToggleFullscreen, isFullscreen, serverUrl = auth.apiUrl ?: "", onLogout = { auth.logout() })
+                        }
                     }
                 }
             }
-        }
 
-        // Single persistent video surface — stays in the tree, resized in place.
-        // No movableContentOf, no re-parenting, no SurfaceView Z-order issues.
-        // miniBottomInset reserves room above the phone bottom-nav so the mini
-        // player snaps above it (and not over it).
-        if (player != null && gps.showsPlayerSurface) {
-            val bottomNavHeight = KobPhoneBottomBarHeight +
-                kobChromeInsets.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
-            val miniBottomInset = if (
-                formFactor == FormFactor.Phone &&
-                nav.current is Destination.Tab &&
-                !gps.isFullscreen
-            ) bottomNavHeight else 0.dp
-            // Only the fullscreen player owns focus; the mini player is a passenger on
-            // whatever screen is behind it and must not steal entry focus from it.
-            FocusScopeHost(id = "video-surface", restoreEnabled = gps.isFullscreen) {
-                Box(Modifier.focusInert(gps.loadingError != null || gps.streamPicker != null)) {
-                    PersistentVideoSurface(
-                        player = player,
-                        state = gps,
-                        api = api,
-                        formFactor = formFactor,
-                        onToggleFullscreen = onToggleFullscreen,
-                        isFullscreen = isFullscreen,
-                        scope = scope,
-                        miniBottomInset = miniBottomInset,
-                        onOpenGuide = {
-                            gps.stop(player, api, scope)
-                            nav.navigate(Destination.Tab.LiveTv)
+            // Single persistent video surface — stays in the tree, resized in place.
+            // No movableContentOf, no re-parenting, no SurfaceView Z-order issues.
+            // miniBottomInset reserves room above the phone bottom-nav so the mini
+            // player snaps above it (and not over it).
+            if (player != null && gps.showsPlayerSurface) {
+                val bottomNavHeight = KobPhoneBottomBarHeight +
+                    kobChromeInsets.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
+                val miniBottomInset = if (
+                    formFactor == FormFactor.Phone &&
+                    nav.current is Destination.Tab &&
+                    !gps.isFullscreen
+                ) bottomNavHeight else 0.dp
+                // Only the fullscreen player owns focus; the mini player is a passenger on
+                // whatever screen is behind it and must not steal entry focus from it.
+                FocusScopeHost(id = "video-surface", restoreEnabled = gps.isFullscreen) {
+                    Box(Modifier.focusInert(gps.loadingError != null || gps.streamPicker != null)) {
+                        PersistentVideoSurface(
+                            player = player,
+                            state = gps,
+                            api = api,
+                            formFactor = formFactor,
+                            onToggleFullscreen = onToggleFullscreen,
+                            isFullscreen = isFullscreen,
+                            scope = scope,
+                            miniBottomInset = miniBottomInset,
+                            onOpenGuide = {
+                                gps.stop(player, api, scope)
+                                nav.navigate(Destination.Tab.LiveTv)
+                            },
+                        )
+                    }
+                }
+            }
+
+            dev.kobbler.app.ui.player.StreamPickerHost(gps, api)
+
+            // Screenshot-friendly playback error dialog. Lives at scaffold level so
+            // it shows even when no player surface is active (e.g. session creation
+            // failed before the fullscreen player opened).
+            val playbackError = gps.loadingError
+            if (playbackError != null) {
+                FocusScopeHost(id = "playback-error") {
+                    val help = gps.failureHelp
+                    dev.kobbler.app.ui.player.PlayerErrorDialog(
+                        message = playbackError,
+                        title = if (help != null) "Couldn't play this" else "Stream failed",
+                        summary = help?.summary,
+                        want = help?.want,
+                        alternatives = help?.alternatives.orEmpty(),
+                        onPickAlternative = { option -> help?.onPickAlternative?.invoke(option) },
+                        onDismiss = {
+                            gps.loadingError = null
+                            if (player != null && gps.isActive) gps.stop(player, api, scope)
+                        },
+                        // A debrid stream has no session to mint again — its only way forward
+                        // is a different source, so the same button opens the picker.
+                        onRetry = if (player != null && api != null && gps.canRecoverSession) {
+                            { scope.launch { gps.retryPlayback(player, api) } }
+                        } else gps.onSwitchStream?.let { switchStream ->
+                            {
+                                gps.loadingError = null
+                                switchStream()
+                            }
+                        },
+                        reportStatus = gps.reportStatus,
+                        onRetryReport = api?.let { client ->
+                            { scope.launch { gps.submitReport(client, playbackError) } }
                         },
                     )
                 }
             }
-        }
-
-        dev.kobbler.app.ui.player.StreamPickerHost(gps, api)
-
-        // Screenshot-friendly playback error dialog. Lives at scaffold level so
-        // it shows even when no player surface is active (e.g. session creation
-        // failed before the fullscreen player opened).
-        val playbackError = gps.loadingError
-        if (playbackError != null) {
-            FocusScopeHost(id = "playback-error") {
-                val help = gps.failureHelp
-                dev.kobbler.app.ui.player.PlayerErrorDialog(
-                    message = playbackError,
-                    title = if (help != null) "Couldn't play this" else "Stream failed",
-                    summary = help?.summary,
-                    want = help?.want,
-                    alternatives = help?.alternatives.orEmpty(),
-                    onPickAlternative = { option -> help?.onPickAlternative?.invoke(option) },
-                    onDismiss = {
-                        gps.loadingError = null
-                        if (player != null && gps.isActive) gps.stop(player, api, scope)
-                    },
-                    // A debrid stream has no session to mint again — its only way forward
-                    // is a different source, so the same button opens the picker.
-                    onRetry = if (player != null && api != null && gps.canRecoverSession) {
-                        { scope.launch { gps.retryPlayback(player, api) } }
-                    } else gps.onSwitchStream?.let { switchStream ->
-                        {
-                            gps.loadingError = null
-                            switchStream()
-                        }
-                    },
-                    reportStatus = gps.reportStatus,
-                    onRetryReport = api?.let { client ->
-                        { scope.launch { gps.submitReport(client, playbackError) } }
-                    },
-                )
-            }
-        }
-    } // Box
-    } // Column
+        } // Box
+        } // Column
+    }
 }
 
 // -- Section ↔ Tab mapping (Section enum is the new design system primitive;

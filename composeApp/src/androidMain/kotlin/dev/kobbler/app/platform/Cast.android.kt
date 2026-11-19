@@ -1,7 +1,6 @@
 package dev.kobbler.app.platform
 
 import android.content.Context
-import android.view.ContextThemeWrapper
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.CastConnected
@@ -13,13 +12,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.mediarouter.app.MediaRouteChooserDialog
-import androidx.mediarouter.app.MediaRouteControllerDialog
+import androidx.mediarouter.media.MediaRouteSelector
+import androidx.mediarouter.media.MediaRouter
+import dev.kobbler.app.ui.player.CastControllerDialog
+import dev.kobbler.app.ui.player.CastPickerDialog
+import dev.kobbler.app.ui.player.CastRouteKind
+import dev.kobbler.app.ui.player.CastRouteOption
+import dev.kobbler.app.ui.player.LocalGlobalPlayerState
 import android.net.Uri
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
@@ -38,6 +43,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -223,8 +229,6 @@ actual fun saveCastAppId(appId: String?) {
     CastManager.saveAppId(appId)
 }
 
-// MainActivity is a ComponentActivity, and MediaRouteButton can only open its picker from a
-// FragmentActivity — so the dialogs are opened here directly.
 @Composable
 actual fun CastButton(modifier: Modifier, tint: Color) {
     val context = LocalContext.current
@@ -239,25 +243,69 @@ actual fun CastButton(modifier: Modifier, tint: Color) {
         castContext.addCastStateListener(listener)
         onDispose { castContext.removeCastStateListener(listener) }
     }
-    IconButton(
-        onClick = {
-            // The dialogs colour themselves from AppCompat's colorPrimary, which the app's
-            // platform theme does not define — read as transparent, they refuse to open.
-            val themed = ContextThemeWrapper(context, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
-            val dialog = if (connected) {
-                MediaRouteControllerDialog(themed)
-            } else {
-                val selector = castContext.mergedSelector ?: return@IconButton
-                MediaRouteChooserDialog(themed).apply { routeSelector = selector }
-            }
-            dialog.show()
-        },
-        modifier = modifier,
-    ) {
+    var open by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    IconButton(onClick = { open = true }, modifier = modifier) {
         Icon(
             if (connected) Icons.Outlined.CastConnected else Icons.Outlined.Cast,
             contentDescription = "Cast",
             tint = if (tint == Color.Unspecified) LocalContentColor.current else tint,
         )
     }
+    if (!open) return
+    val close = { open = false }
+    if (connected) {
+        val gps = LocalGlobalPlayerState.current
+        val device by CastManager.shared.device.collectAsState()
+        CastControllerDialog(
+            deviceName = device?.name ?: "Cast device",
+            session = gps?.castSession,
+            posterUrl = gps?.posterUrl,
+            backdropUrl = gps?.backdropUrl,
+            onPlayPause = gps?.onCastPlayPause,
+            onStop = {
+                close()
+                scope.launch { CastManager.shared.stop() }
+            },
+            onDismiss = close,
+        )
+    } else {
+        val selector = castContext.mergedSelector ?: return
+        CastRoutePicker(context, selector, onDismiss = close)
+    }
+}
+
+@Composable
+private fun CastRoutePicker(context: Context, selector: MediaRouteSelector, onDismiss: () -> Unit) {
+    val router = remember { MediaRouter.getInstance(context) }
+    var routes by remember(selector) { mutableStateOf(router.castRoutes(selector)) }
+    DisposableEffect(router, selector) {
+        val callback = object : MediaRouter.Callback() {
+            override fun onRouteAdded(r: MediaRouter, route: MediaRouter.RouteInfo) { routes = r.castRoutes(selector) }
+            override fun onRouteRemoved(r: MediaRouter, route: MediaRouter.RouteInfo) { routes = r.castRoutes(selector) }
+            override fun onRouteChanged(r: MediaRouter, route: MediaRouter.RouteInfo) { routes = r.castRoutes(selector) }
+        }
+        router.addCallback(selector, callback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN)
+        onDispose { router.removeCallback(callback) }
+    }
+    CastPickerDialog(
+        routes = routes.map { CastRouteOption(it.id, it.name, it.kind()) },
+        onPick = { picked ->
+            routes.firstOrNull { it.id == picked.id }?.select()
+            onDismiss()
+        },
+        onDismiss = onDismiss,
+    )
+}
+
+// The same routes, in the same order, as mediarouter's own chooser offers.
+private fun MediaRouter.castRoutes(selector: MediaRouteSelector) =
+    routes.filter { !it.isDefaultOrBluetooth && it.isEnabled && it.matchesSelector(selector) }
+        .sortedBy { it.name.lowercase() }
+
+private fun MediaRouter.RouteInfo.kind() = when (deviceType) {
+    MediaRouter.RouteInfo.DEVICE_TYPE_TV -> CastRouteKind.Tv
+    MediaRouter.RouteInfo.DEVICE_TYPE_GROUP -> CastRouteKind.Group
+    MediaRouter.RouteInfo.DEVICE_TYPE_SPEAKER, MediaRouter.RouteInfo.DEVICE_TYPE_REMOTE_SPEAKER -> CastRouteKind.Speaker
+    else -> CastRouteKind.Other
 }

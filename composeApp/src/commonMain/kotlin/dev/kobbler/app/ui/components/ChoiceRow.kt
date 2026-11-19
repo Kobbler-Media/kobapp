@@ -3,9 +3,11 @@ package dev.kobbler.app.ui.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -16,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +36,7 @@ fun ChoiceRow(
     focusKeyName: String,
     onClick: () -> Unit,
     preferredEntry: Boolean = false,
+    icon: ImageVector? = null,
 ) {
     val colors = KobappTheme.colors
     Row(
@@ -46,6 +50,10 @@ fun ChoiceRow(
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 10.dp),
     ) {
+        if (icon != null) {
+            Icon(icon, null, tint = if (selected) accent else colors.textMd, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(
                 label,

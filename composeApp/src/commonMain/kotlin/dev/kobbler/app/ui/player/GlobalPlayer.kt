@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import dev.kobbler.app.data.BufferClass
 import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.data.CastTracks
@@ -68,6 +69,9 @@ data class CastSessionDto(
     val tracks: CastTracks? = null,
     val skip: CastSkip? = null,
 )
+
+// For controls far from the scaffold that act on what is playing, such as the cast button.
+val LocalGlobalPlayerState = staticCompositionLocalOf<GlobalPlayerState?> { null }
 
 /**
  * App-wide player state. One instance at AdaptiveScaffold level.
