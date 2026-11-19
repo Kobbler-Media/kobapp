@@ -5,6 +5,7 @@ import dev.kobbler.kobplayer.Chapter
 import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.NativePlayer
 import dev.kobbler.kobplayer.Player
+import dev.kobbler.kobplayer.PlaybackGlitch
 import dev.kobbler.kobplayer.PlayerStall
 import dev.kobbler.kobplayer.PlayerState
 import dev.kobbler.kobplayer.TrackInfo
@@ -66,6 +67,9 @@ class FakePlayer(private val clock: CoroutineScope = CoroutineScope(Dispatchers.
 
     val stallFeed = MutableSharedFlow<PlayerStall>(extraBufferCapacity = 8)
     override val stalls: Flow<PlayerStall> get() = stallFeed
+
+    val glitchFeed = MutableSharedFlow<PlaybackGlitch>(extraBufferCapacity = 8)
+    override val glitches: Flow<PlaybackGlitch> get() = glitchFeed
 
     override val state = MutableStateFlow(PlayerState.IDLE)
     override val isPlaying = MutableStateFlow(false)

@@ -127,3 +127,5 @@ actual suspend fun connectRoundTripMs(host: String, port: Int): Long? =
             }
         }.getOrNull()
     }
+
+actual fun recentPlayerLog(): List<String> = emptyList()

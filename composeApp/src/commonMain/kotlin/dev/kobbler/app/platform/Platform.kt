@@ -24,6 +24,9 @@ expect fun browserCapabilities(): dev.kobbler.app.data.ClientCapabilities?
 
 expect val deviceRegion: String?
 
+/** The player's own recent warnings and errors, where the platform keeps them. */
+expect fun recentPlayerLog(): List<String>
+
 @Composable
 expect fun BackHandler(enabled: Boolean = true, onBack: () -> Unit)
 

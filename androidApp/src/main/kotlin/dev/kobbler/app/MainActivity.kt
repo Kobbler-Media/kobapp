@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.RequiresApi
 import android.os.Bundle
+import android.os.PowerManager
 import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -211,8 +212,12 @@ class MainActivity : ComponentActivity() {
         // dismissal that finishes the activity outright shows up only as isFinishing.
         // Missing it left the player loaded over a session nobody would ever close, which
         // is what the app came back to.
-        val dismissed = pipJustExited || isFinishing ||
-            (Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode)
+        val dismissed = StopSignals(
+            pipJustExited = pipJustExited,
+            finishing = isFinishing,
+            inPip = Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode,
+            screenOn = getSystemService(PowerManager::class.java).isInteractive,
+        ).dismissesPip()
         if (dismissed) {
             pipJustExited = false
             // While the activity is STOPPED Compose disposals do not fire, so the

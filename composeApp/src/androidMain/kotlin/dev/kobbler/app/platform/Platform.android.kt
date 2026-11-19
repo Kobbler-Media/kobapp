@@ -168,3 +168,13 @@ actual suspend fun connectRoundTripMs(host: String, port: Int): Long? =
             }
         }.getOrNull()
     }
+
+// An app may read its own process's log. Warnings and up from VLC and kobplayer only:
+// libVLC's -vv, when on, writes thousands of debug lines a second.
+actual fun recentPlayerLog(): List<String> = runCatching {
+    val logcat = ProcessBuilder(
+        "logcat", "-d", "-t", "400", "-v", "time", "--pid=${android.os.Process.myPid()}",
+        "VLC:W", "kobplayer:W", "*:S",
+    ).redirectErrorStream(true).start()
+    logcat.inputStream.bufferedReader().readLines().filterNot { it.startsWith("-----") }.takeLast(60)
+}.getOrDefault(emptyList())

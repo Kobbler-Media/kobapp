@@ -144,3 +144,5 @@ private fun displayIsHdr(): Boolean =
     js("typeof window.matchMedia === 'function' && window.matchMedia('(dynamic-range: high)').matches")
 
 private fun isFirefox(): Boolean = js("/firefox/i.test(navigator.userAgent)")
+
+actual fun recentPlayerLog(): List<String> = emptyList()

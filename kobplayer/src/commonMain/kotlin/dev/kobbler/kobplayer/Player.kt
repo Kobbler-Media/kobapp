@@ -287,6 +287,9 @@ interface Player {
     /** Each native call given up on, see [PlayerStall]. */
     val stalls: Flow<PlayerStall> get() = emptyFlow()
 
+    /** Each [PlaybackGlitch] seen while playback carried on. */
+    val glitches: Flow<PlaybackGlitch> get() = emptyFlow()
+
     /** Release all resources. Called automatically by [rememberPlayer] on dispose. */
     fun release()
 

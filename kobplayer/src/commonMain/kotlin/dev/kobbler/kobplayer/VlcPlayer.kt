@@ -6,17 +6,25 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.CoroutineContext
+import kotlin.time.TimeSource
 
 // A remux opens with a track event per stream, dozens in one burst: one refresh answers them all.
 private const val TrackRefreshSettleMs = 50L
+
+// Past a resume that has to buffer first; well short of a viewer giving up on the button.
+private const val PlayTakesMs = 4_000L
+
+private val trailOrigin = TimeSource.Monotonic.markNow()
 
 /**
  * What a libVLC 4 player does with its [VlcBinding], the same on every platform: the state
@@ -139,6 +147,19 @@ internal abstract class VlcPlayer<B : VlcBinding>(
 
     override val stalls: Flow<PlayerStall> get() = lane.stalls
 
+    protected val trail = PlaybackTrail { trailOrigin.elapsedNow().inWholeMilliseconds }
+    private val _glitches = MutableSharedFlow<PlaybackGlitch>(extraBufferCapacity = 8)
+    override val glitches: Flow<PlaybackGlitch> = _glitches.asSharedFlow()
+    @Volatile private var transportRequests = 0
+
+    protected open fun onGlitch(glitch: PlaybackGlitch) {}
+
+    protected fun report(glitch: PlaybackGlitch) {
+        val traced = glitch.copy(trail = trail.lines())
+        onGlitch(traced)
+        _glitches.tryEmit(traced)
+    }
+
     protected abstract fun newEngine(): CommandLane.Engine<B>
 
     /** Hands [source] to the player and starts it, on the lane. */
@@ -184,6 +205,7 @@ internal abstract class VlcPlayer<B : VlcBinding>(
 
     init {
         scope.launch { watchFrozenClock(_state, _currentMs, _isBuffering, _error, held = { isPreloading.value }) }
+        scope.launch { _state.collect { trail.note("state ${it.name.lowercase()} at ${_currentMs.value / 1000}s") } }
     }
 
     // --- Events, from the platform's listener for the current player ---
@@ -327,6 +349,14 @@ internal abstract class VlcPlayer<B : VlcBinding>(
     }
 
     override fun play() {
+        trail.note("play")
+        val asked = ++transportRequests
+        scope.launch {
+            delay(PlayTakesMs)
+            if (playIgnored(asked, transportRequests, _state.value, isPreloading.value)) {
+                report(PlaybackGlitch(PlaybackGlitch.Kind.PlayIgnored, _currentMs.value, "still paused ${PlayTakesMs}ms on", emptyList()))
+            }
+        }
         vlc {
             pauseWhenPausable = false
             // A resume queues behind a pause still on its way; play() starts a title that
@@ -343,6 +373,8 @@ internal abstract class VlcPlayer<B : VlcBinding>(
     }
 
     override fun pause() {
+        trail.note("pause")
+        transportRequests++
         fadeOutThen { vlc { if (pausable) setPause(true) else pauseWhenPausable = true } }
     }
 
@@ -381,6 +413,7 @@ internal abstract class VlcPlayer<B : VlcBinding>(
     override fun seekTo(ms: Long) {
         val clamped = clampSeekTarget(ms, _durationMs.value)
         if (clamped == _currentMs.value && _positionReported.value) return
+        trail.note("seek ${_currentMs.value / 1000}s -> ${clamped / 1000}s")
         _currentMs.value = clamped
         onSeek(clamped)
         seeks.offer(clamped)

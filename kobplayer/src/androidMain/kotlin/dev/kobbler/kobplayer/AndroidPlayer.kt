@@ -47,6 +47,7 @@ private const val FrameRateProbeSettleMs = 1_000L
 private const val FrameRateProbeWindowMs = 4_000L
 
 private const val AudioClockPollMs = 250L
+private const val GlitchPollMs = 1_000L
 private const val StuckFrames = 12
 
 // A view rebuilt on the next frame has its surface within a few; past this the stream is
@@ -71,9 +72,13 @@ internal class AndroidPlayer(
         add("--network-caching=${config.networkCacheMs}")
         val lowRam = context.getSystemService(ActivityManager::class.java).isLowRamDevice
         addAll(if (lowRam) config.readAhead.forLowRam().vlcOptions else config.readAhead.vlcOptions)
-        // `adb shell setprop log.tag.kobplayer VERBOSE` turns it on for any build.
+        // `adb shell setprop log.tag.kobplayer VERBOSE` turns it on for any build. Warnings
+        // otherwise, not just errors: a glitch report quotes them, and clock and audio
+        // underflow trouble is only ever a warning.
         if (config.verboseLogging || android.util.Log.isLoggable("kobplayer", android.util.Log.VERBOSE)) {
             add("-vv")
+        } else {
+            add("-v")
         }
         if (!config.hardwareAcceleration) {
             add("--avcodec-hw=none")
@@ -147,6 +152,7 @@ internal class AndroidPlayer(
             )
             .setOnAudioFocusChangeListener { focusChange ->
                 val change = focusChangeOf(focusChange) ?: return@setOnAudioFocusChangeListener
+                trail.note("audio focus ${change.name}")
                 if (change == FocusChange.Loss) hasAudioFocus = false
                 if (change == FocusChange.Gain) hasAudioFocus = true
                 // A silent preload holds no audible claim: a call ending must not start it.
@@ -206,7 +212,9 @@ internal class AndroidPlayer(
         surfaces.created(holder)
         attachVoutIfReady()
         pictureTimeout?.cancel()
-        when (surfaceReturnRedraw(_state.value)) {
+        val redraw = surfaceReturnRedraw(_state.value)
+        trail.note("surface back, redraw ${redraw.name.lowercase()}")
+        when (redraw) {
             SurfaceReturnRedraw.Now -> redrawPicture()
             SurfaceReturnRedraw.Deferred -> {
                 awaitingPicture = true
@@ -224,6 +232,7 @@ internal class AndroidPlayer(
     private var deferredRedraw: Job? = null
 
     private fun redrawPicture() {
+        trail.note("redraw at ${_currentMs.value / 1000}s")
         awaitingPicture = true
         vlc { if (player.isSeekable) player.setTime(player.time) }
         pictureTimeout?.cancel()
@@ -256,6 +265,7 @@ internal class AndroidPlayer(
 
     internal fun onSurfaceDestroyed(holder: android.view.SurfaceHolder) {
         if (!surfaces.destroyed(holder)) return
+        trail.note("surface gone")
         deferredRedraw?.cancel()
         deferredRedraw = null
         detachVout()
@@ -599,6 +609,7 @@ internal class AndroidPlayer(
     }
 
     private fun sinksChanged() {
+        trail.note("audio sinks changed")
         passthroughMask = null
         rebuildAudioOutput()
     }
@@ -612,6 +623,7 @@ internal class AndroidPlayer(
     // would be an audible gap in sound that evidently survived.
     private val wakeWatcher = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            trail.note("screen on")
             if (_state.value != PlayerState.PLAYING) rebuildAudioOutput()
         }
     }
@@ -619,6 +631,32 @@ internal class AndroidPlayer(
     init {
         audioManager.registerAudioDeviceCallback(sinkWatcher, Handler(Looper.getMainLooper()))
         context.applicationContext.registerReceiver(wakeWatcher, IntentFilter(Intent.ACTION_SCREEN_ON))
+        if (!config.audioOnly) scope.launch { watchForGlitches() }
+    }
+
+    private suspend fun watchForGlitches() {
+        val watch = GlitchWatch()
+        while (true) {
+            delay(GlitchPollMs)
+            val steady = _state.value == PlayerState.PLAYING && !_isBuffering.value &&
+                _playbackSpeed.value == 1f && !isPreloading.value
+            val sample = if (!steady) PictureSample(0, 0, 0, 0, steady = false, showsPicture = false) else onVlc {
+                val stats = media?.stats
+                PictureSample(
+                    wallMs = SystemClock.elapsedRealtime(),
+                    clockMs = timeMs ?: 0L,
+                    displayed = stats?.displayedPictures ?: 0L,
+                    lost = stats?.lostPictures ?: 0L,
+                    steady = stats != null,
+                    showsPicture = hasVideoTrack && voutAttached,
+                )
+            } ?: continue
+            watch.sample(sample)?.let(::report)
+        }
+    }
+
+    override fun onGlitch(glitch: PlaybackGlitch) {
+        android.util.Log.w("kobplayer", "Playback glitch: ${glitch.summary()}\n" + glitch.trail.joinToString("\n"))
     }
 
     override suspend fun takeScreenshot(path: String) {
