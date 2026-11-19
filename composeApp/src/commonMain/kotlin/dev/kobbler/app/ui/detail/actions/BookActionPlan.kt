@@ -9,7 +9,7 @@ internal sealed interface BookAction {
     data object ViewComic : BookAction
     data object DownloadBook : BookAction
     data object DownloadAudio : BookAction
-    data object Want : BookAction
+    data class Want(val wanted: Boolean) : BookAction
 }
 
 internal data class BookMedium(
@@ -29,6 +29,7 @@ internal data class BookActionState(
     val canDownloadText: Boolean = false,
     val canDownloadAudio: Boolean = false,
     val wantable: Boolean = false,
+    val wanted: Boolean = false,
 )
 
 internal const val FinishedPercent = 95.0
@@ -56,6 +57,6 @@ internal fun bookActions(state: BookActionState): List<BookAction> = with(state)
         addAll(media)
         if (comic && (!offline || text.onDevice)) add(if (readable) BookAction.ViewComic else BookAction.ReadComic)
         addAll(downloads)
-        if (wantable && !offline) add(BookAction.Want)
+        if (wantable && !offline) add(BookAction.Want(wanted))
     }
 }

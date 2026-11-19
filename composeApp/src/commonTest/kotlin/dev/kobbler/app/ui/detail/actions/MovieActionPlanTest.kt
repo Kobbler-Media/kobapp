@@ -37,12 +37,17 @@ class MovieActionPlanTest {
         Case(
             "no file and no stream can only be wanted",
             online.copy(movie = movie.copy(filePath = null)),
-            listOf(Want, Watchlist),
+            listOf(Want(wanted = false), Watchlist),
+        ),
+        Case(
+            "a wanted movie keeps its button, now showing it wanted",
+            online.copy(movie = movie.copy(filePath = null, wantStatus = "wanted")),
+            listOf(Want(wanted = true), Watchlist),
         ),
         Case(
             "no file but a stream plays it and offers the picker",
             online.copy(movie = movie.copy(filePath = null), canStream = true, canPickStream = true),
-            listOf(Play, Streams, Want, SetWatched(true), Watchlist),
+            listOf(Play, Streams, Want(wanted = false), SetWatched(true), Watchlist),
         ),
         Case("not downloadable offers no download", online.copy(canDownload = false), listOf(Play, SetWatched(true), Watchlist)),
         Case(

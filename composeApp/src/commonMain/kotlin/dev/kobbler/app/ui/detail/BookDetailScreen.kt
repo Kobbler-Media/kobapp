@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.isWantedStatus
 import dev.kobbler.app.offline.OfflineState
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
@@ -86,7 +87,7 @@ private fun ActionRow(
     val readable = book.formats.any { it.uppercase() in ReadableFormats }
     val (readPercent, listenPercent) = rememberBookProgress(book, api, readable)
     val downloads = rememberBookDownloads(book, accent)
-    var wanted by remember { mutableStateOf(false) }
+    var wantedHere by remember { mutableStateOf(false) }
     val wantScope = rememberCoroutineScope()
     // Opened from Audiobooks, the book is being listened to; anywhere else, read.
     val listenFirst = LocalSection.current == Section.Audio
@@ -101,7 +102,8 @@ private fun ActionRow(
             offline = !rememberOnline(),
             canDownloadText = downloads.canText,
             canDownloadAudio = downloads.canAudio,
-            wantable = !book.isInLibrary && api.canWant && book.wantStatus != "wanted",
+            wantable = !book.isInLibrary && api.canWant,
+            wanted = wantedHere || isWantedStatus(book.wantStatus),
         ),
     )
     val actions = plan.mapIndexed { i, action ->
@@ -134,13 +136,16 @@ private fun ActionRow(
             BookAction.ViewComic -> RowAction("comic", "View comic", Icons.Outlined.AutoStories, onViewComic)
             BookAction.DownloadBook -> downloads.textAction
             BookAction.DownloadAudio -> downloads.audioAction
-            BookAction.Want -> RowAction(
+            is BookAction.Want -> RowAction(
                 key = "want",
-                label = if (wanted) "Wanted" else "Want",
-                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.Download,
-                tint = if (wanted) colors.accWanted else null,
+                label = if (action.wanted) "Wanted" else "Want",
+                icon = if (action.wanted) Icons.Outlined.Check else Icons.Outlined.Download,
+                tint = if (action.wanted) colors.accWanted else null,
                 onClick = {
-                    if (!wanted) wantScope.launch { try { api.wantBookById(book.id); wanted = true } catch (_: Exception) {} }
+                    if (!action.wanted) {
+                        wantedHere = true
+                        wantScope.launch { runCatching { api.wantBookById(book.id) }.onFailure { wantedHere = false } }
+                    }
                 },
             )
         }

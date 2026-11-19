@@ -111,7 +111,7 @@ private fun ActionRow(
     val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
     val total = movie.runtimeMinutes?.times(60)
     var inList by remember(movie.inWatchlist) { mutableStateOf(movie.inWatchlist) }
-    var wanted by remember { mutableStateOf(false) }
+    var wantedHere by remember { mutableStateOf(false) }
     // Owned by the row, not the menu: an item closes the menu, disposing its content,
     // before its request finishes.
     val actionScope = rememberCoroutineScope()
@@ -120,7 +120,7 @@ private fun ActionRow(
 
     val plan = movieActions(
         MovieActionState(
-            movie = movie,
+            movie = if (wantedHere) movie.copy(wantStatus = "wanted") else movie,
             canPlayVideo = supportsVideoPlayback,
             canStream = onStream != null,
             canPickStream = onStreamPick != null,
@@ -145,14 +145,15 @@ private fun ActionRow(
             MovieAction.FromStart -> RowAction("fromStart", "From start", Icons.Outlined.Replay, { play(true) })
             MovieAction.Download -> offlineRowAction(download, accent, { engine?.downloadMovie(movie) }, label = "Download", key = "download")
             MovieAction.Streams -> RowAction("streams", "Streams", Icons.Outlined.Tune, { onStreamPick?.invoke() })
-            MovieAction.Want -> RowAction(
+            is MovieAction.Want -> RowAction(
                 key = "want",
-                label = if (wanted) "Wanted" else "Want",
-                icon = if (wanted) Icons.Outlined.Check else Icons.Outlined.Download,
-                tint = if (wanted) colors.warn else null,
+                label = if (action.wanted) "Wanted" else "Want",
+                icon = if (action.wanted) Icons.Outlined.Check else Icons.Outlined.Download,
+                tint = if (action.wanted) colors.warn else null,
                 onClick = {
-                    if (!wanted) actionScope.launch {
-                        try { api.wantMovieById(movie.id); wanted = true } catch (_: Exception) {}
+                    if (!action.wanted) {
+                        wantedHere = true
+                        actionScope.launch { runCatching { api.wantMovieById(movie.id) }.onFailure { wantedHere = false } }
                     }
                 },
             )

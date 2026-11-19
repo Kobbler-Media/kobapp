@@ -58,7 +58,8 @@ class BookActionPlanTest {
         ),
         Case("a comic alone is read", BookActionState(comic = true), listOf(ReadComic)),
         Case("a comic beside an ebook is viewed", BookActionState(readable = true, comic = true), listOf(Read(Unstarted), ViewComic)),
-        Case("a book not in the library is wanted", BookActionState(wantable = true), listOf(Want)),
+        Case("a book not in the library can be wanted", BookActionState(wantable = true), listOf(Want(wanted = false))),
+        Case("a wanted book keeps its button, now showing it wanted", BookActionState(wantable = true, wanted = true), listOf(Want(wanted = true))),
         Case(
             "offline, only what is on this device opens, and only started downloads show",
             both.copy(offline = true, text = BookMedium(onDevice = true, downloadStarted = true)),

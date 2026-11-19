@@ -11,7 +11,7 @@ internal sealed interface MovieAction {
     data object FromStart : MovieAction
     data object Download : MovieAction
     data object Streams : MovieAction
-    data object Want : MovieAction
+    data class Want(val wanted: Boolean) : MovieAction
     data class SetWatched(val watched: Boolean) : MovieAction
     data object Watchlist : MovieAction
     data object Keep : MovieAction
@@ -50,7 +50,7 @@ internal fun movieActions(state: MovieActionState): List<MovieAction> = with(sta
         if (canDownload && hasFile && canPlayVideo && (!offline || downloadStarted)) add(Download)
         if (offline) return@buildList
         if (canPickStream) add(Streams)
-        if (movie.canBeWanted(canWant)) add(Want)
+        if (canWant && movie.filePath == null) add(Want(movie.isWanted))
         if (canPlay) add(SetWatched(!movie.isWatched))
         if (canWant) add(Watchlist)
         if (canKeep) add(Keep)
