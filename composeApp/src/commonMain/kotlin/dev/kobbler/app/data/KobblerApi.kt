@@ -386,6 +386,8 @@ data class CreateSessionRequest(
      * the length of the title.
      */
     @SerialName("start_time") val startTime: Int? = null,
+    /** `progressive` asks for a transcode as one MPEG-TS response too, for a renderer that plays no HLS. */
+    val delivery: String? = null,
 )
 
 @Serializable
@@ -410,6 +412,7 @@ data class SessionResponse(
     val method: String,
     @SerialName("playlist_url") val playlistUrl: String? = null,
     @SerialName("direct_url") val directUrl: String? = null,
+    @SerialName("progressive_url") val progressiveUrl: String? = null,
     @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
     @SerialName("thumbnails_url") val thumbnailsUrl: String? = null,
     val chapters: List<SessionChapter> = emptyList(),
@@ -1655,6 +1658,8 @@ data class PlaybackSubtitleTrackDto(
     @SerialName("language_name") val languageName: String? = null,
     val title: String? = null,
     val url: String? = null,
+    /** Every text track as SRT, the one subtitle format DLNA renderers agree on. */
+    @SerialName("srt_url") val srtUrl: String? = null,
     val format: String? = null,
     @SerialName("is_default") val isDefault: Boolean = false,
     @SerialName("is_forced") val isForced: Boolean = false,
@@ -4473,6 +4478,8 @@ class KobblerApi(
          */
         val method: String? = null,
         val durationSeconds: Double = 0.0,
+        /** The transcode as one MPEG-TS stream, when it was asked for. */
+        val progressiveUrl: String? = null,
     )
 
     /**
@@ -4623,7 +4630,8 @@ class KobblerApi(
         mediaId: String,
         capabilities: ClientCapabilities,
         startTimeSec: Int,
-    ): StreamSession? = createDirectSession(mediaType, mediaId, startTimeSec, capabilities = capabilities)
+        delivery: String? = null,
+    ): StreamSession? = createDirectSession(mediaType, mediaId, startTimeSec, capabilities = capabilities, delivery = delivery)
 
     private suspend fun createDirectSession(
         mediaType: String,
@@ -4631,6 +4639,7 @@ class KobblerApi(
         startTimeSec: Int? = null,
         audioTitle: String? = null,
         capabilities: ClientCapabilities = capabilities(),
+        delivery: String? = null,
     ): StreamSession? {
         val qualityPref = UserSettings.getString(KEY_STREAMING_QUALITY) ?: "auto"
         val forceTranscode = qualityPref != "auto"
@@ -4652,6 +4661,7 @@ class KobblerApi(
             preferredSubtitleLanguage = prefs.subtitleLanguage,
             subtitlesEnabled = prefs.subtitlesEnabled,
             startTime = startTimeSec,
+            delivery = delivery,
         ))
         // 404 is "this media has no file we can play", which is the caller's cue to go
         // looking for a stream rather than an error to surface. Every other status still
@@ -4727,6 +4737,7 @@ class KobblerApi(
             fileId = fileId,
             method = method,
             durationSeconds = durationSeconds,
+            progressiveUrl = progressiveUrl?.let { resolveUrl(apiUrl, it) },
         )
     }
 

@@ -46,6 +46,7 @@ internal suspend fun GlobalPlayerState.castLoad(
     capabilities: ClientCapabilities,
     positionSec: Int,
     durationSec: Double,
+    playsHls: Boolean = true,
 ): CastLoad? {
     val ownStreamUrl = lastStreamUrl ?: return null
     val ownSessionId = sessionId ?: return null
@@ -56,9 +57,12 @@ internal suspend fun GlobalPlayerState.castLoad(
     // This device plays nearly any file as it is, so its own session is rarely one the
     // receiver can open. A debrid stream has no library title to ask for again.
     val own = mediaId?.takeUnless { isDebrid }?.let { id ->
-        runCatching { api.createCastSession(type, id, capabilities, positionSec) }.getOrNull()
+        runCatching {
+            api.createCastSession(type, id, capabilities, positionSec, delivery = "progressive".takeUnless { playsHls })
+        }.getOrNull()
     }
-    val streamUrl = own?.url ?: ownStreamUrl
+    val progressiveUrl = own?.progressiveUrl
+    val streamUrl = progressiveUrl ?: own?.url ?: ownStreamUrl
     val method = castMethod(own?.method ?: sessionMethod)
     val direct = method == "direct_play"
     val startOffset = own?.serverStartSeconds ?: 0
@@ -70,6 +74,7 @@ internal suspend fun GlobalPlayerState.castLoad(
         mediaType = type,
         playlistUrl = streamUrl.takeUnless { direct },
         directUrl = streamUrl.takeIf { direct },
+        progressiveUrl = progressiveUrl,
         method = method,
         duration = own?.durationSeconds?.takeIf { it > 0 } ?: durationSec,
         subtitles = own?.subtitles ?: serverSubtitleTracks,
@@ -83,7 +88,7 @@ internal suspend fun GlobalPlayerState.castLoad(
     )
     return CastLoad(
         contentUrl = streamUrl,
-        contentType = castContentType(method),
+        contentType = if (progressiveUrl != null) "video/mp2t" else castContentType(method),
         payloadJson = castJson.encodeToString(payload),
         startPositionSec = (positionSec - startOffset).coerceAtLeast(0),
         title = title,
@@ -186,6 +191,7 @@ fun CastHandoff(
             capabilities = decodes,
             positionSec = (positionMs / 1000).toInt(),
             durationSec = durationMs / 1000.0,
+            playsHls = CastFeature.Hls in cast.features,
         ) ?: return@LaunchedEffect
 
         cast.load(load)

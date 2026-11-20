@@ -20,6 +20,8 @@ data class CastInitSession(
     val mediaType: String,
     val playlistUrl: String?,
     val directUrl: String?,
+    /** Set for a receiver that plays no HLS: the transcode as one stream, from [startOffset]. */
+    val progressiveUrl: String? = null,
     val method: String,
     val duration: Double,
     val subtitles: List<PlaybackSubtitleTrackDto> = emptyList(),

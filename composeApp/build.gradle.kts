@@ -192,6 +192,7 @@ tasks.named<Test>("desktopTest") {
     val prefsRoot = layout.buildDirectory.dir("test-prefs").get().asFile
     systemProperty("java.util.prefs.userRoot", prefsRoot.absolutePath)
     doFirst { prefsRoot.deleteRecursively() }
+    systemProperty("kobbler.dlna.discovery", "off")
 }
 
 // Packaged launcher only: $APPDIR means nothing to `run`/`hotRun`. install-desktop.sh trains

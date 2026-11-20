@@ -2,6 +2,9 @@ package dev.kobbler.app.platform
 
 import android.content.Context
 import android.net.Uri
+import dev.kobbler.app.data.AppForeground
+import dev.kobbler.app.data.SharedHttp
+import dev.kobbler.app.platform.dlna.DlnaBackend
 import androidx.mediarouter.media.MediaRouteSelector
 import androidx.mediarouter.media.MediaRouter
 import com.google.android.gms.cast.MediaInfo
@@ -36,13 +39,26 @@ import org.json.JSONObject
 private const val PREFS_NAME = "kobbler_cast"
 private const val PREF_APP_ID = "receiver_app_id"
 
-private val router by lazy { CastRouter(listOf(CastManager.shared)) }
+// A TV is a target, not a sender: initContext only runs off-TV, so there both stay inert.
+private val router by lazy {
+    CastRouter(
+        listOf(
+            CastManager.shared,
+            DlnaBackend(
+                http = SharedHttp.apiClient(),
+                openTransport = { CastManager.appContext?.let(::androidSsdpTransport) },
+                foreground = AppForeground.state,
+                keepAlive = { name -> CastManager.appContext?.let { DlnaKeepAlive.update(it, name) } },
+            ),
+        ),
+    )
+}
 
 actual fun castManager(): CastRouter = router
 
 class CastManager private constructor() : CastBackend {
     override val protocol = PlaybackProtocol.GoogleCast
-    override val features = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Audiobook, CastFeature.Tts)
+    override val features = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls, CastFeature.Audiobook, CastFeature.Tts)
     private var castContext: CastContext? = null
     private var session: CastSession? = null
 

@@ -5,6 +5,9 @@ enum class CastFeature {
     /** Saves the watch position against the server on its own. */
     ReceiverReportsProgress,
 
+    /** Plays an HLS playlist; without it a transcode is asked for as one progressive stream. */
+    Hls,
+
     /** Takes a whole book and plays its files in turn. */
     Audiobook,
 
