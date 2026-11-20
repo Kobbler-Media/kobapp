@@ -58,6 +58,7 @@ import dev.kobbler.app.ui.player.audiobook.ChapterListPanel
 import dev.kobbler.app.ui.player.audiobook.SleepMode
 import dev.kobbler.app.platform.castManager
 import dev.kobbler.app.ui.player.audiobook.AudiobookCastHandoff
+import dev.kobbler.app.ui.detail.ToastOverlay
 import dev.kobbler.app.ui.player.audiobook.SleepTimerMenu
 import dev.kobbler.app.ui.player.audiobook.TransportRow
 import dev.kobbler.app.ui.player.audiobook.rememberAudiobookState
@@ -196,6 +197,7 @@ internal fun AudiobookPlayerContent(
 
                 Spacer(Modifier.navigationBarsPadding())
             }
+            ToastOverlay(state.notice, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
         }
     }
 }

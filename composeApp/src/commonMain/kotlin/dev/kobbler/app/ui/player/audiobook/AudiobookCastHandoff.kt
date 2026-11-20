@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import dev.kobbler.app.platform.CastEvent
 import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastSender
@@ -23,21 +25,39 @@ private val castJson = Json { encodeDefaults = true; explicitNulls = true }
 @Composable
 fun AudiobookCastHandoff(cast: CastSender, state: AudiobookPlayerState) {
     val device by cast.device.collectAsState()
+    // Whether the book was playing when a receiver took it off this device, held until the
+    // receiver has it — one that turns it down hands it straight back.
+    val heldForCast = remember { mutableStateOf<Boolean?>(null) }
+
+    fun keepHere(receiver: String) {
+        state.cast = null
+        state.castingTo = null
+        if (heldForCast.value == true) state.player.play()
+        heldForCast.value = null
+        state.notice.show("$receiver can't play audiobooks")
+    }
 
     LaunchedEffect(device, state.dataLoaded) {
         val target = device
         if (target == null) {
+            heldForCast.value = null
             state.handBackFromCast()
             return@LaunchedEffect
         }
         if (!state.dataLoaded || state.castingTo != null) return@LaunchedEffect
-        if (CastFeature.Audiobook !in cast.features) return@LaunchedEffect
-        state.player.pause()
+        if (CastFeature.Audiobook !in cast.features) {
+            if (!target.connecting) keepHere(target.name)
+            return@LaunchedEffect
+        }
+        if (heldForCast.value == null) {
+            heldForCast.value = state.player.isPlaying.value
+            state.player.pause()
+        }
         if (target.connecting) return@LaunchedEffect
         val token = state.api.castToken() ?: return@LaunchedEffect
-        cast.send("INIT_AUDIOBOOK", castJson.encodeToString(state.castPayload(token)))
         state.cast = cast
         state.castingTo = target.name
+        cast.send("INIT_AUDIOBOOK", castJson.encodeToString(state.castPayload(token)))
     }
 
     LaunchedEffect(cast) {
@@ -51,6 +71,9 @@ fun AudiobookCastHandoff(cast: CastSender, state: AudiobookPlayerState) {
                 is CastEvent.AudiobookFileChanged -> {
                     state.currentFileIndex = event.fileIndex
                     state.currentMs = 0
+                }
+                is CastEvent.Refused -> if (event.feature == CastFeature.Audiobook) {
+                    state.castingTo?.let(::keepHere)
                 }
                 else -> Unit
             }

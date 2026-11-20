@@ -166,6 +166,7 @@ class TtsController(
 
     @Volatile
     private var castingTo: String? = null
+    private var toldCantCast: String? = null
     private val castClock = TtsCastClock()
     @Volatile
     private var castSentences: List<CastSentence> = emptyList()
@@ -189,9 +190,21 @@ class TtsController(
      * Start TTS from the given text. Backend envelope is auto-detected from
      * the first event received.
      */
-    @OptIn(ExperimentalEncodingApi::class)
     fun start(text: String) {
-        val receiver = cast.device.value?.takeUnless { it.connecting || CastFeature.Tts !in cast.features }?.name
+        val connected = cast.device.value?.takeUnless { it.connecting }?.name
+        val receiver = connected?.takeIf { CastFeature.Tts in cast.features }
+        read(text, receiver)
+        if (connected != null && receiver == null) tellCantCast(connected)
+    }
+
+    private fun tellCantCast(receiver: String) {
+        if (toldCantCast == receiver) return
+        toldCantCast = receiver
+        _error.value = "$receiver can't play read-alouds"
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun read(text: String, receiver: String?) {
         // A receiver about to be handed the next read replaces this one by itself.
         halt(stopReceiver = receiver == null)
         _state.value = TtsState.LOADING
@@ -362,6 +375,7 @@ class TtsController(
                         timelineIn.isCompleted -> played.complete(Unit)
                         else -> cast.send("INIT_TTS", castJson.encodeToString(init.copy(startMs = castClock.nowMs())))
                     }
+                    is CastEvent.Refused -> if (event.feature == CastFeature.Tts) scope.launch { readHere(text, receiver) }
                     else -> Unit
                 }
             }
@@ -375,6 +389,14 @@ class TtsController(
         api.streamTtsCastEvents(id, onEvent)
         timelineIn.complete(Unit)
         return played
+    }
+
+    private fun readHere(text: String, receiver: String) {
+        if (castingTo != receiver) return
+        castingTo = null
+        halt(stopReceiver = false)
+        read(text, receiver = null)
+        tellCantCast(receiver)
     }
 
     private fun handBack(receiver: String) {

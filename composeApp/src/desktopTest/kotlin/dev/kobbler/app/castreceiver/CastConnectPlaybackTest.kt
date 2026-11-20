@@ -8,6 +8,7 @@ import dev.kobbler.app.platform.CastEvent
 import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastLoad
 import dev.kobbler.app.platform.CastSender
+import dev.kobbler.app.platform.SessionFeatures
 import dev.kobbler.app.platform.parseCastEvent
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.ui.player.CastHandoff
@@ -205,18 +206,27 @@ internal class TvReceiver(tvApi: KobblerApi) {
 }
 
 /** The phone's sender wired straight into the TV's receiver session, as the wire would. */
-private class LoopbackSender(private val tv: TvReceiver) : CastSender {
+internal class LoopbackSender(private val tv: TvReceiver) : CastSender {
     override val device = MutableStateFlow<CastDevice?>(null)
     override val events = MutableSharedFlow<CastEvent>(extraBufferCapacity = 64)
-    override val features = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls)
+    private val session = SessionFeatures(CastFeature.entries.toSet())
+    override val features get() = session.current
     @Volatile var collecting = false
     @Volatile var stopped = false
 
     init {
         CoroutineScope(Dispatchers.Default).launch(start = CoroutineStart.UNDISPATCHED) {
-            tv.sent.collect { json -> parseCastEvent(json)?.let { events.emit(it) } }
+            tv.sent.collect { json ->
+                parseCastEvent(json)?.let {
+                    session.heard(it)
+                    events.emit(it)
+                }
+            }
         }
     }
+
+    /** What the Cast Connect SDK tells the TV once this sender has joined. */
+    fun senderJoined() = runBlocking(Dispatchers.Main) { tv.session.senderConnected() }
 
     override fun start() { collecting = true }
 

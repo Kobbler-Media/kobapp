@@ -8,12 +8,16 @@ import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.data.CastTracks
 import dev.kobbler.app.data.ClientCapabilities
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.platform.CastFeature
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.time.TimeSource
 
 private const val PositionEveryMs = 5_000L
 private val processStart = TimeSource.Monotonic.markNow()
+
+/** What kobapp does as a receiver: video only, saved as the sender. Books and read-alouds stay with the web receiver. */
+val CastConnectFeatures = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls)
 
 class CastReceiverSession(
     private val playback: ReceiverPlayback,
@@ -89,8 +93,9 @@ class CastReceiverSession(
                 expiredLoad?.let { load(it.copy(session = it.session.copy(token = command.token))) }
             }
             ReceiverCommand.StatusRequest -> send(ReceiverReplies.status(playback.now()))
-            ReceiverCommand.CapabilitiesRequest -> send(ReceiverReplies.capabilities(capabilities()))
+            ReceiverCommand.CapabilitiesRequest -> send(ReceiverReplies.capabilities(capabilities(), CastConnectFeatures))
             ReceiverCommand.TracksRequest -> if (isActive) announceTracks()
+            is ReceiverCommand.Unplayable -> send(ReceiverReplies.refused(command.type))
             is ReceiverCommand.Unsupported, null -> Unit
         }
     }
@@ -107,7 +112,7 @@ class CastReceiverSession(
     }
 
     fun senderConnected() {
-        send(ReceiverReplies.capabilities(capabilities()))
+        send(ReceiverReplies.capabilities(capabilities(), CastConnectFeatures))
         if (isActive) announceTracks()
     }
 

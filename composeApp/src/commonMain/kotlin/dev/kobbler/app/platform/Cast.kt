@@ -6,6 +6,7 @@ import dev.kobbler.app.data.ClientCapabilities
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -73,8 +74,14 @@ sealed interface CastEvent {
     /** The receiver finished an episode and went on to the next one by itself. */
     data class EpisodeChanged(val episodeId: String, val showTitle: String, val label: String) : CastEvent
 
-    /** What the receiver probed itself for, asked for as this device attaches. */
-    data class Capabilities(val capabilities: ClientCapabilities) : CastEvent
+    /**
+     * What the receiver probed itself for, asked for as this device attaches. [features] is
+     * null from a receiver that does not list them, which does everything its protocol does.
+     */
+    data class Capabilities(val capabilities: ClientCapabilities, val features: Set<CastFeature>? = null) : CastEvent
+
+    /** The receiver turned down a hand-over it has no player for. */
+    data class Refused(val feature: CastFeature) : CastEvent
 
     data class TracksChanged(val tracks: CastTracks) : CastEvent
 
@@ -123,7 +130,17 @@ fun parseCastEvent(json: String): CastEvent? = runCatching {
             durationSec = num("duration"),
             isPlaying = payload?.get("playing")?.jsonPrimitive?.booleanOrNull ?: false,
         )
-        "CAPABILITIES" -> CastEvent.Capabilities(eventJson.decodeFromJsonElement(payload ?: return@runCatching null))
+        "CAPABILITIES" -> CastEvent.Capabilities(
+            eventJson.decodeFromJsonElement(payload ?: return@runCatching null),
+            (payload["features"] as? JsonArray)?.mapNotNull { CastFeature.fromWire(it.jsonPrimitive.content) }?.toSet(),
+        )
+        "UNSUPPORTED" -> CastEvent.Refused(
+            when (str("type")) {
+                "INIT_AUDIOBOOK" -> CastFeature.Audiobook
+                "INIT_TTS" -> CastFeature.Tts
+                else -> return@runCatching null
+            },
+        )
         "TRACKS" -> CastEvent.TracksChanged(eventJson.decodeFromJsonElement(payload ?: return@runCatching null))
         "SKIP_SEGMENT" -> CastEvent.SkipChanged(payload?.let { eventJson.decodeFromJsonElement<CastSkip>(it) })
         "AUDIOBOOK_FILE_CHANGED" -> CastEvent.AudiobookFileChanged(num("fileIndex").toInt())

@@ -3,10 +3,8 @@ package dev.kobbler.app.ui.player
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.UiTimeoutMs
-import dev.kobbler.app.data.AudioFileDto
-import dev.kobbler.app.data.Book
+import dev.kobbler.app.data.ClientCapabilities
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.UnifiedChapterDto
 import dev.kobbler.app.platform.CastEvent
 import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.runUiTest
@@ -14,8 +12,6 @@ import dev.kobbler.app.ui.player.audiobook.AudiobookCastHandoff
 import dev.kobbler.app.ui.player.audiobook.AudiobookPlayerState
 import dev.kobbler.kobplayer.PlayerState
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
@@ -36,28 +32,6 @@ class AudiobookCastTest {
         "/api/v1/admin/playback/tokens" to { _: HttpExchange -> """{"token":"cast-tok"}""" },
     )
 
-    private fun file(id: String, index: Int, seconds: Double) =
-        AudioFileDto(id = id, fileIndex = index, format = "mp3", fileName = "$id.mp3", durationSeconds = seconds)
-
-    private fun listening(api: KobblerApi, player: FakePlayer) = AudiobookPlayerState(
-        Book(id = "b1", title = "Treehouse", author = "Andy", coverUrl = "/covers/b1.jpg"),
-        api,
-        player,
-        CoroutineScope(Dispatchers.Unconfined),
-    ).apply {
-        audioFiles = listOf(file("f1", 0, 600.0), file("f2", 1, 900.0))
-        chapters = listOf(
-            UnifiedChapterDto(id = "c1", chapterIndex = 0, title = "One", startSeconds = 0.0, endSeconds = 600.0, fileId = "f1"),
-            UnifiedChapterDto(
-                id = "c2", chapterIndex = 1, title = "Two", startSeconds = 0.0, endSeconds = 900.0, fileId = "f2",
-                globalStartSeconds = 600.0, globalEndSeconds = 1500.0,
-            ),
-        )
-        dataLoaded = true
-        runBlocking { playFileAt(1, 30_000) }
-        player.state.value = PlayerState.PLAYING
-    }
-
     private fun handedOver(cast: FakeSender) =
         Json.parseToJsonElement(cast.payloads.single { it.first == "INIT_AUDIOBOOK" }.second).jsonObject
 
@@ -66,7 +40,7 @@ class AudiobookCastTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer()
-            val state = listening(api, player)
+            val state = listeningBook(api, player)
             val cast = FakeSender()
 
             setContent { AudiobookCastHandoff(cast, state) }
@@ -93,7 +67,7 @@ class AudiobookCastTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer()
-            val state = listening(api, player)
+            val state = listeningBook(api, player)
             val cast = FakeSender()
 
             setContent { AudiobookCastHandoff(cast, state) }
@@ -130,7 +104,7 @@ class AudiobookCastTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer()
-            val state = listening(api, player)
+            val state = listeningBook(api, player)
             val cast = FakeSender()
 
             setContent { AudiobookCastHandoff(cast, state) }
@@ -155,7 +129,7 @@ class AudiobookCastTest {
         StubServer(routes).use { stub ->
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val player = FakePlayer()
-            val state = listening(api, player)
+            val state = listeningBook(api, player)
             val cast = FakeSender(features = CastFeature.entries.toSet() - CastFeature.Audiobook)
 
             setContent { AudiobookCastHandoff(cast, state) }
@@ -167,6 +141,50 @@ class AudiobookCastTest {
             assertTrue("INIT_AUDIOBOOK" !in cast.sent, "${cast.sent}")
             assertTrue("pause" !in player.calls, "${player.calls}")
             assertNull(state.castingTo)
+            assertEquals("Living Room DLNA can't play audiobooks", state.notice.message)
+        }
+    }
+
+    @Test
+    fun `a receiver that lists no book player before it connects leaves the listen playing here`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer()
+            val state = listeningBook(api, player)
+            val cast = FakeSender()
+
+            setContent { AudiobookCastHandoff(cast, state) }
+            cast.connecting("Bedroom TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { "pause" in player.calls }
+            runBlocking { cast.say(CastEvent.Capabilities(ClientCapabilities(listOf("h264"), listOf("aac"), listOf("mp4")), setOf(CastFeature.Hls))) }
+            cast.connect("Bedroom TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { player.calls.lastOrNull() == "play" }
+
+            assertTrue("INIT_AUDIOBOOK" !in cast.sent, "${cast.sent}")
+            assertNull(state.castingTo)
+            assertEquals("Bedroom TV can't play audiobooks", state.notice.message)
+        }
+    }
+
+    @Test
+    fun `a receiver that turns the book down hands the listen straight back`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer()
+            val state = listeningBook(api, player)
+            val cast = FakeSender()
+
+            player.calls.clear()
+            setContent { AudiobookCastHandoff(cast, state) }
+            cast.connect("Bedroom TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { "INIT_AUDIOBOOK" in cast.sent }
+            runBlocking { cast.say(CastEvent.Refused(CastFeature.Audiobook)) }
+            waitUntil(timeoutMillis = UiTimeoutMs) { state.castingTo == null }
+
+            assertEquals("play", player.calls.last())
+            assertTrue(player.calls.none { it == "load" }, "${player.calls}")
+            assertEquals("Bedroom TV can't play audiobooks", state.notice.message)
+            assertTrue(CastFeature.Audiobook !in cast.features)
         }
     }
 }

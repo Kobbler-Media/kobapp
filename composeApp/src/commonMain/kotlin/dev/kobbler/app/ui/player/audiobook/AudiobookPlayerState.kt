@@ -26,6 +26,7 @@ import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.TranscriptSegmentDto
 import dev.kobbler.app.data.UnifiedChapterDto
 import dev.kobbler.app.platform.CastSender
+import dev.kobbler.app.ui.detail.ToastState
 import dev.kobbler.app.platform.PlaybackTimeline
 import dev.kobbler.kobplayer.MediaSource
 import dev.kobbler.kobplayer.Player
@@ -90,6 +91,8 @@ class AudiobookPlayerState internal constructor(
     var castingTo by mutableStateOf<String?>(null)
         internal set
     internal var cast: CastSender? = null
+
+    val notice = ToastState()
 
     val fileTimeOffsetsMs: List<Long> by derivedStateOf {
         var offset = 0L

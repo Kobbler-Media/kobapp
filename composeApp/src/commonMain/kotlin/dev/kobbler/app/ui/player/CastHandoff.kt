@@ -269,7 +269,7 @@ fun CastHandoff(
                 is CastEvent.TracksChanged -> gps.castSession = gps.castSession?.copy(tracks = event.tracks)
                 is CastEvent.SkipChanged -> gps.castSession = gps.castSession?.copy(skip = event.skip)
                 // A cast book and a read-aloud are their own screens' to follow.
-                is CastEvent.AudiobookFileChanged, CastEvent.TtsFinished -> Unit
+                is CastEvent.AudiobookFileChanged, CastEvent.TtsFinished, is CastEvent.Refused -> Unit
             }
         }
     }

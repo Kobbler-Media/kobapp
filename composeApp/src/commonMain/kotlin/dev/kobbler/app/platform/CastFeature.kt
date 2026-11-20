@@ -1,16 +1,20 @@
 package dev.kobbler.app.platform
 
 /** What a receiver does for itself, so the app knows what it has to do in its place. */
-enum class CastFeature {
+enum class CastFeature(val wire: String) {
     /** Saves the watch position against the server on its own. */
-    ReceiverReportsProgress,
+    ReceiverReportsProgress("receiver_reports_progress"),
 
     /** Plays an HLS playlist; without it a transcode is asked for as one progressive stream. */
-    Hls,
+    Hls("hls"),
 
     /** Takes a whole book and plays its files in turn. */
-    Audiobook,
+    Audiobook("audiobook"),
 
     /** Plays a read-aloud stream. */
-    Tts,
+    Tts("tts");
+
+    companion object {
+        fun fromWire(name: String): CastFeature? = entries.firstOrNull { it.wire == name }
+    }
 }

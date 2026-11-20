@@ -6,6 +6,7 @@ import dev.kobbler.app.platform.CastEvent
 import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastLoad
 import dev.kobbler.app.platform.CastSender
+import dev.kobbler.app.platform.SessionFeatures
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,8 +18,10 @@ import kotlinx.coroutines.flow.asStateFlow
 /** A receiver that records what it was told, standing in for one across the room. */
 internal class FakeSender(
     private val decodes: ClientCapabilities? = ClientCapabilities(listOf("h264"), listOf("aac"), listOf("mp4")),
-    override val features: Set<CastFeature> = CastFeature.entries.toSet(),
+    features: Set<CastFeature> = CastFeature.entries.toSet(),
 ) : CastSender {
+    private val session = SessionFeatures(features)
+    override val features: Set<CastFeature> get() = session.current
     private val _device = MutableStateFlow<CastDevice?>(null)
     override val device: StateFlow<CastDevice?> = _device.asStateFlow()
     private val _events = MutableSharedFlow<CastEvent>(replay = 1, extraBufferCapacity = 8)
@@ -47,5 +50,8 @@ internal class FakeSender(
     fun connecting(name: String) { _device.value = CastDevice(name, connecting = true) }
     fun connect(name: String) { _device.value = CastDevice(name) }
     fun disconnect() { _device.value = null }
-    suspend fun say(event: CastEvent) { _events.emit(event) }
+    suspend fun say(event: CastEvent) {
+        session.heard(event)
+        _events.emit(event)
+    }
 }

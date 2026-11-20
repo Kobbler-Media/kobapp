@@ -7,6 +7,7 @@ import dev.kobbler.app.data.CastMetadata
 import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.data.ClientCapabilities
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.parseCastEvent
 import dev.kobbler.app.ui.player.StubServer
 import kotlinx.coroutines.CoroutineScope
@@ -120,7 +121,10 @@ class CastReceiverSessionTest {
     fun `requests are answered`() = runBlocking {
         val h = Harness()
         h.session.message("""{"type":"CAPABILITIES_REQUEST"}""")
-        assertEquals(CastEvent.Capabilities(ClientCapabilities(listOf("h264", "hevc"), listOf("aac", "eac3"), listOf("mp4", "mkv"))), h.events.single())
+        assertEquals(
+            CastEvent.Capabilities(ClientCapabilities(listOf("h264", "hevc"), listOf("aac", "eac3"), listOf("mp4", "mkv")), CastConnectFeatures),
+            h.events.single(),
+        )
         h.session.load(load("http://unused"))
         h.sent.clear()
         h.session.message("""{"type":"STATUS_REQUEST"}""")
@@ -131,19 +135,22 @@ class CastReceiverSessionTest {
     }
 
     @Test
-    fun `a sender that attaches is told what this device decodes`() = runBlocking {
+    fun `a sender that attaches is told what this device decodes and that it plays no books or read-alouds`() = runBlocking {
         val h = Harness()
         h.session.senderConnected()
-        assertTrue(h.events.single() is CastEvent.Capabilities)
+        val features = (h.events.single() as CastEvent.Capabilities).features!!
+        assertTrue(CastFeature.ReceiverReportsProgress in features && CastFeature.Hls in features, "$features")
+        assertTrue(CastFeature.Audiobook !in features && CastFeature.Tts !in features, "$features")
     }
 
     @Test
-    fun `audiobooks and read-alouds are not taken`() = runBlocking {
+    fun `audiobooks and read-alouds are refused back to the sender`() = runBlocking {
         val h = Harness()
         h.session.message("""{"type":"INIT_AUDIOBOOK","payload":{}}""")
         h.session.message("""{"type":"INIT_TTS","payload":{}}""")
+        h.session.message("""{"type":"TTS_STOP"}""")
         assertTrue(h.playback.opened.isEmpty())
-        assertTrue(h.sent.isEmpty())
+        assertEquals(listOf(CastEvent.Refused(CastFeature.Audiobook), CastEvent.Refused(CastFeature.Tts)), h.events)
     }
 
     @Test

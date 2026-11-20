@@ -37,7 +37,13 @@ class TtsCastTest {
         """{"type":"done"}""",
     )
 
+    private val localHold = CountDownLatch(1)
+
     private fun routes(events: List<String>, hold: CountDownLatch? = null) = mapOf(
+        "/api/v1/admin/tts/synthesize" to { _: HttpExchange ->
+            localHold.await(10, TimeUnit.SECONDS)
+            ""
+        },
         "/api/v1/admin/tts/cast" to { _: HttpExchange -> """{"id":"r1"}""" },
         "/api/v1/admin/playback/tokens" to { _: HttpExchange -> """{"token":"cast-tok"}""" },
         "/api/v1/admin/tts/cast/r1/events" to { _: HttpExchange ->
@@ -67,6 +73,7 @@ class TtsCastTest {
             try {
                 runBlocking { withTimeout(15_000) { rig.test() } }
             } finally {
+                localHold.countDown()
                 scope.cancel()
             }
         }
@@ -206,5 +213,19 @@ class TtsCastTest {
             delay(300)
             assertTrue(inits().isEmpty(), "handed to a receiver that cannot play it")
             assertTrue(stub.requestBodies["/api/v1/admin/tts/cast"] == null, "asked the server for a cast stream")
+            assertEquals("Kitchen speaker can't play read-alouds", tts.error.value)
         }
+
+    @Test
+    fun `a receiver that turns a read-aloud down has it read here instead`() = casting(aligned) {
+        tts.start("One two three four")
+        eventually("INIT_TTS") { inits().isNotEmpty() }
+        cast.say(CastEvent.Refused(CastFeature.Tts))
+        eventually("the read to be asked for here") { stub.requestBodies["/api/v1/admin/tts/synthesize"] != null }
+
+        assertTrue("One two three four" in stub.requestBodies["/api/v1/admin/tts/synthesize"].orEmpty())
+        assertEquals("Kitchen speaker can't play read-alouds", tts.error.value)
+        assertEquals(1, inits().size)
+        assertTrue("TTS_STOP" !in cast.sent, "${cast.sent}")
+    }
 }

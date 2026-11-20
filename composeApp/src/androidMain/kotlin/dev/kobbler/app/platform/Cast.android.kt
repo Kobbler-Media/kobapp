@@ -58,7 +58,10 @@ actual fun castManager(): CastRouter = router
 
 class CastManager private constructor() : CastBackend {
     override val protocol = PlaybackProtocol.GoogleCast
-    override val features = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls, CastFeature.Audiobook, CastFeature.Tts)
+    private val sessionFeatures = SessionFeatures(
+        setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls, CastFeature.Audiobook, CastFeature.Tts),
+    )
+    override val features: Set<CastFeature> get() = sessionFeatures.current
     private var castContext: CastContext? = null
     private var session: CastSession? = null
 
@@ -139,10 +142,14 @@ class CastManager private constructor() : CastBackend {
 
     private fun adopt(s: CastSession) {
         session = s
+        sessionFeatures.reset()
         _device.value = CastDevice(s.name())
         try {
             s.setMessageReceivedCallbacks(CAST_NAMESPACE) { _, _, message ->
-                parseCastEvent(message)?.let { _events.tryEmit(it) }
+                parseCastEvent(message)?.let {
+                    sessionFeatures.heard(it)
+                    _events.tryEmit(it)
+                }
             }
         } catch (_: Exception) {
         }

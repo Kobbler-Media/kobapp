@@ -9,6 +9,7 @@ import dev.kobbler.app.data.CastTracks
 import dev.kobbler.app.data.ClientCapabilities
 import dev.kobbler.app.data.PlaybackSubtitleTrackDto
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.parseCastEvent
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -76,8 +77,9 @@ class ReceiverProtocolTest {
             """{"type":"STATUS_REQUEST"}""" to ReceiverCommand.StatusRequest,
             """{"type":"CAPABILITIES_REQUEST"}""" to ReceiverCommand.CapabilitiesRequest,
             """{"type":"TRACKS_REQUEST"}""" to ReceiverCommand.TracksRequest,
-            """{"type":"INIT_AUDIOBOOK","payload":{}}""" to ReceiverCommand.Unsupported("INIT_AUDIOBOOK"),
-            """{"type":"INIT_TTS","payload":{}}""" to ReceiverCommand.Unsupported("INIT_TTS"),
+            """{"type":"INIT_AUDIOBOOK","payload":{}}""" to ReceiverCommand.Unplayable("INIT_AUDIOBOOK"),
+            """{"type":"INIT_TTS","payload":{}}""" to ReceiverCommand.Unplayable("INIT_TTS"),
+            """{"type":"TTS_STOP","payload":{}}""" to ReceiverCommand.Unsupported("TTS_STOP"),
         )
         cases.forEach { (json, expected) -> assertEquals(expected, parseReceiverCommand(json), json) }
     }
@@ -111,7 +113,9 @@ class ReceiverProtocolTest {
                 mediaId = "ep-1", mediaType = "episode", title = "Show", subtitle = "S1 E1",
                 posterUrl = "http://p/poster.jpg", positionSec = 600.5, durationSec = 2_400.0, isPlaying = true,
             ),
-            ReceiverReplies.capabilities(caps) to CastEvent.Capabilities(caps),
+            ReceiverReplies.capabilities(caps, CastConnectFeatures) to CastEvent.Capabilities(caps, CastConnectFeatures),
+            ReceiverReplies.refused("INIT_AUDIOBOOK") to CastEvent.Refused(CastFeature.Audiobook),
+            ReceiverReplies.refused("INIT_TTS") to CastEvent.Refused(CastFeature.Tts),
             ReceiverReplies.tracks(tracks) to CastEvent.TracksChanged(tracks),
             ReceiverReplies.episodeChanged(
                 NextEpisode(episodeId = "ep-2", title = "Pilot II", episodeIdentifier = "2", seasonIdentifier = "1", showTitle = "Show"),
@@ -122,6 +126,16 @@ class ReceiverProtocolTest {
             ReceiverReplies.expired to CastEvent.Expired,
         )
         cases.forEach { (json, expected) -> assertEquals(expected, parseCastEvent(json), json) }
+    }
+
+    @Test
+    fun `the web receiver's capabilities list no features, and unknown ones are passed over`() {
+        val caps = ClientCapabilities(listOf("h264"), listOf("aac"), listOf("mp4"))
+        val web = """{"type":"CAPABILITIES","payload":{"video_codecs":["h264"],"audio_codecs":["aac"],"containers":["mp4"]}}"""
+        assertEquals(CastEvent.Capabilities(caps, features = null), parseCastEvent(web))
+        val newer = """{"type":"CAPABILITIES","payload":{"video_codecs":["h264"],"audio_codecs":["aac"],"containers":["mp4"],"features":["hls","teleport"]}}"""
+        assertEquals(CastEvent.Capabilities(caps, setOf(CastFeature.Hls)), parseCastEvent(newer))
+        assertNull(parseCastEvent("""{"type":"UNSUPPORTED","payload":{"type":"TTS_STOP"}}"""))
     }
 
     private fun sub(id: String) = PlaybackSubtitleTrackDto(trackId = id, language = "en", url = "http://s/$id.vtt", format = "vtt")

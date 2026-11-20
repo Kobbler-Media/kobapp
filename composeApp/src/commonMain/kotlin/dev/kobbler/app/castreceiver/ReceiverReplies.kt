@@ -3,7 +3,11 @@ package dev.kobbler.app.castreceiver
 import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.data.CastTracks
 import dev.kobbler.app.data.ClientCapabilities
+import dev.kobbler.app.platform.CastFeature
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
@@ -35,7 +39,15 @@ object ReceiverReplies {
         },
     )
 
-    fun capabilities(capabilities: ClientCapabilities) = message("CAPABILITIES", replyJson.encodeToJsonElement(capabilities))
+    fun capabilities(capabilities: ClientCapabilities, features: Set<CastFeature>) = message(
+        "CAPABILITIES",
+        buildJsonObject {
+            replyJson.encodeToJsonElement(capabilities).jsonObject.forEach { (k, v) -> put(k, v) }
+            put("features", JsonArray(features.map { JsonPrimitive(it.wire) }))
+        },
+    )
+
+    fun refused(type: String) = message("UNSUPPORTED", buildJsonObject { put("type", type) })
 
     fun tracks(tracks: CastTracks) = message("TRACKS", replyJson.encodeToJsonElement(tracks))
 

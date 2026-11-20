@@ -15,10 +15,13 @@ sealed interface ReceiverCommand {
     data object StatusRequest : ReceiverCommand
     data object CapabilitiesRequest : ReceiverCommand
     data object TracksRequest : ReceiverCommand
+    /** A hand-over this receiver has no player for, which the sender is told about. */
+    data class Unplayable(val type: String) : ReceiverCommand
     data class Unsupported(val type: String) : ReceiverCommand
 }
 
-private val UnsupportedTypes = setOf("INIT_AUDIOBOOK", "INIT_TTS", "TTS_STOP", "AUDIOBOOK_SEEK", "AUDIOBOOK_RATE")
+private val UnplayableTypes = setOf("INIT_AUDIOBOOK", "INIT_TTS")
+private val UnsupportedTypes = setOf("TTS_STOP", "AUDIOBOOK_SEEK", "AUDIOBOOK_RATE")
 
 /**
  * A message off the custom namespace. `INIT_SESSION` reads as null: the LOAD carries the
@@ -38,6 +41,7 @@ fun parseReceiverCommand(json: String): ReceiverCommand? = runCatching {
         "STATUS_REQUEST" -> ReceiverCommand.StatusRequest
         "CAPABILITIES_REQUEST" -> ReceiverCommand.CapabilitiesRequest
         "TRACKS_REQUEST" -> ReceiverCommand.TracksRequest
+        in UnplayableTypes -> ReceiverCommand.Unplayable(type!!)
         in UnsupportedTypes -> ReceiverCommand.Unsupported(type!!)
         else -> null
     }
