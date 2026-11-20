@@ -106,7 +106,7 @@ private const val VIDEO_SKIP_MS = 10_000L
 private fun skipRunsToEnd(endMs: Long, durationMs: Long): Boolean =
     durationMs > 0 && endMs >= durationMs - SKIP_END_SLACK_MS
 
-private fun isVisibleSkipSegment(seg: SkipSegment): Boolean =
+internal fun isVisibleSkipSegment(seg: SkipSegment): Boolean =
     seg.source != "chapter" && SEGMENT_LABELS.containsKey(seg.segmentType)
 
 private fun segmentTitle(seg: SkipSegment): String {

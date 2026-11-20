@@ -43,7 +43,7 @@ fun storedActiveProfile(store: KeyValueStore = PlatformKeyValueStore): Profile? 
 }
 
 private fun offlinePinDigest(profileId: String, pin: String) = dev.kobbler.app.offline.stableHash("$profileId:$pin")
-private const val KEY_SHOW_PICKER_ON_LAUNCH = "kobbler_show_picker_on_launch"
+internal const val KEY_SHOW_PICKER_ON_LAUNCH = "kobbler_show_picker_on_launch"
 private const val KEY_SESSION_TOUCHED_PREFIX = "kobbler_session_touched_"
 
 /** Tokens live 90 days; checking in once a day keeps a wide margin for cheap. */

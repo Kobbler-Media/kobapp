@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import dev.kobbler.app.android.R
+import dev.kobbler.app.castconnect.CastConnect
 import androidx.media3.session.MediaSession
 import dev.kobbler.app.platform.NowPlayingInfo
 import dev.kobbler.app.platform.PlaybackBridge
@@ -111,6 +112,7 @@ class PlaybackService : Service() {
                     adapter = null
                     media3Session = null
                 }
+                CastConnect.attachSession(media3Session?.platformToken)
                 val nm = getSystemService(NotificationManager::class.java)
                 nm.notify(NOTIFICATION_ID, buildNotification(PlaybackBridge.nowPlaying.value))
             }
@@ -202,6 +204,7 @@ class PlaybackService : Service() {
         scope.cancel()
         adapter?.cleanup()
         adapter = null
+        CastConnect.attachSession(null)
         media3Session?.release()
         media3Session = null
         tearDownTtsSession()
