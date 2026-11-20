@@ -87,7 +87,7 @@ private fun ActionRow(
     val readable = book.formats.any { it.uppercase() in ReadableFormats }
     val (readPercent, listenPercent) = rememberBookProgress(book, api, readable)
     val downloads = rememberBookDownloads(book, accent)
-    var wantedHere by remember { mutableStateOf(false) }
+    var wantedHere by remember(book.id) { mutableStateOf(false) }
     val wantScope = rememberCoroutineScope()
     // Opened from Audiobooks, the book is being listened to; anywhere else, read.
     val listenFirst = LocalSection.current == Section.Audio

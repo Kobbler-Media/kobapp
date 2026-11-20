@@ -111,7 +111,7 @@ private fun ActionRow(
     val play: (Boolean) -> Unit = if (movie.filePath != null) onPlay else (onStream ?: onPlay)
     val total = movie.runtimeMinutes?.times(60)
     var inList by remember(movie.inWatchlist) { mutableStateOf(movie.inWatchlist) }
-    var wantedHere by remember { mutableStateOf(false) }
+    var wantedHere by remember(movie.id) { mutableStateOf(false) }
     // Owned by the row, not the menu: an item closes the menu, disposing its content,
     // before its request finishes.
     val actionScope = rememberCoroutineScope()

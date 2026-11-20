@@ -22,16 +22,20 @@ class ReleaseAvailabilityStripTest {
 
     private val api = KobblerApi(HttpClient(), "http://127.0.0.1:1", "token")
 
-    private fun shows(formFactor: FormFactor, vararg texts: String, content: @Composable () -> Unit) =
+    private fun shows(formFactor: FormFactor, vararg texts: String, twice: Set<String> = emptySet(), content: @Composable () -> Unit) =
         listOf(1280 to 800, 400 to 860).forEach { (w, h) ->
             runUiTest(width = w, height = h) {
                 setContent { KobappTheme(formFactor = formFactor) { content() } }
                 waitForIdle()
                 texts.forEach { text ->
-                    assertEquals(1, onAllNodesWithText(text).fetchSemanticsNodes().size, "'$text' at ${w}dp")
+                    val expected = if (text in twice) 2 else 1
+                    assertEquals(expected, onAllNodesWithText(text).fetchSemanticsNodes().size, "'$text' at ${w}dp")
                 }
             }
         }
+
+    // The strip's Library row, and the Want button showing it is done.
+    private val wantedTwice = setOf("Wanted")
 
     private val wanted = Movie(
         id = "m1", title = "Upcoming", year = 2099, posterUrl = "", wantStatus = "wanted",
@@ -40,14 +44,14 @@ class ReleaseAvailabilityStripTest {
 
     @Test
     fun `a wanted movie with no file shows when it is coming`() =
-        shows(FormFactor.Desktop, "RELEASE AVAILABILITY", "Coming May 1, 2099", "Wanted") {
+        shows(FormFactor.Desktop, "RELEASE AVAILABILITY", "Coming May 1, 2099", "Wanted", twice = wantedTwice) {
             MovieDetailScreen(movie = wanted, api = api, formFactor = FormFactor.Desktop, onBack = {}, onPlay = {}, onWatchedChanged = {})
         }
 
     @Test
     fun `a wanted movie with release types shows each, and whose region they are`() =
         listOf(FormFactor.Desktop, FormFactor.TV).forEach { formFactor ->
-            shows(formFactor, "Cinema", "Mar 3, 2026", "Digital", "Coming Jun 1, 2099", "Wanted", "Dates for ZZ") {
+            shows(formFactor, "Cinema", "Mar 3, 2026", "Digital", "Coming Jun 1, 2099", "Wanted", "Dates for ZZ", twice = wantedTwice) {
                 MovieDetailScreen(
                     movie = wanted.copy(
                         releaseDates = ReleaseDates(region = "ZZ", theatrical = LocalDate(2026, 3, 3), digital = LocalDate(2099, 6, 1)),

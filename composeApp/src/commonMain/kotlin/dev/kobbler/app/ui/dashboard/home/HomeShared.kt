@@ -125,14 +125,14 @@ fun ForYouCard(
 ) {
     val item = entry.item
     val wantScope = rememberCoroutineScope()
-    val menu = remember(entry, api) { discoverContextMenu(item, api, wantScope, onClick) + forYouRefusals(entry, api, wantScope) }
+    val card = rememberDiscoverCard(item, api, wantScope, onClick, remember(entry, api) { forYouRefusals(entry, api, wantScope) })
     PosterCard(
         title = item.title,
         imageUrl = item.posterUrl,
         subtitle = if (LocalFormFactor.current == FormFactor.Phone) shortBecauseLabel(entry.because) else becauseLabel(entry.because),
         accentColor = KobappTheme.colors.accentForRecentlyAdded(item.mediaType),
-        statusBadge = item.libraryStatus,
-        contextMenuItems = menu,
+        statusBadge = card.status,
+        contextMenuItems = card.menu,
         onClick = { onClick(item) },
         width = width,
         modifier = modifier,

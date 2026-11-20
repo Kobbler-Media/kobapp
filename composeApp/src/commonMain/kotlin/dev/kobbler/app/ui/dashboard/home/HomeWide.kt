@@ -1,6 +1,5 @@
 package dev.kobbler.app.ui.dashboard.home
 
-import dev.kobbler.app.ui.components.CardAction
 import dev.kobbler.app.ui.offline.continueAvailableOffline
 import dev.kobbler.app.ui.offline.recentAvailableOffline
 
@@ -49,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import dev.kobbler.app.data.DiscoverItem
 import dev.kobbler.app.data.HomeData
 import dev.kobbler.app.data.KobblerApi
-import dev.kobbler.app.data.LibraryStatus
 import dev.kobbler.app.data.RecentlyAddedItem
 import dev.kobbler.app.data.UpNextItem
 import dev.kobbler.app.data.ContinueItem
@@ -72,7 +70,6 @@ import dev.kobbler.kobfocus.focusKey
 import dev.kobbler.kobfocus.focusKeyGroup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 private val HeroBarFade = 200.dp
 
@@ -292,12 +289,7 @@ fun HomeWide(
                             key = "section-$i",
                         ) {
                             itemsIndexed(section.items) { c, item ->
-                                // buildList hands back a fresh List every call, and List
-                                // compares by reference under strong skipping — inline, no
-                                // card in this rail can ever skip.
-                                val menu = remember(item, api) {
-                                    discoverContextMenu(item, api, wantScope, onDiscoverItemClick)
-                                }
+                                val card = rememberDiscoverCard(item, api, wantScope, onDiscoverItemClick)
                                 PosterCard(
                                     title = item.title,
                                     imageUrl = item.posterUrl,
@@ -306,8 +298,8 @@ fun HomeWide(
                                         else -> item.year?.toString() ?: ""
                                     },
                                     accentColor = sectionAccent,
-                                    statusBadge = item.libraryStatus,
-                                    contextMenuItems = menu,
+                                    statusBadge = card.status,
+                                    contextMenuItems = card.menu,
                                     onClick = { onDiscoverItemClick(item) },
                                     modifier = Modifier
                                         .focusKey("item.$c")
@@ -465,28 +457,5 @@ private fun HomeRail(
                 content = content,
             )
         }
-    }
-}
-
-internal fun discoverContextMenu(
-    item: DiscoverItem,
-    api: KobblerApi,
-    scope: kotlinx.coroutines.CoroutineScope,
-    onClick: (DiscoverItem) -> Unit,
-): List<CardAction> = buildList {
-    add(CardAction("Info", { onClick(item) }))
-    if (item.libraryStatus == LibraryStatus.NotInLibrary && api.canWant) {
-        add(CardAction("Want", {
-            scope.launch {
-                try {
-                    val detail = api.getDiscoverDetail(item.mediaType, item.provider, item.providerId)
-                    when (item.mediaType) {
-                        "movie" -> api.wantMovie(detail)
-                        "tv" -> api.wantTvShow(detail)
-                        "book" -> api.wantBook(detail)
-                    }
-                } catch (_: Exception) {}
-            }
-        }))
     }
 }

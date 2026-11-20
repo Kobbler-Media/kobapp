@@ -272,10 +272,7 @@ fun HomePhone(
                         spotlight = spotlight,
                         spotlightOf = { it.spotlight() },
                     ) { item, cardWidth ->
-                        // buildList hands back a fresh List every call, and List compares by
-                        // reference under strong skipping — inline, no card in any rail can
-                        // ever skip.
-                        val menu = remember(item, api) { discoverContextMenu(item, api, wantScope, onDiscoverItemClick) }
+                        val card = rememberDiscoverCard(item, api, wantScope, onDiscoverItemClick)
                         PosterCard(
                             title = item.title,
                             imageUrl = item.posterUrl,
@@ -284,8 +281,8 @@ fun HomePhone(
                                 else -> item.year?.toString() ?: ""
                             },
                             accentColor = sectionAccent,
-                            statusBadge = item.libraryStatus,
-                            contextMenuItems = menu,
+                            statusBadge = card.status,
+                            contextMenuItems = card.menu,
                             onClick = { onDiscoverItemClick(item) },
                             width = cardWidth,
                             modifier = Modifier.showingBadge(spotlight, item.spotlight()),
