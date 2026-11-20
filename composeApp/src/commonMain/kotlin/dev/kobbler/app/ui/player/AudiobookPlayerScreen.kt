@@ -56,7 +56,6 @@ import dev.kobbler.app.ui.components.tvAutoGlow
 import dev.kobbler.app.ui.player.audiobook.AudiobookPlayerState
 import dev.kobbler.app.ui.player.audiobook.ChapterListPanel
 import dev.kobbler.app.ui.player.audiobook.SleepMode
-import dev.kobbler.app.platform.CastButton
 import dev.kobbler.app.platform.castManager
 import dev.kobbler.app.ui.player.audiobook.AudiobookCastHandoff
 import dev.kobbler.app.ui.player.audiobook.SleepTimerMenu
@@ -242,7 +241,7 @@ private fun TopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        CastButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), colors.textMd)
+        PlayOnButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), colors.textMd)
         LabelledIconButton(Icons.Outlined.BookmarkAdd, "Add bookmark", onAddBookmark, Modifier.focusKey("bookmark"), tint = colors.textMd)
         SleepTimerMenu(mode = sleepMode, remainingMs = sleepRemainingMs, onSelect = onSleepSelect)
         if (onOpenReader != null) {

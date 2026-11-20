@@ -1,49 +1,32 @@
 package dev.kobbler.app.platform
 
 import android.content.Context
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cast
-import androidx.compose.material.icons.outlined.CastConnected
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import android.net.Uri
 import androidx.mediarouter.media.MediaRouteSelector
 import androidx.mediarouter.media.MediaRouter
-import dev.kobbler.app.ui.player.CastControllerDialog
-import dev.kobbler.app.ui.player.CastPickerDialog
-import dev.kobbler.app.ui.player.CastRouteKind
-import dev.kobbler.app.ui.player.CastRouteOption
-import dev.kobbler.app.ui.player.LocalGlobalPlayerState
-import android.net.Uri
 import com.google.android.gms.cast.MediaInfo
-import com.google.android.gms.cast.MediaMetadata
-import com.google.android.gms.common.images.WebImage
 import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.MediaSeekOptions
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
-import com.google.android.gms.cast.framework.CastState
-import com.google.android.gms.cast.framework.CastStateListener
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.common.images.WebImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -53,9 +36,12 @@ import org.json.JSONObject
 private const val PREFS_NAME = "kobbler_cast"
 private const val PREF_APP_ID = "receiver_app_id"
 
-actual fun castManager(): CastSender = CastManager.shared
+private val router by lazy { CastRouter(listOf(CastManager.shared)) }
 
-class CastManager private constructor() : CastSender {
+actual fun castManager(): CastRouter = router
+
+class CastManager private constructor() : CastBackend {
+    override val protocol = PlaybackProtocol.GoogleCast
     private var castContext: CastContext? = null
     private var session: CastSession? = null
 
@@ -66,6 +52,37 @@ class CastManager private constructor() : CastSender {
     // one would end whatever cast it starts. It is collecting before any session connects.
     private val _events = MutableSharedFlow<CastEvent>(extraBufferCapacity = 16)
     override val events: SharedFlow<CastEvent> = _events.asSharedFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val targets: Flow<List<PlaybackTarget>> = savedAppId.flatMapLatest { appId ->
+        val context = appContext
+        if (appId.isNullOrBlank() || context == null) flowOf(emptyList()) else mediaRoutes(context)
+    }
+
+    override suspend fun scanActively() {
+        val context = appContext ?: return
+        if (savedAppId.value.isNullOrBlank()) return
+        withContext(Dispatchers.Main) {
+            val selector = runCatching { CastContext.getSharedInstance(context).mergedSelector }.getOrNull()
+                ?: return@withContext
+            val router = MediaRouter.getInstance(context)
+            val callback = object : MediaRouter.Callback() {}
+            router.addCallback(selector, callback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN)
+            try {
+                awaitCancellation()
+            } finally {
+                router.removeCallback(callback)
+            }
+        }
+    }
+
+    override suspend fun connect(target: PlaybackTarget) {
+        val context = appContext ?: return
+        start()
+        withContext(Dispatchers.Main) {
+            MediaRouter.getInstance(context).routes.firstOrNull { it.id == target.id }?.select()
+        }
+    }
 
     override fun start() {
         if (castContext != null) return
@@ -229,83 +246,39 @@ actual fun saveCastAppId(appId: String?) {
     CastManager.saveAppId(appId)
 }
 
-@Composable
-actual fun CastButton(modifier: Modifier, tint: Color) {
-    val context = LocalContext.current
-    val appId by CastManager.savedAppId.collectAsState()
-    val castContext = remember(appId) {
-        if (appId.isNullOrBlank()) null
-        else runCatching { CastContext.getSharedInstance(context) }.getOrNull()
-    } ?: return
-    var connected by remember(castContext) { mutableStateOf(castContext.castState == CastState.CONNECTED) }
-    DisposableEffect(castContext) {
-        val listener = CastStateListener { connected = it == CastState.CONNECTED }
-        castContext.addCastStateListener(listener)
-        onDispose { castContext.removeCastStateListener(listener) }
+private fun mediaRoutes(context: Context): Flow<List<PlaybackTarget>> = callbackFlow {
+    val castContext = runCatching { CastContext.getSharedInstance(context) }.getOrNull()
+    val selector = castContext?.mergedSelector
+    if (selector == null) {
+        send(emptyList())
+        awaitClose()
+        return@callbackFlow
     }
-    var open by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    IconButton(onClick = { open = true }, modifier = modifier) {
-        Icon(
-            if (connected) Icons.Outlined.CastConnected else Icons.Outlined.Cast,
-            contentDescription = "Cast",
-            tint = if (tint == Color.Unspecified) LocalContentColor.current else tint,
-        )
+    val router = MediaRouter.getInstance(context)
+    fun publish() = trySend(router.castRoutes(selector).map { it.target() })
+    val callback = object : MediaRouter.Callback() {
+        override fun onRouteAdded(r: MediaRouter, route: MediaRouter.RouteInfo) { publish() }
+        override fun onRouteRemoved(r: MediaRouter, route: MediaRouter.RouteInfo) { publish() }
+        override fun onRouteChanged(r: MediaRouter, route: MediaRouter.RouteInfo) { publish() }
     }
-    if (!open) return
-    val close = { open = false }
-    if (connected) {
-        val gps = LocalGlobalPlayerState.current
-        val device by CastManager.shared.device.collectAsState()
-        CastControllerDialog(
-            deviceName = device?.name ?: "Cast device",
-            session = gps?.castSession,
-            posterUrl = gps?.posterUrl,
-            backdropUrl = gps?.backdropUrl,
-            onPlayPause = gps?.onCastPlayPause,
-            onStop = {
-                close()
-                scope.launch { CastManager.shared.stop() }
-            },
-            onDismiss = close,
-        )
-    } else {
-        val selector = castContext.mergedSelector ?: return
-        CastRoutePicker(context, selector, onDismiss = close)
-    }
-}
-
-@Composable
-private fun CastRoutePicker(context: Context, selector: MediaRouteSelector, onDismiss: () -> Unit) {
-    val router = remember { MediaRouter.getInstance(context) }
-    var routes by remember(selector) { mutableStateOf(router.castRoutes(selector)) }
-    DisposableEffect(router, selector) {
-        val callback = object : MediaRouter.Callback() {
-            override fun onRouteAdded(r: MediaRouter, route: MediaRouter.RouteInfo) { routes = r.castRoutes(selector) }
-            override fun onRouteRemoved(r: MediaRouter, route: MediaRouter.RouteInfo) { routes = r.castRoutes(selector) }
-            override fun onRouteChanged(r: MediaRouter, route: MediaRouter.RouteInfo) { routes = r.castRoutes(selector) }
-        }
-        router.addCallback(selector, callback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN)
-        onDispose { router.removeCallback(callback) }
-    }
-    CastPickerDialog(
-        routes = routes.map { CastRouteOption(it.id, it.name, it.kind()) },
-        onPick = { picked ->
-            routes.firstOrNull { it.id == picked.id }?.select()
-            onDismiss()
-        },
-        onDismiss = onDismiss,
-    )
-}
+    router.addCallback(selector, callback, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY)
+    publish()
+    awaitClose { router.removeCallback(callback) }
+}.flowOn(Dispatchers.Main)
 
 // The same routes, in the same order, as mediarouter's own chooser offers.
 private fun MediaRouter.castRoutes(selector: MediaRouteSelector) =
     routes.filter { !it.isDefaultOrBluetooth && it.isEnabled && it.matchesSelector(selector) }
         .sortedBy { it.name.lowercase() }
 
-private fun MediaRouter.RouteInfo.kind() = when (deviceType) {
-    MediaRouter.RouteInfo.DEVICE_TYPE_TV -> CastRouteKind.Tv
-    MediaRouter.RouteInfo.DEVICE_TYPE_GROUP -> CastRouteKind.Group
-    MediaRouter.RouteInfo.DEVICE_TYPE_SPEAKER, MediaRouter.RouteInfo.DEVICE_TYPE_REMOTE_SPEAKER -> CastRouteKind.Speaker
-    else -> CastRouteKind.Other
-}
+private fun MediaRouter.RouteInfo.target() = PlaybackTarget(
+    id = id,
+    name = name,
+    kind = when (deviceType) {
+        MediaRouter.RouteInfo.DEVICE_TYPE_TV -> PlaybackTargetKind.Tv
+        MediaRouter.RouteInfo.DEVICE_TYPE_GROUP -> PlaybackTargetKind.Group
+        MediaRouter.RouteInfo.DEVICE_TYPE_SPEAKER, MediaRouter.RouteInfo.DEVICE_TYPE_REMOTE_SPEAKER -> PlaybackTargetKind.Speaker
+        else -> PlaybackTargetKind.Other
+    },
+    protocol = PlaybackProtocol.GoogleCast,
+)

@@ -544,13 +544,14 @@ fun FullscreenVideoPlayer(
 
     var showSubtitleSearch by remember { mutableStateOf(false) }
     var sidePanel by remember { mutableStateOf<SidePanel?>(null) }
+    var playOnOpen by remember { mutableStateOf(false) }
     val focusScope = LocalFocusScope.current
 
     // Every layer the app draws over the player. Each owns the D-pad while it is up, so
     // the chrome underneath leaves focus traversal ([focusInert]) and stays put rather
     // than timing out — the control a layer was opened from has to still be there when it
     // closes. A tune's own preparing shell counts: it covers the player too.
-    val overlaid = showSubtitleSearch || state.isPreparing || sidePanel != null
+    val overlaid = showSubtitleSearch || state.isPreparing || sidePanel != null || playOnOpen
 
     // A panel registers into this same scope rather than hosting its own, so entry focus
     // for it is this scope's preferred pass — which lands on the current channel's or
@@ -726,7 +727,7 @@ fun FullscreenVideoPlayer(
                     // A TV is a cast target, not a sender, and live has no receiver-side
                     // story — the channel is this device's tuner.
                     if (formFactor != FormFactor.TV && !isLiveTv) {
-                        dev.kobbler.app.platform.CastButton(Modifier.focusKey("ctrl.cast"), colors.textHi)
+                        PlayOnButton(Modifier.focusKey("ctrl.cast"), colors.textHi, onOpenChange = { playOnOpen = it })
                     }
                 },
                 extraControls = {

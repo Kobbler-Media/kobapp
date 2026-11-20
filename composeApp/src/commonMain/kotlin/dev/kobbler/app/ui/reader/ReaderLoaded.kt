@@ -92,8 +92,9 @@ internal fun ReaderLoaded(
 ) {
     var sheet by remember(paging.chapter) { mutableStateOf<ReaderSheet?>(null) }
     var picture by remember { mutableStateOf<ImageRef?>(null) }
+    var playOnOpen by remember { mutableStateOf(false) }
     val panelOpen = showToc || showSearch || showSettings || sheet != null || picture != null
-    val nav = rememberReaderNavState(keyNav = keyNav, immersive = immersive, holdChrome = panelOpen)
+    val nav = rememberReaderNavState(keyNav = keyNav, immersive = immersive, holdChrome = panelOpen || playOnOpen)
     val uriHandler = LocalUriHandler.current
     val currentChapter = paging.chapter
     val view = paging.view?.takeIf { it.chapterIndex == currentChapter }
@@ -243,6 +244,7 @@ internal fun ReaderLoaded(
                 hasAudiobook = book.hasAudiobook,
                 theme = theme,
                 entryFocus = nav.topBarFocus,
+                onPlayOnOpenChange = { playOnOpen = it },
             )
         }
     }

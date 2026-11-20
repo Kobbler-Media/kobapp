@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.kobbler.app.platform.PlaybackTarget
+import dev.kobbler.app.platform.PlaybackTargetKind
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.ChoiceRow
 import dev.kobbler.app.ui.components.FadeInImage
@@ -43,30 +45,26 @@ import dev.kobbler.app.ui.components.KobButton
 import dev.kobbler.app.ui.components.KobButtonStyle
 import dev.kobbler.kobfocus.focusKey
 
-enum class CastRouteKind { Tv, Speaker, Group, Other }
-
-data class CastRouteOption(val id: String, val name: String, val kind: CastRouteKind)
-
-private val CastRouteKind.icon: ImageVector
+private val PlaybackTargetKind.icon: ImageVector
     get() = when (this) {
-        CastRouteKind.Tv -> Icons.Outlined.Tv
-        CastRouteKind.Speaker -> Icons.Outlined.Speaker
-        CastRouteKind.Group -> Icons.Outlined.SpeakerGroup
-        CastRouteKind.Other -> Icons.Outlined.Cast
+        PlaybackTargetKind.Tv -> Icons.Outlined.Tv
+        PlaybackTargetKind.Speaker -> Icons.Outlined.Speaker
+        PlaybackTargetKind.Group -> Icons.Outlined.SpeakerGroup
+        PlaybackTargetKind.Other -> Icons.Outlined.Cast
     }
 
 @Composable
 fun CastPickerDialog(
-    routes: List<CastRouteOption>,
-    onPick: (CastRouteOption) -> Unit,
+    targets: List<PlaybackTarget>,
+    onPick: (PlaybackTarget) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = KobappTheme.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Cast to", color = colors.textHi, style = KobappTheme.type.h3) },
+        title = { Text("Play on", color = colors.textHi, style = KobappTheme.type.h3) },
         text = {
-            if (routes.isEmpty()) {
+            if (targets.isEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
                     CircularProgressIndicator(Modifier.size(18.dp), color = colors.accCal, strokeWidth = 2.dp)
                     Spacer(Modifier.width(14.dp))
@@ -77,16 +75,16 @@ fun CastPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                 ) {
-                    routes.forEachIndexed { i, route ->
+                    targets.forEachIndexed { i, target ->
                         ChoiceRow(
-                            label = route.name,
-                            detail = null,
+                            label = target.name,
+                            detail = target.protocol.label,
                             selected = false,
                             accent = colors.accCal,
-                            focusKeyName = "cast.route.${route.id}",
-                            onClick = { onPick(route) },
+                            focusKeyName = "cast.route.${target.id}",
+                            onClick = { onPick(target) },
                             preferredEntry = i == 0,
-                            icon = route.kind.icon,
+                            icon = target.kind.icon,
                         )
                     }
                 }

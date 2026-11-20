@@ -1,8 +1,5 @@
 package dev.kobbler.app.platform
 
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.data.CastSkip
 import dev.kobbler.app.data.CastTracks
 import dev.kobbler.app.data.ClientCapabilities
@@ -187,7 +184,7 @@ interface CastSender {
     suspend fun stop()
 }
 
-expect fun castManager(): CastSender
+expect fun castManager(): CastRouter
 
 /**
  * Save the Cast receiver app ID from server config.
@@ -195,7 +192,3 @@ expect fun castManager(): CastSender
  * No-op on other platforms.
  */
 expect fun saveCastAppId(appId: String?)
-
-/** Draws nothing where this device cannot send to a receiver. */
-@Composable
-expect fun CastButton(modifier: Modifier = Modifier, tint: Color = Color.Unspecified)

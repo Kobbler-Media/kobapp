@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
-import dev.kobbler.app.platform.CastButton
+import dev.kobbler.app.ui.player.PlayOnButton
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.components.TvFocusScale
 import dev.kobbler.app.ui.components.tvAutoGlow
@@ -115,7 +115,7 @@ fun KobTopBar(
             }
         }
         if (showCast) {
-            CastButton(Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None), colors.textMd)
+            PlayOnButton(Modifier.tvAutoGlow(IconRingRadius, TvFocusScale.None), colors.textMd)
         }
         Box {
             HoverLabel("Notifications") {

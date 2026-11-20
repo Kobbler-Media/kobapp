@@ -5,6 +5,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import dev.kobbler.app.platform.PlaybackProtocol
+import dev.kobbler.app.platform.PlaybackTarget
+import dev.kobbler.app.platform.PlaybackTargetKind
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.theme.KobappTheme
 import kotlin.test.Test
@@ -15,16 +18,16 @@ import kotlin.test.assertEquals
 class CastDialogsTest {
 
     private val routes = listOf(
-        CastRouteOption("tv", "Projector TV", CastRouteKind.Tv),
-        CastRouteOption("spk", "Ensuite speaker", CastRouteKind.Speaker),
-        CastRouteOption("all", "All speakers", CastRouteKind.Group),
+        PlaybackTarget("tv", "Projector TV", PlaybackTargetKind.Tv, PlaybackProtocol.GoogleCast),
+        PlaybackTarget("spk", "Ensuite speaker", PlaybackTargetKind.Speaker, PlaybackProtocol.GoogleCast),
+        PlaybackTarget("all", "All speakers", PlaybackTargetKind.Group, PlaybackProtocol.GoogleCast),
     )
 
     @Test
     fun `the picker lists what it found and casts to the one picked`() = runUiTest {
         val picked = mutableListOf<String>()
         setContent { KobappTheme { CastPickerDialog(routes, onPick = { picked += it.id }, onDismiss = {}) } }
-        onNodeWithText("Cast to").assertExists()
+        onNodeWithText("Play on").assertExists()
         routes.forEach { onNodeWithText(it.name).assertExists() }
         onNodeWithText("Projector TV").performClick()
         assertEquals(listOf("tv"), picked)

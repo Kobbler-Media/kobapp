@@ -17,7 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.kobbler.app.platform.CastButton
+import dev.kobbler.app.ui.player.PlayOnButton
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.rememberTopChromeShade
@@ -57,6 +57,6 @@ fun KobPhoneTopBar(
         IconButton(onClick = onSearchClick) {
             Icon(Icons.Outlined.Search, "Search", tint = colors.textHi)
         }
-        CastButton(tint = colors.textHi)
+        PlayOnButton(tint = colors.textHi)
     }
 }

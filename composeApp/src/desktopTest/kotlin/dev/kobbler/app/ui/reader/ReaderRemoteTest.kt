@@ -28,12 +28,18 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.performClick
+import androidx.compose.runtime.CompositionLocalProvider
 import dev.kobbler.app.UiTimeoutMs
 import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.theme.KobappTheme
+import dev.kobbler.app.platform.CastRouter
+import dev.kobbler.app.platform.PlaybackProtocol
+import dev.kobbler.app.ui.player.FakeBackend
+import dev.kobbler.app.ui.player.LocalCastRouter
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
 import java.util.UUID
@@ -53,7 +59,11 @@ class ReaderRemoteTest {
         var backs = 0
     }
 
-    private fun tvReader(progressPercent: Double = 0.0, test: ComposeUiTest.(Rig) -> Unit) {
+    private fun tvReader(
+        progressPercent: Double = 0.0,
+        router: CastRouter = CastRouter(emptyList()),
+        test: ComposeUiTest.(Rig) -> Unit,
+    ) {
         val id = "remote-${UUID.randomUUID()}"
         val server = StubServer(
             packRoutes(id, chapters) +
@@ -63,14 +73,16 @@ class ReaderRemoteTest {
             runUiTest(width = 1920, height = 1080) {
                 val rig = Rig()
                 setContent {
-                    KobappTheme(formFactor = FormFactor.TV) {
-                        AndroidDpad {
-                            ReaderScreen(
-                                book = Book(id = id, title = "Remote Book", author = "A", coverUrl = ""),
-                                api = KobblerApi(HttpClient(), server.url, "t"),
-                                formFactor = FormFactor.TV,
-                                onBack = { rig.backs++ },
-                            )
+                    CompositionLocalProvider(LocalCastRouter provides router) {
+                        KobappTheme(formFactor = FormFactor.TV) {
+                            AndroidDpad {
+                                ReaderScreen(
+                                    book = Book(id = id, title = "Remote Book", author = "A", coverUrl = ""),
+                                    api = KobblerApi(HttpClient(), server.url, "t"),
+                                    formFactor = FormFactor.TV,
+                                    onBack = { rig.backs++ },
+                                )
+                            }
                         }
                     }
                 }
@@ -171,6 +183,22 @@ class ReaderRemoteTest {
             press(Key.Enter)
             assertTrue(!isShown(tocMarker), "picking a chapter left the list open")
             waitUntil(timeoutMillis = UiTimeoutMs) { isShownPart("Ch ${reading + 3}/$chapterCount") }
+        }
+    }
+
+    @Test
+    fun `the menu stays up while the play-on picker is open`() {
+        val backend = FakeBackend(PlaybackProtocol.Dlna).apply { found("Projector TV") }
+        tvReader(router = CastRouter(listOf(backend))) {
+            openFromTopBar("Play on")
+            assertTrue(isShown("Play on"), "the picker did not open")
+            mainClock.advanceTimeBy(10_000)
+            waitForIdle()
+            assertTrue(isShown("Play on"), "the menu timed out under the picker")
+            onNodeWithText("Cancel").performClick()
+            mainClock.advanceTimeBy(10_000)
+            waitForIdle()
+            assertTrue(onAllNodesWithContentDescription("Play on").fetchSemanticsNodes().isEmpty(), "the menu held after the picker closed")
         }
     }
 

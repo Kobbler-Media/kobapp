@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.kobbler.app.platform.CastButton
+import dev.kobbler.app.ui.player.PlayOnButton
 import dev.kobbler.app.platform.FormFactor
 import dev.kobbler.app.theme.KobappTheme
 import dev.kobbler.app.theme.LocalFormFactor
@@ -48,6 +48,7 @@ internal fun ReaderTopBar(
     hasAudiobook: Boolean,
     theme: ReaderTheme,
     entryFocus: FocusRequester,
+    onPlayOnOpenChange: (Boolean) -> Unit = {},
 ) {
     val tv = LocalFormFactor.current == FormFactor.TV
     val dimens = KobappTheme.dimens
@@ -96,7 +97,11 @@ internal fun ReaderTopBar(
             tint = if (ttsState != TtsState.IDLE) theme.linkColor else theme.textColor,
         )
         // Read-aloud follows the receiver picked here: the next read starts on it.
-        CastButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), theme.textColor)
+        PlayOnButton(
+            Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
+            theme.textColor,
+            onOpenChange = onPlayOnOpenChange,
+        )
         LabelledIconButton(Icons.Outlined.Search, "Search", onSearch, Modifier.focusKey("search"), tint = theme.textColor)
         LabelledIconButton(Icons.Outlined.BookmarkBorder, "Bookmark", onBookmark, Modifier.focusKey("bookmark"), tint = theme.textColor)
         LabelledIconButton(@Suppress("DEPRECATION") Icons.Outlined.FormatListBulleted, "Contents", onToc, Modifier.focusKey("toc"), tint = theme.textColor)
