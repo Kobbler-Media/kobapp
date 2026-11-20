@@ -405,6 +405,7 @@ data class ClientCapabilities(
     @SerialName("supports_interlaced") val supportsInterlaced: Boolean? = null,
     @SerialName("max_height") val maxHeight: Int? = null,
     @SerialName("hdr_formats") val hdrFormats: List<String>? = null,
+    @SerialName("max_h264_level") val maxH264Level: Int? = null,
 )
 
 @Serializable

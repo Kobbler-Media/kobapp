@@ -8,6 +8,8 @@ internal val DlnaBaseline = ClientCapabilities(
     audioCodecs = listOf("aac"),
     containers = listOf("mp4", "ts"),
     maxHeight = 1080,
+    // DLNA's AVC profiles stop at the HD ones, level 4.x; a Samsung Frame refuses High@5.0.
+    maxH264Level = 41,
 )
 
 /**

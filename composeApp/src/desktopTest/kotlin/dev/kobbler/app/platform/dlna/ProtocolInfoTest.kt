@@ -39,7 +39,18 @@ class ProtocolInfoTest {
             assertEquals(case.audio, caps.audioCodecs.toSet(), "${case.name}: audio")
             assertEquals(case.containers, caps.containers.toSet(), "${case.name}: containers")
             assertEquals(1080, caps.maxHeight, "${case.name}: a renderer is sent nothing taller")
+            assertEquals(41, caps.maxH264Level, "${case.name}: a renderer is sent no H.264 above level 4.1")
         }
+    }
+
+    @Test
+    fun `a real Samsung Frame sink list keeps H264 to the level its AVC profiles stop at`() {
+        val sink = javaClass.getResource("/dlna/samsung-frame-2022-sink.txt")!!.readText().trim()
+        val caps = capabilitiesFromSink(sink)
+        assertEquals(41, caps.maxH264Level)
+        assertTrue("hevc" in caps.videoCodecs)
+        assertTrue("ac3" in caps.audioCodecs)
+        assertTrue("mkv" in caps.containers)
     }
 
     @Test
