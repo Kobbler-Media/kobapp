@@ -156,6 +156,9 @@ interface CastSender {
     /** Everything the receiver says, parsed. */
     val events: SharedFlow<CastEvent>
 
+    /** What the receiver in use does for itself; empty while nothing is connected. */
+    val features: Set<CastFeature>
+
     /**
      * Begin listening for cast sessions.
      *

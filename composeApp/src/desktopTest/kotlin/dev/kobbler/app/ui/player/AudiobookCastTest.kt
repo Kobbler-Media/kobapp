@@ -8,6 +8,7 @@ import dev.kobbler.app.data.Book
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.UnifiedChapterDto
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.ui.player.audiobook.AudiobookCastHandoff
 import dev.kobbler.app.ui.player.audiobook.AudiobookPlayerState
@@ -146,6 +147,26 @@ class AudiobookCastTest {
             assertNull(state.castingTo)
             assertEquals("f1", player.loadedUrl?.substringAfterLast("/audio/")?.substringBefore("?"))
             assertEquals(300, player.loadedSource?.startTimeSec)
+        }
+    }
+
+    @Test
+    fun `a receiver that cannot take a book leaves the listen here`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer()
+            val state = listening(api, player)
+            val cast = FakeSender(features = CastFeature.entries.toSet() - CastFeature.Audiobook)
+
+            setContent { AudiobookCastHandoff(cast, state) }
+            cast.connect("Living Room DLNA")
+            waitForIdle()
+            Thread.sleep(500)
+            waitForIdle()
+
+            assertTrue("INIT_AUDIOBOOK" !in cast.sent, "${cast.sent}")
+            assertTrue("pause" !in player.calls, "${player.calls}")
+            assertNull(state.castingTo)
         }
     }
 }

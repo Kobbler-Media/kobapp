@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.player
 import dev.kobbler.app.data.ClientCapabilities
 import dev.kobbler.app.platform.CastDevice
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastLoad
 import dev.kobbler.app.platform.CastSender
 import java.util.concurrent.CopyOnWriteArrayList
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /** A receiver that records what it was told, standing in for one across the room. */
 internal class FakeSender(
     private val decodes: ClientCapabilities? = ClientCapabilities(listOf("h264"), listOf("aac"), listOf("mp4")),
+    override val features: Set<CastFeature> = CastFeature.entries.toSet(),
 ) : CastSender {
     private val _device = MutableStateFlow<CastDevice?>(null)
     override val device: StateFlow<CastDevice?> = _device.asStateFlow()

@@ -8,6 +8,7 @@ import dev.kobbler.app.data.TtsWordTiming
 import dev.kobbler.app.data.resolveUrlOrNull
 import dev.kobbler.app.data.withPlaybackToken
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastSender
 import dev.kobbler.app.platform.ChunkPlayer
 import dev.kobbler.app.platform.PcmStreamPlayer
@@ -190,7 +191,7 @@ class TtsController(
      */
     @OptIn(ExperimentalEncodingApi::class)
     fun start(text: String) {
-        val receiver = cast.device.value?.takeUnless { it.connecting }?.name
+        val receiver = cast.device.value?.takeUnless { it.connecting || CastFeature.Tts !in cast.features }?.name
         // A receiver about to be handed the next read replaces this one by itself.
         halt(stopReceiver = receiver == null)
         _state.value = TtsState.LOADING

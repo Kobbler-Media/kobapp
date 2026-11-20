@@ -3,6 +3,7 @@ package dev.kobbler.app.ui.reader
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.ui.player.FakeSender
 import dev.kobbler.app.ui.player.StubServer
 import io.ktor.client.HttpClient
@@ -50,10 +51,15 @@ class TtsCastTest {
         fun inits() = cast.payloads.filter { it.first == "INIT_TTS" }.map { Json.parseToJsonElement(it.second).jsonObject }
     }
 
-    private fun casting(events: List<String>, hold: CountDownLatch? = null, test: suspend Rig.() -> Unit) {
+    private fun casting(
+        events: List<String>,
+        hold: CountDownLatch? = null,
+        cast: FakeSender = FakeSender(),
+        test: suspend Rig.() -> Unit,
+    ) {
         StubServer(routes(events, hold)).use { stub ->
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val cast = FakeSender().apply { connect("Kitchen speaker") }
+            cast.connect("Kitchen speaker")
             val tts = TtsController(KobblerApi(HttpClient(), stub.url, "token"), scope, cast)
             val rig = Rig(stub, cast, tts, scope)
             tts.onFinished = { rig.finished++ }
@@ -191,4 +197,14 @@ class TtsCastTest {
         assertFalse(finished > 0)
         assertNotNull(tts.error.value)
     }
+
+    @Test
+    fun `a receiver that cannot play a read-aloud leaves it here`() =
+        casting(aligned, cast = FakeSender(features = CastFeature.entries.toSet() - CastFeature.Tts)) {
+            tts.start("One two three four")
+            eventually("the read to start") { tts.state.value != TtsState.IDLE && tts.state.value != TtsState.LOADING || stub.requestBodies.isNotEmpty() }
+            delay(300)
+            assertTrue(inits().isEmpty(), "handed to a receiver that cannot play it")
+            assertTrue(stub.requestBodies["/api/v1/admin/tts/cast"] == null, "asked the server for a cast stream")
+        }
 }

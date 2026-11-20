@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastSender
 import dev.kobbler.kobplayer.PlayerState
 import kotlinx.serialization.json.Json
@@ -30,6 +31,7 @@ fun AudiobookCastHandoff(cast: CastSender, state: AudiobookPlayerState) {
             return@LaunchedEffect
         }
         if (!state.dataLoaded || state.castingTo != null) return@LaunchedEffect
+        if (CastFeature.Audiobook !in cast.features) return@LaunchedEffect
         state.player.pause()
         if (target.connecting) return@LaunchedEffect
         val token = state.api.castToken() ?: return@LaunchedEffect

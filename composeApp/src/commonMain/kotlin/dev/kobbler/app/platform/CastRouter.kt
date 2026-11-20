@@ -35,6 +35,8 @@ class CastRouter(private val backends: List<CastBackend>) : CastSender {
         merge(*backends.map { it.events }.toTypedArray()).shareIn(scope, SharingStarted.Eagerly)
 
 
+    override val features: Set<CastFeature> get() = active?.features.orEmpty()
+
     override fun start() = backends.forEach { it.start() }
 
     suspend fun scanActively() = coroutineScope {

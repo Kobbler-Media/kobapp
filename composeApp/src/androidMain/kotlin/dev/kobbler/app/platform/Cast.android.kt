@@ -42,6 +42,7 @@ actual fun castManager(): CastRouter = router
 
 class CastManager private constructor() : CastBackend {
     override val protocol = PlaybackProtocol.GoogleCast
+    override val features = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Audiobook, CastFeature.Tts)
     private var castContext: CastContext? = null
     private var session: CastSession? = null
 

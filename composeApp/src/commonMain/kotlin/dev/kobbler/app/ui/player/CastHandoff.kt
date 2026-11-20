@@ -17,6 +17,7 @@ import dev.kobbler.app.data.castContentType
 import dev.kobbler.app.data.castMethod
 import dev.kobbler.app.data.withPlaybackToken
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastLoad
 import dev.kobbler.app.platform.CastSender
 import dev.kobbler.kobplayer.Player
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlinx.serialization.json.Json
 
@@ -98,9 +100,10 @@ internal suspend fun GlobalPlayerState.castLoad(
  * the transport on screen becomes the mini controller. Handing back reverses it, at
  * wherever the receiver had got to — so ending a cast never costs the viewer their place.
  *
- * Progress is the receiver's to report while it plays, which is why nothing here writes
- * it on a tick: it saves directly against the server every few seconds, and a second
- * writer with a staler position would undo those.
+ * Progress is the receiver's to report while it plays, when it can: the Kobbler receiver
+ * saves directly against the server every few seconds, and a second writer with a staler
+ * position would undo those. A receiver without [CastFeature.ReceiverReportsProgress] is
+ * saved for from here, off the positions it reports.
  */
 @Composable
 fun CastHandoff(
@@ -202,6 +205,7 @@ fun CastHandoff(
     }
 
     LaunchedEffect(cast) {
+        var savedForReceiver: TimeMark? = null
         cast.events.collect { event ->
             when (event) {
                 is CastEvent.NowPlaying -> if (gps.castSession == null && gps.mediaId == null) {
@@ -228,6 +232,11 @@ fun CastHandoff(
                             .takeIf { it > 0 } ?: gps.castSession?.durationMs ?: 0L,
                         isPlaying = event.isPlaying,
                     )
+                    val due = !event.isPlaying || savedForReceiver?.let { it.elapsedNow() >= SenderSaveEvery } != false
+                    if (CastFeature.ReceiverReportsProgress !in cast.features && due) {
+                        savedForReceiver = TimeSource.Monotonic.markNow()
+                        saveForReceiver(gps, api)
+                    }
                 }
                 // The receiver reached the end of what it had and found nothing to
                 // follow it. Nothing to hand back to, so the session just closes.
@@ -271,6 +280,16 @@ fun CastHandoff(
 private val CastScrubSettle = 4.seconds
 
 private val CapabilitiesWait = 2.seconds
+
+/** How often this device saves for a receiver that cannot save for itself; a pause saves at once. */
+private val SenderSaveEvery = 5.seconds
+
+private suspend fun saveForReceiver(gps: GlobalPlayerState, api: KobblerApi) {
+    val session = gps.castSession ?: return
+    val type = session.mediaType ?: return
+    val id = session.mediaId ?: return
+    if (session.positionMs > 0) gps.reportProgress(api, type, id, session.positionMs)
+}
 
 /**
  * Move the receiver, and show it as moved.
