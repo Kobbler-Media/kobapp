@@ -1,9 +1,8 @@
 package dev.kobbler.app.platform
 
 import android.content.Context
-import android.content.Intent
 import android.net.wifi.WifiManager
-import androidx.core.content.ContextCompat
+import android.os.PowerManager
 import dev.kobbler.app.platform.dlna.SsdpTransport
 import dev.kobbler.app.platform.dlna.UdpSsdpTransport
 
@@ -25,16 +24,30 @@ internal fun androidSsdpTransport(context: Context): SsdpTransport? {
     }
 }
 
+/**
+ * The phone runs a DLNA session the renderer cannot run for itself, every second, so while
+ * one runs Wi-Fi stays up, the CPU awake and the playback service in front.
+ */
 object DlnaKeepAlive {
-    const val EXTRA_NAME = "renderer"
-    private const val SERVICE = "dev.kobbler.app.DlnaCastService"
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
+    @Synchronized
     internal fun update(context: Context, rendererName: String?) {
-        val intent = Intent().setClassName(context.packageName, SERVICE)
         if (rendererName == null) {
-            context.stopService(intent)
+            wifiLock?.takeIf { it.isHeld }?.release()
+            wakeLock?.takeIf { it.isHeld }?.release()
         } else {
-            runCatching { ContextCompat.startForegroundService(context, intent.putExtra(EXTRA_NAME, rendererName)) }
+            @Suppress("DEPRECATION")
+            wifiLock = wifiLock ?: context.getSystemService(WifiManager::class.java)
+                ?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "kobbler:dlna")
+                ?.apply { setReferenceCounted(false) }
+            wakeLock = wakeLock ?: context.getSystemService(PowerManager::class.java)
+                ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kobbler:dlna")
+                ?.apply { setReferenceCounted(false) }
+            wifiLock?.acquire()
+            wakeLock?.acquire()
         }
+        PlaybackBridge.driveRemote(rendererName)
     }
 }

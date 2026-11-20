@@ -31,7 +31,7 @@ actual object PlaybackLifecycle {
 
     actual fun stopBackgroundPlayback() {
         PlaybackBridge.clearNowPlaying()
-        PlaybackBridge.stopService()
+        if (PlaybackBridge.remoteRenderer.value == null) PlaybackBridge.stopService()
     }
 
     actual fun setVideoPlaying(playing: Boolean) {

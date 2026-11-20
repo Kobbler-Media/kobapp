@@ -23,10 +23,12 @@ import dev.kobbler.app.castconnect.CastConnect
 import androidx.media3.session.MediaSession
 import dev.kobbler.app.platform.NowPlayingInfo
 import dev.kobbler.app.platform.PlaybackBridge
+import dev.kobbler.app.platform.castManager
 import dev.kobbler.app.platform.loadCoverArt
 import dev.kobbler.kobplayer.Media3PlayerAdapter
 import dev.kobbler.kobplayer.playPauseSession
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.combine
 
 @OptIn(UnstableApi::class)
 class PlaybackService : Service() {
@@ -43,11 +45,10 @@ class PlaybackService : Service() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var media3Session: MediaSession? = null
     private var adapter: Media3PlayerAdapter? = null
-    // Separate MediaSession for the ebook-reader TTS path. Distinct from
-    // media3Session because TTS doesn't have a backing kobplayer.Player — its
-    // state lives in PlaybackBridge.nowPlaying + transport callbacks.
-    private var ttsSession: MediaSession? = null
-    private var ttsPlayer: TtsMediaPlayer? = null
+    // Separate MediaSession for what has transport but no kobplayer.Player here — the
+    // reader's read-aloud, a DLNA cast — whose state lives in PlaybackBridge.
+    private var bridgeSession: MediaSession? = null
+    private var bridgePlayer: BridgeMediaPlayer? = null
     private var cachedCoverUrl: String? = null
     private var cachedCoverBitmap: Bitmap? = null
     private var cachedCoverData: ByteArray? = null
@@ -84,7 +85,7 @@ class PlaybackService : Service() {
         }
 
         // Create/recreate Media3 session when player changes (e.g. movie → audiobook).
-        // When a kobplayer.Player is active, tear down any TTS-mode session — they're
+        // When a kobplayer.Player is active, tear down any bridge session — they're
         // mutually exclusive (only one active media source at a time).
         scope.launch {
             PlaybackBridge.playerFlow.collect { player ->
@@ -92,7 +93,7 @@ class PlaybackService : Service() {
                 adapter?.cleanup()
 
                 if (player != null) {
-                    tearDownTtsSession()
+                    tearDownBridgeSession()
                     adapter = Media3PlayerAdapter(
                         player,
                         positionMs = { PlaybackBridge.timeline?.positionMs?.invoke() ?: player.currentMs.value },
@@ -126,15 +127,15 @@ class PlaybackService : Service() {
             PlaybackBridge.nowPlaying.collect { info ->
                 adapter?.updateMetadata(info.title, info.subtitle, cachedCoverData)
                 if (info.title.isEmpty()) {
-                    tearDownTtsSession()
+                    tearDownBridgeSession()
                     return@collect
                 }
-                // TTS path: if no kobplayer.Player is active but the bridge has
-                // controls + a title, ensure the TTS-mode MediaSession exists so
+                // Bridge path: if no kobplayer.Player is active but the bridge has
+                // controls + a title, ensure the bridge MediaSession exists so
                 // the notification surfaces as a proper system media notification
                 // (lockscreen, Bluetooth metadata, media tile).
                 if (media3Session == null && PlaybackBridge.onPlayPause != null) {
-                    ensureTtsSession()
+                    ensureBridgeSession()
                 }
                 val notification = buildNotification(info)
                 val nm = getSystemService(NotificationManager::class.java)
@@ -143,31 +144,32 @@ class PlaybackService : Service() {
         }
 
         // Auto-stop service when player is cleared (screen/activity navigated away from player)
+        // and no cast this device drives is left running.
         scope.launch {
-            PlaybackBridge.playerFlow.collect { player ->
-                if (player == null && PlaybackBridge.onPlayPause == null) {
-                    // No active player and no controls — clean up
+            combine(PlaybackBridge.playerFlow, PlaybackBridge.remoteRenderer, ::Pair).collect { (player, remote) ->
+                val idle = { PlaybackBridge.playerFlow.value == null && PlaybackBridge.onPlayPause == null && PlaybackBridge.remoteRenderer.value == null }
+                if (remote != null) getSystemService(NotificationManager::class.java)
+                    .notify(NOTIFICATION_ID, buildNotification(PlaybackBridge.nowPlaying.value))
+                if (player == null && idle()) {
                     delay(2000) // grace period for player transitions
-                    if (PlaybackBridge.playerFlow.value == null && PlaybackBridge.onPlayPause == null) {
-                        shutdown()
-                    }
+                    if (idle()) shutdown()
                 }
             }
         }
     }
 
-    private fun ensureTtsSession() {
-        if (ttsSession != null) return
-        val player = TtsMediaPlayer().also { it.artworkData = cachedCoverData }
-        ttsPlayer = player
-        ttsSession = playPauseSession(this, player)
+    private fun ensureBridgeSession() {
+        if (bridgeSession != null) return
+        val player = BridgeMediaPlayer().also { it.artworkData = cachedCoverData }
+        bridgePlayer = player
+        bridgeSession = playPauseSession(this, player)
     }
 
-    private fun tearDownTtsSession() {
-        ttsSession?.release()
-        ttsSession = null
-        ttsPlayer?.cleanup()
-        ttsPlayer = null
+    private fun tearDownBridgeSession() {
+        bridgeSession?.release()
+        bridgeSession = null
+        bridgePlayer?.cleanup()
+        bridgePlayer = null
     }
 
     /** Tear down the foreground service AND remove the notification. Just
@@ -190,7 +192,9 @@ class PlaybackService : Service() {
             ACTION_SKIP_FORWARD -> PlaybackBridge.onSkipForward?.invoke()
             ACTION_SKIP_BACK -> PlaybackBridge.onSkipBack?.invoke()
             ACTION_STOP -> {
+                // A cast left running with no screen to answer for it is still this device's to end.
                 PlaybackBridge.onStop?.invoke()
+                    ?: PlaybackBridge.remoteRenderer.value?.let { scope.launch { castManager().stop() } }
                 shutdown()
             }
         }
@@ -207,7 +211,7 @@ class PlaybackService : Service() {
         CastConnect.attachSession(null)
         media3Session?.release()
         media3Session = null
-        tearDownTtsSession()
+        tearDownBridgeSession()
         // Belt-and-braces: even if shutdown() didn't run (e.g. service killed),
         // make sure the notification doesn't outlive the process.
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
@@ -248,7 +252,7 @@ class PlaybackService : Service() {
                     cachedCoverData = data
                     val now = PlaybackBridge.nowPlaying.value
                     adapter?.updateMetadata(now.title, now.subtitle, data)
-                    ttsPlayer?.artworkData = data
+                    bridgePlayer?.artworkData = data
                     // buildNotification reads media3Session, whose getters are looper-confined
                     // since media3 1.11 — must stay on Main.
                     val nm = getSystemService(NotificationManager::class.java)
@@ -305,7 +309,7 @@ class PlaybackService : Service() {
         )
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(info.title.ifEmpty { "Kobbler" })
+            .setContentTitle(info.title.ifEmpty { PlaybackBridge.remoteRenderer.value?.let { "Playing on $it" } ?: "Kobbler" })
             .setContentText(info.subtitle ?: "")
             .setSmallIcon(R.drawable.ic_notification_app)
             .setLargeIcon(cachedCoverBitmap)
@@ -318,8 +322,8 @@ class PlaybackService : Service() {
         // with the Media3 session — the compat bridge (MediaSessionCompat.Token.fromToken)
         // doesn't reliably produce standard media notifications on modern Android.
         // kobplayer media3Session wins when present (movies/audiobooks); otherwise
-        // the TTS session lights up the read-along's lockscreen controls.
-        (media3Session ?: ttsSession)?.let { session ->
+        // the bridge session lights up the lockscreen controls of a read-aloud or a DLNA cast.
+        (media3Session ?: bridgeSession)?.let { session ->
             builder.setStyle(
                 androidx.media3.session.MediaStyleNotificationHelper.MediaStyle(session)
                     .setShowActionsInCompactView(*compactIndices.toIntArray())

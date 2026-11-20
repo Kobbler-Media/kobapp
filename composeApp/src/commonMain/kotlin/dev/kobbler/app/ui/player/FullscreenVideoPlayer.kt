@@ -101,7 +101,7 @@ private val SEGMENT_LABELS = mapOf(
 // A detected end lands a little short of EOF, and a stream's duration is not the file's to
 // the millisecond.
 private const val SKIP_END_SLACK_MS = 5_000L
-private const val VIDEO_SKIP_MS = 10_000L
+internal const val VIDEO_SKIP_MS = 10_000L
 
 private fun skipRunsToEnd(endMs: Long, durationMs: Long): Boolean =
     durationMs > 0 && endMs >= durationMs - SKIP_END_SLACK_MS

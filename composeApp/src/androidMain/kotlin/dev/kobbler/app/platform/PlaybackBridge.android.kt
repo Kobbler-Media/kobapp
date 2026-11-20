@@ -47,6 +47,16 @@ object PlaybackBridge {
     // Active player instance (for Media3 session bridge)
     val playerFlow = MutableStateFlow<Player?>(null)
 
+    private val _remoteRenderer = MutableStateFlow<String?>(null)
+
+    /** A renderer this device is driving a cast for, and so has to stay up for while nothing plays here. */
+    val remoteRenderer: StateFlow<String?> = _remoteRenderer.asStateFlow()
+
+    fun driveRemote(rendererName: String?) {
+        _remoteRenderer.value = rendererName
+        if (rendererName != null) startService()
+    }
+
     /**
      * Host interface for Activity-level operations that require window/PiP access.
      * Implemented by MainActivity.

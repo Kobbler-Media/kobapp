@@ -43,7 +43,7 @@ object ReceiverReplies {
         "CAPABILITIES",
         buildJsonObject {
             replyJson.encodeToJsonElement(capabilities).jsonObject.forEach { (k, v) -> put(k, v) }
-            put("features", JsonArray(features.map { JsonPrimitive(it.wire) }))
+            put("features", JsonArray(features.mapNotNull { it.wire }.map(::JsonPrimitive)))
         },
     )
 

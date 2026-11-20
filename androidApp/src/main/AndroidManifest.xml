@@ -123,11 +123,6 @@
             android:foregroundServiceType="mediaPlayback" />
 
         <service
-            android:name="dev.kobbler.app.DlnaCastService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
-
-        <service
             android:name="dev.kobbler.app.offline.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />

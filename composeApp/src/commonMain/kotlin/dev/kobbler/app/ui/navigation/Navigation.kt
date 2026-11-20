@@ -318,6 +318,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
                 "episode" -> nav.navigate(Destination.TvShowDetail(id, autoPlay = true, isEpisodeId = true))
             }
         }
+        dev.kobbler.app.ui.player.CastSystemTransport(cast, gps)
     }
     dev.kobbler.app.watchnext.HomeWatchNextSession(auth, api) { navigateContinueItem(nav, gps, it) }
 

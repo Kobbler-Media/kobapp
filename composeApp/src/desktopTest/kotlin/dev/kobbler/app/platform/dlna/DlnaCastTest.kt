@@ -9,6 +9,9 @@ import dev.kobbler.app.platform.CastRouter
 import dev.kobbler.app.platform.PlaybackProtocol
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.ui.player.CastHandoff
+import dev.kobbler.app.ui.player.CastSystemControls
+import dev.kobbler.app.ui.player.FakeSender
+import dev.kobbler.app.ui.player.castNeedsSystemTransport
 import dev.kobbler.app.ui.player.FakePlayer
 import dev.kobbler.app.ui.player.GlobalPlayerState
 import dev.kobbler.app.ui.player.StubServer
@@ -24,6 +27,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -89,7 +93,7 @@ class DlnaCastTest {
         override fun close() = stub.close()
     }
 
-    private data class Casting(val kobbler: Kobbler, val tv: FakeRenderer, val gps: GlobalPlayerState)
+    private data class Casting(val kobbler: Kobbler, val tv: FakeRenderer, val gps: GlobalPlayerState, val router: CastRouter)
 
     private fun ComposeUiTest.await(c: Casting, condition: () -> Boolean) = try {
         waitUntil(timeoutMillis = 20_000, condition = condition)
@@ -128,7 +132,7 @@ class DlnaCastTest {
                 runBlocking { router.connect(target) }
                 waitUntil(timeoutMillis = UiTimeoutMs) { tv.uris.isNotEmpty() && tv.state == "PLAYING" }
                 try {
-                    test(Casting(kobbler, tv, gps))
+                    test(Casting(kobbler, tv, gps, router))
                 } finally {
                     runBlocking { router.stop() }
                 }
@@ -228,5 +232,36 @@ class DlnaCastTest {
         assertTrue("\"audio_track_index\":2" in forced && "\"force_transcode\":true" in forced, forced)
         assertTrue(tv.uris.last().endsWith("/s3/stream.ts"), tv.uris.last())
         await(c) { "/api/v1/admin/playback/sessions/s2" in kobbler.stub.requestBodies }
+    }
+
+    @Test
+    fun `the lock screen and notification transport drive the renderer and show where it is`() = casting { c ->
+        val (kobbler, tv, gps, router) = c
+        await(c) { castNeedsSystemTransport(router, gps) }
+        assertFalse(castNeedsSystemTransport(FakeSender().apply { connect("Chromecast") }, gps), "the Cast SDK shows its own")
+        val controls = CastSystemControls(gps)
+
+        tv.positionSec = 20
+        await(c) { controls.timeline.positionMs() == 320_000L }
+        assertEquals(1_800_000L, controls.timeline.durationMs())
+        assertEquals("Show", controls.nowPlaying()?.title)
+        assertEquals(true, controls.nowPlaying()?.isPlaying)
+
+        controls.onPlayPause()
+        await(c) { tv.state == "PAUSED_PLAYBACK" }
+        await(c) { controls.nowPlaying()?.isPlaying == false }
+        controls.onPlayPause()
+        await(c) { tv.state == "PLAYING" }
+
+        controls.timeline.seekTo(900_000L)
+        await(c) { tv.uris.size == 2 && tv.state == "PLAYING" }
+        assertTrue("\"start_time\":900" in kobbler.sessionRequests.last(), kobbler.sessionRequests.last())
+
+        controls.onSkipBack()
+        await(c) { tv.uris.size == 3 }
+        assertTrue("\"start_time\":890" in kobbler.sessionRequests.last(), kobbler.sessionRequests.last())
+
+        controls.onStop()
+        await(c) { gps.castSession == null && tv.state == "STOPPED" }
     }
 }

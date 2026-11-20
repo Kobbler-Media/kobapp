@@ -19,7 +19,9 @@ class SessionFeatures(private val declared: Set<CastFeature>) {
 
     fun heard(event: CastEvent) {
         when (event) {
-            is CastEvent.Capabilities -> event.features?.let { listed -> current = declared intersect listed }
+            is CastEvent.Capabilities -> event.features?.let { listed ->
+                current = declared.filterTo(mutableSetOf()) { it.wire == null || it in listed }
+            }
             is CastEvent.Refused -> current = current - event.feature
             else -> Unit
         }

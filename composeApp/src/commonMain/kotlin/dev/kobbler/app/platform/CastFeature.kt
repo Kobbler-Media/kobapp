@@ -1,7 +1,8 @@
 package dev.kobbler.app.platform
 
 /** What a receiver does for itself, so the app knows what it has to do in its place. */
-enum class CastFeature(val wire: String) {
+/** [wire] is how a receiver lists the feature; null for one only the sender's side can have. */
+enum class CastFeature(val wire: String?) {
     /** Saves the watch position against the server on its own. */
     ReceiverReportsProgress("receiver_reports_progress"),
 
@@ -12,7 +13,10 @@ enum class CastFeature(val wire: String) {
     Audiobook("audiobook"),
 
     /** Plays a read-aloud stream. */
-    Tts("tts");
+    Tts("tts"),
+
+    /** The sender's SDK puts the session on the lock screen and in the notification itself. */
+    SystemTransport(null);
 
     companion object {
         fun fromWire(name: String): CastFeature? = entries.firstOrNull { it.wire == name }

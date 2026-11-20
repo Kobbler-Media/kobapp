@@ -17,7 +17,7 @@ class SessionFeaturesTest {
 
     @Test
     fun `a receiver's list narrows the session, never widens it`() {
-        val session = SessionFeatures(all - CastFeature.Tts)
+        val session = SessionFeatures(setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls, CastFeature.Audiobook))
         session.heard(CastEvent.Capabilities(caps, setOf(CastFeature.Hls, CastFeature.Tts)))
         assertEquals(setOf(CastFeature.Hls), session.current)
     }
@@ -29,5 +29,12 @@ class SessionFeaturesTest {
         assertEquals(all - CastFeature.Audiobook, session.current)
         session.reset()
         assertEquals(all, session.current)
+    }
+
+    @Test
+    fun `what the sender's own SDK does is not the receiver's to list`() {
+        val session = SessionFeatures(setOf(CastFeature.SystemTransport, CastFeature.Hls, CastFeature.Audiobook))
+        session.heard(CastEvent.Capabilities(caps, setOf(CastFeature.Hls)))
+        assertEquals(setOf(CastFeature.SystemTransport, CastFeature.Hls), session.current)
     }
 }
