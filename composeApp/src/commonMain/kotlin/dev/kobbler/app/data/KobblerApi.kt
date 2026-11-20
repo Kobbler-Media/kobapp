@@ -371,6 +371,7 @@ data class CreateSessionRequest(
     /** The movie or episode. The server picks the file, so the client never asks for one. */
     @SerialName("media_id") val mediaId: String,
     val capabilities: ClientCapabilities,
+    @SerialName("audio_track_index") val audioTrackIndex: Int? = null,
     @SerialName("force_transcode") val forceTranscode: Boolean = false,
     @SerialName("max_bitrate_kbps") val maxBitrateKbps: Int? = null,
     @SerialName("preferred_audio_language") val preferredAudioLanguage: String? = null,

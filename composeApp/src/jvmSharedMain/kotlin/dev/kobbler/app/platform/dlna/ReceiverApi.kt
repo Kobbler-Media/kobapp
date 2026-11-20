@@ -49,6 +49,20 @@ internal class ReceiverApi(private val http: HttpClient, val baseUrl: String, @V
         else json.decodeFromString(SessionResponse.serializer(), response.bodyAsText())
     }.getOrNull()
 
+    /**
+     * A session on the track the server picked. Direct play serves the file whole and a
+     * renderer plays its default audio, so any other track is asked for again as a stream
+     * the server produces; a remux or transcode maps the picked track itself.
+     */
+    suspend fun openSession(request: CreateSessionRequest): SessionResponse? {
+        val session = createSession(request) ?: return null
+        val track = session.selectedAudioIndex ?: return session
+        val default = session.audioTracks.firstOrNull { it.streamIndex == track }?.isDefault ?: true
+        if (session.method != "direct_play" || default) return session
+        closeSession(session.sessionId)
+        return createSession(request.copy(audioTrackIndex = track, forceTranscode = true))
+    }
+
     /** A session still preparing its source answers 503; a renderer handed it then gives up. */
     suspend fun awaitStream(url: String, attempts: Int = 60) {
         repeat(attempts) {

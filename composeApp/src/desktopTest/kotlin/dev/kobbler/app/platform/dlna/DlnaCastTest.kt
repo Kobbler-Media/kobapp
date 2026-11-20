@@ -37,6 +37,8 @@ class DlnaCastTest {
     private class Kobbler : AutoCloseable {
         val sessionRequests = CopyOnWriteArrayList<String>()
         val firstStreamProbes = AtomicInteger()
+        /** What the server's decision engine would make of a request: direct play, or a stream it produces. */
+        @Volatile var playsDirect: (request: String) -> Boolean = { false }
         private val sessions = AtomicInteger()
         lateinit var stub: StubServer
 
@@ -45,12 +47,19 @@ class DlnaCastTest {
             sessionRequests += body
             val start = Json.parseToJsonElement(body).jsonObject["start_time"]?.jsonPrimitive?.content ?: "null"
             val id = "s${sessions.incrementAndGet()}"
+            val audio = """"audio_tracks":[{"stream_index":1,"codec":"aac","language":"eng","is_default":true},
+                {"stream_index":2,"codec":"aac","language":"jpn","title":"Japanese","is_default":false}]"""
+            if (playsDirect(body)) {
+                val picked = Json.parseToJsonElement(body).jsonObject["audio_track_index"]?.jsonPrimitive?.content ?: "1"
+                return """{"session_id":"$id","method":"direct_play","direct_url":"/api/v1/admin/playback/sessions/$id/direct",
+                    "duration_seconds":1800.0,"subtitles":[],$audio,"selected_audio_index":$picked}"""
+            }
             return """{"session_id":"$id","method":"video_transcode",
                 "playlist_url":"/api/v1/admin/playback/sessions/$id/master.m3u8",
                 "progressive_url":"/api/v1/admin/playback/sessions/$id/stream.ts",
                 "duration_seconds":1800.0,"start_time":$start,
                 "subtitles":[{"track_id":"en","language":"eng","format":"vtt","url":"/subs/en.vtt","srt_url":"/api/v1/admin/playback/sessions/$id/subtitles/en.srt"}],
-                "audio_tracks":[{"stream_index":1,"codec":"aac","language":"eng","is_default":true}],
+                $audio,
                 "skip_segments":[{"segment_type":"intro","start_seconds":1000.0,"end_seconds":1100.0}]}"""
         }
 
@@ -186,6 +195,38 @@ class DlnaCastTest {
         await(c) { gps.castSession?.positionMs == 330_000L }
         tv.state = "STOPPED"
         await(c) { gps.castSession == null }
+        await(c) { "/api/v1/admin/playback/sessions/s2" in kobbler.stub.requestBodies }
+    }
+
+    @Test
+    fun `an audio switch reopens on the track's stream index, letting the server remux it`() = casting { c ->
+        val (kobbler, tv, gps) = c
+        await(c) { gps.castSession?.tracks?.audioTracks?.size == 2 }
+
+        gps.onCastAudio?.invoke(2)
+        await(c) { tv.uris.size == 2 && tv.state == "PLAYING" }
+
+        val reopen = kobbler.sessionRequests.last()
+        assertTrue("\"audio_track_index\":2" in reopen, reopen)
+        assertTrue("force_transcode" !in reopen, "a remux carries the track; a transcode was forced: $reopen")
+        assertTrue("preferred_audio" !in reopen, reopen)
+        assertEquals(2, kobbler.sessionRequests.size)
+        await(c) { gps.castSession?.tracks?.activeAudioIndex == 2 }
+    }
+
+    @Test
+    fun `a track the server would direct play is forced through a stream, which a renderer cannot switch itself`() = casting { c ->
+        val (kobbler, tv, gps) = c
+        kobbler.playsDirect = { "force_transcode" !in it }
+        await(c) { gps.castSession?.tracks?.audioTracks?.size == 2 }
+
+        gps.onCastAudio?.invoke(2)
+        await(c) { tv.uris.size == 2 && tv.state == "PLAYING" }
+
+        val (asked, forced) = kobbler.sessionRequests.takeLast(2)
+        assertTrue("\"audio_track_index\":2" in asked && "force_transcode" !in asked, asked)
+        assertTrue("\"audio_track_index\":2" in forced && "\"force_transcode\":true" in forced, forced)
+        assertTrue(tv.uris.last().endsWith("/s3/stream.ts"), tv.uris.last())
         await(c) { "/api/v1/admin/playback/sessions/s2" in kobbler.stub.requestBodies }
     }
 }

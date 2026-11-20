@@ -1,6 +1,5 @@
 package dev.kobbler.app.platform.dlna
 
-import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.data.CastAudioTrack
 import dev.kobbler.app.data.CastInitSession
 import dev.kobbler.app.data.CastSkip
@@ -175,7 +174,7 @@ internal class DlnaPlayback(
         val api = api ?: return@withLock
         emit(CastEvent.Position(s.durationSec, s.durationSec, isPlaying = false))
         val episode = s.mediaId?.takeIf { s.mediaType == "episode" }?.let { api.nextEpisode(it) }
-        val session = episode?.let { api.createSession(request(s.copy(mediaId = it.episodeId), atSec = null)) }
+        val session = episode?.let { api.openSession(request(s.copy(mediaId = it.episodeId), atSec = null, sameFile = false)) }
         if (episode == null || session == null) {
             emit(CastEvent.Finished)
             return@withLock
@@ -234,23 +233,24 @@ internal class DlnaPlayback(
         val s = stream ?: return
         val api = api ?: return
         val mediaId = s.mediaId ?: return
-        val session = api.createSession(request(s, atSec.toInt())) ?: return
+        val session = api.openSession(request(s, atSec.toInt(), sameFile = true)) ?: return
         api.closeSession(s.sessionId)
         stream = session.toStream(api, mediaId, s.mediaType)
         start(atSec)
     }
 
-    private fun request(s: DlnaStream, atSec: Int?): CreateSessionRequest {
+    private fun request(s: DlnaStream, atSec: Int?, sameFile: Boolean): CreateSessionRequest {
         val prefs = TrackPrefs.current()
-        val audio: AudioTrackDto? = s.audioTracks.firstOrNull { it.streamIndex == audioIndex }
+        val index = audioIndex.takeIf { sameFile }
+        // Stream indices are one file's own: the next episode gets the pick by what it is.
+        val carried = s.audioTracks.firstOrNull { it.streamIndex == audioIndex }.takeUnless { sameFile }
         return CreateSessionRequest(
             mediaType = s.mediaType,
             mediaId = s.mediaId.orEmpty(),
             capabilities = capabilities,
-            // A renderer plays a file's default audio and has no way to be told otherwise.
-            forceTranscode = audio != null && !audio.isDefault,
-            preferredAudioLanguage = audio?.language ?: prefs.audioLanguage,
-            preferredAudioTitle = audio?.title,
+            audioTrackIndex = index,
+            preferredAudioLanguage = if (index != null) null else carried?.language ?: prefs.audioLanguage,
+            preferredAudioTitle = carried?.title,
             preferredSubtitleLanguage = prefs.subtitleLanguage,
             // Text subtitles ride as a sidecar; only a burn-in would need the server.
             subtitlesEnabled = false,
