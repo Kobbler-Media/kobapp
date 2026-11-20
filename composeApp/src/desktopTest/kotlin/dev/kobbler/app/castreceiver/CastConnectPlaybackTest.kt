@@ -5,6 +5,7 @@ import dev.kobbler.app.UiTimeoutMs
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.platform.CastDevice
 import dev.kobbler.app.platform.CastEvent
+import dev.kobbler.app.platform.CastFeature
 import dev.kobbler.app.platform.CastLoad
 import dev.kobbler.app.platform.CastSender
 import dev.kobbler.app.platform.parseCastEvent
@@ -207,6 +208,7 @@ internal class TvReceiver(tvApi: KobblerApi) {
 private class LoopbackSender(private val tv: TvReceiver) : CastSender {
     override val device = MutableStateFlow<CastDevice?>(null)
     override val events = MutableSharedFlow<CastEvent>(extraBufferCapacity = 64)
+    override val features = setOf(CastFeature.ReceiverReportsProgress, CastFeature.Hls)
     @Volatile var collecting = false
     @Volatile var stopped = false
 
