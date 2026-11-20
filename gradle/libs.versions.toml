@@ -16,6 +16,8 @@ androidx-core = "1.19.1"
 media3 = "1.11.1"
 mediarouter = "1.9.0"
 play-cast = "23.0.0"
+play-cast-tv = "21.1.1"
+androidx-media = "1.8.0"
 # vlcj 5 (VLC 4) has only milestones; M6 binds libvlc as reworked in June 2026.
 vlcj = "5.0.0-M6"
 dbus-java = "5.2.2"
@@ -71,6 +73,8 @@ media3-session = { module = "androidx.media3:media3-session", version.ref = "med
 media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 mediarouter = { module = "androidx.mediarouter:mediarouter", version.ref = "mediarouter" }
 play-services-cast-framework = { module = "com.google.android.gms:play-services-cast-framework", version.ref = "play-cast" }
+play-services-cast-tv = { module = "com.google.android.gms:play-services-cast-tv", version.ref = "play-cast-tv" }
+androidx-media = { module = "androidx.media:media", version.ref = "androidx-media" }
 vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
 dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = "dbus-java" }
 dbus-java-transport-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }

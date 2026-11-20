@@ -304,6 +304,10 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     dev.kobbler.app.ui.player.ExclusiveAudio(player, audio)
     val scope = rememberCoroutineScope()
     if (api != null) dev.kobbler.app.ui.player.LiveSessionHeartbeat(gps, api, player)
+    // A cast to this TV plays on its own player, as the sender: whatever the player does to
+    // the server while a cast title is up has to go out with the sender's credential.
+    val castReceiver = if (player != null && api != null) dev.kobbler.app.castreceiver.rememberCastReceiver(gps, player, api) else null
+    val playerApi = castReceiver?.apiFor(gps.mediaId) ?: api
     // One sender for the app: a cast session outlives the screen that started it, and
     // picking one up again on launch is the same handover as starting it.
     val cast = remember { dev.kobbler.app.platform.castManager() }
@@ -321,18 +325,18 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
 
     // A stream that never starts and a libVLC failure both used to reach nothing, so an
     // unopenable one showed as a spinner that never resolved. One collector for the app.
-    if (player != null && api != null) {
-        LaunchedEffect(player, api) { gps.watchPlayback(player, api) }
+    if (player != null && playerApi != null) {
+        LaunchedEffect(player, playerApi) { gps.watchPlayback(player, playerApi) }
         LaunchedEffect(player) { gps.levelLoudness(player) }
-        PlaybackSessionHeartbeat(gps, player, api)
-        dev.kobbler.app.ui.player.RouteDownloadsThroughProxy(gps, player, api)
+        PlaybackSessionHeartbeat(gps, player, playerApi)
+        dev.kobbler.app.ui.player.RouteDownloadsThroughProxy(gps, player, playerApi)
     }
 
     // Report it without being asked: by the time somebody thinks to press a
     // button the useful context is a screenshot at best.
-    if (api != null) {
+    if (playerApi != null) {
         LaunchedEffect(gps.loadingError) {
-            gps.loadingError?.let { gps.submitReport(api, it) }
+            gps.loadingError?.let { gps.submitReport(playerApi, it) }
         }
     }
 
@@ -342,7 +346,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
     // Not on TV: the mini player's controls are tap-only and it carries no focus target,
     // so shrinking into it strands playback somewhere the remote can never reach again.
     BackHandler(enabled = gps.isFullscreen) {
-        if (player != null) gps.back(player, api!!, formFactor, scope)
+        if (player != null) gps.back(player, playerApi!!, formFactor, scope)
     }
     // Only plain Home leaves the app; any other tab steps back to it first.
     BackHandler(enabled = nav.current != Destination.Tab.Home && !gps.isFullscreen) {
@@ -414,14 +418,14 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
                         PersistentVideoSurface(
                             player = player,
                             state = gps,
-                            api = api,
+                            api = playerApi ?: api,
                             formFactor = formFactor,
                             onToggleFullscreen = onToggleFullscreen,
                             isFullscreen = isFullscreen,
                             scope = scope,
                             miniBottomInset = miniBottomInset,
                             onOpenGuide = {
-                                gps.stop(player, api, scope)
+                                gps.stop(player, playerApi ?: api, scope)
                                 nav.navigate(Destination.Tab.LiveTv)
                             },
                         )
@@ -447,12 +451,12 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
                         onPickAlternative = { option -> help?.onPickAlternative?.invoke(option) },
                         onDismiss = {
                             gps.loadingError = null
-                            if (player != null && gps.isActive) gps.stop(player, api, scope)
+                            if (player != null && gps.isActive) gps.stop(player, playerApi ?: api, scope)
                         },
                         // A debrid stream has no session to mint again — its only way forward
                         // is a different source, so the same button opens the picker.
-                        onRetry = if (player != null && api != null && gps.canRecoverSession) {
-                            { scope.launch { gps.retryPlayback(player, api) } }
+                        onRetry = if (player != null && playerApi != null && gps.canRecoverSession) {
+                            { scope.launch { gps.retryPlayback(player, playerApi) } }
                         } else gps.onSwitchStream?.let { switchStream ->
                             {
                                 gps.loadingError = null
@@ -460,7 +464,7 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
                             }
                         },
                         reportStatus = gps.reportStatus,
-                        onRetryReport = api?.let { client ->
+                        onRetryReport = playerApi?.let { client ->
                             { scope.launch { gps.submitReport(client, playbackError) } }
                         },
                     )

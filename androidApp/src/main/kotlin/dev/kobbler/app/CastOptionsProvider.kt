@@ -2,6 +2,7 @@ package dev.kobbler.app
 
 import android.content.Context
 import com.google.android.gms.cast.CastMediaControlIntent
+import com.google.android.gms.cast.LaunchOptions
 import com.google.android.gms.cast.framework.CastOptions
 import com.google.android.gms.cast.framework.OptionsProvider
 import com.google.android.gms.cast.framework.SessionProvider
@@ -33,6 +34,7 @@ class CastOptionsProvider : OptionsProvider {
             .setReceiverApplicationId(appId)
             .setCastMediaOptions(media)
             .setStopReceiverApplicationWhenEndingSession(true)
+            .setLaunchOptions(LaunchOptions.Builder().setAndroidReceiverCompatible(true).build())
             .build()
     }
 

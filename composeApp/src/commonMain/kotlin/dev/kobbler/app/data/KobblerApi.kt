@@ -3567,7 +3567,7 @@ class KobblerApi(
         put("priority", priority)
     }.toString()
 
-    private fun capabilities() =
+    internal fun capabilities() =
         browserCapabilities() ?: VLC_CAPABILITIES.copy(supportsInterlaced = decodesInterlaced(), hdrFormats = hdrFormats())
 
     private fun capabilitiesJson() = json.encodeToJsonElement(ClientCapabilities.serializer(), capabilities())

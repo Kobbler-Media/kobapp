@@ -18,4 +18,11 @@ class CastOptionsProviderTest {
         val options = CastOptionsProvider().getCastOptions(RuntimeEnvironment.getApplication())
         assertTrue(options.stopReceiverApplicationWhenEndingSession)
     }
+
+    // Without it a TV running kobapp still gets the web receiver.
+    @Test
+    fun `a cast may launch kobapp on an Android TV`() {
+        val options = CastOptionsProvider().getCastOptions(RuntimeEnvironment.getApplication())
+        assertTrue(options.launchOptions.androidReceiverCompatible)
+    }
 }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import dev.kobbler.app.castconnect.CastConnect
 import dev.kobbler.app.platform.CastManager
 import dev.kobbler.app.platform.FileCache
 import dev.kobbler.app.platform.FormFactor
@@ -171,6 +172,17 @@ class MainActivity : ComponentActivity() {
         // App paints its own background; the window's would be one more full-screen fill
         // under every frame.
         window.setBackgroundDrawable(null)
+        CastConnect.handle(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        CastConnect.handle(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        CastConnect.onForeground()
     }
 
     override fun onDestroy() {
@@ -205,6 +217,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        CastConnect.onBackground()
         // The PiP close button does not route a close to the app — it tears the window
         // down and takes the activity with it. Three signals for the one gesture,
         // because no one of them is reliable: the mode change may arrive first
