@@ -412,8 +412,6 @@ data class SessionResponse(
     @SerialName("direct_url") val directUrl: String? = null,
     @SerialName("duration_seconds") val durationSeconds: Double = 0.0,
     @SerialName("thumbnails_url") val thumbnailsUrl: String? = null,
-    val lufs: Double? = null,
-    @SerialName("downmix_peak_db") val downmixPeakDb: Double? = null,
     val chapters: List<SessionChapter> = emptyList(),
     @SerialName("skip_segments") val skipSegments: List<SkipSegment> = emptyList(),
     /** Where the timeline begins. See [rebaseSeconds] — an echo is not a rebase. */
@@ -513,7 +511,11 @@ data class AudioTrackDto(
     @SerialName("language_name") val languageName: String? = null,
     val title: String? = null,
     @SerialName("is_default") val isDefault: Boolean = false,
-)
+    val lufs: Double? = null,
+    @SerialName("downmix_peak_db") val downmixPeakDb: Double? = null,
+) {
+    val loudness: Loudness? get() = lufs?.let { Loudness(it, downmixPeakDb) }
+}
 
 @Serializable
 data class SessionChapter(
@@ -4441,8 +4443,6 @@ class KobblerApi(
         val chapters: List<SessionChapter> = emptyList(),
         val skipSegments: List<SkipSegment> = emptyList(),
         val thumbnailsUrl: String? = null,
-        val lufs: Double? = null,
-        val downmixPeakDb: Double? = null,
         val audioTracks: List<AudioTrackDto> = emptyList(),
         val subtitles: List<PlaybackSubtitleTrackDto> = emptyList(),
         /** Audio stream index the server actually picked (matches one in audioTracks). */
@@ -4473,9 +4473,7 @@ class KobblerApi(
          */
         val method: String? = null,
         val durationSeconds: Double = 0.0,
-    ) {
-        val loudness: Loudness? get() = lufs?.let { Loudness(it, downmixPeakDb) }
-    }
+    )
 
     /**
      * Get a streaming session for a movie. Returns URL + session ID, or null.
@@ -4717,8 +4715,6 @@ class KobblerApi(
             chapters = chapters,
             skipSegments = skipSegments,
             thumbnailsUrl = thumbnailsUrl?.let { resolveUrl(apiUrl, it) },
-            lufs = lufs,
-            downmixPeakDb = downmixPeakDb,
             audioTracks = audioTracks,
             subtitles = subtitles.map { it.copy(url = resolveUrlOrNull(apiUrl, it.url)) },
             selectedAudioIndex = preferredAudioStreamIndex ?: selectedAudioIndex,

@@ -28,9 +28,12 @@ class DebridSessionEventsTest {
             state, api, "s1",
             frame("chapters", """{"chapters":[{"index":0,"title":"Opening","start_seconds":0.0,"end_seconds":90.0}]}"""),
         )
-        applyDebridSessionFrame(state, api, "s1", frame("loudness", """{"lufs":-21.5,"downmix_peak_db":-2.0}"""))
+        applyDebridSessionFrame(
+            state, api, "s1",
+            frame("loudness", """{"tracks":[{"stream_index":1,"lufs":-21.5,"downmix_peak_db":-2.0},{"stream_index":2,"lufs":-18.0}]}"""),
+        )
         assertEquals(listOf("Opening"), state.chapters.map { it.title })
-        assertEquals(Loudness(-21.5, -2.0), state.loudness)
+        assertEquals(mapOf(1 to Loudness(-21.5, -2.0), 2 to Loudness(-18.0)), state.trackLoudness)
     }
 
     @Test

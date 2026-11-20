@@ -27,7 +27,7 @@ fun startIptvWatch(
     gps.chapters = emptyList()
     gps.skipSegments = emptyList()
     gps.thumbnailsUrl = null
-    gps.loudness = null
+    gps.trackLoudness = emptyMap()
     gps.serverAudioTracks = emptyList()
     gps.selectedServerAudioIndex = null
     gps.serverSubtitleTracks = emptyList()

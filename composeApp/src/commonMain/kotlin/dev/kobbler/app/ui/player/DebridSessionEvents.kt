@@ -1,16 +1,14 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.app.data.LibraryEventFrame
 import dev.kobbler.app.data.PictureArea
 import dev.kobbler.app.data.SessionChapter
 import dev.kobbler.app.data.ThumbnailsProbe
-import dev.kobbler.kobplayer.Loudness
 import dev.kobbler.kobplayer.Player
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 private val chapterJson = Json { ignoreUnknownKeys = true }
 
@@ -53,8 +51,27 @@ internal suspend fun applyDebridSessionFrame(
             state.picture = area.takeUnless { it == WHOLE_FRAME }
             player?.setPictureCrop(state.pictureCrop())
         }
-        "loudness" -> frame.data["lufs"]?.jsonPrimitive?.doubleOrNull?.let {
-            state.loudness = Loudness(it, frame.data["downmix_peak_db"]?.jsonPrimitive?.doubleOrNull)
+        // A stream resolved before its probe opened knowing no tracks, so VLC chose by itself.
+        "probe_complete" -> {
+            if (state.serverAudioTracks.isNotEmpty()) return
+            val tracks = runCatching {
+                chapterJson.decodeFromJsonElement(ListSerializer(AudioTrackDto.serializer()), frame.data["audio_tracks"] ?: return)
+            }.getOrNull() ?: return
+            state.serverAudioTracks = tracks
+            state.trackLoudness += tracks.loudnessByStream()
+            state.selectedServerAudioIndex = player?.let { playingServerAudioIndex(it, tracks) }
+        }
+        "loudness" -> {
+            val tracks = frame.data["tracks"] ?: return
+            state.trackLoudness += chapterJson.decodeFromJsonElement(ListSerializer(AudioTrackDto.serializer()), tracks)
+                .loudnessByStream()
         }
     }
+}
+
+private fun playingServerAudioIndex(player: Player, tracks: List<AudioTrackDto>): Int? {
+    val vlcAudio = player.audioTracks.value
+    if (vlcAudio.size != tracks.size) return null
+    val nth = vlcAudio.indexOfFirst { it.id == player.selectedAudioTrack.value?.id }
+    return tracks.sortedBy { it.streamIndex }.getOrNull(nth)?.streamIndex
 }

@@ -165,7 +165,7 @@ class GlobalPlayerState {
     // The library file behind the current session, when it is a local one. Skip
     // detection addresses its events to a file id, so a player has to know its own.
     var fileId by mutableStateOf<String?>(null)
-    var loudness by mutableStateOf<Loudness?>(null)
+    var trackLoudness by mutableStateOf<Map<Int, Loudness>>(emptyMap())
     // Source video dimensions reported by the server. Drive aspect-ratio bucket
     // lookup before the player reports videoSize. Null until session is loaded
     // (or for sessions where server hasn't probed yet — falls back to player).
@@ -174,6 +174,7 @@ class GlobalPlayerState {
     var picture by mutableStateOf<dev.kobbler.app.data.PictureArea?>(null)
     var serverAudioTracks by mutableStateOf<List<dev.kobbler.app.data.AudioTrackDto>>(emptyList())
     var selectedServerAudioIndex by mutableStateOf<Int?>(null)
+    val loudness: Loudness? get() = selectedServerAudioIndex?.let { trackLoudness[it] }
 
     // Client-rendered subtitles: server provides VTT URLs, we draw the cues in a
     // Compose overlay so they stay in the visible viewport regardless of video
@@ -495,7 +496,7 @@ class GlobalPlayerState {
         skipSegments = session?.skipSegments ?: emptyList()
         thumbnailsUrl = session?.thumbnailsUrl
         fileId = session?.fileId
-        loudness = session?.loudness
+        trackLoudness = session?.audioTracks.orEmpty().loudnessByStream()
         videoWidth = session?.videoWidth
         videoHeight = session?.videoHeight
         picture = session?.picture
@@ -680,7 +681,7 @@ class GlobalPlayerState {
         skipSegments = emptyList()
         thumbnailsUrl = null
         fileId = null
-        loudness = null
+        trackLoudness = emptyMap()
         videoWidth = null
         videoHeight = null
         picture = null

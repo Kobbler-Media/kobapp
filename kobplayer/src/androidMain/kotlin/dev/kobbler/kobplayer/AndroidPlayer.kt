@@ -136,6 +136,8 @@ internal class AndroidPlayer(
 
     override val native: NativePlayer get() = NativePlayer.LibVlc(vlcPlayer, libVLC)
 
+    override val volumeCurve = VolumeCurve.Android
+
     // --- Audio focus ---
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager

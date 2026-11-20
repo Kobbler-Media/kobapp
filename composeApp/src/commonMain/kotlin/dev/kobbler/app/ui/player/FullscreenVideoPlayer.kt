@@ -907,6 +907,7 @@ internal suspend fun switchAudioAndResume(
     ) ?: return
     state.selectedServerAudioIndex = audioStreamIndex
     state.serverAudioTracks = newSession.audioTracks
+    state.trackLoudness += newSession.audioTracks.loudnessByStream()
     state.sessionId = newSession.sessionId
     state.timeline = PlayerTimeline.of(newSession.serverStartSeconds)
     val seekMs = state.timeline.toPlayerMs(posMs)

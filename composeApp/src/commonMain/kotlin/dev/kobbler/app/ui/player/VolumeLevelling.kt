@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
+import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.platform.Settings
 import dev.kobbler.kobplayer.Loudness
 import dev.kobbler.kobplayer.Player
@@ -18,6 +19,9 @@ var normalizeVolume: Boolean
         normalizeVolumeState.value = value
         Settings.putString(KEY_NORMALIZE_VOLUME, value.toString())
     }
+
+fun List<AudioTrackDto>.loudnessByStream(): Map<Int, Loudness> =
+    mapNotNull { track -> track.loudness?.let { track.streamIndex to it } }.toMap()
 
 suspend fun GlobalPlayerState.levelLoudness(player: Player) = levelPlayer(player) { loudness }
 

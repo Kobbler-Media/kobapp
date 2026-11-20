@@ -123,7 +123,9 @@ internal abstract class VlcPlayer<B : VlcBinding>(
 
     protected var normalization = 1f
 
-    protected fun userVolume() = vlcVolume(_volume.value, normalization, maxVolume)
+    protected open val volumeCurve = VolumeCurve.Cubic
+
+    protected fun userVolume() = vlcVolume(_volume.value, normalization, maxVolume, volumeCurve)
 
     // libVLC is driven from one thread per player, so a call that never returns (a stop
     // waiting on an input whose decoder deadlocked) would hold every command behind it.

@@ -61,7 +61,7 @@ fun startLiveWatch(
     gps.skipSegments = emptyList()
     gps.thumbnailsUrl = null
     gps.fileId = null
-    gps.loudness = null
+    gps.trackLoudness = emptyMap()
     gps.serverAudioTracks = emptyList()
     gps.selectedServerAudioIndex = null
     gps.serverSubtitleTracks = emptyList()

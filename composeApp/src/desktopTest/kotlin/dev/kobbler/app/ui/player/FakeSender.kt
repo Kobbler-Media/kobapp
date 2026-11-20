@@ -23,12 +23,12 @@ internal class FakeSender(
     override val events: SharedFlow<CastEvent> = _events.asSharedFlow()
 
     var started = false
-    val loads = mutableListOf<CastLoad>()
-    val seeks = mutableListOf<Int>()
+    // Recorded from the controller's coroutines while a test thread polls them.
+    val loads = CopyOnWriteArrayList<CastLoad>()
+    val seeks = CopyOnWriteArrayList<Int>()
     var toggles = 0
     var stopped = false
-    val sent = mutableListOf<String>()
-    // Sent from the controller's coroutines while a test thread polls it.
+    val sent = CopyOnWriteArrayList<String>()
     val payloads = CopyOnWriteArrayList<Pair<String, String>>()
 
     override fun start() { started = true }

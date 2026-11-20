@@ -1,9 +1,10 @@
 package dev.kobbler.kobplayer
 
+import kotlin.math.cbrt
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-private const val TARGET_LUFS = -14.0
+private const val TARGET_LUFS = -20.0
 private const val MAX_BOOST_DB = 6.0
 private const val PEAK_CEILING_DB = -1.0
 
@@ -24,5 +25,26 @@ fun loudnessGain(loudness: Loudness?): Float {
     return 10.0.pow(minOf(TARGET_LUFS - loudness.lufs, ceiling) / 20).toFloat()
 }
 
-internal fun vlcVolume(volume: Float, normalization: Float, maxVolume: Float): Int =
-    ((volume * normalization).coerceIn(0f, maxVolume) * 100).roundToInt()
+/**
+ * How a libVLC audio output turns its volume into amplitude. VLC's software volume and its
+ * desktop and Apple outputs cube it; Android's AAudio and AudioTrack streams pass volumes up
+ * to 1 to the platform, which is linear, and cube only the boost above that.
+ */
+internal enum class VolumeCurve {
+    Cubic,
+    Android;
+
+    fun amplitude(volume: Float): Float = when {
+        this == Android && volume <= 1f -> volume
+        else -> volume * volume * volume
+    }
+
+    fun volume(amplitude: Float): Float = when {
+        this == Android && amplitude <= 1f -> amplitude
+        else -> cbrt(amplitude)
+    }
+}
+
+/** [normalization] is a plain amplitude factor; it is applied on top of the user's [volume] as VLC hears it. */
+internal fun vlcVolume(volume: Float, normalization: Float, maxVolume: Float, curve: VolumeCurve): Int =
+    (curve.volume(curve.amplitude(volume) * normalization).coerceIn(0f, maxVolume) * 100).roundToInt()
