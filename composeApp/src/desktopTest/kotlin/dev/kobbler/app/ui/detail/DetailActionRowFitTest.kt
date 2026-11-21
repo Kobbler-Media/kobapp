@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class DetailActionRowFitTest {
 
-    private val names = listOf("Watched", "Save all episodes offline", "Add to your list", "Want", "Keep", "Kids", "Rewatch from the start")
+    private val names = listOf("Watched", "Save all episodes offline", "Add to my list", "Want", "Keep", "Kids", "Rewatch from the start")
     private val actions = listOf(RowAction("lead", "Rewatch", Icons.Outlined.PlayArrow, {}, detail = "S01 E01")) +
         names.map { RowAction(it, it, Icons.Outlined.Download, {}) }
 

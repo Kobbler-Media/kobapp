@@ -48,6 +48,7 @@ fun DiscoverDetailScreen(
     }
     var currentDetail by remember(detail) { mutableStateOf(detail) }
     var wantLoading by remember { mutableStateOf(false) }
+    var listLoading by remember { mutableStateOf(false) }
     var showWantPicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -111,6 +112,22 @@ fun DiscoverDetailScreen(
         }
     }
 
+    // Lands on the library page like a want does, where the list toggle already shows it.
+    val onAddToList: () -> Unit = {
+        listLoading = true
+        scope.launch {
+            try {
+                val id = api.addDiscoverToWatchlist(currentDetail)
+                currentDetail = currentDetail.copy(libraryId = id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            } finally {
+                listLoading = false
+            }
+        }
+    }
+
     // A show is a question — how much of it — and everything else is a single answer.
     val onWantPressed: () -> Unit = {
         if (currentDetail.mediaType == "tv") showWantPicker = true else onWant("new_only")
@@ -124,6 +141,8 @@ fun DiscoverDetailScreen(
             wantLoading = wantLoading,
             showWant = api.canWant,
             onWant = onWantPressed,
+            listLoading = listLoading,
+            onAddToList = onAddToList.takeIf { api.canWant && currentDetail.mediaType in listOf("movie", "tv") },
             wide = wide,
             exitDown = exitDown,
             modifier = anchor,

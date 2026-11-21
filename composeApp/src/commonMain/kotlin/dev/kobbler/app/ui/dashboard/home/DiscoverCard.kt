@@ -1,5 +1,7 @@
 package dev.kobbler.app.ui.dashboard.home
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -38,10 +40,22 @@ internal fun rememberDiscoverCard(
                     scope.launch { runCatching { want(api, item) }.onFailure { wanted = false } }
                 }))
             }
+            listAdd(api, item)?.let { add(CardAction("Add to my list", { scope.launch { runCatching { it() } } }, Icons.AutoMirrored.Outlined.PlaylistAdd)) }
             addAll(more)
         }
     }
     return DiscoverCard(status, menu)
+}
+
+/** Only a contributor may create the library row a list entry needs; anyone may list a title already there. */
+private fun listAdd(api: KobblerApi, item: DiscoverItem): (suspend () -> Unit)? {
+    val kind = when (item.mediaType) {
+        "tv" -> "show"
+        "movie" -> "movie"
+        else -> return null
+    }
+    if (api.canWant) return { api.addDiscoverToWatchlist(api.getDiscoverDetail(item.mediaType, item.provider, item.providerId)) }
+    return item.libraryId?.let { id -> { api.addToWatchlist(kind, id) } }
 }
 
 private suspend fun want(api: KobblerApi, item: DiscoverItem) {

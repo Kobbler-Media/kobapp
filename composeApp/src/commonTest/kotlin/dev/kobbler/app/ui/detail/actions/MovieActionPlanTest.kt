@@ -67,6 +67,11 @@ class MovieActionPlanTest {
         ),
         Case("offline without a download offers nothing", online.copy(offline = true), emptyList()),
         Case(
+            "a viewer who cannot want still keeps a list",
+            online.copy(canWant = false, movie = movie.copy(filePath = null)),
+            listOf(Watchlist),
+        ),
+        Case(
             "keep and kids access come last",
             online.copy(canKeep = true, canManageKids = true),
             listOf(Play, Download, SetWatched(true), Watchlist, Keep, Kids),

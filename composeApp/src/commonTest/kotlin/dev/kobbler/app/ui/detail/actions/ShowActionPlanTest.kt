@@ -141,6 +141,11 @@ class ShowActionPlanTest {
             listOf(Rewatch(at(1, 0))),
         ),
         Case(
+            "a viewer who cannot want still keeps a list",
+            online.copy(show = everythingWatched, downloads = null, canWant = false),
+            listOf(Rewatch(at(1, 0)), Watchlist),
+        ),
+        Case(
             "keep and kids access come last",
             online.copy(show = everythingWatched, downloads = null, canKeep = true, canManageKids = true),
             listOf(Rewatch(at(1, 0)), WantShow, Watchlist, Keep, Kids),

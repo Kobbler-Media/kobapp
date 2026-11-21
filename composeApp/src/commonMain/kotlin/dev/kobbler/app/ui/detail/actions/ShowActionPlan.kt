@@ -71,10 +71,8 @@ internal fun showActions(state: ShowActionState): List<ShowAction> = with(state)
         val position = resumeEpisode?.let { if (it.id in watched) 0 else show.continueEpisode.positionSeconds } ?: 0
         val history = position > 0 || show.seasons.any { s -> s.episodes.any { it.id != null && it.isWatchedNow(watched) } }
         if (history && lead !is Rewatch) add(StartOver)
-        if (canWant) {
-            add(WantShow)
-            add(Watchlist)
-        }
+        if (canWant) add(WantShow)
+        add(Watchlist)
         if (canKeep) add(Keep)
         if (canManageKids) add(Kids)
     }

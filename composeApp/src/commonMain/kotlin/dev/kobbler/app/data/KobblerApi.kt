@@ -1674,6 +1674,9 @@ data class PlaybackSubtitleTrackDto(
 internal data class CreateDiscoverSeasonWant(@SerialName("show_id") val showId: String)
 
 @Serializable
+internal data class DiscoverWatchlistResponse(@SerialName("media_id") val mediaId: String)
+
+@Serializable
 data class DiscoverItemDto(
     val provider: String,
     @SerialName("provider_id") val providerId: String,
@@ -4080,11 +4083,25 @@ class KobblerApi(
         return resp.showId
     }
 
+    /** The library id of the show or movie now on the caller's list; the server adds it to the library unwanted. */
+    suspend fun addDiscoverToWatchlist(detail: DiscoverDetail): String {
+        val resp = decode<DiscoverWatchlistResponse>(
+            post("/api/v1/admin/discover/watchlist", discoverSpec(detail) { put("media_type", detail.mediaType) }.toString()),
+        )
+        if (detail.mediaType == "tv") invalidateTvShows() else invalidateMovies()
+        return resp.mediaId
+    }
+
     private fun discoverShowSpec(detail: DiscoverDetail, season: Int, extra: JsonObjectBuilder.() -> Unit = {}) =
+        discoverSpec(detail) {
+            put("season_number", season)
+            extra()
+        }
+
+    private fun discoverSpec(detail: DiscoverDetail, extra: JsonObjectBuilder.() -> Unit) =
         buildJsonObject {
             put("provider", detail.provider)
             put("provider_id", detail.providerId)
-            put("season_number", season)
             extra()
             put("title", detail.title)
             detail.year?.let { put("year", it) }

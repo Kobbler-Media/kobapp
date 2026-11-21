@@ -2,7 +2,7 @@ package dev.kobbler.app.ui.dashboard
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -34,7 +34,7 @@ private fun rememberLibraryCardActions(
     return remember(kind, id, api, play != null, markWatched != null) {
         listOfNotNull(
             play?.let { CardAction("Play", it, Icons.Outlined.PlayArrow) },
-            CardAction("Add to my list", { scope.launch { runCatching { api.addToWatchlist(kind, id) } } }, Icons.Outlined.BookmarkAdd),
+            CardAction("Add to my list", { scope.launch { runCatching { api.addToWatchlist(kind, id) } } }, Icons.AutoMirrored.Outlined.PlaylistAdd),
             markWatched?.let { mark -> CardAction("Mark watched", { scope.launch { runCatching { mark() } } }, Icons.Outlined.Visibility) },
         )
     }

@@ -82,4 +82,19 @@ class DiscoverCardWantTest {
         hold()
         onNodeWithText("Want").assertExists()
     }
+
+    @Test
+    fun `adding to my list from the menu puts it on the list without wanting it`() = card(
+        mapOf(
+            detail,
+            "/api/v1/admin/discover/watchlist" to { _ -> """{"media_type":"movie","media_id":"m9"}""" },
+        ),
+    ) { stub ->
+        hold()
+        onNodeWithText("Add to my list").performClick()
+        waitUntil(timeoutMillis = UiTimeoutMs) { "/api/v1/admin/discover/watchlist" in stub.requestBodies }
+        waitForIdle()
+        kotlin.test.assertTrue("/api/v1/admin/movies" !in stub.requestBodies, "the list add also created a want")
+        kotlin.test.assertTrue(!wanted(), "the card claims it is wanted")
+    }
 }

@@ -57,13 +57,13 @@ class MovieHeaderTest {
     @Test
     fun `on a phone, what does not fit beside Resume is in More`() = movie(FormFactor.Phone, 412, 900) {
         onNodeWithContentDescription("More").assertExists()
-        assertOfferedOnce("From start", "Mark watched", "Add to your list")
+        assertOfferedOnce("From start", "Mark watched", "Add to my list")
     }
 
     @Test
     fun `beside a poster, the row has room for everything`() = movie(FormFactor.Desktop, 1280, 900) {
         onAllNodesWithContentDescription("More").assertCountEquals(0)
         onNodeWithContentDescription("Mark watched").assertExists()
-        onNodeWithContentDescription("Add to your list").assertExists()
+        onNodeWithContentDescription("Add to my list").assertExists()
     }
 }

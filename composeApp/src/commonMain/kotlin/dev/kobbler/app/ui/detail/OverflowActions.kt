@@ -201,17 +201,17 @@ internal fun watchlistAction(
     // NOT the eye: `Visibility` is the watched toggle, and one glyph meaning two things is
     // worse than a duller one.
     icon = if (inList) Icons.AutoMirrored.Outlined.PlaylistAddCheck else Icons.AutoMirrored.Outlined.PlaylistAdd,
-    label = if (inList) "Remove from your list" else "Add to your list",
+    label = if (inList) "Remove from my list" else "Add to my list",
     selected = inList,
     onClick = {
         val next = !inList
         onChanged(next)
         scope.launch {
             runCatching { toggle(next) }
-                .onSuccess { toast.show(if (next) "Added to your list" else "Removed from your list") }
+                .onSuccess { toast.show(if (next) "Added to my list" else "Removed from my list") }
                 .onFailure {
                     onChanged(!next)
-                    toast.show("Could not update your list")
+                    toast.show("Could not update my list")
                 }
         }
     },

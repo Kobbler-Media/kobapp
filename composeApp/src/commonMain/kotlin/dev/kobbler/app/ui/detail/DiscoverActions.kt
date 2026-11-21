@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.detail
 
 import dev.kobbler.app.ui.components.CardAction
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.HistoryToggleOff
@@ -26,6 +27,8 @@ internal fun DiscoverActions(
     wantLoading: Boolean,
     showWant: Boolean,
     onWant: () -> Unit,
+    listLoading: Boolean,
+    onAddToList: (() -> Unit)?,
     wide: Boolean,
     modifier: Modifier = Modifier,
     exitDown: FocusRequester? = null,
@@ -40,6 +43,10 @@ internal fun DiscoverActions(
             add(RowAction("streams", "Stream options", Icons.Outlined.Tune, stream.pick))
         }
         if (wantable) add(RowAction("want", wantLabel, Icons.Outlined.Download, onWant, enabled = !wantLoading))
+        if (onAddToList != null && detail.libraryStatus == LibraryStatus.NotInLibrary) {
+            val label = if (listLoading) "Adding…" else "Add to my list"
+            add(RowAction("watchlist", label, Icons.AutoMirrored.Outlined.PlaylistAdd, onAddToList, enabled = !listLoading && !wantLoading))
+        }
         refusals.forEachIndexed { i, (label, refuse) ->
             add(RowAction("refuse.$i", label, if (i == 0) Icons.Outlined.ThumbDown else Icons.Outlined.HistoryToggleOff, refuse))
         }

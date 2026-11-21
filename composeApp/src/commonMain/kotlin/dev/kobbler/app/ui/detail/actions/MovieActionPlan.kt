@@ -52,7 +52,7 @@ internal fun movieActions(state: MovieActionState): List<MovieAction> = with(sta
         if (canPickStream) add(Streams)
         if (canWant && movie.filePath == null) add(Want(movie.isWanted))
         if (canPlay) add(SetWatched(!movie.isWatched))
-        if (canWant) add(Watchlist)
+        add(Watchlist)
         if (canKeep) add(Keep)
         if (canManageKids) add(Kids)
     }
