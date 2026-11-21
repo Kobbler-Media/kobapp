@@ -10,6 +10,9 @@
 # remove it — the Cast framework then throws on first session.
 -keep class dev.kobbler.app.CastOptionsProvider { *; }
 -keep class * implements com.google.android.gms.cast.framework.OptionsProvider { *; }
+# The TV side's ReceiverOptionsProvider is named the same way, and CastReceiverContext
+# reflects its no-arg constructor from Application.onCreate: losing it kills every launch on TV.
+-keep class * implements com.google.android.gms.cast.tv.ReceiverOptionsProvider { <init>(); *; }
 
 # ---- libvlc -------------------------------------------------------------------------
 # libvlc-all ships no consumer rules and its native layer resolves Java classes, methods
