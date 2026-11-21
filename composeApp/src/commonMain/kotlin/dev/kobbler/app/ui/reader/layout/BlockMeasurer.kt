@@ -71,6 +71,9 @@ internal class BlockMeasurer(
     fun spaceBefore(block: Block): Float =
         if (book.spacing) block.spaceBefore * basePx else with(density) { theme.paragraphSpacing.dp.toPx() }
 
+    fun spaceAfterBreak(block: Block, pageHeight: Float): Float =
+        if (book.spacing) min(block.spaceBefore * basePx, pageHeight * MaxBreakSpaceFraction) else 0f
+
     private fun sizeOf(style: PackTextStyle): Float = style.size?.takeIf { book.sizes } ?: 1f
 
     private fun indentOf(style: PackTextStyle): Float = style.indent?.takeIf { book.spacing } ?: 0f
@@ -288,6 +291,7 @@ internal class BlockMeasurer(
         const val MinColumnFraction = 0.3f
         const val RuleFraction = 0.3f
         const val OwnInsetMaxEm = 3f
+        const val MaxBreakSpaceFraction = 1f / 3f
         const val MarkerGap = 0.4f
         const val CellPaddingEm = 0.3f
         const val FallbackAspect = 2f / 3f

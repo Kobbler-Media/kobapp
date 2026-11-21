@@ -8,9 +8,9 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import dev.kobbler.app.ui.reader.ComposeText
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.ui.reader.pack.Block
 import dev.kobbler.app.ui.reader.pack.BlockOffset
@@ -36,7 +36,7 @@ class PageViewTapTest {
     @Test
     fun `taps route to links, notes and plain positions`() = runUiTest(width = 400, height = 300) {
         val chapter = runBlocking {
-            layoutChapter(blocks, listOf(PackTextStyle()), LayoutRig.typography, IntSize(400, 300), density, createFontFamilyResolver(), LayoutDirection.Ltr, LayoutRig.locales)
+            layoutChapter(blocks, listOf(PackTextStyle()), LayoutRig.typography, IntSize(400, 300), density, ComposeText.resolver(), LayoutDirection.Ltr, LayoutRig.locales)
         }
         val events = mutableListOf<Any?>()
         setContent {

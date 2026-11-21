@@ -6,6 +6,7 @@ import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import dev.kobbler.app.ui.reader.layout.LayoutRig.layout
+import dev.kobbler.app.ui.reader.layout.LayoutRig.without
 import dev.kobbler.app.ui.reader.pack.Block
 import dev.kobbler.app.ui.reader.pack.BorderLine
 import dev.kobbler.app.ui.reader.pack.Container
@@ -19,7 +20,6 @@ import kotlin.test.assertTrue
 
 class BookCssLayoutTest {
 
-    private fun without(aspect: StyleAspect) = LayoutRig.typography.copy(book = BookStyle.Book.with(aspect, book = false))
 
     private fun firstText(blocks: List<Block>, styles: List<PackTextStyle> = listOf(PackTextStyle()), typography: ReaderTypography = LayoutRig.typography) =
         layout(blocks, styles = styles, typography = typography).pages[0].slices.filterIsInstance<TextSlice>().first()

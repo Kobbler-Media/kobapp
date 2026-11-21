@@ -2,7 +2,6 @@ package dev.kobbler.app.ui.reader
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
@@ -17,7 +16,7 @@ import kotlin.test.assertNotEquals
 
 class LayoutSpecTest {
     private val base = LayoutSpec(
-        ReaderTypography(ReaderTheme.Dark), IntSize(1080, 2000), Density(2.75f), LayoutDirection.Ltr, LocaleList("en-US"), createFontFamilyResolver(),
+        ReaderTypography(ReaderTheme.Dark), IntSize(1080, 2000), Density(2.75f), LayoutDirection.Ltr, LocaleList("en-US"), ComposeText.resolver(),
     )
 
     private fun ReaderTypography.withTheme(change: ReaderTheme.() -> ReaderTheme) = copy(theme = theme.change())
@@ -27,7 +26,7 @@ class LayoutSpecTest {
         val light = base.copy(typography = base.typography.withTheme { ReaderTheme.Light.copy(fontSize = fontSize, lineHeight = lineHeight) })
         assertEquals(base.fingerprint, light.fingerprint)
         assertEquals(base.fingerprint, base.copy(typography = base.typography.withTheme { copy(textColor = Color.Red) }).fingerprint)
-        assertEquals(base.fingerprint, base.copy(resolver = createFontFamilyResolver()).fingerprint)
+        assertEquals(base.fingerprint, base.copy(resolver = ComposeText.resolver()).fingerprint)
         val bookColours = base.copy(typography = base.typography.copy(book = BookStyle.Book.with(StyleAspect.Colours, book = false)))
         assertEquals(base.fingerprint, bookColours.fingerprint, "the book's colours move no line")
     }

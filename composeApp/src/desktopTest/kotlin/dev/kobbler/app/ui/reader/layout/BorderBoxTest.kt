@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.reader.layout
 
 import dev.kobbler.app.ui.reader.layout.LayoutRig.filler
 import dev.kobbler.app.ui.reader.layout.LayoutRig.layout
+import dev.kobbler.app.ui.reader.layout.LayoutRig.without
 import dev.kobbler.app.ui.reader.layout.LayoutRig.lines
 import dev.kobbler.app.ui.reader.pack.Block
 import dev.kobbler.app.ui.reader.pack.BlockKind
@@ -31,7 +32,6 @@ class BorderBoxTest {
         insetStart = if (boxes.isEmpty()) 0f else 2.625f, insetEnd = if (boxes.isEmpty()) 0f else 2.625f,
     )
 
-    private fun without(aspect: StyleAspect) = LayoutRig.typography.copy(book = BookStyle.Book.with(aspect, book = false))
     private val noDecorations = without(StyleAspect.Decorations)
 
     @Test
@@ -73,14 +73,18 @@ class BorderBoxTest {
     @Test
     fun `a box opening a page keeps the room inside its border`() {
         val a = box(0)
-        val opening = listOf(para("Boxed.", a, spaceBefore = 1.625f))
-        val page = layout(opening).pages[0]
+        val opening = listOf(lines(10), para("Boxed.", a, spaceBefore = 1.625f))
+        val page = layout(opening).pages[1]
         assertEquals(0.625f * em, page.slices[0].top)
         assertEquals(0f, page.boxes.single().top)
 
-        val plain = layout(opening, typography = noDecorations).pages[0]
+        val plain = layout(opening, typography = noDecorations).pages[1]
         assertTrue(plain.boxes.isEmpty(), "drew the book's box with its styles off")
         assertEquals(0f, plain.slices[0].top)
+
+        val chapterStart = layout(listOf(para("Boxed.", a, spaceBefore = 1.625f))).pages[0]
+        assertEquals(1.625f * em, chapterStart.slices[0].top)
+        assertEquals(1f * em, chapterStart.boxes.single().top)
     }
 
     @Test

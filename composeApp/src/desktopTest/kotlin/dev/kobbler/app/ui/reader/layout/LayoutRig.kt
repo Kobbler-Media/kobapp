@@ -1,7 +1,7 @@
 package dev.kobbler.app.ui.reader.layout
 
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.intl.LocaleList
+import dev.kobbler.app.ui.reader.ComposeText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
@@ -21,7 +21,7 @@ import kotlin.math.floor
 import kotlin.test.assertTrue
 
 internal object LayoutRig {
-    val resolver = createFontFamilyResolver()
+    val resolver = ComposeText.resolver()
     val density = Density(1f)
     val locales = LocaleList("en-US")
     val typography = ReaderTypography(ReaderTheme.Light.copy(fontSize = 16.sp, lineHeight = 24.sp, horizontalPadding = 0))
@@ -40,6 +40,8 @@ internal object LayoutRig {
     ): ChapterLayout = runBlocking {
         layoutChapter(blocks, styles, typography, IntSize(width, height), density, resolver, LayoutDirection.Ltr, locales)
     }
+
+    fun without(aspect: StyleAspect): ReaderTypography = typography.copy(book = BookStyle.Book.with(aspect, book = false))
 
     fun lines(n: Int, style: Int = 0, kind: BlockKind = BlockKind.Text): Block =
         Block(kind = kind, style = style, spans = listOf(Span((1..n).joinToString("\n") { "line $it" })))

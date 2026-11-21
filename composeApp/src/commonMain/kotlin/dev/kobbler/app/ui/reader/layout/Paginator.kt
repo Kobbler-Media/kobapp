@@ -84,8 +84,12 @@ internal class Paginator(
         return i + 1
     }
 
-    private fun gapFor(i: Int): Float =
-        if (slices.all { it === float?.slice }) boxes.openingSpace(i) else measurer.spaceBefore(blocks[i])
+    /** Like CSS, a page break the book forces keeps the margin after it; one the page forces drops it. */
+    private fun gapFor(i: Int): Float = when {
+        slices.any { it !== float?.slice } -> measurer.spaceBefore(blocks[i])
+        i == 0 || blocks[i].breakBefore -> maxOf(boxes.openingSpace(i), measurer.spaceAfterBreak(blocks[i], pageHeight))
+        else -> boxes.openingSpace(i)
+    }
 
     /** Lines of [m] from [from] on; while [until] is set, only those starting above it. */
     private class Run(val m: MeasuredBlock.Text, val from: Int, val opens: Boolean, val until: Float? = null)

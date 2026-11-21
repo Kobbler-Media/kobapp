@@ -9,6 +9,7 @@ import dev.kobbler.app.ui.reader.layout.LayoutRig.lines
 import dev.kobbler.app.ui.reader.layout.LayoutRig.linesOn
 import dev.kobbler.app.ui.reader.layout.LayoutRig.pageHeightFor
 import dev.kobbler.app.ui.reader.layout.LayoutRig.table
+import dev.kobbler.app.ui.reader.layout.LayoutRig.without
 import dev.kobbler.app.ui.reader.pack.Block
 import dev.kobbler.app.ui.reader.pack.BlockKind
 import dev.kobbler.app.ui.reader.pack.FixedPageDto
@@ -105,15 +106,25 @@ class PaginationRulesTest {
     }
 
     @Test
-    fun `space before collapses at the top of a page`() {
+    fun `space before survives a forced break but not a full page`() {
         val spaced = lines(1).copy(spaceBefore = 2f)
-        val result = layout(listOf(lines(1), spaced, lines(1).copy(breakBefore = true), spaced))
-        val first = result.pages[0].slices
-        assertEquals(first[0].bottom + 32f, first[1].top)
-        val second = result.pages[1].slices
-        assertEquals(0f, second[0].top)
-        assertEquals(second[0].bottom + 32f, second[1].top)
-        assertEquals(0f, layout(listOf(spaced)).pages[0].slices[0].top)
+        val cases = listOf(
+            Triple("chapter start", layout(listOf(spaced)), 32f),
+            Triple("break before", layout(listOf(lines(1), spaced.copy(breakBefore = true))), 32f),
+            Triple("full page", layout(listOf(lines(10), spaced)), 0f),
+            Triple("own spacing", layout(listOf(spaced), typography = without(StyleAspect.Spacing)), 0f),
+        )
+        for ((name, result, top) in cases) {
+            assertWellFormed(result)
+            assertEquals(top, result.pages.last().slices[0].top, name)
+        }
+        val flowing = layout(listOf(lines(1), spaced)).pages[0].slices
+        assertEquals(flowing[0].bottom + 32f, flowing[1].top)
+
+        val pageHeight = pageHeightFor(10).toFloat()
+        val huge = layout(listOf(lines(1).copy(spaceBefore = 100f)))
+        assertEquals(1, huge.pages.size)
+        assertTrue(huge.pages[0].slices[0].top <= pageHeight / 2, "a book's margin never pushes its text off the page")
     }
 
     @Test
