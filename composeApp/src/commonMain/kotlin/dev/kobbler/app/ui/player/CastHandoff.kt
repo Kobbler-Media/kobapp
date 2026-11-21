@@ -12,6 +12,7 @@ import dev.kobbler.app.data.CastInitSession
 import dev.kobbler.app.data.CastMetadata
 import dev.kobbler.app.data.ClientCapabilities
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.StreamResolveResult
 import dev.kobbler.app.data.castCapabilities
 import dev.kobbler.app.data.castContentType
 import dev.kobbler.app.data.castMethod
@@ -55,11 +56,23 @@ internal suspend fun GlobalPlayerState.castLoad(
     // segments it follows and the next episode it fetches — and it holds no login.
     val token = api.castToken() ?: return null
     // This device plays nearly any file as it is, so its own session is rarely one the
-    // receiver can open. A debrid stream has no library title to ask for again.
-    val own = mediaId?.takeUnless { isDebrid }?.let { id ->
+    // receiver can open: it gets one of its own, from the same file or the same release.
+    val delivery = "progressive".takeUnless { playsHls }
+    val own = mediaId?.let { id ->
+        val heard = heardAudio(id)
         runCatching {
-            api.createCastSession(type, id, capabilities, positionSec, delivery = "progressive".takeUnless { playsHls })
-        }.getOrNull()
+            if (isDebrid) {
+                debridPlayback?.playing?.let { option ->
+                    val resolved = api.streamResolve(
+                        option = option, mediaType = type, mediaId = id, startTime = positionSec,
+                        heard = heard, capabilities = capabilities, delivery = delivery,
+                    )
+                    (resolved as? StreamResolveResult.Ready)?.session
+                }
+            } else {
+                api.createCastSession(type, id, capabilities, positionSec, heard = heard, delivery = delivery)
+            }
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }.getOrNull()
     }
     val progressiveUrl = own?.progressiveUrl
     val streamUrl = progressiveUrl ?: own?.url ?: ownStreamUrl
@@ -160,6 +173,8 @@ fun CastHandoff(
             ?: gps.timeline.toAbsoluteMs(if (switching) gps.pendingSeekMs else player.currentMs.value)
         val durationMs = if (switching) ((gps.streamSession?.durationSeconds ?: 0.0) * 1000).toLong()
         else gps.timeline.absoluteDurationMs(player.durationMs.value)
+        // Carried on the held session so a cast that never starts hands back what was here.
+        val wasPlaying = gps.castSession?.takeIf { it.connecting }?.isPlaying ?: player.isPlaying.value
         // Stopped here the moment a receiver is picked: opening the session takes seconds,
         // and the viewer has already chosen where they are watching.
         player.pause()
@@ -168,19 +183,31 @@ fun CastHandoff(
             gps.isMiniPlayer = true
             gps.isCastExpanded = true
         }
+        val held = CastSessionDto(
+            deviceName = target.name,
+            mediaId = mediaId,
+            mediaType = gps.mediaType,
+            mediaTitle = gps.title,
+            subtitle = gps.subtitle,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            isPlaying = wasPlaying,
+            connecting = true,
+        )
+        // Ending the session is what hands the watch back, so it needs a session to hand back from.
+        suspend fun keepHere(notice: String) {
+            if (gps.castSession == null) gps.castSession = held
+            gps.castNotice.show(notice)
+            cast.stop()
+        }
         if (target.connecting) {
-            gps.castSession = CastSessionDto(
-                deviceName = target.name,
-                mediaId = mediaId,
-                mediaType = gps.mediaType,
-                mediaTitle = gps.title,
-                subtitle = gps.subtitle,
-                positionMs = positionMs,
-                durationMs = durationMs,
-                isPlaying = false,
-                connecting = true,
-            )
+            gps.castSession = held
             gps.onCastDisconnect = { gps.teardownScope.launch { cast.stop() } }
+            return@LaunchedEffect
+        }
+        // Nothing the server makes carries a film's sound alone, and a speaker plays no picture.
+        if (target.audioOnly) {
+            keepHere("${target.name} can't play video")
             return@LaunchedEffect
         }
         // A receiver from before it could say answers nothing, and is judged by its name.
@@ -192,7 +219,11 @@ fun CastHandoff(
             positionSec = (positionMs / 1000).toInt(),
             durationSec = durationMs / 1000.0,
             playsHls = CastFeature.Hls in cast.features,
-        ) ?: return@LaunchedEffect
+        )
+        if (load == null) {
+            keepHere(couldNotPlay(target.name))
+            return@LaunchedEffect
+        }
 
         cast.load(load)
         gps.castSession = CastSessionDto(
@@ -268,6 +299,10 @@ fun CastHandoff(
                 is CastEvent.Capabilities -> receiverDecodes = event.capabilities
                 is CastEvent.TracksChanged -> gps.castSession = gps.castSession?.copy(tracks = event.tracks)
                 is CastEvent.SkipChanged -> gps.castSession = gps.castSession?.copy(skip = event.skip)
+                CastEvent.Failed -> gps.castSession?.takeUnless { it.connecting }?.let { session ->
+                    gps.castNotice.show(couldNotPlay(session.deviceName))
+                    cast.stop()
+                }
                 // A cast book and a read-aloud are their own screens' to follow.
                 is CastEvent.AudiobookFileChanged, CastEvent.TtsFinished, is CastEvent.Refused -> Unit
             }
@@ -286,6 +321,8 @@ fun CastHandoff(
 private val CastScrubSettle = 4.seconds
 
 private val CapabilitiesWait = 2.seconds
+
+private fun couldNotPlay(deviceName: String) = "$deviceName couldn't play this"
 
 /** How often this device saves for a receiver that cannot save for itself; a pause saves at once. */
 private val SenderSaveEvery = 5.seconds
@@ -355,6 +392,8 @@ private suspend fun handBackFromCast(
     onResumeHere: (mediaType: String, mediaId: String) -> Unit,
 ) {
     val cast = gps.castSession ?: return
+    // The cast player stood in for the fullscreen one; the picture goes back where it was.
+    val onCastScreen = gps.isCastExpanded
     dropCast(gps)
     // What the receiver was playing is not open here: it went on to another episode, or
     // this device joined a cast already running. It is opened the way any title is.
@@ -366,9 +405,14 @@ private suspend fun handBackFromCast(
         onResumeHere(type, id)
         return
     }
+    if (onCastScreen) {
+        gps.isMiniPlayer = false
+        gps.isFullscreen = true
+    }
     if (player != null) {
-        if (cast.positionMs > 0) player.landAt(gps.timeline.toPlayerMs(cast.positionMs), resume = gps.isVideoPlaying)
-        else if (gps.isVideoPlaying) player.play()
+        val resume = gps.isVideoPlaying && cast.isPlaying
+        if (cast.positionMs > 0) player.landAt(gps.timeline.toPlayerMs(cast.positionMs), resume = resume)
+        else if (resume) player.play()
     }
     val mediaType = gps.mediaType
     val mediaId = gps.mediaId

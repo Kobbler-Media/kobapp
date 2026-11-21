@@ -2,6 +2,7 @@ package dev.kobbler.app.ui.player
 
 import dev.kobbler.app.runUiTest
 import dev.kobbler.app.UiTimeoutMs
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.CastAudioTrack
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -69,6 +71,8 @@ class CastHandoffTest {
     private fun loaded(api: KobblerApi, player: FakePlayer): GlobalPlayerState {
         val gps = GlobalPlayerState()
         gps.open(api, player, "movie-1", "sess-1")
+        gps.playUnmuted(player)
+        player.calls.clear()
         gps.isFullscreen = true
         return gps
     }
@@ -271,6 +275,149 @@ class CastHandoffTest {
             cast.disconnect()
             waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession == null }
             assertTrue(!gps.isCastExpanded)
+            assertTrue(gps.isFullscreen && !gps.isMiniPlayer, "handed back to a mini player, not the screen it left")
+        }
+    }
+
+    @Test
+    fun `a cast put down from its own screen goes back to the fullscreen player`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connect("Living Room TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { cast.loads.isNotEmpty() }
+
+            cast.disconnect()
+            waitUntil(timeoutMillis = UiTimeoutMs) { "play" in player.calls }
+            assertTrue(gps.isFullscreen && !gps.isMiniPlayer, "the picture did not come back")
+        }
+    }
+
+    @Test
+    fun `a cast collapsed to the mini bar hands back to the mini player`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connect("Living Room TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { cast.loads.isNotEmpty() }
+            gps.isCastExpanded = false
+
+            cast.disconnect()
+            waitUntil(timeoutMillis = UiTimeoutMs) { "play" in player.calls }
+            assertTrue(gps.isMiniPlayer && !gps.isFullscreen)
+        }
+    }
+
+    private fun ComposeUiTest.assertKeptHere(cast: FakeSender, gps: GlobalPlayerState, player: FakePlayer, notice: String) {
+        waitUntil(timeoutMillis = UiTimeoutMs) { cast.stopped && gps.castSession == null && "play" in player.calls }
+        assertEquals(notice, gps.castNotice.message)
+        assertTrue("seek:1380000" in player.calls, "lost its place: ${player.calls}")
+        assertTrue(gps.isFullscreen, "the picture did not come back")
+    }
+
+    @Test
+    fun `a cast paused on the receiver is handed back paused`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connect("Living Room TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
+            runBlocking { cast.say(CastEvent.Position(2_400.0, 7_200.0, isPlaying = false)) }
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession?.positionMs == 2_400_000L }
+            player.calls.clear()
+
+            cast.disconnect()
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession == null && "seek:2400000" in player.calls }
+            waitForIdle()
+
+            assertFalse("play" in player.calls, "unpaused what the viewer had paused on the receiver: ${player.calls}")
+        }
+    }
+
+    @Test
+    fun `a paused watch a speaker turns away stays paused`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            player.pause()
+            player.currentMs.value = 1_380_000
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connecting("Living Room speaker")
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
+            player.calls.clear()
+            cast.connect("Living Room speaker", audioOnly = true)
+            waitUntil(timeoutMillis = UiTimeoutMs) { cast.stopped && gps.castSession == null && "seek:1380000" in player.calls }
+            waitForIdle()
+
+            assertFalse("play" in player.calls, "a refused cast started a paused watch: ${player.calls}")
+        }
+    }
+
+    @Test
+    fun `a speaker is never handed a film and the watch stays here`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            player.currentMs.value = 1_380_000
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connecting("Living Room speaker")
+            waitUntil(timeoutMillis = UiTimeoutMs) { gps.castSession != null }
+            cast.connect("Living Room speaker", audioOnly = true)
+
+            assertKeptHere(cast, gps, player, "Living Room speaker can't play video")
+            assertTrue(cast.loads.isEmpty(), "loaded a film onto a speaker: ${cast.loads}")
+        }
+    }
+
+    @Test
+    fun `a receiver that cannot play what it was handed gives the watch back`() = runUiTest {
+        StubServer(routes).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            player.currentMs.value = 1_380_000
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connect("Living Room TV")
+            waitUntil(timeoutMillis = UiTimeoutMs) { cast.loads.isNotEmpty() }
+            runBlocking { cast.say(CastEvent.Failed) }
+
+            assertKeptHere(cast, gps, player, "Living Room TV couldn't play this")
+        }
+    }
+
+    @Test
+    fun `a title that cannot be put on the receiver is not left stranded there`() = runUiTest {
+        StubServer(routes - "/api/v1/admin/playback/tokens").use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val player = FakePlayer().also { it.durationMs.value = 7_200_000 }
+            val gps = loaded(api, player)
+            player.currentMs.value = 1_380_000
+            val cast = FakeSender()
+
+            setContent { CastHandoff(cast, gps, api, player) }
+            cast.connect("Living Room TV")
+
+            assertKeptHere(cast, gps, player, "Living Room TV couldn't play this")
         }
     }
 

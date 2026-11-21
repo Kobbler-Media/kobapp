@@ -9,7 +9,6 @@ import dev.kobbler.app.offline.OfflineItem
 import dev.kobbler.app.offline.OfflineKind
 import dev.kobbler.app.offline.OfflineState
 import dev.kobbler.kobplayer.Player
-import dev.kobbler.kobplayer.PlayerState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -40,12 +39,16 @@ internal fun RouteDownloadsThroughProxy(gps: GlobalPlayerState, player: Player, 
 
 private suspend fun GlobalPlayerState.reopenThroughDownload(player: Player, api: KobblerApi, type: String, id: String) {
     val previous = sessionId
-    val keepPaused = player.state.value == PlayerState.PAUSED
     val resumeSec = (timeline.toAbsoluteMs(player.currentMs.value) / 1000).toInt()
     val audioTitle = rememberedAudioTitle(playbackTitleKey)
-    val session = (if (type == "movie") api.getMovieStreamSession(id, audioTitle = audioTitle) else api.getEpisodeStreamSession(id, audioTitle = audioTitle)) ?: return
+    val heard = heardAudio(id)
+    val session = (
+        if (type == "movie") api.getMovieStreamSession(id, audioTitle = audioTitle, heard = heard)
+        else api.getEpisodeStreamSession(id, audioTitle = audioTitle, heard = heard)
+    ) ?: return
     if (mediaId != id) return
     loadInPlace(player, api, type, id, session, resumeSec)
-    if (keepPaused) endPreload(player) else playUnmuted(player)
+    viewerPause.reopening()
+    playUnmuted(player)
     if (previous != null && previous != session.sessionId) teardownScope.launch { api.closeSession(previous) }
 }

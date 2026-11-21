@@ -152,6 +152,7 @@ fun InlineTvPlayer(
             }
 
         if (autoPlay) PlaybackTrace.begin("play episode $episodeId (autoplay)")
+        if (autoPlay && api.canStream && findEpisode(show, episodeId).second?.filePath == null) gps.markStreamStart()
         try {
             val start = startPlayback(api, "episode", episodeId, cachedSec, audioTitle = rememberedAudioTitle("episode", episodeId, show.id))
             val session = start?.session
@@ -355,6 +356,12 @@ fun InlineTvPlayer(
                 val episode = show.seasons.getOrNull(sIdx)?.episodes?.getOrNull(eIdx) ?: return@TvShowDetailScreen
                 val episodeId = episode.id ?: return@TvShowDetailScreen
                 val season = show.seasons[sIdx]
+                // Same as a movie: a session asked for an episode with no file only answers
+                // that there is none, and the player sat black and shell-less meanwhile.
+                if (episode.filePath == null && api.canStream && gps.mediaId != episodeId) {
+                    autoPlayDebridEpisode(sIdx, eIdx, fromStart)
+                    return@TvShowDetailScreen
+                }
 
                 scope.launch {
                     try {
@@ -584,6 +591,7 @@ internal suspend fun tryPlayTvWithFallback(
             api.streamResolve(
                 option = opt, mediaType = "episode", mediaId = episodeId, startTime = resumeRequestSeconds(resume),
                 audioTitle = rememberedAudioTitle("episode", episodeId, show.id),
+                heard = gps.heardAudio(episodeId),
             )
         },
         play = { _, session, resume ->

@@ -11,9 +11,13 @@ import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadRequestData
 import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.MediaSeekOptions
+import com.google.android.gms.cast.MediaStatus
+import com.google.android.gms.cast.CastStatusCodes
+import com.google.android.gms.cast.CastDevice as GmsCastDevice
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.cast.framework.media.RemoteMediaClient
 import com.google.android.gms.common.images.WebImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,6 +42,8 @@ import org.json.JSONObject
 
 private const val PREFS_NAME = "kobbler_cast"
 private const val PREF_APP_ID = "receiver_app_id"
+
+private val Superseded = setOf(CastStatusCodes.REPLACED, CastStatusCodes.CANCELED)
 
 // A TV is a target, not a sender: initContext only runs off-TV, so there both stay inert.
 private val router by lazy {
@@ -138,15 +144,30 @@ class CastManager private constructor() : CastBackend {
     }
 
     private fun opening(s: CastSession) {
-        _device.value = CastDevice(s.name(), connecting = true)
+        _device.value = s.device(connecting = true)
     }
 
-    private fun CastSession.name() = castDevice?.friendlyName ?: "Cast device"
+    private fun CastSession.device(connecting: Boolean) = CastDevice(
+        name = castDevice?.friendlyName ?: "Cast device",
+        connecting = connecting,
+        audioOnly = castDevice?.hasCapability(GmsCastDevice.CAPABILITY_VIDEO_OUT) == false,
+    )
+
+    private val mediaFailures = object : RemoteMediaClient.Callback() {
+        override fun onStatusUpdated() {
+            val client = session?.remoteMediaClient ?: return
+            if (client.playerState == MediaStatus.PLAYER_STATE_IDLE && client.idleReason == MediaStatus.IDLE_REASON_ERROR) {
+                _events.tryEmit(CastEvent.Failed)
+            }
+        }
+    }
 
     private fun adopt(s: CastSession) {
+        session?.remoteMediaClient?.unregisterCallback(mediaFailures)
         session = s
         sessionFeatures.reset()
-        _device.value = CastDevice(s.name())
+        _device.value = s.device(connecting = false)
+        s.remoteMediaClient?.registerCallback(mediaFailures)
         try {
             s.setMessageReceivedCallbacks(CAST_NAMESPACE) { _, _, message ->
                 parseCastEvent(message)?.let {
@@ -159,6 +180,7 @@ class CastManager private constructor() : CastBackend {
     }
 
     private fun release() {
+        session?.remoteMediaClient?.unregisterCallback(mediaFailures)
         session = null
         _device.value = null
     }
@@ -188,7 +210,11 @@ class CastManager private constructor() : CastBackend {
             .build()
         send("INIT_SESSION", load.payloadJson)
         // The SDK asserts the main thread for anything that touches a session.
-        withContext(Dispatchers.Main) { client.load(request) }
+        withContext(Dispatchers.Main) {
+            client.load(request).setResultCallback { result ->
+                if (!result.status.isSuccess && result.status.statusCode !in Superseded) _events.tryEmit(CastEvent.Failed)
+            }
+        }
     }
 
     override suspend fun send(type: String, payloadJson: String) {
@@ -301,10 +327,12 @@ private fun MediaRouter.castRoutes(selector: MediaRouteSelector) =
 private fun MediaRouter.RouteInfo.target() = PlaybackTarget(
     id = id,
     name = name,
-    kind = when (deviceType) {
-        MediaRouter.RouteInfo.DEVICE_TYPE_TV -> PlaybackTargetKind.Tv
-        MediaRouter.RouteInfo.DEVICE_TYPE_GROUP -> PlaybackTargetKind.Group
-        MediaRouter.RouteInfo.DEVICE_TYPE_SPEAKER, MediaRouter.RouteInfo.DEVICE_TYPE_REMOTE_SPEAKER -> PlaybackTargetKind.Speaker
+    kind = when {
+        deviceType == MediaRouter.RouteInfo.DEVICE_TYPE_GROUP -> PlaybackTargetKind.Group
+        // A Nest speaker can route as an unknown type; its own record says it has no screen.
+        GmsCastDevice.getFromBundle(extras)?.hasCapability(GmsCastDevice.CAPABILITY_VIDEO_OUT) == false -> PlaybackTargetKind.Speaker
+        deviceType == MediaRouter.RouteInfo.DEVICE_TYPE_TV -> PlaybackTargetKind.Tv
+        deviceType == MediaRouter.RouteInfo.DEVICE_TYPE_SPEAKER || deviceType == MediaRouter.RouteInfo.DEVICE_TYPE_REMOTE_SPEAKER -> PlaybackTargetKind.Speaker
         else -> PlaybackTargetKind.Other
     },
     protocol = PlaybackProtocol.GoogleCast,

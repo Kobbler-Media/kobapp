@@ -66,11 +66,31 @@ fun startAudioIndex(
     audioTracks: List<AudioTrackDto>,
     serverPick: Int?,
     preferredLanguage: String?,
+    keep: AudioTrackDto? = null,
 ): Int? {
     val feature = audioTracks.featureTracks()
     val default = audioTracks.firstOrNull { it.isDefault }
         ?.let { if (it in feature) it else feature.firstOrNull() ?: it }
-    return serverPick
+    return chosenAudioIndex(audioTracks, serverPick, preferredLanguage, keep) ?: default?.streamIndex
+}
+
+/**
+ * The track something asked for, as opposed to whatever the file leads with: [keep], the
+ * track the viewer was hearing before this title was opened again, outranks the server's
+ * pick, which only knows the standing preferences.
+ */
+fun chosenAudioIndex(
+    audioTracks: List<AudioTrackDto>,
+    serverPick: Int?,
+    preferredLanguage: String?,
+    keep: AudioTrackDto? = null,
+): Int? {
+    val feature = audioTracks.featureTracks()
+    val kept = keep?.let { k ->
+        audioTracks.firstOrNull { it.language == k.language && it.title == k.title && it.title != null }
+            ?: feature.firstOrNull { it.speaks(k.language) }
+    }
+    return kept?.streamIndex
+        ?: serverPick
         ?: feature.firstOrNull { it.speaks(preferredLanguage) }?.streamIndex
-        ?: default?.streamIndex
 }

@@ -175,6 +175,21 @@ class GlobalPlayerState {
     var serverAudioTracks by mutableStateOf<List<dev.kobbler.app.data.AudioTrackDto>>(emptyList())
     var selectedServerAudioIndex by mutableStateOf<Int?>(null)
     val loudness: Loudness? get() = selectedServerAudioIndex?.let { trackLoudness[it] }
+    val playingServerAudio: dev.kobbler.app.data.AudioTrackDto?
+        get() = serverAudioTracks.firstOrNull { it.streamIndex == selectedServerAudioIndex }
+
+    /**
+     * What the viewer was hearing before this title was last opened again. Held past the
+     * open because a debrid session that has not been probed yet names no tracks at all,
+     * and its probe is where the choice is finally applied.
+     */
+    internal var keptAudio: dev.kobbler.app.data.AudioTrackDto? = null
+
+    /** What the viewer is hearing of [id], for a new session of it to ask the server for. */
+    internal fun heardAudio(id: String?): dev.kobbler.app.data.AudioTrackDto? =
+        if (id != null && id == mediaId) playingServerAudio ?: keptAudio else null
+
+    internal val viewerPause = ViewerPause()
 
     // Client-rendered subtitles: server provides VTT URLs, we draw the cues in a
     // Compose overlay so they stay in the visible viewport regardless of video
@@ -210,6 +225,7 @@ class GlobalPlayerState {
     var onCastAudio: ((Int) -> Unit)? = null
     /** When the viewer last moved the receiver themselves. See CastHandoff. */
     var castScrubbedAt: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
+    val castNotice = dev.kobbler.app.ui.detail.ToastState()
 
     // Set to the media id the player is being opened for before its session exists, so
     // a Continue Watching tap raises the player immediately and lets the detail page
@@ -460,6 +476,9 @@ class GlobalPlayerState {
         // them before it answers, and none of that is an input to opening the next stream
         // — awaiting it put a variable, sometimes long, stall in front of every switch.
         val oldSid = sessionId
+        keptAudio = if (id == mediaId) playingServerAudio ?: keptAudio else null
+        if (id != mediaId) viewerPause.forget()
+        viewerPause.follow(player, teardownScope) { mutedForPreload }
         if (oldSid != null && id != mediaId) {
             teardownScope.launch { api.closeSession(oldSid) }
         }
@@ -479,6 +498,7 @@ class GlobalPlayerState {
         preparingFor = null
         isPreparing = false
         preparingNote = null
+        recoveryNotice = false
         mediaType = type
         mediaId = id
         title = newTitle
@@ -506,6 +526,7 @@ class GlobalPlayerState {
             serverPick = session?.selectedAudioIndex,
             preferredLanguage = dev.kobbler.app.data.UserSettings
                 .getString(dev.kobbler.app.ui.dashboard.KEY_DEFAULT_AUDIO_LANG),
+            keep = keptAudio,
         )
         val subs = session?.subtitles ?: emptyList()
         serverSubtitleTracks = subs
@@ -687,6 +708,7 @@ class GlobalPlayerState {
         picture = null
         serverAudioTracks = emptyList()
         selectedServerAudioIndex = null
+        keptAudio = null
         serverSubtitleTracks = emptyList()
         selectedServerSubtitleTrackId = null
         selectedServerSubtitleStreamIndex = null
@@ -806,6 +828,7 @@ class GlobalPlayerState {
         contextLines: List<String> = emptyList(),
         help: PlaybackFailureHelp? = null,
     ) {
+        viewerPause.settle()
         // Cancellation means we stopped, not that playback failed: leaving the screen
         // kills the in-flight resolve, and reporting that raised a dialog over nothing.
         if (throwable is CancellationException) {
@@ -819,6 +842,7 @@ class GlobalPlayerState {
         }
         reportStatus = ReportStatus.Idle
         isStarting = false
+        recoveryNotice = false
         loadingError = buildString {
             appendLine("Playback failed")
             if (contextLines.isNotEmpty()) {
@@ -860,8 +884,9 @@ class GlobalPlayerState {
         onCancel: (() -> Unit)? = null,
         stream: Boolean = true,
     ) {
+        viewerPause.settle()
         if (isActive) {
-            if (stream && preparingFor != null) streamStart = true
+            if (stream) markStreamStart()
             return
         }
         streamStart = stream
@@ -875,6 +900,14 @@ class GlobalPlayerState {
         loadingError = null
         isPreparing = true
         isFullscreen = true
+    }
+
+    /**
+     * Continue raises its shell before anyone knows whether the title is a library file or a
+     * debrid stream; the detail screen says which as soon as it can.
+     */
+    fun markStreamStart() {
+        if (preparingFor != null) streamStart = true
     }
 
     /** Take the shell back down when the thing it was raised for never arrived. */
@@ -938,7 +971,7 @@ class GlobalPlayerState {
 
     /** Unmute if we muted for preload, then play. */
     fun playUnmuted(player: dev.kobbler.kobplayer.Player) {
-        if (castSession != null && mediaType in CastableTypes) {
+        if (viewerPause.holds() || castSession != null && mediaType in CastableTypes) {
             endPreload(player)
             return
         }

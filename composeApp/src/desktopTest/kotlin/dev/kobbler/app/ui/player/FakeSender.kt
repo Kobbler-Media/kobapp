@@ -48,7 +48,7 @@ internal class FakeSender(
     override suspend fun stop() { stopped = true; _device.value = null }
 
     fun connecting(name: String) { _device.value = CastDevice(name, connecting = true) }
-    fun connect(name: String) { _device.value = CastDevice(name) }
+    fun connect(name: String, audioOnly: Boolean = false) { _device.value = CastDevice(name, audioOnly = audioOnly) }
     fun disconnect() { _device.value = null }
     suspend fun say(event: CastEvent) {
         session.heard(event)

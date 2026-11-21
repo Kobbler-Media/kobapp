@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import dev.kobbler.app.platform.CastDevice
 import dev.kobbler.app.platform.CastRouter
 import dev.kobbler.app.platform.PlaybackTarget
+import dev.kobbler.app.platform.PlaybackTargetKind
 import dev.kobbler.app.platform.castManager
 import kotlinx.coroutines.launch
 
@@ -29,6 +30,12 @@ val LocalCastRouter = staticCompositionLocalOf<CastRouter> { castManager() }
 
 internal fun playOnVisible(targets: List<PlaybackTarget>, device: CastDevice?): Boolean =
     targets.isNotEmpty() || device != null
+
+private val SoundOnly = setOf(PlaybackTargetKind.Speaker, PlaybackTargetKind.Group)
+
+// A receiver fetches its own stream, so a speaker can't take only the sound of a video shown here.
+internal fun castableFor(targets: List<PlaybackTarget>, video: Boolean): List<PlaybackTarget> =
+    if (video) targets.filterNot { it.kind in SoundOnly } else targets
 
 /**
  * Hand playback to another device, or control the one it went to.
@@ -40,10 +47,14 @@ internal fun playOnVisible(targets: List<PlaybackTarget>, device: CastDevice?): 
 fun PlayOnButton(
     modifier: Modifier = Modifier,
     tint: Color = Color.Unspecified,
+    audio: Boolean = false,
     onOpenChange: (Boolean) -> Unit = {},
 ) {
     val router = LocalCastRouter.current
-    val targets by router.targets.collectAsState(emptyList())
+    val gps = LocalGlobalPlayerState.current
+    val video = !audio && gps?.isActive == true && gps.mediaType in CastableTypes
+    val found by router.targets.collectAsState(emptyList())
+    val targets = castableFor(found, video)
     val device by router.device.collectAsState()
     var open by remember { mutableStateOf(false) }
     val reportOpen by rememberUpdatedState(onOpenChange)
@@ -63,7 +74,6 @@ fun PlayOnButton(
     if (!open) return
     val close = { open = false }
     if (connected) {
-        val gps = LocalGlobalPlayerState.current
         CastControllerDialog(
             deviceName = device?.name.orEmpty(),
             session = gps?.castSession,

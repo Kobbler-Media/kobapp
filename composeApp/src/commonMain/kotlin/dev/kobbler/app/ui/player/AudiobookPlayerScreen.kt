@@ -243,7 +243,7 @@ private fun TopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        PlayOnButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), colors.textMd)
+        PlayOnButton(Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f), colors.textMd, audio = true)
         LabelledIconButton(Icons.Outlined.BookmarkAdd, "Add bookmark", onAddBookmark, Modifier.focusKey("bookmark"), tint = colors.textMd)
         SleepTimerMenu(mode = sleepMode, remainingMs = sleepRemainingMs, onSelect = onSleepSelect)
         if (onOpenReader != null) {

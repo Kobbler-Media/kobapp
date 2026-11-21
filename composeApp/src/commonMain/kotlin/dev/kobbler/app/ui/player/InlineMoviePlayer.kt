@@ -84,6 +84,10 @@ fun InlineMoviePlayer(
 
     val movieSubtitle = "${movie.year} • ${movie.duration ?: ""}"
 
+    LaunchedEffect(isDebrid) {
+        if (isDebrid && autoPlayPending) gps.markStreamStart()
+    }
+
     WarmStream(
         gps, api,
         target = movie.instantTarget()?.takeIf { player != null && api.canStream && supportsVideoPlayback },
@@ -392,6 +396,7 @@ private suspend fun tryPlayWithFallback(
             api.streamResolve(
                 option = opt, mediaType = "movie", mediaId = movie.id, startTime = resumeRequestSeconds(resume),
                 audioTitle = rememberedAudioTitle("movie", movie.id, null),
+                heard = gps.heardAudio(movie.id),
             )
         },
         play = { _, session, resume -> playDebridSession(gps, player, api, session, movie, resume) },

@@ -18,8 +18,8 @@ import kotlinx.serialization.json.jsonPrimitive
 /** The namespace the Kobbler receiver app listens on. Shared with the web sender. */
 const val CAST_NAMESPACE = "urn:x-cast:com.kobbler.cast"
 
-/** The device a cast session is running on, or is still being opened on. */
-data class CastDevice(val name: String, val connecting: Boolean = false)
+/** The device a cast session is running on, or is still being opened on. [audioOnly] is a speaker or a group of them. */
+data class CastDevice(val name: String, val connecting: Boolean = false, val audioOnly: Boolean = false)
 
 /**
  * What to put on the receiver.
@@ -67,6 +67,9 @@ sealed interface CastEvent {
 
     /** A read-aloud's stream ran out. The session stays: what is read next is the reader's call. */
     data object TtsFinished : CastEvent
+
+    /** The receiver could not open or keep playing what it was handed. */
+    data object Failed : CastEvent
 
     /** The credential the receiver was handed has expired. */
     data object Expired : CastEvent

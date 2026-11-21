@@ -2,6 +2,8 @@ package dev.kobbler.app.ui.player
 
 import androidx.compose.runtime.Immutable
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.app.data.SessionStatus
+import dev.kobbler.app.data.SessionStatusDto
 import dev.kobbler.app.data.StreamOption
 import dev.kobbler.app.data.StreamResolveResult
 import dev.kobbler.app.data.StreamSearchResult
@@ -24,7 +26,6 @@ class PlaybackFailureHelp(
 )
 
 private const val NEXT_STREAM_NOTE = "That stream wouldn't play — trying another…"
-private const val RECONNECT_STREAM_NOTE = "Lost the stream — reconnecting…"
 internal const val SWITCHED_SOURCE_NOTE = "Switched to another source"
 
 // A new release is a different encode: its keyframes and any cut differ, so it picks up
@@ -61,6 +62,7 @@ internal class DebridPlayback(
     private val reloadedStalls = mutableSetOf<String>()
     private var abandoned = false
     private var current: StreamOption? = null
+    val playing: StreamOption? get() = current
     private var currentSession: KobblerApi.StreamSession? = null
     private var playedSession: String? = null
     private var retry: Job? = null
@@ -169,9 +171,11 @@ internal class DebridPlayback(
 
     /**
      * Take a failure off the player's hands. A start that never played moves on to the
-     * next option by itself; one that played and then broke is reopened once, and if it
-     * breaks again playback moves to the next release where it left off. The dialog is
-     * only for when nothing is left to try.
+     * next option by itself. One that played and then broke is first opened again on the
+     * session it had — a paused stream's idle connection is closed by the proxy in front
+     * of the server, and the session is still there to read — then resolved again once,
+     * and if it breaks again playback moves to the next release where it left off. The
+     * dialog is only for when nothing is left to try.
      */
     fun takeOver(player: Player, cause: Throwable): Boolean {
         // Null between a session being retired and the next one loading: whatever the
@@ -179,12 +183,18 @@ internal class DebridPlayback(
         val sid = gps.sessionId ?: return retry?.isActive == true
         val lost = current ?: return false
         if (sid in failedSessions) return true
+        gps.viewerPause.reopening()
         resumeSec = resumeSecondsNow(player)
         if (reloadStalled(player, sid, cause)) return true
+        if (!reconnectDropped(player, sid, lost, cause)) moveOn(player, sid, lost, cause)
+        return true
+    }
+
+    private fun moveOn(player: Player, sid: String, lost: StreamOption, cause: Throwable) {
         failedSessions += sid
         val midway = sid == playedSession
         // A release that played and then dropped is more likely a hiccup — an expired link,
-        // a CDN blip — than a bad file, so it is reopened once before anything is blamed.
+        // a CDN blip — than a bad file, so it is resolved again once before anything is blamed.
         val reopen = midway && reopenedMidway.add(lost.id)
         gps.teardownScope.launch {
             if (!reopen) api.reportStreamOutcome(sid, ok = false, reason = cause.message)
@@ -198,7 +208,8 @@ internal class DebridPlayback(
         player.stop()
         gps.isStarting = true
         gps.isPreparing = true
-        gps.preparingNote = if (midway) RECONNECT_STREAM_NOTE else NEXT_STREAM_NOTE
+        gps.recoveryNotice = midway
+        gps.preparingNote = if (midway) RECONNECTING_NOTE else NEXT_STREAM_NOTE
         relaunch {
             val untried = searched().any { it.id !in tried }
             when {
@@ -207,11 +218,51 @@ internal class DebridPlayback(
                 else -> giveUp(cause, lostMidway = midway)
             }
         }
+        cancelOnPreparing(player)
+    }
+
+    /**
+     * A stream that played and then dropped, opened again on the session it had, at the
+     * playhead and on the audio the viewer was hearing. Bounded by the same storm budget
+     * as a library reconnect, so a session that keeps dying is handed on to [moveOn].
+     */
+    private fun reconnectDropped(player: Player, sid: String, lost: StreamOption, cause: Throwable): Boolean {
+        if (sid != playedSession) return false
+        val session = currentSession?.takeIf { it.sessionId == sid } ?: return false
+        val type = gps.mediaType ?: return false
+        val id = gps.mediaId ?: return false
+        if (!gps.spendRecoveryBudget()) return false
+        gps.noteStartEvent("dropped midway: reopening $sid")
+        player.stop()
+        gps.isStarting = true
+        relaunch {
+            gps.isRecovering = true
+            val notice = gps.raiseReconnectNotice(player, api)
+            val alive = try {
+                val status = api.sessionStatus(sid)
+                val alive = status !is SessionStatus.Missing && (status as? SessionStatusDto)?.state != "failed"
+                if (alive) {
+                    // The session as resolved may predate its probe; what the player learned since stands.
+                    val known = session.copy(audioTracks = gps.serverAudioTracks.ifEmpty { session.audioTracks })
+                    gps.loadInPlace(player, api, type, id, known, resumeSec)
+                    gps.playUnmuted(player)
+                }
+                alive
+            } finally {
+                gps.isRecovering = false
+                gps.endReconnectNotice(notice)
+            }
+            if (!alive) moveOn(player, sid, lost, cause)
+        }
+        cancelOnPreparing(player)
+        return true
+    }
+
+    private fun cancelOnPreparing(player: Player) {
         gps.onPreparingCancel = {
             retry?.cancel()
             gps.stop(player, api, gps.teardownScope)
         }
-        return true
     }
 
     /**

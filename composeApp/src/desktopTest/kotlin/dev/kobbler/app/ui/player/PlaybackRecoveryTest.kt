@@ -47,6 +47,12 @@ class PlaybackRecoveryTest {
         title = "Project Hail Mary"
     }
 
+    private fun pausedByViewer(gps: GlobalPlayerState, player: FakePlayer) = runBlocking {
+        gps.viewerPause.follow(player, gps.teardownScope) { false }
+        player.pause()
+        withTimeout(5_000) { while (!gps.viewerPause.paused) delay(10) }
+    }
+
     private fun stalledPlayer(atMs: Long) = FakePlayer().apply {
         playStalls = true
         durationMs.value = 9_444_000
@@ -220,8 +226,10 @@ class PlaybackRecoveryTest {
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val gps = watching()
             val player = stalledPlayer(atMs = 90_000)
+            pausedByViewer(gps, player)
+            player.calls.clear()
 
-            gps.recoverPlayback(player, api, keepPaused = true)
+            gps.recoverPlayback(player, api)
 
             assertEquals(listOf("s1"), minted.toList(), "no fresh session was minted")
             assertFalse(
@@ -229,6 +237,21 @@ class PlaybackRecoveryTest {
                 "started a player the viewer had paused: ${player.calls}",
             )
             assertFalse(gps.isStarting, "left the loading state up over a player it will not start")
+        }
+    }
+
+    @Test
+    fun `retrying from the error dialog plays even a stream that was paused`() = runTest {
+        StubServer(mintingRoutes(CopyOnWriteArrayList())).use { stub ->
+            val api = KobblerApi(HttpClient(), stub.url, "token")
+            val gps = watching()
+            val player = stalledPlayer(atMs = 90_000)
+            pausedByViewer(gps, player)
+            player.calls.clear()
+
+            gps.retryPlayback(player, api)
+
+            assertTrue(player.calls.contains("play"), "a deliberate retry left the stream paused: ${player.calls}")
         }
     }
 
@@ -245,10 +268,13 @@ class PlaybackRecoveryTest {
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val gps = watching()
             val player = stalledPlayer(atMs = 90_000)
+            pausedByViewer(gps, player)
+            player.calls.clear()
 
             reapedUnder(gps, player) { PlaybackSessionHeartbeat(gps, player, api, intervalMs = 50) }
 
             assertEquals("s1", gps.sessionId)
+            assertFalse(player.calls.contains("play"), "the heartbeat's reconnect played a paused stream: ${player.calls}")
         }
     }
 

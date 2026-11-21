@@ -436,6 +436,11 @@ fun AdaptiveScaffold(auth: AuthState, formFactor: FormFactor, onToggleFullscreen
 
             dev.kobbler.app.ui.player.StreamPickerHost(gps, api)
 
+            dev.kobbler.app.ui.detail.ToastOverlay(
+                gps.castNotice,
+                Modifier.align(androidx.compose.ui.Alignment.BottomCenter).navigationBarsPadding(),
+            )
+
             // Screenshot-friendly playback error dialog. Lives at scaffold level so
             // it shows even when no player surface is active (e.g. session creation
             // failed before the fullscreen player opened).

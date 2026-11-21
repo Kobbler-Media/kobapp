@@ -20,9 +20,10 @@ internal data class TrackPrefs(
     }
 
     companion object {
-        fun current(audioTitle: String? = null) = TrackPrefs(
-            audioLanguage = UserSettings.getString(KEY_DEFAULT_AUDIO_LANG)?.takeIf { it.isNotBlank() },
-            audioTitle = audioTitle,
+        fun current(audioTitle: String? = null, heard: AudioTrackDto? = null) = TrackPrefs(
+            audioLanguage = heard?.language?.takeIf { it.isNotBlank() && it != "und" }
+                ?: UserSettings.getString(KEY_DEFAULT_AUDIO_LANG)?.takeIf { it.isNotBlank() },
+            audioTitle = if (heard != null) heard.title?.takeIf { it.isNotBlank() } else audioTitle,
             subtitleLanguage = UserSettings.getString(KEY_DEFAULT_SUBTITLE_LANG)?.takeIf { it.isNotBlank() },
             subtitlesEnabled = UserSettings.getString(KEY_SUBTITLES_ENABLED) != "false",
         )

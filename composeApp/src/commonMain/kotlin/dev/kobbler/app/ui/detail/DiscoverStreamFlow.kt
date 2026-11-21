@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import dev.kobbler.app.data.AudioTrackDto
 import dev.kobbler.app.data.DiscoverDetail
 import dev.kobbler.app.data.DiscoverEpisodeRef
 import dev.kobbler.app.data.KobblerApi
@@ -134,10 +135,14 @@ internal class DiscoverStreams(
     private fun walkFor(episode: DiscoverEpisodeRef?, claim: (suspend () -> InstantStart?)?): DebridPlayback {
         val d = detail()
         lateinit var walk: DebridPlayback
+        var played: String? = null
         walk = DebridPlayback(
             api = api, gps = gps, search = { searchFor(episode).await() },
-            resolve = { option, resume -> resolve(option, episode, resume) },
-            play = { _, session, resume -> play(session, episode, resume) },
+            resolve = { option, resume -> resolve(option, episode, resume, gps.heardAudio(played)) },
+            play = { _, session, resume ->
+                played = session.mediaId
+                play(session, episode, resume)
+            },
             onCaching = { c ->
                 caching = Caching(c.providerId, c.torrentId, c.option, episode, walk)
                 gps.beginCachingPreparation(
@@ -165,7 +170,7 @@ internal class DiscoverStreams(
         else -> null
     }
 
-    private suspend fun resolve(option: StreamOption, episode: DiscoverEpisodeRef?, resumeSec: Int) =
+    private suspend fun resolve(option: StreamOption, episode: DiscoverEpisodeRef?, resumeSec: Int, heard: AudioTrackDto?) =
         api.streamResolve(
             option = option,
             mediaType = detail().mediaType,
@@ -173,6 +178,7 @@ internal class DiscoverStreams(
             autoCreate = detail(),
             autoCreateEpisode = episode,
             audioTitle = detail().rememberedAudioTitle(episode),
+            heard = heard,
         )
 
     private suspend fun play(session: KobblerApi.StreamSession, episode: DiscoverEpisodeRef?, resumeSec: Int) {

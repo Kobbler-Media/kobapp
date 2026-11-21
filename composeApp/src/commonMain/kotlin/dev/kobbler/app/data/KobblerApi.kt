@@ -4301,6 +4301,9 @@ class KobblerApi(
         autoCreate: DiscoverDetail? = null,
         autoCreateEpisode: DiscoverEpisodeRef? = null,
         audioTitle: String? = null,
+        heard: AudioTrackDto? = null,
+        capabilities: ClientCapabilities = capabilities(),
+        delivery: String? = null,
     ): StreamResolveResult {
         val target = StreamTarget(mediaType, mediaId, autoCreate, autoCreateEpisode, audioTitle)
         val body = buildJsonObject {
@@ -4311,7 +4314,8 @@ class KobblerApi(
             put("debrid_provider", option.debridProvider)
             option.qualityJson?.let { put("quality", it) }
             estimatedDuration?.let { put("estimated_duration", it) }
-            putStreamTarget(target, startTime)
+            putStreamTarget(target, startTime, heard, capabilities)
+            delivery?.let { put("delivery", it) }
         }
         val respText = post("/api/v1/admin/stream/resolve", body.toString(), StreamResolveTimeoutMs)
         val disc = decode<StreamResolveDiscriminatorDto>(respText)
@@ -4327,12 +4331,17 @@ class KobblerApi(
         return StreamResolveResult.Caching(providerId, torrentId, option)
     }
 
-    private fun JsonObjectBuilder.putStreamTarget(target: StreamTarget, startTime: Int?) {
+    private fun JsonObjectBuilder.putStreamTarget(
+        target: StreamTarget,
+        startTime: Int?,
+        heard: AudioTrackDto? = null,
+        capabilities: ClientCapabilities = capabilities(),
+    ) {
         put("media_type", target.mediaType)
         target.mediaId?.let { put("media_id", it) }
         startTime?.let { put("start_time", it) }
-        TrackPrefs.current(target.audioTitle).putInto(this)
-        put("capabilities", capabilitiesJson())
+        TrackPrefs.current(target.audioTitle, heard).putInto(this)
+        put("capabilities", json.encodeToJsonElement(ClientCapabilities.serializer(), capabilities))
         target.discover?.let { ac ->
             putJsonObject("auto_create") {
                 put("title", ac.title)
@@ -4509,14 +4518,24 @@ class KobblerApi(
      * between the tap and the first byte to re-derive a choice the server owns anyway.
      * A media with no available file comes back 404, which is the null.
      */
-    suspend fun getMovieStreamSession(movieId: String, startTimeSec: Int? = null, audioTitle: String? = null): StreamSession? =
+    suspend fun getMovieStreamSession(
+        movieId: String,
+        startTimeSec: Int? = null,
+        audioTitle: String? = null,
+        heard: AudioTrackDto? = null,
+    ): StreamSession? =
         offline?.playbackSession("movie", movieId) { createDownloadSession("movie", movieId) }
-            ?: createDirectSession("movie", movieId, startTimeSec, audioTitle)
+            ?: createDirectSession("movie", movieId, startTimeSec, audioTitle, heard)
 
     /** Get a streaming session for an episode. See [getMovieStreamSession]. */
-    suspend fun getEpisodeStreamSession(episodeId: String, startTimeSec: Int? = null, audioTitle: String? = null): StreamSession? =
+    suspend fun getEpisodeStreamSession(
+        episodeId: String,
+        startTimeSec: Int? = null,
+        audioTitle: String? = null,
+        heard: AudioTrackDto? = null,
+    ): StreamSession? =
         offline?.playbackSession("episode", episodeId) { createDownloadSession("episode", episodeId) }
-            ?: createDirectSession("episode", episodeId, startTimeSec, audioTitle)
+            ?: createDirectSession("episode", episodeId, startTimeSec, audioTitle, heard)
 
     /**
      * A session onto the title's own file, whatever the quality setting says: a download is
@@ -4649,14 +4668,16 @@ class KobblerApi(
         mediaId: String,
         capabilities: ClientCapabilities,
         startTimeSec: Int,
+        heard: AudioTrackDto? = null,
         delivery: String? = null,
-    ): StreamSession? = createDirectSession(mediaType, mediaId, startTimeSec, capabilities = capabilities, delivery = delivery)
+    ): StreamSession? = createDirectSession(mediaType, mediaId, startTimeSec, heard = heard, capabilities = capabilities, delivery = delivery)
 
     private suspend fun createDirectSession(
         mediaType: String,
         mediaId: String,
         startTimeSec: Int? = null,
         audioTitle: String? = null,
+        heard: AudioTrackDto? = null,
         capabilities: ClientCapabilities = capabilities(),
         delivery: String? = null,
     ): StreamSession? {
@@ -4668,7 +4689,7 @@ class KobblerApi(
             "480" -> 2000
             else -> null
         }
-        val prefs = TrackPrefs.current(audioTitle)
+        val prefs = TrackPrefs.current(audioTitle, heard)
         val reqBody = json.encodeToString(CreateSessionRequest.serializer(), CreateSessionRequest(
             mediaType = mediaType,
             mediaId = mediaId,

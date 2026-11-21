@@ -100,6 +100,7 @@ internal fun ReaderTopBar(
         PlayOnButton(
             Modifier.focusKey("cast").tvAutoGlow(cornerRadiusDp = 999f, scale = 1.08f),
             theme.textColor,
+            audio = true,
             onOpenChange = onPlayOnOpenChange,
         )
         LabelledIconButton(Icons.Outlined.Search, "Search", onSearch, Modifier.focusKey("search"), tint = theme.textColor)

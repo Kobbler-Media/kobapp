@@ -291,7 +291,7 @@ fun PlaybackSessionHeartbeat(
             if (api.sessionGone(sid)) {
                 // Not in this effect: the reconnect replaces the session id it is keyed on,
                 // which would cancel it between stopping the player and reopening it.
-                gps.teardownScope.launch { gps.recoverPlayback(player, api, keepPaused = !player.isPlaying.value) }
+                gps.teardownScope.launch { gps.recoverPlayback(player, api) }
                 return@LaunchedEffect
             }
         }
@@ -345,15 +345,13 @@ internal suspend fun keepSessionWarm(
  * given up on with [GlobalPlayerState.loadingError] set.
  *
  * [cause] is the failure that prompted this, kept so that giving up reports what actually
- * broke rather than the fact that reconnecting did not fix it. [keepPaused] reopens the
- * stream without starting it, for a session that died under a player the viewer had
- * already paused — rebuilding the pipeline must not decide to play on their behalf.
+ * broke rather than the fact that reconnecting did not fix it. A stream the viewer had
+ * paused is reopened paused: rebuilding the pipeline must not decide to play on their behalf.
  */
 suspend fun GlobalPlayerState.recoverPlayback(
     player: Player,
     api: KobblerApi,
     cause: Throwable? = null,
-    keepPaused: Boolean = false,
 ): Boolean {
     val type = mediaType
     val id = mediaId
@@ -367,18 +365,11 @@ suspend fun GlobalPlayerState.recoverPlayback(
     isRecovering = true
     isStarting = true
     loadingError = null
+    viewerPause.reopening()
     // A reconnect is invisible for its first stretch by design, so this is the only trace
     // of why a start took as long as it did.
     noteStartEvent("reconnect: ${cause?.message ?: "session lost"}")
-    // Held back rather than raised: see [RECONNECT_NOTICE_DELAY_MS].
-    val notice = teardownScope.launch {
-        delay(RECONNECT_NOTICE_DELAY_MS)
-        if (!isRecovering) return@launch
-        recoveryNotice = true
-        isPreparing = true
-        preparingNote = RECONNECTING_NOTE
-        onPreparingCancel = { stop(player, api, teardownScope) }
-    }
+    val notice = raiseReconnectNotice(player, api)
 
     // Absolute, and taken before the player is torn down: a session the server rebased
     // reports a playhead relative to where it was rebased to, and the watch state the
@@ -423,7 +414,7 @@ suspend fun GlobalPlayerState.recoverPlayback(
                 if (status is SessionStatusDto && status.state != "failed") {
                     reopenedSessionId = session.sessionId
                     loadInPlace(player, api, type, id, session, resumeSec)
-                    if (keepPaused) endPreload(player) else playUnmuted(player)
+                    playUnmuted(player)
                     return true
                 }
                 teardownScope.launch { api.closeSession(session.sessionId) }
@@ -446,23 +437,37 @@ suspend fun GlobalPlayerState.recoverPlayback(
                 continue
             }
             if (mediaId != id) return true
-            if (keepPaused) endPreload(player) else playUnmuted(player)
+            playUnmuted(player)
             return true
         }
     } finally {
         isRecovering = false
-        notice.cancel()
-        // Only what the notice itself raised: a reconnect that reopened the stream has
-        // already been through load(), which owns these.
-        if (recoveryNotice) {
-            recoveryNotice = false
-            isPreparing = false
-            preparingNote = null
-            onPreparingCancel = null
-        }
+        endReconnectNotice(notice)
     }
     failWith(last ?: IllegalStateException("Could not reopen the stream"), diagnosticContext())
     return true
+}
+
+/** Say a reconnect is happening once it has taken long enough to be worth saying; see [RECONNECT_NOTICE_DELAY_MS]. */
+internal fun GlobalPlayerState.raiseReconnectNotice(player: Player, api: KobblerApi): Job = teardownScope.launch {
+    delay(RECONNECT_NOTICE_DELAY_MS)
+    if (!isRecovering) return@launch
+    recoveryNotice = true
+    isPreparing = true
+    preparingNote = RECONNECTING_NOTE
+    onPreparingCancel = { stop(player, api, teardownScope) }
+}
+
+internal fun GlobalPlayerState.endReconnectNotice(notice: Job) {
+    notice.cancel()
+    // Only what the notice itself raised: a reconnect that reopened the stream has
+    // already been through load(), which owns these.
+    if (recoveryNotice) {
+        recoveryNotice = false
+        isPreparing = false
+        preparingNote = null
+        onPreparingCancel = null
+    }
 }
 
 private suspend fun GlobalPlayerState.reopenVod(
@@ -476,8 +481,8 @@ private suspend fun GlobalPlayerState.reopenVod(
     // from zero has nothing to seek into.
     val rebaseTo = resumeRequestSeconds(resumeSec)
     val session = when (type) {
-        "movie" -> api.getMovieStreamSession(id, rebaseTo, rememberedAudioTitle(playbackTitleKey))
-        else -> api.getEpisodeStreamSession(id, rebaseTo, rememberedAudioTitle(playbackTitleKey))
+        "movie" -> api.getMovieStreamSession(id, rebaseTo, rememberedAudioTitle(playbackTitleKey), heardAudio(id))
+        else -> api.getEpisodeStreamSession(id, rebaseTo, rememberedAudioTitle(playbackTitleKey), heardAudio(id))
     } ?: return false
     if (mediaId != id) {
         teardownScope.launch { api.closeSession(session.sessionId) }
@@ -567,10 +572,11 @@ suspend fun GlobalPlayerState.retryPlayback(player: Player, api: KobblerApi) {
     recoveryMarks.clear()
     isRecovering = false
     loadingError = null
+    viewerPause.forget()
     recoverPlayback(player, api)
 }
 
-private fun GlobalPlayerState.spendRecoveryBudget(): Boolean {
+internal fun GlobalPlayerState.spendRecoveryBudget(): Boolean {
     recoveryMarks.retainAll { it.elapsedNow() < RECOVERY_WINDOW }
     if (recoveryMarks.size >= MAX_RECOVERIES_IN_WINDOW) return false
     recoveryMarks += TimeSource.Monotonic.markNow()
