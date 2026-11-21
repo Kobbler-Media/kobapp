@@ -119,7 +119,7 @@ fun TvShowDetailScreen(
             )
         },
         seasonMenu = { fallback -> seasonMenu(shown, selectedSeason, api, watchedOverrides, wantOverrides, toast, accent, fallbackFocus = fallback) },
-        episodes = { seasonEntry ->
+        episodes = { seasonFocus ->
             episodeList(
                 season = selectedSeason,
                 seasonIdx = selectedSeasonIdx,
@@ -132,7 +132,7 @@ fun TvShowDetailScreen(
                 onPlayEpisode = onPlayEpisode,
                 onStreamEpisode = onStreamEpisode,
                 onStreamEpisodePick = onStreamEpisodePick,
-                seasonEntry = seasonEntry,
+                seasonFocus = seasonFocus,
                 onDownload = offline?.let { engine -> { ep -> engine.downloadEpisodes(shown, listOf(ep)) } },
             )
         },

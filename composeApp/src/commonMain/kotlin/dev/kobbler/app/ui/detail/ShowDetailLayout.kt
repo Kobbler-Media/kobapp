@@ -56,6 +56,7 @@ import dev.kobbler.app.ui.components.BackButtonGutter
 import dev.kobbler.app.ui.components.BackButtonTop
 import dev.kobbler.app.ui.components.ExpandableText
 import dev.kobbler.app.ui.components.spotlight
+import dev.kobbler.app.ui.detail.tvshow.SeasonFocus
 import dev.kobbler.app.ui.detail.tvshow.SeasonTabs
 import dev.kobbler.app.ui.kobTopInset
 import dev.kobbler.app.ui.safeTopPadding
@@ -83,7 +84,7 @@ internal fun ShowDetailLayout(
     onPersonClick: ((String) -> Unit)?,
     actions: @Composable (wide: Boolean, anchor: Modifier, exitDown: FocusRequester?) -> Unit,
     seasonMenu: @Composable (fallbackFocus: FocusRequester?) -> SeasonMenu?,
-    episodes: LazyListScope.(seasonEntry: FocusRequester?) -> Unit,
+    episodes: LazyListScope.(seasonFocus: SeasonFocus?) -> Unit,
     topBarStatus: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
@@ -93,7 +94,7 @@ internal fun ShowDetailLayout(
     val pageScroll = listState.asPageScroll()
     val pageTopHold = rememberPageTopHold(pageScroll)
     val pageScope = rememberCoroutineScope()
-    val seasonEntry = remember { FocusRequester() }
+    val seasonFocus = remember { SeasonFocus() }
     val season = show.seasons.getOrNull(selectedSeasonIdx)
     val body = ShowBody(show, episodeTotal, accent, selectedSeasonIdx, onSeasonSelected, actions, seasonMenu)
     // The head is a lazy item, so its actions register during measure; a back button
@@ -119,10 +120,10 @@ internal fun ShowDetailLayout(
             ) {
                 item(key = HeadKey, contentType = HeadKey) {
                     Box(Modifier.onPlaced { headPlaced = true }) {
-                        if (stacked) PhoneHead(body, pageTopHold.anchor) else WideHead(body, formFactor, pageTopHold.anchor, seasonEntry)
+                        if (stacked) PhoneHead(body, pageTopHold.anchor) else WideHead(body, formFactor, pageTopHold.anchor, seasonFocus)
                     }
                 }
-                if (show.seasons.isNotEmpty()) episodes(seasonEntry.takeIf { !stacked })
+                if (show.seasons.isNotEmpty()) episodes(seasonFocus.takeIf { !stacked })
                 if (show.cast.isNotEmpty()) {
                     item(key = CastKey, contentType = CastKey) {
                         Spacer(Modifier.height(if (stacked) 22.dp else 36.dp))
@@ -181,7 +182,7 @@ private class ShowBody(
 )
 
 @Composable
-private fun WideHead(body: ShowBody, formFactor: FormFactor, actionsAnchor: Modifier, seasonEntry: FocusRequester) {
+private fun WideHead(body: ShowBody, formFactor: FormFactor, actionsAnchor: Modifier, seasonFocus: SeasonFocus) {
     val show = body.show
     val colors = KobappTheme.colors
     val posterWidth = when (formFactor) {
@@ -214,7 +215,7 @@ private fun WideHead(body: ShowBody, formFactor: FormFactor, actionsAnchor: Modi
                     )
                 }
                 Spacer(Modifier.height(24.dp))
-                body.actions(true, actionsAnchor, seasonEntry.takeIf { show.seasons.isNotEmpty() })
+                body.actions(true, actionsAnchor, seasonFocus.tabs.takeIf { show.seasons.isNotEmpty() })
             }
         }
 
@@ -225,8 +226,9 @@ private fun WideHead(body: ShowBody, formFactor: FormFactor, actionsAnchor: Modi
             Spacer(Modifier.height(32.dp))
             SeasonTabs(
                 show.seasons, body.selectedSeasonIdx, body.accent, formFactor, body.onSeasonSelected,
-                entryFocus = seasonEntry,
-                menu = body.seasonMenu(seasonEntry),
+                entryFocus = seasonFocus.tabs,
+                exitDown = seasonFocus.episodes,
+                menu = body.seasonMenu(seasonFocus.tabs),
             )
             Spacer(Modifier.height(8.dp))
         }

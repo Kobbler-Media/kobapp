@@ -91,7 +91,7 @@ internal fun DiscoverShowPage(
         modifier = modifier,
         actions = { wide, anchor, exitDown -> actions(wide, anchor, exitDown, target) },
         seasonMenu = { discoverSeasonMenu(selectedNumber, accent, onWantSeason) },
-        episodes = { seasonEntry ->
+        episodes = { seasonFocus ->
             val n = selectedNumber
             when {
                 n == null -> Unit
@@ -120,7 +120,7 @@ internal fun DiscoverShowPage(
                     onPlayEpisode = { s, e, _ -> refAt(s, e)?.let { onStreamEpisode?.invoke(it) } },
                     onStreamEpisode = onStreamEpisode?.let { stream -> { s, e -> refAt(s, e)?.let(stream) } },
                     onStreamEpisodePick = onStreamEpisodePick?.let { pick -> { s, e -> refAt(s, e)?.let(pick) } },
-                    seasonEntry = seasonEntry,
+                    seasonFocus = seasonFocus,
                     // Nothing here is held, so being unplayable says nothing about airing.
                     isUpcoming = { ep -> ep.airDate?.let { it > today } ?: false },
                 )

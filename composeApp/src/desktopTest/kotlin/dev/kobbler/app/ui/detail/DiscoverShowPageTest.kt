@@ -120,6 +120,31 @@ class DiscoverShowPageTest {
     }
 
     @Test
+    fun `down from a season tab far along the strip lands on that season's first episode`() {
+        val seasons = 1..12
+        val longShow = mapOf<String, (HttpExchange) -> String>(
+            "/api/v1/admin/discover/tv/tmdb/97951" to { _ ->
+                val list = seasons.joinToString(",") { """{"season_number":$it,"title":"Season $it","episode_count":3}""" }
+                """{"media_type":"tv","provider":"tmdb","details":{"title":"Mayor of Kingstown","year":2021,
+                   "identifiers":{"tmdb_id":"97951"},"seasons":[$list]}}"""
+            },
+        ) + seasons.associate { n ->
+            "/api/v1/admin/discover/tv/tmdb/97951/season/$n" to { _: HttpExchange ->
+                """{"episodes":[{"episode_number":1,"title":"S${n}E1 title"},{"episode_number":2,"title":"S${n}E2 title"}]}"""
+            }
+        }
+        for (season in listOf(6, 10, 12)) discoverPage(longShow) {
+            moveUntil(Key.DirectionDown, { it?.startsWith("Season") == true })
+            moveUntil(Key.DirectionRight, { it == "Season $season" }, maxSteps = 12)
+            assertEquals("Season $season", focusedText())
+            waitUntil(timeoutMillis = UiTimeoutMs) { onAllNodesWithText("S${season}E1 title").fetchSemanticsNodes().isNotEmpty() }
+            press(Key.DirectionDown)
+            val landed = focusedText()
+            assertTrue(landed?.contains("S${season}E1 title") == true, "down from Season $season landed on $landed")
+        }
+    }
+
+    @Test
     fun `closing an episode's stream options returns to the button that opened them`() = discoverPage(
         mapOf("/api/v1/admin/stream/search" to { _ ->
             """{"options":[{"id":"o1","release_title":"Mayor.of.Kingstown.S01E01.1080p","debrid_provider":"rd","debrid_provider_id":"rd1"}]}"""

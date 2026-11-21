@@ -1,6 +1,7 @@
 package dev.kobbler.app.ui.detail.tvshow
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.BlendMode
@@ -84,6 +87,7 @@ fun SeasonTabs(
     formFactor: FormFactor,
     onSelected: (Int) -> Unit,
     entryFocus: FocusRequester? = null,
+    exitDown: FocusRequester? = null,
     menu: (@Composable ColumnScope.(close: () -> Unit) -> Unit)? = null,
 ) {
     val colors = KobappTheme.colors
@@ -147,7 +151,16 @@ fun SeasonTabs(
                     .bleedHorizontally(gutter)
                     .then(if (menuButton) Modifier.fadeOutBefore(gutter + menuWidth) else Modifier)
                     .horizontalScroll(scrollState)
-                    .padding(start = gutter, end = gutter + menuWidth),
+                    .padding(start = gutter, end = gutter + menuWidth)
+                    // Geometry picks whatever sits under the tab, which past the first few
+                    // seasons is an episode's action icon rather than an episode. A season
+                    // still loading has no rows to take it, and geometry stands.
+                    .focusProperties {
+                        onExit = {
+                            if (requestedFocusDirection == FocusDirection.Down) runCatching { exitDown?.requestFocus() }
+                        }
+                    }
+                    .focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {

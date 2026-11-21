@@ -93,7 +93,7 @@ fun LazyListScope.episodeList(
     onStreamEpisode: ((Int, Int) -> Unit)?,
     onStreamEpisodePick: ((Int, Int) -> Unit)?,
     wantOverrides: SnapshotStateMap<String, Boolean>,
-    seasonEntry: FocusRequester? = null,
+    seasonFocus: SeasonFocus? = null,
     isUpcoming: ((Episode) -> Boolean)? = null,
     onDownload: ((Episode) -> Unit)? = null,
 ) {
@@ -101,10 +101,11 @@ fun LazyListScope.episodeList(
     // Above the first row is the tab strip, and a geometric search up out of the list
     // lands on whichever tab sits nearest the row's centre — the last season, never the
     // one being listed. Redirected on leaving the first row rather than on its body, so
-    // it holds from the row's action icons as well.
-    val exitUp = if (seasonEntry != null) {
-        Modifier.focusProperties {
-            onExit = { if (requestedFocusDirection == FocusDirection.Up) seasonEntry.requestFocus() }
+    // it holds from the row's action icons as well. The requester sits on the row's group
+    // so entry picks its first focusable, the body, or an action when it cannot play.
+    val firstRow = if (seasonFocus != null) {
+        Modifier.focusRequester(seasonFocus.episodes).focusProperties {
+            onExit = { if (requestedFocusDirection == FocusDirection.Up) seasonFocus.tabs.requestFocus() }
         }.focusGroup()
     } else {
         Modifier
@@ -164,7 +165,7 @@ fun LazyListScope.episodeList(
             } else null,
             // Scoped per season: without it every season registers `episode.1`, and a restore
             // after recomposition hands focus to whichever season claimed the key last.
-            modifier = Modifier.focusKeyGroup("season.${season.number}").then(if (idx == 0) exitUp else Modifier),
+            modifier = Modifier.focusKeyGroup("season.${season.number}").then(if (idx == 0) firstRow else Modifier),
         )
     }
 }
