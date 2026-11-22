@@ -84,7 +84,7 @@ class DebridCastTest {
     @Test
     fun `a debrid stream is resolved again for the receiver, at the playhead and in the viewer's language`() =
         castFromDebrid(playsHls = true) { load, asked, url ->
-            assertTrue("\"info_hash\":\"h1\"" in asked, "not the release being watched: $asked")
+            assertTrue("\"release_key\":\"h1\"" in asked, "not the release being watched: $asked")
             assertTrue("\"video_codecs\":[\"h264\",\"vp9\"]" in asked, "asked with this device's capabilities: $asked")
             assertTrue("\"start_time\":600" in asked, asked)
             assertTrue("\"preferred_audio_language\":\"eng\"" in asked, asked)

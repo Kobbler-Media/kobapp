@@ -45,7 +45,7 @@ private val startedShow = show.copy(
 )
 
 private fun option(hash: String) = """{"id":"$hash","release_title":"Release.$hash","debrid_provider":"realdebrid",
-    "debrid_provider_id":"p1","info_hash":"$hash","cached":true,"availability":"ready"}"""
+    "debrid_provider_id":"p1","release_key":"$hash","cached":true,"availability":"ready"}"""
 
 private fun routes(resolving: CountDownLatch = CountDownLatch(0)) = mapOf<String, (HttpExchange) -> String>(
     LOCAL to { option("localhash") },

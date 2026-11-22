@@ -33,8 +33,6 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 internal data class Caching(
     val providerId: String,
@@ -224,13 +222,7 @@ internal class DiscoverStreams(
     // Warming finishes after the search returns, so an option listed as unknown can
     // become verified-instant while the picker is open.
     suspend fun foldWarmReady() {
-        api.libraryEvents().collect { frame ->
-            if (frame.kind != "stream_warm_ready") return@collect
-            val hash = frame.data["info_hash"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val providerId = frame.data["debrid_provider_id"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val fid = frame.data["file_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
-            result = applyWarmReady(result, hash, fid, providerId)
-        }
+        api.libraryEvents().collect { frame -> result = applyWarmReady(result, frame) }
     }
 }
 

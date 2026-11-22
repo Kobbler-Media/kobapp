@@ -43,7 +43,7 @@ class PlayerErrorDialogFitTest {
 
     private val alternatives = (1..6).map {
         StreamOption(
-            id = "o$it", releaseTitle = "Show.S04E17.720p.v$it", size = 1, indexer = "idx", infoHash = "h$it",
+            id = "o$it", releaseTitle = "Show.S04E17.720p.v$it", size = 1, indexer = "idx", releaseKey = "h$it",
             quality = StreamQuality("720p", "h264", null, null), qualityJson = null, totalScore = 1.0,
             debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
             sourceType = "torrent", fileId = null, publishDate = null,

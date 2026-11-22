@@ -27,7 +27,7 @@ class RememberedAudioRequestTest {
         seasons = listOf(Season(number = 1, episodes = listOf(Episode(id = "race", number = 1, title = "Race")))),
     )
     private val option = StreamOption(
-        id = "o1", releaseTitle = "MotoGP.Race.mkv", size = 1, indexer = "idx", infoHash = "h1",
+        id = "o1", releaseTitle = "MotoGP.Race.mkv", size = 1, indexer = "idx", releaseKey = "h1",
         quality = StreamQuality("1080p", null, null, null), qualityJson = null, totalScore = 1.0,
         debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
         sourceType = "torrent", fileId = 1, publishDate = null,

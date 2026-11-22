@@ -21,7 +21,7 @@ private val show = TvShow(
 )
 
 private val option = StreamOption(
-    id = "opt-1", releaseTitle = "Show.S01E01", size = 1, indexer = "idx", infoHash = "h",
+    id = "opt-1", releaseTitle = "Show.S01E01", size = 1, indexer = "idx", releaseKey = "h",
     quality = StreamQuality(null, null, null, null), qualityJson = null, totalScore = 1.0,
     debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
     sourceType = "torrent", fileId = 1, publishDate = null,

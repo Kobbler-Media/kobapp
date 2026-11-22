@@ -1,6 +1,10 @@
 package dev.kobbler.app.ui.player
 
+import dev.kobbler.app.data.LibraryEventFrame
 import dev.kobbler.app.data.StreamOption
+import dev.kobbler.app.data.StreamSearchResult
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * How many real attempts auto-play makes before giving up and showing caching progress.
@@ -43,21 +47,19 @@ internal fun fallbackCandidates(
  * Fold a `stream_warm_ready` event into a search result, marking the option that just
  * finished warming as verified-instant so the picker stops calling it unknown.
  *
- * Identity is (info_hash, file id, provider): a season pack appears once per episode
- * file, so the hash alone can land on a sibling entry.
+ * Identity is (release key, file id, provider): a season pack appears once per episode
+ * file, so the key alone can land on a sibling entry.
  */
-internal fun applyWarmReady(
-    result: dev.kobbler.app.data.StreamSearchResult?,
-    infoHash: String,
-    fileId: Int?,
-    debridProviderId: String,
-): dev.kobbler.app.data.StreamSearchResult? {
-    if (result == null) return null
+internal fun applyWarmReady(result: StreamSearchResult?, frame: LibraryEventFrame): StreamSearchResult? {
+    if (result == null || frame.kind != "stream_warm_ready") return result
+    val key = frame.data["release_key"]?.jsonPrimitive?.contentOrNull ?: return result
+    val providerId = frame.data["debrid_provider_id"]?.jsonPrimitive?.contentOrNull ?: return result
+    val fileId = frame.data["file_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
     var changed = false
     val options = result.options.map { opt ->
         if (!opt.cached &&
-            opt.infoHash == infoHash &&
-            opt.debridProviderId == debridProviderId &&
+            opt.releaseKey == key &&
+            opt.debridProviderId == providerId &&
             opt.fileId == fileId
         ) {
             changed = true

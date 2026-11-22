@@ -547,7 +547,8 @@ data class StreamOptionDto(
     @SerialName("release_title") val releaseTitle: String,
     val size: Long = 0,
     val indexer: String = "",
-    @SerialName("info_hash") val infoHash: String? = null,
+    @SerialName("release_key") val releaseKey: String? = null,
+    @SerialName("nzb_ref") val nzbRef: NzbRef? = null,
     val quality: kotlinx.serialization.json.JsonObject? = null,
     @SerialName("total_score") val totalScore: Double = 0.0,
     @SerialName("match_score") val matchScore: Double = 0.0,
@@ -566,6 +567,12 @@ data class StreamOptionDto(
 )
 
 @Serializable
+data class NzbRef(
+    @SerialName("indexer_id") val indexerId: String,
+    val guid: String,
+)
+
+@Serializable
 data class StreamFileDto(
     val id: Int,
     val path: String = "",
@@ -576,7 +583,7 @@ data class StreamFileDto(
 data class StreamSearchResponseDto(
     val options: List<StreamOptionDto> = emptyList(),
     val errors: List<String> = emptyList(),
-    @SerialName("preferred_info_hash") val preferredInfoHash: String? = null,
+    @SerialName("preferred_release_key") val preferredReleaseKey: String? = null,
     @SerialName("preferred_file_id") val preferredFileId: Int? = null,
 )
 
@@ -3829,7 +3836,8 @@ class KobblerApi(
         val file = files.firstOrNull()
         return StreamOption(
             id = id, releaseTitle = releaseTitle, size = size, indexer = indexer,
-            infoHash = infoHash,
+            releaseKey = releaseKey,
+            nzbRef = nzbRef,
             quality = StreamQuality(
                 resolution = qStr("resolution", "source"), codec = qStr("codec", "video_codec"),
                 hdr = qStr("hdr", "dynamic_range")?.takeUnless { it.equals("sdr", ignoreCase = true) },
@@ -4267,7 +4275,7 @@ class KobblerApi(
             StreamSearchResult(
                 options = applyPreferredOrder(
                     options = resp.options.map { it.toModel() },
-                    preferredInfoHash = resp.preferredInfoHash,
+                    preferredReleaseKey = resp.preferredReleaseKey,
                     preferredFileId = resp.preferredFileId,
                 ),
                 errors = resp.errors,
@@ -4277,12 +4285,12 @@ class KobblerApi(
 
     private fun applyPreferredOrder(
         options: List<StreamOption>,
-        preferredInfoHash: String?,
+        preferredReleaseKey: String?,
         preferredFileId: Int?,
     ): List<StreamOption> {
-        if (preferredInfoHash == null) return options
+        if (preferredReleaseKey == null) return options
         val idx = options.indexOfFirst { o ->
-            o.infoHash == preferredInfoHash && (preferredFileId == null || o.fileId == preferredFileId)
+            o.releaseKey == preferredReleaseKey && (preferredFileId == null || o.fileId == preferredFileId)
         }
         if (idx <= 0) return options
         val mutable = options.toMutableList()
@@ -4308,7 +4316,8 @@ class KobblerApi(
         val target = StreamTarget(mediaType, mediaId, autoCreate, autoCreateEpisode, audioTitle)
         val body = buildJsonObject {
             put("debrid_provider_id", option.debridProviderId)
-            option.infoHash?.let { put("info_hash", it) }
+            option.releaseKey?.let { put("release_key", it) }
+            option.nzbRef?.let { put("nzb_ref", json.encodeToJsonElement(NzbRef.serializer(), it)) }
             option.fileId?.let { put("file_id", it) }
             put("release_title", option.releaseTitle)
             put("debrid_provider", option.debridProvider)
@@ -4429,7 +4438,7 @@ class KobblerApi(
     suspend fun reportBadCopy(option: StreamOption, bad: Boolean) {
         val body = buildJsonObject {
             put("debrid_provider_id", option.debridProviderId)
-            put("info_hash", option.infoHash)
+            put("release_key", option.releaseKey)
             put("file_id", option.fileId)
             put("bad", bad)
         }

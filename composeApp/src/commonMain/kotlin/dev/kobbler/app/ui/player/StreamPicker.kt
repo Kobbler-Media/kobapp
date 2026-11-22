@@ -18,8 +18,6 @@ import dev.kobbler.kobfocus.FocusScopeHost
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 class StreamPicker internal constructor(val onSelect: (StreamOption) -> Unit) {
     var result by mutableStateOf<StreamSearchResult?>(null)
@@ -71,13 +69,7 @@ fun StreamPickerHost(gps: GlobalPlayerState, api: KobblerApi) {
     // Warming finishes after the search returns, so an option listed as unknown can become
     // verified-instant while the picker is open.
     LaunchedEffect(picker) {
-        api.libraryEvents().collect { frame ->
-            if (frame.kind != "stream_warm_ready") return@collect
-            val hash = frame.data["info_hash"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val providerId = frame.data["debrid_provider_id"]?.jsonPrimitive?.contentOrNull ?: return@collect
-            val fid = frame.data["file_id"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
-            picker.result = applyWarmReady(picker.result, hash, fid, providerId)
-        }
+        api.libraryEvents().collect { frame -> picker.result = applyWarmReady(picker.result, frame) }
     }
     val scope = rememberCoroutineScope()
     val dismiss = { gps.streamPicker = null }

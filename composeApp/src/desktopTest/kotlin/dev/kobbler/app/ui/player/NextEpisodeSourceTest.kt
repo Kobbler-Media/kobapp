@@ -52,13 +52,13 @@ class NextEpisodeSourceTest {
         "/api/v1/admin/playback/sessions" to { _ -> session("lib2") },
         "/api/v1/admin/stream/search" to { _ ->
             """{"options":[{"id":"o1","release_title":"Show.S01E01","debrid_provider":"realdebrid",
-                "debrid_provider_id":"p1","info_hash":"h1","cached":true}],"errors":[]}"""
+                "debrid_provider_id":"p1","release_key":"h1","cached":true}],"errors":[]}"""
         },
         "/api/v1/admin/stream/resolve" to { _ -> session("sess-1") },
         "/api/v1/admin/stream/sess-1/outcome" to { _ -> "{}" },
         "/api/v1/admin/stream/prewarm" to { _ ->
             """{"state":"ready","prewarm_id":"pw1","option":{"id":"o2","release_title":"Show.S01E02",
-                "debrid_provider":"realdebrid","debrid_provider_id":"p1","info_hash":"h2","cached":true}}"""
+                "debrid_provider":"realdebrid","debrid_provider_id":"p1","release_key":"h2","cached":true}}"""
         },
         "/api/v1/admin/stream/prewarm/pw1/touch" to { _ -> "{}" },
         "/api/v1/admin/stream/prewarm/pw1" to { _ -> "" },

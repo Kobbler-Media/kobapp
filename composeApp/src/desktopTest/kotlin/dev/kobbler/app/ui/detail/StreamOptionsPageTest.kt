@@ -46,7 +46,7 @@ class StreamOptionsPageTest {
 
     private val remux = StreamOption(
         id = "remux", releaseTitle = "Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR10.HEVC.TrueHD.Atmos.7.1-FraMeSToR",
-        size = 78_000_000_000, indexer = "hash_index:torrentio", infoHash = "h1",
+        size = 78_000_000_000, indexer = "hash_index:torrentio", releaseKey = "h1",
         quality = StreamQuality("2160p", "HEVC", "DV", "TrueHD Atmos"), qualityJson = null,
         totalScore = 0.97, debridProvider = "Real-Debrid", debridProviderId = "rd", cached = true,
         sourceType = "torrent", fileId = null, publishDate = null, playback = PLAYBACK_WORKED,

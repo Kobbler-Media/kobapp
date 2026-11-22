@@ -32,7 +32,7 @@ class DebridGiveUpTest {
     )
 
     private val only = StreamOption(
-        id = "o1", releaseTitle = "Show.S04E17.1080p.hevc", size = 1, indexer = "idx", infoHash = "h1",
+        id = "o1", releaseTitle = "Show.S04E17.1080p.hevc", size = 1, indexer = "idx", releaseKey = "h1",
         quality = StreamQuality("1080p", "hevc", null, null), qualityJson = null, totalScore = 1.0,
         debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
         sourceType = "torrent", fileId = 16, publishDate = null,
@@ -97,7 +97,7 @@ class DebridGiveUpTest {
     /** Leaving the player mid-walk used to let the walk finish and raise its dialog over whatever came next. */
     @Test
     fun `a walk the viewer left does not end in a dialog`() = runBlocking {
-        val second = only.copy(id = "o2", infoHash = "h2")
+        val second = only.copy(id = "o2", releaseKey = "h2")
         val resolves = java.util.concurrent.atomic.AtomicInteger()
         val walkRoutes = routes + ("/api/v1/admin/stream/resolve" to { _: HttpExchange ->
             if (resolves.incrementAndGet() > 1) Thread.sleep(1_500)

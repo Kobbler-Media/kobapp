@@ -27,7 +27,7 @@ import kotlin.test.assertEquals
 class PlayerErrorDialogTest {
 
     private val alt = StreamOption(
-        id = "o9", releaseTitle = "Show.S01E01.720p", size = 1, indexer = "idx", infoHash = "h9",
+        id = "o9", releaseTitle = "Show.S01E01.720p", size = 1, indexer = "idx", releaseKey = "h9",
         quality = StreamQuality("720p", "h264", null, null), qualityJson = null, totalScore = 1.0,
         debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
         sourceType = "torrent", fileId = null, publishDate = null,

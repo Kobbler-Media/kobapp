@@ -30,7 +30,7 @@ class DebridAudioLanguageTest {
     )
 
     private val option = StreamOption(
-        id = "o1", releaseTitle = "Show.S01E01.ITA.ENG.mkv", size = 1, indexer = "idx", infoHash = "h1",
+        id = "o1", releaseTitle = "Show.S01E01.ITA.ENG.mkv", size = 1, indexer = "idx", releaseKey = "h1",
         quality = StreamQuality("1080p", null, null, null), qualityJson = null, totalScore = 1.0,
         debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
         sourceType = "torrent", fileId = 1, publishDate = null,

@@ -43,7 +43,7 @@ class DebridFallbackTest {
     )
 
     private fun option(n: Int) = StreamOption(
-        id = "o$n", releaseTitle = "Show.S01E01.v$n", size = 1, indexer = "idx", infoHash = "h$n",
+        id = "o$n", releaseTitle = "Show.S01E01.v$n", size = 1, indexer = "idx", releaseKey = "h$n",
         quality = StreamQuality("1080p", null, null, null), qualityJson = null, totalScore = 1.0,
         debridProvider = "realdebrid", debridProviderId = "p1", cached = true,
         sourceType = "torrent", fileId = 1, publishDate = null,
@@ -58,7 +58,7 @@ class DebridFallbackTest {
     // The stub has read the request body by the time a handler runs, so it is taken from there.
     private fun resolveBy(answer: (hash: String) -> String) = { _: HttpExchange ->
         val hash = Json.parseToJsonElement(stub!!.requestBodies.getValue("/api/v1/admin/stream/resolve"))
-            .jsonObject["info_hash"]!!.jsonPrimitive.content
+            .jsonObject["release_key"]!!.jsonPrimitive.content
         resolved += hash
         answer(hash)
     }
@@ -146,7 +146,7 @@ class DebridFallbackTest {
             session(hash.removePrefix("h") + if (n > 1) "b" else "")
         }
         val onDisk = """{"id":"local-h3-1","release_title":"Show.S01E01.v3","debrid_provider":"realdebrid",
-            "debrid_provider_id":"p1","info_hash":"h3","cached":true,"availability":"ready"}"""
+            "debrid_provider_id":"p1","release_key":"h3","cached":true,"availability":"ready"}"""
         val withLocal = routes(resolve) + ("/api/v1/admin/stream/local" to { _: HttpExchange -> onDisk })
         StubServer(withLocal).also { stub = it }.use { stub ->
             watched(stub, player) { api, gps ->
@@ -277,7 +277,7 @@ class DebridFallbackTest {
     @Test
     fun `a bad copy report names the release file, and a search says which copies are reported`() {
         val listed = """{"options":[{"id":"o1","release_title":"Show.S01E01","debrid_provider":"realdebrid","debrid_provider_id":"p1",
-            "info_hash":"h1","files":[{"id":4,"path":"e1.mkv"}],"playback":"failed","reported_bad":true}],"errors":[]}"""
+            "release_key":"h1","files":[{"id":4,"path":"e1.mkv"}],"playback":"failed","reported_bad":true}],"errors":[]}"""
         val routes = mapOf<String, (HttpExchange) -> String>(
             "/api/v1/admin/stream/bad" to { _ -> "" },
             "/api/v1/admin/stream/search" to { _ -> listed },
@@ -288,7 +288,7 @@ class DebridFallbackTest {
             assertTrue(found.reportedBad)
             runBlocking { api.reportBadCopy(found, bad = false) }
             assertEquals(
-                """{"debrid_provider_id":"p1","info_hash":"h1","file_id":4,"bad":false}""",
+                """{"debrid_provider_id":"p1","release_key":"h1","file_id":4,"bad":false}""",
                 stub.requestBodies.getValue("/api/v1/admin/stream/bad"),
             )
         }

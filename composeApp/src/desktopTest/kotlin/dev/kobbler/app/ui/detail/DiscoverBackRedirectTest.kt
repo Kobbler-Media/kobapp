@@ -53,7 +53,7 @@ class DiscoverBackRedirectTest {
                 "/api/v1/admin/movies/m1" to { _ -> """{"id":"m1","title":"The Matrix","year":1999}""" },
                 "/api/v1/admin/stream/search" to { _ ->
                     """{"options":[{"id":"o1","release_title":"The.Matrix.1999.1080p","debrid_provider":"realdebrid",
-                       "debrid_provider_id":"p1","info_hash":"h1","cached":true}]}"""
+                       "debrid_provider_id":"p1","release_key":"h1","cached":true}]}"""
                 },
                 "/api/v1/admin/stream/resolve" to { _ ->
                     inLibrary.set(true)

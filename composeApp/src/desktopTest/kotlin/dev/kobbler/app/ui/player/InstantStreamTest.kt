@@ -30,7 +30,7 @@ class InstantStreamTest {
 
     private val warmed =
         """{"state":"ready","prewarm_id":"pw1","option":{"id":"o9","release_title":"Show.S01E01","debrid_provider":"realdebrid",""" +
-            """"debrid_provider_id":"p1","info_hash":"h9","cached":true}}"""
+            """"debrid_provider_id":"p1","release_key":"h9","cached":true}}"""
 
     private fun session(id: String) =
         """{"session_id":"$id","method":"direct_play","direct_url":"/api/v1/admin/stream/$id/play","duration_seconds":3600}"""

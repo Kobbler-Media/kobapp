@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 class StreamWalkTest {
 
     private fun option(id: String) = StreamOption(
-        id = id, releaseTitle = id, size = 0, indexer = "", infoHash = "h-$id",
+        id = id, releaseTitle = id, size = 0, indexer = "", releaseKey = "h-$id",
         quality = StreamQuality(null, null, null, null), qualityJson = null,
         totalScore = 0.0, debridProvider = "realdebrid", debridProviderId = "p1",
         cached = false, sourceType = "torrent", fileId = null, publishDate = null,

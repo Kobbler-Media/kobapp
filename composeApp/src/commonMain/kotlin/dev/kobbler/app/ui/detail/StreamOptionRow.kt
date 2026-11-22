@@ -149,7 +149,7 @@ internal fun StreamOptionRow(
 
         }
 
-        if (onReport != null && option.infoHash != null) {
+        if (onReport != null && option.releaseKey != null) {
             val end = Modifier.padding(end = if (compact) 4.dp else 8.dp).focusKey("report")
             if (option.reportedBad) {
                 LabelledIconButton(Icons.AutoMirrored.Outlined.Undo, "Undo report", { onReport(false) }, end, tint = colors.textMd)

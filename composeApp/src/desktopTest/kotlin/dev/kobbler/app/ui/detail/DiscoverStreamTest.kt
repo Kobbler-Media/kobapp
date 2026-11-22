@@ -61,7 +61,7 @@ class DiscoverStreamTest {
 
     private val option = """
         {"id":"o1","release_title":"Mayor.of.Kingstown.S01.1080p.WEB.h264-GRP","size":9000000000,
-         "indexer":"hash_index:torrentio","info_hash":"abc","total_score":0.91,
+         "indexer":"hash_index:torrentio","release_key":"abc","total_score":0.91,
          "debrid_provider":"realdebrid","debrid_provider_id":"rd-1","cached":true,
          "files":[{"id":3,"path":"Mayor.of.Kingstown.S01/Mayor.of.Kingstown.S01E01.1080p.mkv","size":1}],
          "quality":{"resolution":"1080p","codec":"h264"}}
