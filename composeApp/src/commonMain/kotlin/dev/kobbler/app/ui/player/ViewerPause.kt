@@ -18,6 +18,7 @@ internal class ViewerPause {
     var paused = false
         private set
     private var reopening = false
+    private var playedSinceOpen = false
     private var followed: Player? = null
     private var follow: Job? = null
 
@@ -30,12 +31,21 @@ internal class ViewerPause {
                 // A load pauses the player itself to buffer silently; that is not the viewer's.
                 if (preloading()) return@collect
                 when (state) {
-                    PlayerState.PAUSED -> paused = true
-                    PlayerState.PLAYING -> paused = false
+                    // This collector can run after the load has already asked to play, so
+                    // the preload check alone reads the load's own hold as the viewer's.
+                    PlayerState.PAUSED -> if (playedSinceOpen) paused = true
+                    PlayerState.PLAYING -> {
+                        playedSinceOpen = true
+                        paused = false
+                    }
                     else -> {}
                 }
             }
         }
+    }
+
+    fun streamOpening() {
+        playedSinceOpen = false
     }
 
     fun reopening() {

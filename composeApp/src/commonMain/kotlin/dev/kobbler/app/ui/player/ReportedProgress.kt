@@ -110,7 +110,7 @@ fun TvShow.withReportedProgress(reported: Map<String, WatchedPoint>, today: Loca
  * Left as fetched, Resume kept naming the episode just finished, and pressing it handed
  * back to the player still holding that episode at its last frame. Same pick as the
  * server's `compute_continue_episode`: the next unwatched episode after the furthest
- * one finished that has a file, or has aired with nobody wanting it.
+ * one finished that has a file, or has aired or been fetched early with nobody wanting it.
  */
 private fun continueAfter(
     seasons: List<Season>,
@@ -131,4 +131,4 @@ private fun continueAfter(
 }
 
 private fun Episode.isPlayable(today: LocalDate): Boolean =
-    filePath != null || (!isWanted && airDate != null && airDate <= today)
+    filePath != null || (!isWanted && (copyOnDisk || (airDate != null && airDate <= today)))

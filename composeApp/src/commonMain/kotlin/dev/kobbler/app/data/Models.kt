@@ -139,6 +139,7 @@ data class Episode(
     val isWatched: Boolean = false,
     val wantStatus: String? = null,
     val airDate: LocalDate? = null,
+    val copyOnDisk: Boolean = false,
 ) {
     val isWanted: Boolean get() = isWantedStatus(wantStatus)
 

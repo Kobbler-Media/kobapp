@@ -14,6 +14,7 @@ import dev.kobbler.app.data.StreamResolveResult
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -75,7 +76,8 @@ class DebridFallbackTest {
     )
 
     private fun watched(stub: StubServer, player: FakePlayer, block: suspend CoroutineScope.(KobblerApi, GlobalPlayerState) -> Unit) =
-        runBlocking {
+        // The main thread, as in the app: off it, whether a load's hold reads as the viewer's pause is a race.
+        runBlocking(Dispatchers.Main) {
             val api = KobblerApi(HttpClient(), stub.url, "token")
             val gps = GlobalPlayerState()
             val watcher = launch { gps.watchPlayback(player, api) }

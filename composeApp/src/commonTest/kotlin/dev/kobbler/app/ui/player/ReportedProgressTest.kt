@@ -9,7 +9,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 
 /**
  * A detail page behind the player has to show what was just watched.
@@ -150,6 +152,17 @@ class ReportedProgressTest {
         )
         val cont = show.withReportedProgress(mapOf("e1" to WatchedPoint(3600, finished = true)), today).continueEpisode!!
         assertEquals("e5", cont.episodeId)
+    }
+
+    @Test
+    fun `the next pick takes an early copy of an episode listed for later`() {
+        val show = binge(
+            owned("e1", 1),
+            Episode(id = "e2", number = 2, title = "early", wantStatus = "none", airDate = today.plus(3, DateTimeUnit.DAY), copyOnDisk = true),
+            cont = "e1",
+        )
+        val cont = show.withReportedProgress(mapOf("e1" to WatchedPoint(3600, finished = true)), today).continueEpisode!!
+        assertEquals("e2", cont.episodeId)
     }
 
     @Test

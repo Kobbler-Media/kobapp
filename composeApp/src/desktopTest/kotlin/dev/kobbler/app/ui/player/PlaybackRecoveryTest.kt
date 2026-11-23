@@ -5,6 +5,7 @@ import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.sun.net.httpserver.HttpExchange
 import dev.kobbler.app.data.KobblerApi
+import dev.kobbler.kobplayer.PlayerState
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -12,7 +13,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -49,6 +52,8 @@ class PlaybackRecoveryTest {
 
     private fun pausedByViewer(gps: GlobalPlayerState, player: FakePlayer) = runBlocking {
         gps.viewerPause.follow(player, gps.teardownScope) { false }
+        player.state.value = PlayerState.PLAYING
+        withContext(Dispatchers.Main) { yield() }
         player.pause()
         withTimeout(5_000) { while (!gps.viewerPause.paused) delay(10) }
     }
@@ -215,6 +220,34 @@ class PlaybackRecoveryTest {
 
             assertFalse(gps.recoverPlayback(player, api), "reconnected a player nobody is watching")
             assertTrue(minted.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a start that never played is not held paused by its own preload when reopened`() {
+        val reopens = listOf<suspend (GlobalPlayerState, FakePlayer, KobblerApi) -> Unit>(
+            { gps, player, api -> gps.recoverPlayback(player, api) },
+            { gps, player, api ->
+                gps.loadInPlace(player, api, "movie", "mov-1", KobblerApi.StreamSession("http://127.0.0.1:1/s9.mkv", "s9"), 0)
+                gps.viewerPause.reopening()
+                gps.playUnmuted(player)
+            },
+        )
+        for (reopen in reopens) StubServer(mintingRoutes(CopyOnWriteArrayList())).use { stub ->
+            runBlocking(Dispatchers.Main) {
+                val api = KobblerApi(HttpClient(), stub.url, "token")
+                val gps = watching(sessionId = null)
+                val player = stalledPlayer(atMs = 0)
+                gps.load(player, api, "movie", "mov-1", "http://127.0.0.1:1/s0.mkv", "s0", "T", null, null, null, null)
+                gps.playUnmuted(player)
+                yield()
+                assertFalse(gps.viewerPause.paused, "the load's own hold was taken for the viewer's pause")
+                player.calls.clear()
+
+                reopen(gps, player, api)
+
+                assertTrue(player.calls.contains("play"), "left a stream nobody paused sitting paused: ${player.calls}")
+            }
         }
     }
 

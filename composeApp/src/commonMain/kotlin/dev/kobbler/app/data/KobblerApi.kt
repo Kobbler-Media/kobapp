@@ -346,6 +346,7 @@ data class EpisodeDto(
     @SerialName("air_date") val airDate: String? = null,
     val runtime: Int? = null,
     @SerialName("is_in_library") val isInLibrary: Boolean = false,
+    @SerialName("copy_on_disk") val copyOnDisk: Boolean = false,
     @SerialName("want_status") val wantStatus: String = "",
     val watched: Boolean? = null,
     @SerialName("watch_position_seconds") val watchPositionSeconds: Int? = null,
@@ -1912,6 +1913,7 @@ internal fun ShowDetailDto.toTvShow(base: String): TvShow {
                         isWatched = e.watched ?: false,
                         wantStatus = e.wantStatus,
                         airDate = parseIsoDate(e.airDate),
+                        copyOnDisk = e.copyOnDisk,
                         watchProgress = if (e.watchPositionSeconds != null && e.runtime != null && e.runtime > 0)
                             (e.watchPositionSeconds / (e.runtime * 60f)).coerceIn(0f, 1f)
                         else null,

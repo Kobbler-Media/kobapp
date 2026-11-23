@@ -576,6 +576,7 @@ class GlobalPlayerState {
         // how it went unnoticed before there was anything watching for it.
         PlaybackTrace.mark(if (hasOutput) "surface" else "surface MISSING")
         if (!hasOutput) noteStartEvent("no video output after 2s, opened anyway: decodes in software")
+        viewerPause.streamOpening()
         player.load(
             dev.kobbler.kobplayer.MediaSource.Url(
                 // Tokenised here rather than stored: lastStreamUrl above goes into failure
