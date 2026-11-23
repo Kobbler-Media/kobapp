@@ -6,15 +6,24 @@ import dev.kobbler.app.data.ApiException
  * One or two plain sentences for a stream that would not play. The dialog keeps the full
  * diagnostic behind a details toggle; this is what the viewer reads first.
  */
-internal fun streamFailureSummary(cause: Throwable?, tried: Int, lostMidway: Boolean = false): String {
+internal fun streamFailureSummary(cause: Throwable?, tried: Int, lostMidway: Boolean = false, source: String? = null): String {
     val what = when {
         lostMidway -> "The stream stopped and couldn't be picked up again."
         tried == 0 -> "No streams were found for this."
         tried == 1 -> "That stream wouldn't play."
         else -> "None of the $tried streams we tried would play."
     }
-    val why = (cause as? ApiException)?.let(::reasonSentence)
+    val why = (cause as? ApiException)?.let { e ->
+        (if (source == "usenet") usenetReasonSentence(e) else null) ?: reasonSentence(e)
+    }
     return if (why == null) what else "$what $why"
+}
+
+private fun usenetReasonSentence(e: ApiException): String? = when (e.reason) {
+    "not_cached" -> "Parts of the release are gone from your usenet providers."
+    "unavailable" -> "None of your usenet providers could serve it right now."
+    "timeout" -> "Your usenet providers took too long to answer."
+    else -> null
 }
 
 private fun reasonSentence(e: ApiException): String? = when (e.reason) {

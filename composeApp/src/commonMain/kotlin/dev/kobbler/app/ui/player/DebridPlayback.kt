@@ -311,6 +311,9 @@ internal class DebridPlayback(
         retry?.cancel()
     }
 
+    private fun lastTriedSource(): String? =
+        tried.lastOrNull()?.let { id -> options.firstOrNull { it.id == id } }?.sourceType
+
     /** End the walk in the dialog, offering what was not tried and a download. */
     fun giveUp(cause: Throwable?, lostMidway: Boolean = false) {
         if (abandoned) return
@@ -320,7 +323,7 @@ internal class DebridPlayback(
             cause ?: IllegalStateException("No stream would play"),
             context + found?.errors.orEmpty() + "Tried ${tried.size} of ${options.size} stream options",
             help = PlaybackFailureHelp(
-                summary = streamFailureSummary(cause, tried.size, lostMidway),
+                summary = streamFailureSummary(cause, tried.size, lostMidway, source = lastTriedSource()),
                 alternatives = left,
                 onPickAlternative = { option ->
                     gps.loadingError = null
