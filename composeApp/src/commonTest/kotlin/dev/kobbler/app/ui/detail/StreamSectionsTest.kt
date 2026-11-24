@@ -21,8 +21,6 @@ class StreamSectionsTest {
         val sections = streamSections(
             listOf(
                 option("a", "played"),
-                option("b", "account"),
-                option("c", "account"),
                 option("d", "available"),
                 option("e", "uncached"),
                 option("f", "failed"),
@@ -31,7 +29,6 @@ class StreamSectionsTest {
         assertEquals(
             listOf(
                 "Played before" to listOf("a"),
-                "On your debrid account" to listOf("b", "c"),
                 "Available" to listOf("d"),
                 "Needs downloading" to listOf("e"),
                 "Previously failed" to listOf("f"),
@@ -45,6 +42,15 @@ class StreamSectionsTest {
         val sections = streamSections(listOf(option("a", null), option("b", null)))
         assertEquals(
             listOf<Pair<String?, List<String>>>(null to listOf("a", "b")),
+            sections.map { it.title to it.options.map(StreamOption::id) },
+        )
+    }
+
+    @Test
+    fun theRetiredAccountGroupFromAnOlderServerStillListsItsCopiesWithoutTheHeading() {
+        val sections = streamSections(listOf(option("a", "played"), option("b", "account"), option("c", "available")))
+        assertEquals(
+            listOf("Played before" to listOf("a"), null to listOf("b"), "Available" to listOf("c")),
             sections.map { it.title to it.options.map(StreamOption::id) },
         )
     }

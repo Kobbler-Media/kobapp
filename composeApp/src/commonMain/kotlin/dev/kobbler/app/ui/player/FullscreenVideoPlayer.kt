@@ -912,7 +912,8 @@ internal suspend fun switchAudioAndResume(
     state.sessionId = newSession.sessionId
     state.timeline = PlayerTimeline.of(newSession.serverStartSeconds)
     val seekMs = state.timeline.toPlayerMs(posMs)
-    player.load(
+    state.openStream(
+        player,
         dev.kobbler.kobplayer.MediaSource.Url(
             api.playerUrl(newSession.url),
             networkCacheMs = api.networkCacheMsFor(newSession.url),

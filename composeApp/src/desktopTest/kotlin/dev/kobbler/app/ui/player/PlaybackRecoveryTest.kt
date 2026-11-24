@@ -4,6 +4,7 @@ import dev.kobbler.app.runUiTest
 import dev.kobbler.app.UiTimeoutMs
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.sun.net.httpserver.HttpExchange
+import dev.kobbler.app.castreceiver.GpsReceiverPlayback
 import dev.kobbler.app.data.KobblerApi
 import dev.kobbler.kobplayer.PlayerState
 import io.ktor.client.HttpClient
@@ -247,6 +248,40 @@ class PlaybackRecoveryTest {
                 reopen(gps, player, api)
 
                 assertTrue(player.calls.contains("play"), "left a stream nobody paused sitting paused: ${player.calls}")
+            }
+        }
+    }
+
+    @Test
+    fun `an audio switch's own hold is not read as the viewer's pause`() {
+        val switched = """{"session_id":"s1","direct_url":"http://127.0.0.1:1/s1.mkv","method":"direct"}"""
+        val entries = listOf<suspend (GlobalPlayerState, FakePlayer, KobblerApi) -> Unit>(
+            { gps, player, api -> switchAudioAndResume(api, player, gps, "s0", 2) },
+            { gps, player, api -> GpsReceiverPlayback(gps, player) { api }.selectAudio(api, 2) },
+        )
+        for (switch in entries) {
+            val route = "/api/v1/admin/playback/sessions/s0/switch-audio"
+            StubServer(mapOf(route to { _: HttpExchange -> switched })).use { stub ->
+                runBlocking(Dispatchers.Main) {
+                    val api = KobblerApi(HttpClient(), stub.url, "token")
+                    val gps = watching(sessionId = null)
+                    val player = FakePlayer()
+                    gps.load(player, api, "movie", "mov-1", "http://127.0.0.1:1/s0.mkv", "s0", "T", null, null, null, null)
+                    gps.playUnmuted(player)
+                    delay(50)
+
+                    player.playStalls = true
+                    switch(gps, player, api)
+                    player.pause()
+                    delay(50)
+                    assertFalse(gps.viewerPause.paused, "the reopened stream's hold was taken for the viewer's pause")
+
+                    player.playStalls = false
+                    player.play()
+                    delay(50)
+                    player.pause()
+                    withTimeout(5_000) { while (!gps.viewerPause.paused) delay(10) }
+                }
             }
         }
     }

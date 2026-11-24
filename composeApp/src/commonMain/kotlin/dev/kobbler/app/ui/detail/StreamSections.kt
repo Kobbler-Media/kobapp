@@ -8,7 +8,6 @@ internal data class StreamSection(val title: String?, val options: List<StreamOp
 
 private fun groupTitle(group: String?): String? = when (group) {
     "played" -> "Played before"
-    "account" -> "On your debrid account"
     "available" -> "Available"
     "uncached" -> "Needs downloading"
     "failed" -> "Previously failed"

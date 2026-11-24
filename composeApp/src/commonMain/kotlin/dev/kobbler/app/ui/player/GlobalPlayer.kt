@@ -576,8 +576,8 @@ class GlobalPlayerState {
         // how it went unnoticed before there was anything watching for it.
         PlaybackTrace.mark(if (hasOutput) "surface" else "surface MISSING")
         if (!hasOutput) noteStartEvent("no video output after 2s, opened anyway: decodes in software")
-        viewerPause.streamOpening()
-        player.load(
+        openStream(
+            player,
             dev.kobbler.kobplayer.MediaSource.Url(
                 // Tokenised here rather than stored: lastStreamUrl above goes into failure
                 // reports, and a credential does not belong in one.
@@ -614,6 +614,11 @@ class GlobalPlayerState {
         // waiting for it cost two seconds of every start and delivered nothing.
         teardownScope.launch { reconcileTracksToServerPick(player, intent) }
         PlaybackTrace.mark("tracks")
+    }
+
+    internal fun openStream(player: dev.kobbler.kobplayer.Player, source: dev.kobbler.kobplayer.MediaSource) {
+        viewerPause.streamOpening()
+        player.load(source)
     }
 
     /**
