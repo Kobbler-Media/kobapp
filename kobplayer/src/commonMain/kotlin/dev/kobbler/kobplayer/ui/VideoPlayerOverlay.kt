@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
@@ -163,6 +164,11 @@ private const val PastEndSlackMs = 1_000L
 // Long enough for AnimatedVisibility to compose and lay out the transport, short enough
 // not to fight a viewer who has already moved off it.
 private const val EntryFocusFrames = 8
+
+// A resting mouse jitters a pixel or two around where it sits; a move has to travel
+// this far from the last one that counted before it is activity, or the jitter keeps
+// the auto-hide clock from ever running out.
+private const val MoveJitterTolerancePx = 4f
 
 @Composable
 fun VideoPlayerOverlay(
@@ -284,10 +290,23 @@ fun VideoPlayerOverlay(
         interactionTick++
     }
 
-    // A mouse reports a move per frame; bumping the tick on each one recomposed the overlay
-    // and restarted its timers at display rate for as long as the pointer moved.
+    // A mouse reports a Move every frame, and an idle one keeps reporting jitter — a
+    // pixel of wander around its resting spot. Counting each of those as activity
+    // restarted the auto-hide clock at display rate, so on a desktop the pointer is
+    // always "moving" and the controls never went away. A move only counts once the
+    // pointer has travelled further than [MoveJitterTolerancePx] from the last move
+    // that counted: a slow drift accumulates and counts, a resting pointer never does.
+    // A null position is a deliberate hover (the seek bar's, which only reports a
+    // fraction), and counts unconditionally. (Bumping the tick on every move also
+    // recomposed the overlay at display rate.)
     val pointerThrottle = remember { Throttle(500.milliseconds) }
-    fun onPointerActivity() {
+    val lastCountedMove = remember { arrayOf<Offset?>(null) }
+    fun onPointerActivity(position: Offset?) {
+        if (position != null) {
+            val previous = lastCountedMove[0]
+            if (previous != null && (position - previous).getDistance() <= MoveJitterTolerancePx) return
+            lastCountedMove[0] = position
+        }
         if (!controlsVisible || pointerThrottle.pass()) onInteraction()
     }
 
@@ -487,7 +506,7 @@ fun VideoPlayerOverlay(
                         if (event.type == PointerEventType.Move &&
                             event.changes.any { it.type == PointerType.Mouse }
                         ) {
-                            onPointerActivity()
+                            onPointerActivity(event.changes.first { it.type == PointerType.Mouse }.position)
                         }
                     }
                 }
@@ -788,7 +807,7 @@ fun VideoPlayerOverlay(
                             },
                             onHover = { fraction ->
                                 hoverFraction = fraction
-                                if (fraction != null) onPointerActivity()
+                                if (fraction != null) onPointerActivity(null)
                             },
                             chapterMarkers = chapterMarkers,
                             regions = regions,
