@@ -51,6 +51,29 @@ class PointerAutoHideTest {
         check(!titleShown()) { "the restarted clock should have fired" }
     }
 
+    @Test
+    fun `a slow drift of small moves still counts once it accumulates`() = runUiTest {
+        overlay()
+        revealControls(PlayerChrome.Pointer)
+        check(titleShown()) { "controls did not come up" }
+
+        // Let the 4-second window run out so the bar is hidden again; the drift
+        // below has to be what brings it back.
+        mainClock.advanceTimeBy(4_500)
+        waitForIdle()
+        check(!titleShown()) { "the controls should have hidden" }
+
+        // Two 3-pixel moves: neither alone clears the 4-pixel tolerance, together
+        // they do. If every move reset the anchor instead, a slow deliberate drag
+        // would never count as reaching for the controls.
+        onRoot().performMouseInput {
+            moveTo(center + Offset(3f, 0f))
+            moveTo(center + Offset(6f, 0f))
+        }
+        waitForIdle()
+        check(titleShown()) { "an accumulated 6px drift should bring the bar back" }
+    }
+
     private fun ComposeUiTest.overlay() {
         setContent {
             VideoPlayerOverlay(
