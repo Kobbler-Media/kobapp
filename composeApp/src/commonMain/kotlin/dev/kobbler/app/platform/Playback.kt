@@ -26,8 +26,6 @@ expect object PlaybackLifecycle {
     fun startBackgroundPlayback()
     /** Stop background playback support. */
     fun stopBackgroundPlayback()
-    /** Notify that video is actively playing (enables auto-PiP on Android). */
-    fun setVideoPlaying(playing: Boolean)
     /** Whether the app is currently in PiP mode (hide controls). */
     fun isInPipMode(): Boolean
 

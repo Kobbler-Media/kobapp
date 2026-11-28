@@ -46,6 +46,9 @@ private const val SNAP_MS = 250
 /** Applies [fullscreenExit]; the two dismiss paths share it so they cannot disagree. */
 /** Back out of the player: while a start is still being found it is called off, not just hidden. */
 fun GlobalPlayerState.back(player: Player, api: KobblerApi, formFactor: FormFactor, scope: CoroutineScope) {
+    // The player only disarms when it leaves composition, a frame later; a Home in between
+    // must not turn BACK into a picture-in-picture.
+    PictureInPicture.disarm()
     if (isPreparing) cancelStart(player, api, scope) else leaveFullscreen(player, api, formFactor, scope)
 }
 
@@ -64,7 +67,7 @@ fun GlobalPlayerState.leaveFullscreen(
     formFactor: FormFactor,
     scope: CoroutineScope,
 ) {
-    when (fullscreenExit(formFactor, player.isPlaying.value)) {
+    when (fullscreenExit(formFactor, player.isPlaying.value, miniPlayerOnBackSetting())) {
         FullscreenExit.ToMiniPlayer -> {
             isMiniPlayer = true
             isFullscreen = false

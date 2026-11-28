@@ -39,6 +39,7 @@ import dev.kobbler.app.offline.DownloadService
 import dev.kobbler.app.offline.NewEpisodesWorker
 import dev.kobbler.app.offline.Offline
 import dev.kobbler.app.tv.TvWatchNext
+import dev.kobbler.app.ui.player.PictureInPicture
 import dev.kobbler.kobplayer.DisplayHdr
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -50,7 +51,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private var isFullscreen by mutableStateOf(false)
     private var isInPip by mutableStateOf(false)
-    private var isVideoPlaying = false
+    private var pipArmed = false
     /** Set true on PiP exit; cleared on resume. If onStop fires while true, the user dismissed PiP via X. */
     private var pipJustExited = false
 
@@ -118,21 +119,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            override fun setVideoPlaying(playing: Boolean) {
-                isVideoPlaying = playing
-                if (Build.VERSION.SDK_INT >= 31) {
-                    try {
-                        val params = PictureInPictureParams.Builder()
-                            .setAspectRatio(videoRational())
-                            .setAutoEnterEnabled(playing)
-                        if (playing) {
-                            params.setActions(buildPipActions(PlaybackBridge.nowPlaying.value.isPlaying))
-                        }
-                        setPictureInPictureParams(params.build())
-                    } catch (_: Exception) {}
-                }
-            }
-
             override fun setBrightnessLock(level: Float) {
                 runOnUiThread {
                     val params = window.attributes
@@ -147,18 +133,20 @@ class MainActivity : ComponentActivity() {
 
             override fun updatePipActions(isPlaying: Boolean) {
                 if (Build.VERSION.SDK_INT < 26) return
-                if (!isInPip && !(Build.VERSION.SDK_INT >= 31 && isVideoPlaying)) return
+                if (!isInPip && !(Build.VERSION.SDK_INT >= 31 && pipArmed)) return
                 try {
                     val params = PictureInPictureParams.Builder()
                         .setAspectRatio(videoRational())
                         .setActions(buildPipActions(isPlaying))
                     if (Build.VERSION.SDK_INT >= 31) {
-                        params.setAutoEnterEnabled(isVideoPlaying)
+                        params.setAutoEnterEnabled(pipArmed)
                     }
                     setPictureInPictureParams(params.build())
                 } catch (_: Exception) {}
             }
         }
+
+        lifecycleScope.launch { PictureInPicture.armed.collect(::armPip) }
 
         val formFactor = if (isTv()) FormFactor.TV else FormFactor.Phone
 
@@ -192,8 +180,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // Auto-enter PiP when user presses home during video playback (pre-API 31)
-        if (isVideoPlaying && Build.VERSION.SDK_INT < 31) {
+        // Pre-31 has no auto-enter; this is called for Home and never for BACK.
+        if (pipArmed && Build.VERSION.SDK_INT < 31) {
             enterPip()
         }
     }
@@ -240,6 +228,18 @@ class MainActivity : ComponentActivity() {
             PlaybackBridge.clearNowPlaying()
             PlaybackBridge.stopService()
         }
+    }
+
+    private fun armPip(armed: Boolean) {
+        pipArmed = armed
+        if (Build.VERSION.SDK_INT < 31) return
+        try {
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(videoRational())
+                .setAutoEnterEnabled(armed)
+            if (armed) params.setActions(buildPipActions(PlaybackBridge.nowPlaying.value.isPlaying))
+            setPictureInPictureParams(params.build())
+        } catch (_: Exception) {}
     }
 
     private fun enterPip() {

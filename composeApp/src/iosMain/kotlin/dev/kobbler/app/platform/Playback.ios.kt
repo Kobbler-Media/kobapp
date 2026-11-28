@@ -11,9 +11,6 @@ actual object PlaybackLifecycle {
         // with UIBackgroundModes = audio
     }
     actual fun stopBackgroundPlayback() {}
-    actual fun setVideoPlaying(playing: Boolean) {
-        // iOS PiP is handled by AVPlayerLayer natively
-    }
     actual fun isInPipMode(): Boolean = false
 
     actual val isInPipModeFlow: StateFlow<Boolean> = MutableStateFlow(false)

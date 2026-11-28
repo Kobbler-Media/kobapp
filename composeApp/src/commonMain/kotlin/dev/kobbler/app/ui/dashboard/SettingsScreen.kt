@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonRemove
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Speaker
 import androidx.compose.material.icons.outlined.Tv
@@ -91,6 +92,10 @@ import dev.kobbler.app.ui.player.KEY_VIDEO_DECODING
 import dev.kobbler.app.ui.player.videoDecodingSetting
 import dev.kobbler.app.ui.player.KEY_MATCH_DISPLAY_REFRESH
 import dev.kobbler.app.ui.player.matchDisplayRefreshSetting
+import dev.kobbler.app.ui.player.KEY_PICTURE_IN_PICTURE
+import dev.kobbler.app.ui.player.pictureInPictureSetting
+import dev.kobbler.app.ui.player.KEY_MINI_PLAYER_ON_BACK
+import dev.kobbler.app.ui.player.miniPlayerOnBackSetting
 import dev.kobbler.app.ui.player.KEY_TRIM_BLACK_BARS
 import dev.kobbler.app.ui.player.trimBlackBarsSetting
 import dev.kobbler.app.ui.player.normalizeVolume
@@ -204,6 +209,8 @@ fun SettingsScreen(
     var videoDecoding by remember { mutableStateOf(videoDecodingSetting().key) }
     var matchDisplayRefresh by remember { mutableStateOf(matchDisplayRefreshSetting()) }
     var trimBlackBars by remember { mutableStateOf(trimBlackBarsSetting()) }
+    var pictureInPicture by remember { mutableStateOf(pictureInPictureSetting(formFactor)) }
+    var miniPlayerOnBack by remember { mutableStateOf(miniPlayerOnBackSetting()) }
     var playbackSpeed by remember { mutableStateOf(UserSettings.getString(KEY_DEFAULT_PLAYBACK_SPEED) ?: "1.0") }
     var streamingQuality by remember { mutableStateOf(UserSettings.getString(KEY_STREAMING_QUALITY) ?: "auto") }
     var ttsVoice by remember { mutableStateOf(UserSettings.getString(KEY_TTS_VOICE) ?: "") }
@@ -392,6 +399,30 @@ fun SettingsScreen(
                         onToggle = {
                             matchDisplayRefresh = it
                             Settings.putString(KEY_MATCH_DISPLAY_REFRESH, it.toString())
+                        },
+                    )
+                    SettingsDivider()
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.PictureInPictureAlt,
+                        title = "Picture-in-picture on Home",
+                        key = "picture-in-picture",
+                        checked = pictureInPicture,
+                        onToggle = {
+                            pictureInPicture = it
+                            Settings.putString(KEY_PICTURE_IN_PICTURE, it.toString())
+                        },
+                    )
+                }
+                if ((clientKind.startsWith("android") || clientKind == "desktop") && formFactor != FormFactor.TV) {
+                    SettingsDivider()
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.PictureInPictureAlt,
+                        title = "Mini player on Back",
+                        key = "mini-player-on-back",
+                        checked = miniPlayerOnBack,
+                        onToggle = {
+                            miniPlayerOnBack = it
+                            Settings.putString(KEY_MINI_PLAYER_ON_BACK, it.toString())
                         },
                     )
                 }

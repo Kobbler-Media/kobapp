@@ -37,15 +37,16 @@ enum class FullscreenExit { ToMiniPlayer, Stop }
  * What BACK does to a fullscreen player — one answer for the remote's key and the
  * overlay's own arrow, which had drifted into two.
  *
- * The mini player is the way down, but only where there is a pointer — its controls are
- * tap-only and it holds no focus target, so on a television it is somewhere playback can
- * never be reached again.
+ * The mini player is opt-in, and never on a television: its controls are tap-only with no
+ * focus target, so a remote could never reach playback again.
  */
 fun GlobalPlayerState.fullscreenExit(
     formFactor: dev.kobbler.app.platform.FormFactor,
     isPlaying: Boolean,
+    miniPlayer: Boolean,
 ): FullscreenExit = when {
-    formFactor != dev.kobbler.app.platform.FormFactor.TV && isPlaying -> FullscreenExit.ToMiniPlayer
+    formFactor != dev.kobbler.app.platform.FormFactor.TV && isPlaying && miniPlayer ->
+        FullscreenExit.ToMiniPlayer
     else -> FullscreenExit.Stop
 }
 

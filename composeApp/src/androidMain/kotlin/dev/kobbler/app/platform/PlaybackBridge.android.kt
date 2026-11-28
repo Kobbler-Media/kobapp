@@ -63,7 +63,6 @@ object PlaybackBridge {
      */
     interface PlaybackHost {
         fun setKeepScreenOn(on: Boolean)
-        fun setVideoPlaying(playing: Boolean)
         fun updatePipActions(isPlaying: Boolean)
         fun setFullscreenMode(enabled: Boolean)
         fun setBrightnessLock(level: Float)

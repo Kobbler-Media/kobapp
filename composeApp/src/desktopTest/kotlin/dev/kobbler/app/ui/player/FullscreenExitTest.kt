@@ -16,41 +16,32 @@ class FullscreenExitTest {
         mediaId = "m-1"
     }
 
-    /** A guide with no player in it is where BACK lands, so the tuner goes with it. */
-    @Test
-    fun `leaving a live channel on a tv stops it`() {
-        assertEquals(
-            FullscreenExit.Stop,
-            state("livetv").fullscreenExit(FormFactor.TV, isPlaying = true),
-        )
-    }
-
-    /**
-     * The mini player's controls are tap-only and it carries no focus target, so on a TV
-     * it is somewhere a remote can never reach playback again.
-     */
-    @Test
-    fun `a film on a tv stops rather than shrinking`() {
-        assertEquals(
-            FullscreenExit.Stop,
-            state("movie").fullscreenExit(FormFactor.TV, isPlaying = true),
-        )
-    }
+    private data class Case(
+        val name: String,
+        val type: String,
+        val formFactor: FormFactor,
+        val isPlaying: Boolean,
+        val miniPlayer: Boolean,
+        val exit: FullscreenExit,
+    )
 
     @Test
-    fun `a film playing on a phone shrinks into the mini player`() {
-        assertEquals(
-            FullscreenExit.ToMiniPlayer,
-            state("movie").fullscreenExit(FormFactor.Phone, isPlaying = true),
-        )
-    }
-
-    /** Paused is a viewer who has stopped watching, not one who is multitasking. */
-    @Test
-    fun `a paused film on a phone stops`() {
-        assertEquals(
-            FullscreenExit.Stop,
-            state("movie").fullscreenExit(FormFactor.Phone, isPlaying = false),
-        )
+    fun `back shrinks into the mini player only where it was asked for and can be reached`() {
+        listOf(
+            Case("a live channel on a tv", "livetv", FormFactor.TV, true, true, FullscreenExit.Stop),
+            // Its controls are tap-only with no focus target: a remote could never reach it.
+            Case("a film on a tv", "movie", FormFactor.TV, true, true, FullscreenExit.Stop),
+            Case("a film on a phone by default", "movie", FormFactor.Phone, true, false, FullscreenExit.Stop),
+            Case("a film on a phone with it on", "movie", FormFactor.Phone, true, true, FullscreenExit.ToMiniPlayer),
+            Case("a film on a desktop by default", "movie", FormFactor.Desktop, true, false, FullscreenExit.Stop),
+            Case("a film on a desktop with it on", "movie", FormFactor.Desktop, true, true, FullscreenExit.ToMiniPlayer),
+            Case("a paused film with it on", "movie", FormFactor.Phone, false, true, FullscreenExit.Stop),
+        ).forEach {
+            assertEquals(
+                it.exit,
+                state(it.type).fullscreenExit(it.formFactor, it.isPlaying, it.miniPlayer),
+                it.name,
+            )
+        }
     }
 }

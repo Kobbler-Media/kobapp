@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 actual object PlaybackLifecycle {
     actual fun startBackgroundPlayback() {} // Desktop doesn't need a service
     actual fun stopBackgroundPlayback() {}
-    actual fun setVideoPlaying(playing: Boolean) {} // No PiP on desktop
     actual fun isInPipMode(): Boolean = false
 
     actual val isInPipModeFlow: StateFlow<Boolean> = MutableStateFlow(false)

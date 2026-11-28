@@ -156,7 +156,7 @@ fun FullscreenVideoPlayer(
             PlaybackLifecycle.setBrightnessLock(-1f)
             PlaybackLifecycle.setFullscreenMode(false)
             PlaybackLifecycle.setKeepScreenOn(false)
-            PlaybackLifecycle.setVideoPlaying(false)
+            PictureInPicture.disarm()
         }
     }
 
@@ -165,7 +165,7 @@ fun FullscreenVideoPlayer(
     // was not playing anything — there is nothing for a picture-in-picture to show, and
     // no way back to the full player except through it.
     LaunchedEffect(player) {
-        player.isPlaying.collect { PlaybackLifecycle.setVideoPlaying(it) }
+        player.isPlaying.collect { PictureInPicture.follow(formFactor, it) }
     }
     LaunchedEffect(player) {
         holdScreenWhilePlaying(player.isPlaying, setKeepScreenOn = PlaybackLifecycle::setKeepScreenOn)

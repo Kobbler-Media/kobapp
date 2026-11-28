@@ -34,10 +34,6 @@ actual object PlaybackLifecycle {
         if (PlaybackBridge.remoteRenderer.value == null) PlaybackBridge.stopService()
     }
 
-    actual fun setVideoPlaying(playing: Boolean) {
-        PlaybackBridge.host?.setVideoPlaying(playing)
-    }
-
     actual fun isInPipMode(): Boolean = PlaybackBridge.isInPipMode.value
 
     actual val isInPipModeFlow: StateFlow<Boolean> get() = PlaybackBridge.isInPipMode
