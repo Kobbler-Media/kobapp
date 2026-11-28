@@ -138,7 +138,7 @@ fun InlineMoviePlayer(
                     streamLoading = false
                 }
             }
-        } else if (movie.filePath == null && api.canStream && supportsVideoPlayback) {
+        } else if (movie.filePath == null && api.canStream && supportsVideoPlayback && gps.mediaId != movie.id) {
             streamLoading = true
             onDisk = api.localStreamOption("movie", movie.id)
             if (onDisk == null) runCatching { streamResult = api.streamSearch(movieId = movie.id) }
